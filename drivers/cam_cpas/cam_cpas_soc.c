@@ -192,7 +192,7 @@ static int cam_cpas_parse_node_tree(struct cam_cpas *cpas_core,
 	uint32_t client_idx = 0, cell_idx = 0, level_idx = 0;
 	int rc = 0, count = 0, i;
 
-	camera_bus_node = of_find_node_by_name(of_node, "camera-bus-nodes");
+	camera_bus_node = of_get_child_by_name(of_node, "camera-bus-nodes");
 	if (!camera_bus_node) {
 		CAM_ERR(CAM_CPAS, "Camera Bus node not found in cpas DT node");
 		return -EINVAL;
@@ -262,7 +262,7 @@ static int cam_cpas_parse_node_tree(struct cam_cpas *cpas_core,
 				&curr_node_ptr->merge_type);
 
 			curr_node_ptr->axi_port_idx = -1;
-			mnoc_node = of_find_node_by_name(curr_node,
+			mnoc_node = of_get_child_by_name(curr_node,
 				"qcom,axi-port-mnoc");
 			if (mnoc_node) {
 				if (mnoc_idx >= CAM_CPAS_MAX_AXI_PORTS)
@@ -297,7 +297,7 @@ static int cam_cpas_parse_node_tree(struct cam_cpas *cpas_core,
 					}
 
 					of_node_put(src_args.np);
-					if (src_args.args_count != 2) {
+					if (src_args.args_count != 1) {
 						CAM_ERR(CAM_CPAS,
 							"Invalid number of axi src args: %d",
 							src_args.args_count);
@@ -319,7 +319,7 @@ static int cam_cpas_parse_node_tree(struct cam_cpas *cpas_core,
 					}
 
 					of_node_put(dst_args.np);
-					if (dst_args.args_count != 2) {
+					if (dst_args.args_count != 1) {
 						CAM_ERR(CAM_CPAS,
 							"Invalid number of axi dst args: %d",
 							dst_args.args_count);
@@ -689,7 +689,7 @@ static int cam_cpas_get_custom_dt_info(struct cam_hw_info *cpas_hw,
 		}
 
 		of_node_put(src_args.np);
-		if (src_args.args_count != 2) {
+		if (src_args.args_count != 1) {
 			CAM_ERR(CAM_CPAS,
 				"Invalid number of ahb src args: %d",
 				src_args.args_count);
@@ -708,7 +708,7 @@ static int cam_cpas_get_custom_dt_info(struct cam_hw_info *cpas_hw,
 		}
 
 		of_node_put(dst_args.np);
-		if (dst_args.args_count != 2) {
+		if (dst_args.args_count != 1) {
 			CAM_ERR(CAM_CPAS,
 				"Invalid number of ahb dst args: %d",
 				dst_args.args_count);
