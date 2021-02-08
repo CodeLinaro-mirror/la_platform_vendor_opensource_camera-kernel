@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -1474,6 +1474,8 @@ irqreturn_t cam_hw_cdm_irq(int irq_num, void *data)
 				CAM_CDM_IRQ_STATUS_INLINE_IRQ_MASK) {
 			payload[i]->irq_data = (user_data >> (i * 0x8)) &
 				CAM_CDM_IRQ_STATUS_USR_DATA_MASK;
+
+			atomic_inc(&cdm_core->bl_fifo[i].work_record);
 		}
 
 		CAM_DBG(CAM_CDM,
@@ -1491,7 +1493,6 @@ irqreturn_t cam_hw_cdm_irq(int irq_num, void *data)
 			payload[i]->irq_status,
 			cdm_hw->soc_info.index);
 
-		atomic_inc(&cdm_core->bl_fifo[i].work_record);
 		payload[i]->workq_scheduled_ts = ktime_get();
 
 		work_status = queue_work(
@@ -1800,14 +1801,17 @@ int cam_hw_cdm_hang_detect(
 	uint32_t            handle)
 {
 	struct cam_cdm *cdm_core = NULL;
+	struct cam_hw_soc_info *soc_info;
 	int i, rc = -1;
 
 	cdm_core = (struct cam_cdm *)cdm_hw->core_info;
+	soc_info = &cdm_hw->soc_info;
 
 	for (i = 0; i < cdm_core->offsets->reg_data->num_bl_fifo; i++)
 		if (atomic_read(&cdm_core->bl_fifo[i].work_record)) {
 			CAM_WARN(CAM_CDM,
-				"workqueue got delayed, work_record :%u",
+				"workqueue got delayed for %s%u, work_record :%u",
+				soc_info->label_name, soc_info->index,
 				atomic_read(&cdm_core->bl_fifo[i].work_record));
 			rc = 0;
 			break;
