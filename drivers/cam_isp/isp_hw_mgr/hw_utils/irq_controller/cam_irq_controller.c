@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -110,6 +111,11 @@ int cam_irq_controller_deinit(void **irq_controller)
 {
 	struct cam_irq_controller *controller = *irq_controller;
 	struct cam_irq_evt_handler *evt_handler = NULL;
+
+	if (!controller) {
+		CAM_ERR(CAM_IRQ_CTRL, "Null Pointer");
+		return -EINVAL;
+	}
 
 	while (!list_empty(&controller->evt_handler_list_head)) {
 		evt_handler = list_first_entry(
