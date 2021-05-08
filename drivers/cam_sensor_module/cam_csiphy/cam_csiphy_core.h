@@ -56,4 +56,11 @@ void cam_csiphy_shutdown(struct csiphy_device *csiphy_dev);
  */
 void cam_csiphy_register_baseaddress(struct csiphy_device *csiphy_dev);
 
+/**
+ * @csiphy_dev: CSIPhy device structure
+ *
+ * This API allows to print all the cphy/dphy specific status registers
+ */
+int cam_csiphy_print_status_reg(struct csiphy_device *csiphy_dev);
+
 #endif /* _CAM_CSIPHY_CORE_H_ */
