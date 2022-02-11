@@ -43,6 +43,7 @@ def _define_module(target, variant):
             "drivers/cam_smmu/cam_smmu_api.c",
             "drivers/cam_sync/cam_sync.c",
             "drivers/cam_sync/cam_sync_util.c",
+	    "drivers/cam_sync/cam_sync_dma_fence.c",
             "drivers/cam_cpas/cpas_top/cam_cpastop_hw.c",
             "drivers/cam_cpas/camss_top/cam_camsstop_hw.c",
             "drivers/cam_cpas/cam_cpas_soc.c",

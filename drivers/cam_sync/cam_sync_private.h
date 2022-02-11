@@ -18,6 +18,7 @@
 #include <media/v4l2-event.h>
 #include <media/v4l2-ioctl.h>
 #include "cam_sync_api.h"
+#include "cam_sync_dma_fence.h"
 
 #if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX)
 #include <synx_api.h>
@@ -31,6 +32,7 @@
 
 #define CAM_SYNC_OBJ_NAME_LEN           64
 #define CAM_SYNC_MAX_OBJS               2048
+#define CAM_GENERIC_FENCE_BATCH_MAX     10
 #define CAM_SYNC_MAX_V4L2_EVENTS        250
 #define CAM_SYNC_DEBUG_FILENAME         "cam_debug"
 #define CAM_SYNC_DEBUG_BASEDIR          "cam"
@@ -124,6 +126,20 @@ struct sync_uid_info {
 };
 
 /**
+ * struct sync_dma_fence_info - DMA fence info associated with this sync obj
+ *
+ * @dma_fence_fd          : DMA fence fd
+ * @dma_fence_row_idx     : Index of the row corresponding to this dma fence
+ *                          in the dma fence table
+ * @sync_created_with_dma : If sync obj and dma fence are created together
+ */
+struct sync_dma_fence_info {
+	int32_t dma_fence_fd;
+	int32_t dma_fence_row_idx;
+	bool    sync_created_with_dma;
+};
+
+/**
  * struct sync_table_row - Single row of information about a sync object, used
  * for internal book keeping in the sync driver
  *
@@ -143,6 +159,8 @@ struct sync_uid_info {
  * @sync_manager_idx  : Sync manager index for fence
  * @struct old_fence  : Unique ID and state of previous fence that used
  *                      same sync obj
+ * @ext_fence_mask    : Mask to indicate associated external fence types
+ * @dma_fence_info    : dma fence info if associated
  */
 struct sync_table_row {
 	char name[CAM_SYNC_OBJ_NAME_LEN];
@@ -160,6 +178,8 @@ struct sync_table_row {
 	atomic_t ref_cnt;
 	uint16_t uid;
 	uint16_t sync_manager_idx;
+	unsigned long ext_fence_mask;
+	struct sync_dma_fence_info dma_fence_info;
 };
 
 /**
@@ -187,6 +207,7 @@ struct cam_signalable_info {
  * @worker                : Worker used for dispatching kernel callbacks
  * @cam_sync_eventq       : Event queue used to dispatch user payloads to user space
  * @bitmap                : Bitmap representation of all sync objects
+ * @open_cnt	          : Count of file open calls made on the sync driver
  * @sync_manager_id_mask  : Bit mask to get sync manager idx
  * @sync_manager_id_shift : Bit shift required to get sync manager idx
  * @params                : Parameters for synx call back registration
@@ -203,6 +224,7 @@ struct sync_device {
 	spinlock_t cam_sync_eventq_lock[CAM_SYNC_MAX_SYNC_MANAGER];
 	DECLARE_BITMAP(bitmap, CAM_SYNC_MAX_OBJS);
 	DECLARE_BITMAP(bitmap_syncmanager, CAM_SYNC_MAX_SYNC_MANAGER);
+	int open_cnt;
 	int sync_manager_id_mask;
 	int sync_manager_id_shift;
 #if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX)
