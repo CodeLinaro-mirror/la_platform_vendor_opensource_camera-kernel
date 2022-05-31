@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SENSOR_CMN_HEADER_
@@ -381,10 +381,10 @@ struct cam_sensor_power_ctrl_t {
 };
 
 struct cam_camera_slave_info {
-	uint16_t sensor_slave_addr;
-	uint16_t sensor_id_reg_addr;
-	uint16_t sensor_id;
-	uint16_t sensor_id_mask;
+	uint32_t sensor_slave_addr;
+	uint32_t sensor_id_reg_addr;
+	uint32_t sensor_id;
+	uint32_t sensor_id_mask;
 };
 
 struct msm_sensor_init_params {
