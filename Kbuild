@@ -62,7 +62,7 @@ ifeq ($(CONFIG_ARCH_PARROT), y)
 include $(CAMERA_KERNEL_ROOT)/config/parrot.mk
 endif
 
-ifneq ($(KBUILD_EXTRA_CONFIGS),)
+ifdef ($(KBUILD_EXTRA_CONFIGS))
 include $(KBUILD_EXTRA_CONFIGS)
 endif
 

@@ -15,13 +15,34 @@ DLKM_DIR := $(TOP)/device/qcom/common/dlkm
 
 LOCAL_MODULE_DDK_BUILD := true
 
+# List of board platforms for which MMRM driver API should be enabled
+MMRM_BOARDS := taro parrot kalama pineapple
+
 CAMERA_SRC_FILES := \
                     $(addprefix $(LOCAL_PATH)/, $(call all-named-files-under,*.h,drivers dt-bindings include))\
                     $(addprefix $(LOCAL_PATH)/, $(call all-named-files-under,*.mk,config))\
                     $(addprefix $(LOCAL_PATH)/, $(call all-named-files-under,*.c,drivers))\
+                    $(LOCAL_PATH)/dependency.mk \
                     $(LOCAL_PATH)/board.mk      \
                     $(LOCAL_PATH)/product.mk    \
                     $(LOCAL_PATH)/Kbuild
+
+# Target for pre-sil symbols
+ifeq ($(CONFIG_CAM_PRESIL), y)
+$(warning camera-kernel: Enabling Pre-Sil Kbuild Options!)
+KBUILD_OPTIONS := CONFIG_CAM_PRESIL=y
+include $(CLEAR_VARS)
+$(warning camera-kernel: Enabling Pre-Sil build, exporting symbols!)
+LOCAL_SRC_FILES           := $(CAMERA_SRC_FILES)
+LOCAL_MODULE              := camera-kernel-symvers
+LOCAL_MODULE_STEM         := Module.symvers
+LOCAL_MODULE_KBUILD_NAME  := Module.symvers
+LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
+# Check build for optional dependencies
+include $(LOCAL_PATH)/dependency.mk
+
+include $(DLKM_DIR)/Build_external_kernelmodule.mk
+endif
 
 # Kbuild options
 KBUILD_OPTIONS := CAMERA_KERNEL_ROOT=$(TOP)/$(LOCAL_PATH)
@@ -39,6 +60,16 @@ LOCAL_MODULE_TAGS           := optional
 #LOCAL_MODULE_KBUILD_NAME   := camera.ko
 #LOCAL_MODULE_DEBUG_ENABLE  := true
 
+# Check build for optional dependencies
+include $(LOCAL_PATH)/dependency.mk
+
+# $(info LOCAL_SRC_FILES = $(LOCAL_SRC_FILES))
+# $(info intermediates mmrm symvers path = $(call intermediates-dir-for,DLKM,mmrm-module-symvers))
+# $(info CAMERA_EXTRA_SYMBOLS = $(CAMERA_EXTRA_SYMBOLS))
+# $(info CAMERA_EXTRA_CONFIGS = $(CAMERA_EXTRA_CONFIGS))
+# $(info LOCAL_ADDITIONAL_DEPENDENCIES = $(LOCAL_ADDITIONAL_DEPENDENCIES))
+# $(info LOCAL_REQUIRED_MODULES = $(LOCAL_REQUIRED_MODULES))
+# $(info DLKM_DIR = $(DLKM_DIR))
 $(info KBUILD_OPTIONS = $(KBUILD_OPTIONS))
 
 BOARD_VENDOR_KERNEL_MODULES += $(LOCAL_MODULE_PATH)/$(LOCAL_MODULE)
