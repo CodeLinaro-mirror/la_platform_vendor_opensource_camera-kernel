@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __CAM_SYNC_PRIVATE_H__
@@ -38,6 +38,7 @@
 #define CAM_SYNC_PAYLOAD_WORDS          2
 #define CAM_SYNC_NAME                   "cam_sync"
 #define CAM_SYNC_WORKQUEUE_NAME         "HIPRIO_SYNC_WORK_QUEUE"
+#define CAM_SYNC_MAX_SYNC_MANAGER       16
 
 #define CAM_SYNC_TYPE_INDV              0
 #define CAM_SYNC_TYPE_GROUP             1
@@ -159,6 +160,7 @@ struct sync_uid_info {
  * @user_payload_list : LInked list of user space payloads registered
  * @ref_cnt           : ref count of the number of usage of the fence.
  * @uid               : Unique ID of the current fence that is using this sync obj
+ * @sync_manager_idx  : Sync manager index for fence
  * @struct old_fence  : Unique ID and state of previous fence that used
  *                      same sync obj
  */
@@ -177,6 +179,7 @@ struct sync_table_row {
 	struct list_head user_payload_list;
 	atomic_t ref_cnt;
 	uint16_t uid;
+	uint16_t sync_manager_idx;
 };
 
 /**
@@ -196,31 +199,32 @@ struct cam_signalable_info {
 /**
  * struct sync_device - Internal struct to book keep sync driver details
  *
- * @vdev            : Video device
- * @v4l2_dev        : V4L2 device
- * @sync_table      : Table of all sync objects
- * @row_spinlocks   : Spinlock array, one for each row in the table
- * @table_lock      : Mutex used to lock the table
- * @open_cnt        : Count of file open calls made on the sync driver
- * @dentry          : Debugfs entry
- * @work_queue      : Work queue used for dispatching kernel callbacks
- * @cam_sync_eventq : Event queue used to dispatch user payloads to user space
- * @bitmap          : Bitmap representation of all sync objects
- * @params          : Parameters for synx call back registration
- * @version         : version support
+ * @vdev                  : Video device
+ * @v4l2_dev              : V4L2 device
+ * @sync_table            : Table of all sync objects
+ * @row_spinlocks         : Spinlock array, one for each row in the table
+ * @dentry                : Debugfs entry
+ * @work_queue            : Work queue used for dispatching kernel callbacks
+ * @cam_sync_eventq       : Event queue used to dispatch user payloads to user space
+ * @bitmap                : Bitmap representation of all sync objects
+ * @sync_manager_id_mask  : Bit mask to get sync manager idx
+ * @sync_manager_id_shift : Bit shift required to get sync manager idx
+ * @params                : Parameters for synx call back registration
+ * @version               : version support
  */
 struct sync_device {
 	struct video_device *vdev;
 	struct v4l2_device v4l2_dev;
-	struct sync_table_row sync_table[CAM_SYNC_MAX_OBJS];
+	struct sync_table_row *sync_table;
 	spinlock_t row_spinlocks[CAM_SYNC_MAX_OBJS];
-	struct mutex table_lock;
-	int open_cnt;
 	struct dentry *dentry;
-	struct workqueue_struct *work_queue;
-	struct v4l2_fh *cam_sync_eventq;
-	spinlock_t cam_sync_eventq_lock;
+	struct workqueue_struct *work_queue[CAM_SYNC_MAX_SYNC_MANAGER];
+	struct v4l2_fh *cam_sync_eventq[CAM_SYNC_MAX_SYNC_MANAGER];
+	spinlock_t cam_sync_eventq_lock[CAM_SYNC_MAX_SYNC_MANAGER];
 	DECLARE_BITMAP(bitmap, CAM_SYNC_MAX_OBJS);
+	DECLARE_BITMAP(bitmap_syncmanager, CAM_SYNC_MAX_SYNC_MANAGER);
+	int sync_manager_id_mask;
+	int sync_manager_id_shift;
 #if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX)
 	struct synx_register_params params;
 #endif

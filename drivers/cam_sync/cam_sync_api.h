@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __CAM_SYNC_API_H__
@@ -25,11 +25,13 @@ typedef void (*sync_callback)(int32_t sync_obj, int status, void *data);
  * @status         Status of the signaling. Can be either SYNC_SIGNAL_ERROR or
  *                 SYNC_SIGNAL_SUCCESS.
  * @event_cause	   Event parameter
+ * @fh             File handle
  */
 struct cam_sync_signal_param {
 	uint32_t   sync_obj;
 	uint32_t   status;
 	uint32_t   event_cause;
+	void       *fh;
 };
 
 /**
@@ -38,6 +40,7 @@ struct cam_sync_signal_param {
  *  The newly created sync obj is assigned to sync_obj.
  *  sync object.
  *
+ * @param sync_manager_idx : Index of sync manager
  * @param sync_obj   : Pointer to int referencing the sync object.
  * @param name : Optional parameter associating a name with the sync object for
  * debug purposes. Only first SYNC_DEBUG_NAME_LEN bytes are accepted,
@@ -48,7 +51,7 @@ struct cam_sync_signal_param {
  * -ENOMEM will be returned if the kernel can't allocate space for
  * sync object.
  */
-int cam_sync_create(int32_t *sync_obj, const char *name);
+int cam_sync_create(uint32_t sync_manager_idx, int32_t *sync_obj, const char *name);
 
 /**
  * @brief: Registers a callback with a sync object

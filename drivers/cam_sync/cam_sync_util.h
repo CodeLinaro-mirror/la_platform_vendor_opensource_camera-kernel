@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __CAM_SYNC_UTIL_H__
@@ -14,19 +14,6 @@
 extern struct sync_device *sync_dev;
 
 /**
- * @brief: Finds an empty row in the sync table and sets its corresponding bit
- * in the bit array
- *
- * @param sync_dev : Pointer to the sync device instance
- * @param idx      : Pointer to an long containing the index found in the bit
- *                   array
- *
- * @return Status of operation. Negative in case of error. Zero otherwise.
- */
-int cam_sync_util_find_and_set_empty_row(struct sync_device *sync_dev,
-	long *idx);
-
-/**
  * @brief: Function to initialize an empty row in the sync table. This should be
  *         called only for individual sync objects.
  *
@@ -35,10 +22,11 @@ int cam_sync_util_find_and_set_empty_row(struct sync_device *sync_dev,
  * @param name  : Optional string representation of the sync object. Should be
  *                63 characters or less
  * @param type  : type of row to be initialized
+ * @param sync_manager_idx:  Index of sync manager
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
 int cam_sync_init_row(struct sync_table_row *table,
-	uint32_t idx, const char *name, uint32_t type);
+	uint32_t idx, const char *name, uint32_t type, uint32_t sync_manager_idx);
 
 /**
  * @brief: Function to uninitialize a row in the sync table
@@ -108,6 +96,7 @@ void cam_sync_util_dispatch_signaled_cb(struct cam_sync_signal_param *param,
  * @len            : Length of the payload
  * @evt_param      : Event Paramenter
  * @time_stamp     : Sync timestamp information
+ * @fh             : File handler of sync manager
  * @return None
  */
 void cam_sync_util_send_v4l2_event(uint32_t id,
@@ -116,7 +105,8 @@ void cam_sync_util_send_v4l2_event(uint32_t id,
 	void *payload,
 	int len,
 	uint32_t evt_param,
-	struct cam_sync_timestamp *time_stamp);
+	struct cam_sync_timestamp *time_stamp,
+	void *fh);
 
 /**
  * @brief: Function which gets the next state of the sync object based on the

@@ -23,6 +23,7 @@
 struct sync_device *sync_dev;
 struct sync_uid_info sync_uid_access;
 
+
 /*
  * Flag to determine whether to enqueue cb of a
  * signaled fence onto the workq or invoke it
@@ -35,7 +36,7 @@ static void cam_sync_print_fence_table(void)
 	int idx;
 
 	for (idx = 0; idx < CAM_SYNC_MAX_OBJS; idx++) {
-		spin_lock_bh(&sync_dev->row_spinlocks[idx]);
+		spin_lock(&sync_dev->row_spinlocks[idx]);
 		CAM_INFO(CAM_SYNC,
 			"index[%u]: sync_id=%d, name=%s, type=%d, state=%d, ref_cnt=%d",
 			idx,
@@ -44,11 +45,21 @@ static void cam_sync_print_fence_table(void)
 			sync_dev->sync_table[idx].type,
 			sync_dev->sync_table[idx].state,
 			atomic_read(&sync_dev->sync_table[idx].ref_cnt));
-		spin_unlock_bh(&sync_dev->row_spinlocks[idx]);
+		spin_unlock(&sync_dev->row_spinlocks[idx]);
 	}
 }
 
-int cam_sync_create(int32_t *sync_obj, const char *name)
+static inline __add_sync_manager_idx(int32_t sync_id, uint32_t sync_manager_idx)
+{
+	return (sync_manager_idx << sync_dev->sync_manager_id_shift) | sync_id;
+}
+
+static inline get_sync_manager_idx(uint32_t sync_obj)
+{
+	return (sync_obj >> sync_dev->sync_manager_id_shift) & sync_dev->sync_manager_id_mask;
+}
+
+int cam_sync_create(uint32_t sync_manager_idx, int32_t *sync_obj, const char *name)
 {
 	int rc;
 	long idx;
@@ -69,7 +80,7 @@ int cam_sync_create(int32_t *sync_obj, const char *name)
 
 	spin_lock_bh(&sync_dev->row_spinlocks[idx]);
 	rc = cam_sync_init_row(sync_dev->sync_table, idx, name,
-		CAM_SYNC_TYPE_INDV);
+		CAM_SYNC_TYPE_INDV, sync_manager_idx);
 	if (rc) {
 		CAM_ERR(CAM_SYNC, "Error: Unable to init row at idx = %ld",
 			idx);
@@ -77,8 +88,7 @@ int cam_sync_create(int32_t *sync_obj, const char *name)
 		spin_unlock_bh(&sync_dev->row_spinlocks[idx]);
 		return -EINVAL;
 	}
-
-	*sync_obj = idx;
+	*sync_obj = __add_sync_manager_idx(idx, sync_manager_idx);
 	CAM_DBG(CAM_SYNC, "sync_obj: %s[%i]", name, *sync_obj);
 	spin_unlock_bh(&sync_dev->row_spinlocks[idx]);
 
@@ -99,17 +109,23 @@ int cam_sync_register_callback(sync_callback cb_func,
 	int status = 0;
 	uint32_t sync_obj, uid_validity;
 	uint16_t sync_uid;
-	int rc;
+	int rc, sync_manager_idx;
 
 	sync_obj = (uint32_t)sync_var & sync_uid_access.fenceIdMask;
 	sync_uid = (uint32_t)sync_var >> sync_uid_access.uidShift;
+	sync_manager_idx = get_sync_manager_idx(sync_var);
 
 	if (sync_obj >= CAM_SYNC_MAX_OBJS || sync_obj <= 0 || !cb_func)
 		return -EINVAL;
 
 	spin_lock_bh(&sync_dev->row_spinlocks[sync_obj]);
 	row = sync_dev->sync_table + sync_obj;
-
+	if (sync_manager_idx != row->sync_manager_idx) {
+		CAM_ERR(CAM_SYNC, "sync manager idx for row %d don't match with sync 0x%x",
+			row->sync_manager_idx, sync_var);
+		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
+		return -EINVAL;
+	}
 	uid_validity = cam_sync_check_uid_valid(sync_var);
 
 	if (uid_validity == SYNC_UID_NEW) {
@@ -163,7 +179,7 @@ int cam_sync_register_callback(sync_callback cb_func,
 				sync_cb->sync_obj,
 				sync_uid);
 			sync_cb->workq_scheduled_ts = ktime_get();
-			queue_work(sync_dev->work_queue,
+			queue_work(sync_dev->work_queue[sync_manager_idx],
 				&sync_cb->cb_dispatch_work);
 			spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 		}
@@ -187,11 +203,12 @@ int cam_sync_deregister_callback(sync_callback cb_func,
 	struct sync_table_row *row = NULL;
 	struct sync_callback_info *sync_cb, *temp;
 	bool found = false;
-	uint32_t sync_obj;
+	uint32_t sync_obj, sync_manager_idx;
 	uint16_t sync_uid;
 
 	sync_obj = (uint32_t)sync_var & sync_uid_access.fenceIdMask;
 	sync_uid = (uint32_t)sync_var >> sync_uid_access.uidShift;
+	sync_manager_idx = get_sync_manager_idx(sync_var);
 
 	if (sync_obj >= CAM_SYNC_MAX_OBJS || sync_obj <= 0)
 		return -EINVAL;
@@ -203,6 +220,12 @@ int cam_sync_deregister_callback(sync_callback cb_func,
 		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 		CAM_ERR(CAM_SYNC, "deregister called for invalid fence, sync obj: %d, uid: %d",
 			sync_obj, sync_uid);
+		return -EINVAL;
+	}
+	if (sync_manager_idx != row->sync_manager_idx) {
+		CAM_ERR(CAM_SYNC, "sync manager idx for row %d don't match with sync 0x%x",
+			row->sync_manager_idx, sync_var);
+		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 		return -EINVAL;
 	}
 
@@ -240,11 +263,13 @@ int cam_sync_signal(struct cam_sync_signal_param *param,
 	struct sync_parent_info *parent_info, *temp_parent_info;
 	struct list_head parents_list;
 	int rc = 0;
-	uint32_t sync_obj, psync_obj, uid_validity;
+	uint32_t sync_obj, psync_obj, uid_validity, sync_manager_idx;
 	int16_t sync_uid;
 
 	sync_obj = param->sync_obj & sync_uid_access.fenceIdMask;
 	sync_uid = param->sync_obj >> sync_uid_access.uidShift;
+	sync_manager_idx = get_sync_manager_idx(param->sync_obj);
+	param->fh = sync_dev->cam_sync_eventq[sync_manager_idx];
 
 	if (sync_obj >= CAM_SYNC_MAX_OBJS || sync_obj <= 0) {
 		CAM_ERR(CAM_SYNC, "Error: Out of range sync obj (0 <= %d < %d)",
@@ -264,6 +289,13 @@ int cam_sync_signal(struct cam_sync_signal_param *param,
 			sync_obj,
 			sync_uid,
 			param->status);
+		return -EINVAL;
+	}
+
+	if (sync_manager_idx != row->sync_manager_idx) {
+		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
+		CAM_ERR(CAM_SYNC, "sync manager idx for row %d don't match with sync 0x%x",
+			row->sync_manager_idx, param->sync_obj);
 		return -EINVAL;
 	}
 
@@ -367,8 +399,7 @@ int cam_sync_merge(int32_t *sync_var, uint32_t num_objs, int32_t *merged_obj)
 	long idx = 0;
 	bool bit;
 	int i = 0;
-	uint32_t sync_obj;
-	uint16_t sync_uid;
+	uint32_t sync_manager_idx;
 
 	if (!sync_var || !merged_obj) {
 		CAM_ERR(CAM_SYNC, "Invalid pointer(s)");
@@ -386,14 +417,20 @@ int cam_sync_merge(int32_t *sync_var, uint32_t num_objs, int32_t *merged_obj)
 		return -EINVAL;
 	}
 
+	sync_manager_idx = get_sync_manager_idx(sync_var[0]);
 	for (i = 0; i < num_objs; i++) {
-		sync_obj = (uint32_t)(sync_var[i]) & sync_uid_access.fenceIdMask;
-		sync_uid = (uint32_t)(sync_var[i]) >> sync_uid_access.uidShift;
-		rc = cam_sync_check_valid(sync_obj);
+		rc = cam_sync_check_valid(sync_var[i]);
 		if (rc) {
 			CAM_ERR(CAM_SYNC, "Sync_obj[%d] %d valid check fail",
-				i, sync_obj);
+				i, sync_var[i]);
 			return rc;
+		}
+		if (get_sync_manager_idx(sync_var[i]) != sync_manager_idx) {
+			CAM_ERR(CAM_SYNC,
+				"Sync objects %d %d belongs to different sync manager %d %d",
+				sync_var[0], sync_var[i], sync_manager_idx,
+				get_sync_manager_idx(sync_var[i]));
+			return -EINVAL;
 		}
 	}
 	do {
@@ -414,8 +451,8 @@ int cam_sync_merge(int32_t *sync_var, uint32_t num_objs, int32_t *merged_obj)
 		spin_unlock_bh(&sync_dev->row_spinlocks[idx]);
 		return -EINVAL;
 	}
+	sync_dev->sync_table[idx].sync_manager_idx = sync_manager_idx;
 	CAM_DBG(CAM_SYNC, "Init row at idx:%ld to merge objects", idx);
-	*merged_obj = idx;
 	spin_unlock_bh(&sync_dev->row_spinlocks[idx]);
 
 	return 0;
@@ -424,11 +461,12 @@ int cam_sync_merge(int32_t *sync_var, uint32_t num_objs, int32_t *merged_obj)
 int cam_sync_get_obj_ref(int32_t sync_var)
 {
 	struct sync_table_row *row = NULL;
-	uint32_t sync_obj;
+	uint32_t sync_obj, sync_manager_idx;
 	uint16_t sync_uid;
 
 	sync_obj = (uint32_t)sync_var & sync_uid_access.fenceIdMask;
 	sync_uid = (uint32_t)sync_var >> sync_uid_access.uidShift;
+	sync_manager_idx = get_sync_manager_idx(sync_var);
 
 	if (sync_obj >= CAM_SYNC_MAX_OBJS || sync_obj <= 0)
 		return -EINVAL;
@@ -437,6 +475,12 @@ int cam_sync_get_obj_ref(int32_t sync_var)
 
 	spin_lock(&sync_dev->row_spinlocks[sync_obj]);
 
+	if (sync_manager_idx != row->sync_manager_idx) {
+		CAM_ERR(CAM_SYNC, "sync manager idx for row %d don't match with sync 0x%x",
+			row->sync_manager_idx, sync_var);
+		spin_unlock(&sync_dev->row_spinlocks[sync_obj]);
+		return -EINVAL;
+	}
 	if (row->state != CAM_SYNC_STATE_ACTIVE) {
 		spin_unlock(&sync_dev->row_spinlocks[sync_obj]);
 		CAM_ERR(CAM_SYNC,
@@ -456,8 +500,9 @@ int cam_sync_get_obj_ref(int32_t sync_var)
 int cam_sync_put_obj_ref(int32_t sync_var)
 {
 	struct sync_table_row *row = NULL;
-	uint32_t sync_obj;
+	uint32_t sync_obj, sync_manager_idx;
 	uint16_t sync_uid;
+	sync_manager_idx = get_sync_manager_idx(sync_var);
 
 	sync_obj = (uint32_t)sync_var & sync_uid_access.fenceIdMask;
 	sync_uid = (uint32_t)sync_var >> sync_uid_access.uidShift;
@@ -466,6 +511,12 @@ int cam_sync_put_obj_ref(int32_t sync_var)
 		return -EINVAL;
 
 	row = sync_dev->sync_table + sync_obj;
+
+	if (sync_manager_idx != row->sync_manager_idx) {
+		CAM_ERR(CAM_SYNC, "sync manager idx for row %d don't match with synx 0x%x",
+			row->sync_manager_idx, sync_var);
+		return -EINVAL;
+	}
 	atomic_dec(&row->ref_cnt);
 	CAM_DBG(CAM_SYNC, "put ref for obj %d, row_state:%u, uid: %d",
 		sync_obj,
@@ -516,11 +567,12 @@ int cam_sync_wait(int32_t sync_var, uint64_t timeout_ms)
 	unsigned long timeleft;
 	int rc = -EINVAL;
 	struct sync_table_row *row = NULL;
-	uint32_t sync_obj;
+	uint32_t sync_obj, sync_manager_idx;
 	uint16_t sync_uid;
 
 	sync_obj = (uint32_t)sync_var & sync_uid_access.fenceIdMask;
 	sync_uid = (uint32_t)sync_var >> sync_uid_access.uidShift;
+	sync_manager_idx = get_sync_manager_idx(sync_var);
 
 	if (sync_obj >= CAM_SYNC_MAX_OBJS || sync_obj <= 0)
 		return -EINVAL;
@@ -535,7 +587,11 @@ int cam_sync_wait(int32_t sync_var, uint64_t timeout_ms)
 			sync_uid);
 		return -EINVAL;
 	}
-
+	if (sync_manager_idx != row->sync_manager_idx) {
+		CAM_ERR(CAM_SYNC, "sync manager idx for row %d don't match with sync 0x%x",
+			row->sync_manager_idx, sync_var);
+		return -EINVAL;
+	}
 	timeleft = cam_common_wait_for_completion_timeout(&row->signaled,
 		msecs_to_jiffies(timeout_ms));
 
@@ -569,7 +625,7 @@ int cam_sync_wait(int32_t sync_var, uint64_t timeout_ms)
 	return rc;
 }
 
-static int cam_sync_handle_create(struct cam_private_ioctl_arg *k_ioctl)
+static int cam_sync_handle_create(int sync_manager_idx, struct cam_private_ioctl_arg *k_ioctl)
 {
 	struct cam_sync_info sync_create;
 	int result;
@@ -586,7 +642,7 @@ static int cam_sync_handle_create(struct cam_private_ioctl_arg *k_ioctl)
 		return -EFAULT;
 	sync_create.name[SYNC_DEBUG_NAME_LEN] = '\0';
 
-	result = cam_sync_create(&sync_create.sync_obj,
+	result = cam_sync_create(sync_manager_idx, &sync_create.sync_obj,
 		sync_create.name);
 
 	if (!result)
@@ -750,7 +806,7 @@ static int cam_sync_handle_register_user_payload(
 	uint32_t sync_obj;
 	struct sync_table_row *row = NULL;
 	uint16_t sync_uid;
-	uint32_t rc, uid_validity;
+	uint32_t rc, uid_validity, sync_manager_idx;
 
 	if (k_ioctl->size != sizeof(struct cam_sync_userpayload_info))
 		return -EINVAL;
@@ -765,9 +821,14 @@ static int cam_sync_handle_register_user_payload(
 
 	sync_obj = (uint32_t)userpayload_info.sync_obj & sync_uid_access.fenceIdMask;
 	sync_uid = (uint32_t)userpayload_info.sync_obj >> sync_uid_access.uidShift;
+	sync_manager_idx = get_sync_manager_idx(userpayload_info.sync_obj);
 	if (sync_obj >= CAM_SYNC_MAX_OBJS || sync_obj <= 0)
 		return -EINVAL;
-
+	if (sync_manager_idx != sync_dev->sync_table[sync_obj].sync_manager_idx) {
+		CAM_ERR(CAM_SYNC, "sync manager idx for row %d don't match with sync 0x%x",
+			sync_dev->sync_table[sync_obj].sync_manager_idx, userpayload_info.sync_obj);
+		return -EINVAL;
+	}
 	user_payload_kernel = kzalloc(sizeof(*user_payload_kernel), GFP_KERNEL);
 	if (!user_payload_kernel)
 		return -ENOMEM;
@@ -810,7 +871,8 @@ static int cam_sync_handle_register_user_payload(
 			row->state,
 			user_payload_kernel->payload_data,
 			CAM_SYNC_USER_PAYLOAD_SIZE * sizeof(__u64),
-			CAM_SYNC_COMMON_REG_PAYLOAD_EVENT, NULL);
+			CAM_SYNC_COMMON_REG_PAYLOAD_EVENT, NULL,
+			sync_dev->cam_sync_eventq[sync_manager_idx]);
 
 		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 		kfree(user_payload_kernel);
@@ -842,7 +904,7 @@ static int cam_sync_handle_deregister_user_payload(
 {
 	struct cam_sync_userpayload_info userpayload_info;
 	struct sync_user_payload *user_payload_kernel, *temp;
-	uint32_t sync_obj;
+	uint32_t sync_obj, sync_manager_idx;
 	struct sync_table_row *row = NULL;
 	uint16_t sync_uid;
 
@@ -863,12 +925,19 @@ static int cam_sync_handle_deregister_user_payload(
 
 	sync_obj = (uint32_t)userpayload_info.sync_obj & sync_uid_access.fenceIdMask;
 	sync_uid = (uint32_t)userpayload_info.sync_obj >> sync_uid_access.uidShift;
+	sync_manager_idx = get_sync_manager_idx(userpayload_info.sync_obj);
 	if (sync_obj >= CAM_SYNC_MAX_OBJS || sync_obj <= 0)
 		return -EINVAL;
 
 	spin_lock_bh(&sync_dev->row_spinlocks[sync_obj]);
 	row = sync_dev->sync_table + sync_obj;
 
+	if (sync_manager_idx != row->sync_manager_idx) {
+		CAM_ERR(CAM_SYNC, "sync manager idx for row %d don't match with sync 0x%x",
+			row->sync_manager_idx, userpayload_info.sync_obj);
+		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
+		return -EINVAL;
+	}
 	if (row->uid != sync_uid) {
 		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 		CAM_ERR(CAM_SYNC, "deregister called for invalid fence, sync obj: %d, uid: %d",
@@ -901,10 +970,21 @@ static int cam_sync_handle_deregister_user_payload(
 	return 0;
 }
 
+static inline int get_syncmanager_index(void *fh)
+{
+	int i;
+
+	for (i = 0; i < CAM_SYNC_MAX_SYNC_MANAGER; i++) {
+		if (sync_dev->cam_sync_eventq[i] == fh)
+			return i;
+	}
+	return -EINVAL;
+}
+
 static long cam_sync_dev_ioctl(struct file *filep, void *fh,
 		bool valid_prio, unsigned int cmd, void *arg)
 {
-	int32_t rc;
+	int32_t rc, sync_manager_idx;
 	struct sync_device *sync_dev = video_drvdata(filep);
 	struct cam_private_ioctl_arg k_ioctl;
 
@@ -919,11 +999,16 @@ static long cam_sync_dev_ioctl(struct file *filep, void *fh,
 	if (cmd != CAM_PRIVATE_IOCTL_CMD)
 		return -ENOIOCTLCMD;
 
+	sync_manager_idx = get_syncmanager_index(fh);
+	if (sync_manager_idx < 0) {
+		CAM_ERR(CAM_SYNC, "sync manager not found");
+		return -EINVAL;
+	}
 	k_ioctl = *(struct cam_private_ioctl_arg *)arg;
 
 	switch (k_ioctl.id) {
 	case CAM_SYNC_CREATE:
-		rc = cam_sync_handle_create(&k_ioctl);
+		rc = cam_sync_handle_create(sync_manager_idx, &k_ioctl);
 		break;
 	case CAM_SYNC_DESTROY:
 		rc = cam_sync_handle_destroy(&k_ioctl);
@@ -976,7 +1061,7 @@ static unsigned int cam_sync_poll(struct file *f,
 
 static int cam_sync_open(struct file *filep)
 {
-	int rc;
+	int rc, idx, bit;
 	struct sync_device *sync_dev = video_drvdata(filep);
 
 	if (!sync_dev) {
@@ -984,22 +1069,25 @@ static int cam_sync_open(struct file *filep)
 		return -ENODEV;
 	}
 
-	mutex_lock(&sync_dev->table_lock);
-	if (sync_dev->open_cnt >= 1) {
-		mutex_unlock(&sync_dev->table_lock);
-		return -EALREADY;
-	}
+	do {
+		idx = find_first_zero_bit(sync_dev->bitmap_syncmanager, CAM_SYNC_MAX_SYNC_MANAGER);
+		if (idx >= CAM_SYNC_MAX_SYNC_MANAGER) {
+			CAM_ERR(CAM_SYNC,
+				"Error: Unable to create syncmanager reached max!");
+			return -EALREADY;
+		}
+		CAM_INFO(CAM_SYNC, "Sync manager Index location available at idx: %ld", idx);
+		bit = test_and_set_bit(idx, sync_dev->bitmap_syncmanager);
+	} while (bit);
 
 	rc = v4l2_fh_open(filep);
 	if (!rc) {
-		sync_dev->open_cnt++;
-		spin_lock_bh(&sync_dev->cam_sync_eventq_lock);
-		sync_dev->cam_sync_eventq = filep->private_data;
-		spin_unlock_bh(&sync_dev->cam_sync_eventq_lock);
+		spin_lock_bh(&sync_dev->cam_sync_eventq_lock[idx]);
+		sync_dev->cam_sync_eventq[idx] = filep->private_data;
+		spin_unlock_bh(&sync_dev->cam_sync_eventq_lock[idx]);
 	} else {
 		CAM_ERR(CAM_SYNC, "v4l2_fh_open failed : %d", rc);
 	}
-	mutex_unlock(&sync_dev->table_lock);
 
 	return rc;
 }
@@ -1010,64 +1098,63 @@ static int cam_sync_close(struct file *filep)
 	int i;
 	struct sync_device *sync_dev = video_drvdata(filep);
 	struct cam_sync_signal_param param;
+	void *fh = filep->private_data;
+	uint32_t sync_manager_idx = get_syncmanager_index(fh);
 
 	if (!sync_dev) {
 		CAM_ERR(CAM_SYNC, "Sync device NULL");
 		rc = -ENODEV;
 		return rc;
 	}
-	mutex_lock(&sync_dev->table_lock);
-	sync_dev->open_cnt--;
-	if (!sync_dev->open_cnt) {
-		for (i = 1; i < CAM_SYNC_MAX_OBJS; i++) {
-			struct sync_table_row *row =
-			sync_dev->sync_table + i;
-
-			/*
-			 * Signal all ACTIVE objects as ERR, but we don't
-			 * care about the return status here apart from logging
-			 * it.
-			 */
-			if (row->state == CAM_SYNC_STATE_ACTIVE) {
-				memset(&param, 0, sizeof(param));
-				param.sync_obj = i;
-				param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
-				param.event_cause = CAM_SYNC_COMMON_RELEASE_EVENT;
-				rc = cam_sync_signal(&param, NULL);
-				if (rc < 0)
-					CAM_ERR(CAM_SYNC,
-					  "Cleanup signal fail idx:%d\n",
-					  i);
-			}
-		}
-
+	for (i = 1; i < CAM_SYNC_MAX_OBJS; i++) {
+		struct sync_table_row *row =
+		sync_dev->sync_table + i;
 		/*
-		 * Flush the work queue to wait for pending signal callbacks to
-		 * finish
+		 * Signal all ACTIVE objects as ERR, but we don't
+		 * care about the return status here apart from logging
+		 * it.
 		 */
-		flush_workqueue(sync_dev->work_queue);
-
-		/*
-		 * Now that all callbacks worker threads have finished,
-		 * destroy the sync objects
-		 */
-		for (i = 1; i < CAM_SYNC_MAX_OBJS; i++) {
-			struct sync_table_row *row =
-			sync_dev->sync_table + i;
-
-			if (row->state != CAM_SYNC_STATE_INVALID) {
-				rc = cam_sync_destroy(i);
-				if (rc < 0)
-					CAM_ERR(CAM_SYNC,
-					  "Cleanup destroy fail:idx:%d\n",
-					  i);
-			}
+		if ((row->sync_manager_idx == sync_manager_idx) &&
+				(row->state == CAM_SYNC_STATE_ACTIVE)) {
+			memset(&param, 0, sizeof(param));
+			param.sync_obj = __add_sync_manager_idx(i, sync_manager_idx);
+			param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
+			param.event_cause = CAM_SYNC_COMMON_RELEASE_EVENT;
+			rc = cam_sync_signal(&param, NULL);
+			if (rc < 0)
+				CAM_ERR(CAM_SYNC,
+				  "Cleanup signal fail idx:%d\n",
+				  i);
 		}
 	}
-	mutex_unlock(&sync_dev->table_lock);
-	spin_lock_bh(&sync_dev->cam_sync_eventq_lock);
-	sync_dev->cam_sync_eventq = NULL;
-	spin_unlock_bh(&sync_dev->cam_sync_eventq_lock);
+
+	/*
+	 * Flush the work queue to wait for pending signal callbacks to
+	 * finish
+	 */
+	flush_workqueue(sync_dev->work_queue[sync_manager_idx]);
+
+	/*
+	 * Now that all callbacks worker threads have finished,
+	 * destroy the sync objects
+	 */
+	for (i = 1; i < CAM_SYNC_MAX_OBJS; i++) {
+		struct sync_table_row *row =
+		sync_dev->sync_table + i;
+
+		if ((row->sync_manager_idx == sync_manager_idx) &&
+				(row->state != CAM_SYNC_STATE_INVALID)) {
+			rc = cam_sync_destroy(__add_sync_manager_idx(i, sync_manager_idx));
+			if (rc < 0)
+				CAM_ERR(CAM_SYNC,
+				  "Cleanup destroy fail:idx:%d\n",
+				  i);
+		}
+	}
+	spin_lock_bh(&sync_dev->cam_sync_eventq_lock[sync_manager_idx]);
+	sync_dev->cam_sync_eventq[sync_manager_idx] = NULL;
+	clear_bit(sync_manager_idx, sync_dev->bitmap_syncmanager);
+	spin_unlock_bh(&sync_dev->cam_sync_eventq_lock[sync_manager_idx]);
 	v4l2_fh_release(filep);
 
 	return rc;
@@ -1334,18 +1421,26 @@ static int cam_sync_component_bind(struct device *dev,
 	int rc;
 	int idx;
 	struct platform_device *pdev = to_platform_device(dev);
-	uint32_t num_uid_bits;
+	uint32_t num_uid_bits, num_sync_manager_bits;
 	const unsigned long max_uid = CAM_SYNC_MAX_UID;
+	const unsigned long max_sync_manager_id = CAM_SYNC_MAX_SYNC_MANAGER - 1;
 
 	sync_dev = kzalloc(sizeof(*sync_dev), GFP_KERNEL);
 	if (!sync_dev)
 		return -ENOMEM;
 
-	mutex_init(&sync_dev->table_lock);
-	spin_lock_init(&sync_dev->cam_sync_eventq_lock);
-
+	for (idx = 0; idx < CAM_SYNC_MAX_SYNC_MANAGER; idx++)
+		spin_lock_init(&sync_dev->cam_sync_eventq_lock[idx]);
+	sync_dev->sync_table = kzalloc(sizeof(struct sync_table_row) * CAM_SYNC_MAX_OBJS,
+							GFP_KERNEL);
 	for (idx = 0; idx < CAM_SYNC_MAX_OBJS; idx++)
 		spin_lock_init(&sync_dev->row_spinlocks[idx]);
+
+	/*
+	 * We treat zero as invalid handle, so we will keep the 0th bit set
+	 * always
+	 */
+	set_bit(0, sync_dev->bitmap);
 
 	sync_dev->vdev = video_device_alloc();
 	if (!sync_dev->vdev) {
@@ -1381,33 +1476,30 @@ static int cam_sync_component_bind(struct device *dev,
 
 	cam_sync_init_entity(sync_dev);
 	video_set_drvdata(sync_dev->vdev, sync_dev);
-	memset(&sync_dev->sync_table, 0, sizeof(sync_dev->sync_table));
-	memset(&sync_dev->bitmap, 0, sizeof(sync_dev->bitmap));
-	bitmap_zero(sync_dev->bitmap, CAM_SYNC_MAX_OBJS);
 
-	/*
-	 * We treat zero as invalid handle, so we will keep the 0th bit set
-	 * always
-	 */
-	set_bit(0, sync_dev->bitmap);
+	for (idx = 0; idx < CAM_SYNC_MAX_SYNC_MANAGER; idx++) {
+		sync_dev->work_queue[idx] = alloc_workqueue(CAM_SYNC_WORKQUEUE_NAME,
+			WQ_HIGHPRI | WQ_UNBOUND, 1);
 
-	sync_dev->work_queue = alloc_workqueue(CAM_SYNC_WORKQUEUE_NAME,
-		WQ_HIGHPRI | WQ_UNBOUND, 1);
-
-	if (!sync_dev->work_queue) {
-		CAM_ERR(CAM_SYNC,
-			"Error: high priority work queue creation failed");
-		rc = -ENOMEM;
-		goto v4l2_fail;
+		if (!sync_dev->work_queue[idx]) {
+			CAM_ERR(CAM_SYNC,
+				"Error: high priority work queue creation failed");
+			rc = -ENOMEM;
+			goto workqueue_create_fail;
+		}
 	}
 
 	trigger_cb_without_switch = false;
 	cam_sync_create_debugfs();
 	num_uid_bits = bitmap_weight(&max_uid, sizeof(sync_dev->sync_table->sync_id));
+	num_sync_manager_bits = cam_common_get_num_bits_required(max_sync_manager_id);
 	sync_uid_access.fenceIdMask =
-		(1 << ((sizeof(sync_dev->sync_table->sync_id) * 8) - num_uid_bits)) - 1;
+		GENMASK((sizeof(sync_dev->sync_table->sync_id) * 8) -
+			num_uid_bits - num_sync_manager_bits - 1, 0);
 	sync_uid_access.uidShift = (sizeof(sync_dev->sync_table->sync_id) * 8) - num_uid_bits;
 	sync_uid_access.init_uid_val = max_uid << sync_uid_access.uidShift;
+	sync_dev->sync_manager_id_shift =  sync_uid_access.uidShift - num_sync_manager_bits;
+	sync_dev->sync_manager_id_mask = GENMASK(num_sync_manager_bits - 1, 0);
 #if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX)
 	CAM_DBG(CAM_SYNC, "Registering with synx driver");
 	cam_sync_configure_synx_obj(&sync_dev->params);
@@ -1418,6 +1510,9 @@ static int cam_sync_component_bind(struct device *dev,
 	CAM_DBG(CAM_SYNC, "Component bound successfully");
 	return rc;
 
+workqueue_create_fail:
+	for (idx -= 1; idx >= 0; idx--)
+		destroy_workqueue(sync_dev->work_queue[idx]);
 v4l2_fail:
 	v4l2_device_unregister(sync_dev->vdev->v4l2_dev);
 register_fail:
@@ -1426,7 +1521,6 @@ mcinit_fail:
 	video_unregister_device(sync_dev->vdev);
 	video_device_release(sync_dev->vdev);
 vdev_fail:
-	mutex_destroy(&sync_dev->table_lock);
 	kfree(sync_dev);
 	return rc;
 }
@@ -1434,7 +1528,7 @@ vdev_fail:
 static void cam_sync_component_unbind(struct device *dev,
 	struct device *master_dev, void *data)
 {
-	int i;
+	int j;
 
 	v4l2_device_unregister(sync_dev->vdev->v4l2_dev);
 	cam_sync_media_controller_cleanup(sync_dev);
@@ -1446,9 +1540,11 @@ static void cam_sync_component_unbind(struct device *dev,
 	debugfs_remove_recursive(sync_dev->dentry);
 	sync_dev->dentry = NULL;
 
-	for (i = 0; i < CAM_SYNC_MAX_OBJS; i++)
-		spin_lock_init(&sync_dev->row_spinlocks[i]);
+	for (j = 0; j < CAM_SYNC_MAX_OBJS; j++)
+		spin_lock_init(&sync_dev->row_spinlocks[j]);
 
+	for (j = 0; j < CAM_SYNC_MAX_SYNC_MANAGER; j++)
+		destroy_workqueue(sync_dev->work_queue[j]);
 	kfree(sync_dev);
 	sync_dev = NULL;
 }

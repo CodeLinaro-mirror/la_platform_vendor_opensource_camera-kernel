@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_COMMON_UTIL_H_
@@ -169,6 +170,18 @@ int cam_common_modify_timer(struct timer_list *timer, int32_t timeout_val);
  */
 void cam_common_util_thread_switch_delay_detect(const char *token,
 	ktime_t scheduled_time, uint32_t threshold);
+
+/**
+ * cam_common_get_num_bits_required()
+ *
+ * @brief                  Get number of bits required to store a integer
+ *
+ * @max_val:               Maximum value of integer
+ * @scheduled_time:        Time when workq or tasklet was scheduled
+ * @threshold:             Threshold time
+ *
+ */
+int cam_common_get_num_bits_required(uint32_t max_val);
 
 /**
  * cam_common_register_mini_dump_cb()

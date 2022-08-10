@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/string.h>
@@ -156,6 +157,17 @@ void cam_common_util_thread_switch_delay_detect(
 			cur_ts.tv_sec, cur_ts.tv_nsec/NSEC_PER_USEC,
 			diff, threshold);
 	}
+}
+
+int cam_common_get_num_bits_required(uint32_t max_val)
+{
+	int i = 0;
+
+	while (max_val != 0) {
+		max_val >>= 1;
+		i++;
+	}
+	return i;
 }
 
 #if IS_REACHABLE(CONFIG_QCOM_VA_MINIDUMP)
