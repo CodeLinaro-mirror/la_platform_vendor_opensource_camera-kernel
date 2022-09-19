@@ -12,6 +12,9 @@
 static uint debug_mdl;
 module_param(debug_mdl, uint, 0644);
 
+unsigned int debug_event_report;
+module_param(debug_event_report, uint, 0644);
+
 const char *cam_get_module_name(unsigned int module_id)
 {
 	const char *name = NULL;
