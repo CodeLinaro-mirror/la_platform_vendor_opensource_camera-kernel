@@ -52,6 +52,9 @@
 #define STR_BUFFER_MAX_LENGTH  1024
 #define CAM_BOOL_TO_YESNO(val) ((val) ? "Y" : "N")
 
+/* Event IDs used for debug_event_report */
+#define CAM_REPORT_EOF_EVENT   (1 << 0)
+
 /*
  *  cam_debug_log()
  *
@@ -67,6 +70,8 @@
  */
 void cam_debug_log(unsigned int module_id, const char *func, const int line,
 	const char *fmt, ...);
+
+extern unsigned int debug_event_report;
 
 /*
  * cam_get_module_name()
