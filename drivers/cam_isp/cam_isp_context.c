@@ -7801,7 +7801,7 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 		}
 
 		is_slave_down = *(bool *)isp_hw_cmd_args.cmd_data;
-		CAM_ERR(CAM_ISP, "acq type: %d, is_slave_down: %d ctx:%u",
+		CAM_INFO(CAM_ISP, "acq type: %d, is_slave_down: %d ctx:%u",
 			ctx_isp->acquire_type,
 			is_slave_down, ctx->ctx_id);
 		if (ctx_isp->acquire_type == CAM_ISP_ACQUIRE_TYPE_HYBRID &&
