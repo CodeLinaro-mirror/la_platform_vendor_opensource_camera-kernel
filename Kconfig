@@ -67,3 +67,11 @@ config CAM_KTHREAD_WORKER
 	  When this flag is set, we support
 	  kthread for camera kernel worker threads.
 
+config MSM_GLOBAL_SYNX_V2
+	bool "enabling camera synxv2 module"
+	help
+	  This is enabling camera synx v2 module
+	  that allows the usage of synx V2 APIs
+	  and global synchronization across cores.
+	  Synx V2 code only compiles if this is enabled.
+
