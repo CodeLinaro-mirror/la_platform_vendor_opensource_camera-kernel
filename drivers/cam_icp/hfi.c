@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/io.h>
@@ -723,6 +724,11 @@ int cam_hfi_resume(struct hfi_mem_info *hfi_mem)
 	cam_io_w_mb((uint32_t)hfi_mem->fw_uncached.len,
 		icp_base + HFI_REG_FWUNCACHED_REGION_SIZE);
 
+	cam_io_w_mb((uint32_t)hfi_mem->device_mem.iova,
+		icp_base + HFI_REG_DEVICE_REGION_IOVA);
+	cam_io_w_mb((uint32_t)hfi_mem->device_mem.len,
+		icp_base + HFI_REG_DEVICE_REGION_IOVA_SIZE);
+
 	CAM_DBG(CAM_HFI, "IO1 : [0x%x 0x%x] IO2 [0x%x 0x%x]",
 		hfi_mem->io_mem.iova, hfi_mem->io_mem.len,
 		hfi_mem->io_mem2.iova, hfi_mem->io_mem2.len);
@@ -735,9 +741,10 @@ int cam_hfi_resume(struct hfi_mem_info *hfi_mem)
 		hfi_mem->sec_heap.iova, hfi_mem->sec_heap.len,
 		hfi_mem->qdss.iova, hfi_mem->qdss.len);
 
-	CAM_DBG(CAM_HFI, "QTbl : [0x%x 0x%x] Sfr [0x%x 0x%x]",
+	CAM_DBG(CAM_HFI, "QTbl : [0x%x 0x%x] Sfr [0x%x 0x%x] Device [0x%x 0x%x]",
 		hfi_mem->qtbl.iova, hfi_mem->qtbl.len,
-		hfi_mem->sfr_buf.iova, hfi_mem->sfr_buf.len);
+		hfi_mem->sfr_buf.iova, hfi_mem->sfr_buf.len,
+		hfi_mem->device_mem.iova, hfi_mem->device_mem.len);
 
 	return rc;
 }
@@ -934,6 +941,10 @@ int cam_hfi_init(struct hfi_mem_info *hfi_mem, const struct hfi_ops *hfi_ops,
 		icp_base + HFI_REG_FWUNCACHED_REGION_SIZE);
 	cam_io_w_mb((uint32_t)ICP_INIT_REQUEST_SET,
 		icp_base + HFI_REG_HOST_ICP_INIT_REQUEST);
+	cam_io_w_mb((uint32_t)hfi_mem->device_mem.iova,
+		icp_base + HFI_REG_DEVICE_REGION_IOVA);
+	cam_io_w_mb((uint32_t)hfi_mem->device_mem.len,
+		icp_base + HFI_REG_DEVICE_REGION_IOVA_SIZE);
 
 	CAM_DBG(CAM_HFI, "IO1 : [0x%x 0x%x] IO2 [0x%x 0x%x]",
 		hfi_mem->io_mem.iova, hfi_mem->io_mem.len,
@@ -947,9 +958,10 @@ int cam_hfi_init(struct hfi_mem_info *hfi_mem, const struct hfi_ops *hfi_ops,
 		hfi_mem->sec_heap.iova, hfi_mem->sec_heap.len,
 		hfi_mem->qdss.iova, hfi_mem->qdss.len);
 
-	CAM_DBG(CAM_HFI, "QTbl : [0x%x 0x%x] Sfr [0x%x 0x%x]",
+	CAM_DBG(CAM_HFI, "QTbl : [0x%x 0x%x] Sfr [0x%x 0x%x] Device [0x%x 0x%x]",
 		hfi_mem->qtbl.iova, hfi_mem->qtbl.len,
-		hfi_mem->sfr_buf.iova, hfi_mem->sfr_buf.len);
+		hfi_mem->sfr_buf.iova, hfi_mem->sfr_buf.len,
+		hfi_mem->device_mem.iova, hfi_mem->device_mem.len);
 
 	if (cam_common_read_poll_timeout(icp_base +
 		    HFI_REG_ICP_HOST_INIT_RESPONSE,

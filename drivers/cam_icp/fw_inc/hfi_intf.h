@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _HFI_INTF_H_
@@ -37,6 +38,8 @@ struct hfi_mem {
  * @io_mem: io memory info
  * @io_mem2: 2nd io memory info
  * @fw_uncached: FW uncached region info
+ * @global_sync: Global sync mem for IPC
+ * @device_mem: device memory
  */
 struct hfi_mem_info {
 	struct hfi_mem qtbl;
@@ -50,6 +53,7 @@ struct hfi_mem_info {
 	struct hfi_mem io_mem;
 	struct hfi_mem io_mem2;
 	struct hfi_mem fw_uncached;
+	struct hfi_mem device_mem;
 };
 
 /**

@@ -70,9 +70,19 @@ static const struct hfi_ops hfi_lx7_ops = {
 	.iface_addr = cam_lx7_iface_addr,
 };
 
+/* Memory required to setup all HFI queues and sec heap */
+#define ICP_HFI_QUEUES_MEM_SIZE 0x700000
+
 static struct cam_icp_hw_mgr icp_hw_mgr;
 
 static void cam_icp_mgr_process_dbg_buf(unsigned int debug_lvl);
+
+/*
+ * If synx fencing is enabled, send FW memory mapping
+ * for synx hw_mutex, ipc hw_mutex, synx global mem
+ * and global cntr for qtimer
+ */
+#define ICP_NUM_MEM_REGIONS_FOR_SYNX 4
 
 static int cam_icp_dump_io_cfg(struct cam_icp_hw_ctx_data *ctx_data,
 	int32_t buf_handle, uint32_t size)
@@ -2747,23 +2757,16 @@ static void cam_icp_free_fw_mem(void)
 static void cam_icp_free_hfi_mem(void)
 {
 	int rc;
-	struct cam_smmu_region_info fwuncached_region_info;
-	bool fwuncached_region_exists = false;
 
 	cam_icp_free_fw_mem();
 
-	rc = cam_smmu_get_region_info(icp_hw_mgr.iommu_hdl,
-		CAM_SMMU_REGION_FWUNCACHED,
-		&fwuncached_region_info);
-	if (!rc)
-		fwuncached_region_exists = true;
-
-	if (fwuncached_region_exists) {
+	if (icp_hw_mgr.hfi_mem.fw_uncached_region) {
 		rc = cam_mem_mgr_free_memory_region(
-			&icp_hw_mgr.hfi_mem.fw_uncached);
+			&icp_hw_mgr.hfi_mem.fw_uncached_generic);
 		if (rc)
 			CAM_ERR(CAM_ICP,
 				"failed to unreserve fwuncached region");
+		icp_hw_mgr.hfi_mem.fw_uncached_region = false;
 	} else {
 		rc = cam_mem_mgr_free_memory_region(
 			&icp_hw_mgr.hfi_mem.sec_heap);
@@ -2777,7 +2780,19 @@ static void cam_icp_free_hfi_mem(void)
 		cam_mem_mgr_release_mem(&icp_hw_mgr.hfi_mem.sfr_buf);
 	}
 
-	cam_smmu_dealloc_qdss(icp_hw_mgr.iommu_hdl);
+	cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl, CAM_SMMU_REGION_QDSS, 0);
+
+	/* Skip freeing if not mapped */
+	if (icp_hw_mgr.synx_signaling_en) {
+		cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl, CAM_SMMU_REGION_FWUNCACHED,
+			CAM_SMMU_SUBREGION_GLOBAL_SYNC_MEM);
+		cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl, CAM_SMMU_REGION_DEVICE,
+			CAM_SMMU_SUBREGION_SYNX_HWMUTEX);
+		cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl, CAM_SMMU_REGION_DEVICE,
+			CAM_SMMU_SUBREGION_IPC_HWMUTEX);
+		cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl, CAM_SMMU_REGION_DEVICE,
+			CAM_SMMU_SUBREGION_GLOBAL_CNTR);
+	}
 }
 
 static int cam_icp_alloc_secheap_mem(struct cam_mem_mgr_memory_desc *secheap)
@@ -2791,8 +2806,7 @@ static int cam_icp_alloc_secheap_mem(struct cam_mem_mgr_memory_desc *secheap)
 	memset(&out, 0, sizeof(out));
 
 	rc = cam_smmu_get_region_info(icp_hw_mgr.iommu_hdl,
-		CAM_SMMU_REGION_SECHEAP,
-		&secheap_info);
+		CAM_SMMU_REGION_SECHEAP, &secheap_info);
 	if (rc) {
 		CAM_ERR(CAM_ICP, "Unable to get secheap memory info");
 		return rc;
@@ -2898,16 +2912,159 @@ static int cam_icp_allocate_qdss_mem(void)
 	size_t len;
 	dma_addr_t iova;
 
-	rc = cam_smmu_alloc_qdss(icp_hw_mgr.iommu_hdl,
-		&iova, &len);
-	if (rc)
+	rc = cam_smmu_map_phy_mem_region(icp_hw_mgr.iommu_hdl,
+		CAM_SMMU_REGION_QDSS, 0, &iova, &len);
+	if (rc) {
+		CAM_ERR(CAM_ICP, "Failed in alloc qdss mem rc %d", rc);
 		return rc;
+	}
 
 	icp_hw_mgr.hfi_mem.qdss_buf.len = len;
 	icp_hw_mgr.hfi_mem.qdss_buf.iova = iova;
 	icp_hw_mgr.hfi_mem.qdss_buf.smmu_hdl = icp_hw_mgr.iommu_hdl;
 
 	CAM_DBG(CAM_ICP, "iova: %llx, len: %zu", iova, len);
+
+	return rc;
+}
+
+static int cam_icp_allocate_global_sync_mem(void)
+{
+	int rc;
+	size_t len;
+	dma_addr_t iova;
+
+	rc = cam_smmu_map_phy_mem_region(icp_hw_mgr.iommu_hdl,
+		CAM_SMMU_REGION_FWUNCACHED,
+		CAM_SMMU_SUBREGION_GLOBAL_SYNC_MEM, &iova, &len);
+	if (rc) {
+		CAM_ERR(CAM_ICP,
+			"Failed in allocating global sync ipc mem rc %d", rc);
+		return rc;
+	}
+
+	icp_hw_mgr.hfi_mem.fw_uncached_global_sync.len = len;
+	icp_hw_mgr.hfi_mem.fw_uncached_global_sync.iova = iova;
+	icp_hw_mgr.hfi_mem.fw_uncached_global_sync.smmu_hdl = icp_hw_mgr.iommu_hdl;
+
+	CAM_DBG(CAM_ICP, "iova: %llx, len: %zu", iova, len);
+
+	return rc;
+}
+
+static int cam_icp_allocate_device_synx_hwmutex_mem(void)
+{
+	int rc;
+	size_t len;
+	dma_addr_t iova;
+
+	rc = cam_smmu_map_phy_mem_region(icp_hw_mgr.iommu_hdl,
+		CAM_SMMU_REGION_DEVICE, CAM_SMMU_SUBREGION_SYNX_HWMUTEX, &iova, &len);
+	if (rc) {
+		CAM_ERR(CAM_ICP,
+			"Failed in allocating hwmutex mem rc %d", rc);
+		return rc;
+	}
+
+	icp_hw_mgr.hfi_mem.synx_hwmutex.len = len;
+	icp_hw_mgr.hfi_mem.synx_hwmutex.iova = iova;
+	icp_hw_mgr.hfi_mem.synx_hwmutex.smmu_hdl = icp_hw_mgr.iommu_hdl;
+
+	CAM_DBG(CAM_ICP, "iova: %llx, len: %zu", iova, len);
+
+	return rc;
+}
+
+static int cam_icp_allocate_device_global_cnt_mem(void)
+{
+	int rc;
+	size_t len;
+	dma_addr_t iova;
+
+	rc = cam_smmu_map_phy_mem_region(icp_hw_mgr.iommu_hdl,
+		CAM_SMMU_REGION_DEVICE, CAM_SMMU_SUBREGION_GLOBAL_CNTR,
+		&iova, &len);
+	if (rc) {
+		CAM_ERR(CAM_ICP,
+			"Failed in allocating global cntr mem rc %d", rc);
+		return rc;
+	}
+
+	icp_hw_mgr.hfi_mem.global_cntr.len = len;
+	icp_hw_mgr.hfi_mem.global_cntr.iova = iova;
+	icp_hw_mgr.hfi_mem.global_cntr.smmu_hdl = icp_hw_mgr.iommu_hdl;
+
+	CAM_DBG(CAM_ICP, "iova: %llx, len: %zu", iova, len);
+
+	return rc;
+}
+
+static int cam_icp_allocate_device_ipc_hwmutex_mem(void)
+{
+	int rc;
+	size_t len;
+	dma_addr_t iova;
+
+	rc = cam_smmu_map_phy_mem_region(icp_hw_mgr.iommu_hdl,
+		CAM_SMMU_REGION_DEVICE, CAM_SMMU_SUBREGION_IPC_HWMUTEX,
+		&iova, &len);
+	if (rc) {
+		CAM_ERR(CAM_ICP,
+			"Failed in allocating hwmutex mem rc %d", rc);
+		return rc;
+	}
+
+	icp_hw_mgr.hfi_mem.ipc_hwmutex.len = len;
+	icp_hw_mgr.hfi_mem.ipc_hwmutex.iova = iova;
+	icp_hw_mgr.hfi_mem.ipc_hwmutex.smmu_hdl = icp_hw_mgr.iommu_hdl;
+
+	CAM_DBG(CAM_ICP, "iova: %llx, len: %zu", iova, len);
+
+	return rc;
+}
+
+static int cam_icp_allocate_mem_for_fence_signaling(void)
+{
+	int rc;
+
+	rc = cam_smmu_get_region_info(icp_hw_mgr.iommu_hdl,
+		CAM_SMMU_REGION_DEVICE, &icp_hw_mgr.hfi_mem.device);
+	if (rc) {
+		CAM_ERR(CAM_ICP,
+			"Unable to get device memory info rc %d", rc);
+		return rc;
+	}
+
+	rc = cam_icp_allocate_global_sync_mem();
+	if (rc)
+		return rc;
+
+	rc = cam_icp_allocate_device_synx_hwmutex_mem();
+	if (rc)
+		goto unmap_global_sync;
+
+	rc = cam_icp_allocate_device_ipc_hwmutex_mem();
+	if (rc)
+		goto unmap_synx_hwmutex;
+
+	rc = cam_icp_allocate_device_global_cnt_mem();
+	if (rc)
+		goto unmap_ipc_mutex;
+
+	return 0;
+
+unmap_ipc_mutex:
+	cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl,
+		CAM_SMMU_REGION_DEVICE,
+		CAM_SMMU_SUBREGION_IPC_HWMUTEX);
+unmap_synx_hwmutex:
+	cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl,
+		CAM_SMMU_REGION_DEVICE,
+		CAM_SMMU_SUBREGION_SYNX_HWMUTEX);
+unmap_global_sync:
+	cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl,
+		CAM_SMMU_REGION_FWUNCACHED,
+		CAM_SMMU_SUBREGION_GLOBAL_SYNC_MEM);
 
 	return rc;
 }
@@ -2941,8 +3098,7 @@ static int cam_icp_allocate_hfi_mem(void)
 	bool fwuncached_region_exists = false;
 
 	rc = cam_smmu_get_region_info(icp_hw_mgr.iommu_hdl,
-		CAM_SMMU_REGION_SHARED,
-		&icp_hw_mgr.hfi_mem.shmem);
+		CAM_SMMU_REGION_SHARED, &icp_hw_mgr.hfi_mem.shmem);
 	if (rc) {
 		CAM_ERR(CAM_ICP, "Unable to get shared memory info");
 		return rc;
@@ -2961,8 +3117,7 @@ static int cam_icp_allocate_hfi_mem(void)
 	}
 
 	rc = cam_smmu_get_region_info(icp_hw_mgr.iommu_hdl,
-		CAM_SMMU_REGION_FWUNCACHED,
-		&fwuncached_region_info);
+		CAM_SMMU_REGION_FWUNCACHED, &fwuncached_region_info);
 	if (!rc)
 		fwuncached_region_exists = true;
 
@@ -2975,19 +3130,27 @@ static int cam_icp_allocate_hfi_mem(void)
 		memset(&alloc, 0, sizeof(alloc));
 		memset(&out, 0, sizeof(out));
 
-		alloc.size = fwuncached_region_info.iova_len;
+		alloc.size = ICP_HFI_QUEUES_MEM_SIZE;
 		alloc.align = 0;
 		alloc.flags = CAM_MEM_FLAG_KMD_ACCESS;
 		alloc.smmu_hdl = icp_hw_mgr.iommu_hdl;
 		rc = cam_mem_mgr_reserve_memory_region(&alloc,
-			CAM_SMMU_REGION_FWUNCACHED,
-			&out);
+			CAM_SMMU_REGION_FWUNCACHED, &out);
 		if (rc) {
-			CAM_ERR(CAM_ICP, "Unable to reserve secheap memory");
+			CAM_ERR(CAM_ICP, "Unable to reserve fw uncached memory rc %d", rc);
 			goto qtbl_alloc_failed;
 		}
 
-		icp_hw_mgr.hfi_mem.fw_uncached = out;
+		icp_hw_mgr.hfi_mem.fw_uncached_region = true;
+		/*
+		 * If the FW uncached region is carved into different subregions
+		 * send the whole region to FW, resulting in one ICP MMU entry.
+		 * If reserving for FW uncached the SMMU will map the FW uncached
+		 * generic, and return the appropriate va
+		 *
+		 */
+		icp_hw_mgr.hfi_mem.fw_uncached = fwuncached_region_info;
+		icp_hw_mgr.hfi_mem.fw_uncached_generic = out;
 
 		offset = 0;
 
@@ -3049,8 +3212,7 @@ static int cam_icp_allocate_hfi_mem(void)
 			CAM_ERR(CAM_ICP,
 				"FW uncached region size %lld not enough, required %lld",
 				offset, out.len);
-			cam_mem_mgr_free_memory_region(
-				&icp_hw_mgr.hfi_mem.fw_uncached);
+			cam_mem_mgr_free_memory_region(&icp_hw_mgr.hfi_mem.fw_uncached_generic);
 			goto qtbl_alloc_failed;
 		}
 	} else {
@@ -3091,7 +3253,7 @@ static int cam_icp_allocate_hfi_mem(void)
 		}
 	}
 
-	CAM_DBG(CAM_ICP, "Shared Region [0x%x %lld] FW Uncached Region [0x%x %lld]",
+	CAM_DBG(CAM_ICP, "Shared Region [0x%x %lld] FW Uncached nested Region [0x%x %lld]",
 		icp_hw_mgr.hfi_mem.shmem.iova_start,
 		icp_hw_mgr.hfi_mem.shmem.iova_len,
 		fwuncached_region_info.iova_start,
@@ -3099,9 +3261,9 @@ static int cam_icp_allocate_hfi_mem(void)
 
 	CAM_DBG(CAM_ICP,
 		"FwUncached[0x%x %p %lld] QTbl[0x%x %p %lld] CmdQ[0x%x %p %lld] MsgQ[0x%x %p %lld]",
-		icp_hw_mgr.hfi_mem.fw_uncached.iova,
-		icp_hw_mgr.hfi_mem.fw_uncached.kva,
-		icp_hw_mgr.hfi_mem.fw_uncached.len,
+		icp_hw_mgr.hfi_mem.fw_uncached_generic.iova,
+		icp_hw_mgr.hfi_mem.fw_uncached_generic.kva,
+		icp_hw_mgr.hfi_mem.fw_uncached_generic.len,
 		icp_hw_mgr.hfi_mem.qtbl.iova,
 		icp_hw_mgr.hfi_mem.qtbl.kva,
 		icp_hw_mgr.hfi_mem.qtbl.len,
@@ -3129,10 +3291,24 @@ static int cam_icp_allocate_hfi_mem(void)
 		CAM_ERR(CAM_ICP, "Unable to get I/O region info");
 		if (fwuncached_region_exists) {
 			cam_mem_mgr_free_memory_region(
-				&icp_hw_mgr.hfi_mem.fw_uncached);
+				&icp_hw_mgr.hfi_mem.fw_uncached_generic);
 			goto qtbl_alloc_failed;
 		} else {
 			goto get_io_mem_failed;
+		}
+	}
+
+	/* Allocate sync global mem & hwmutex for IPC */
+	if (icp_hw_mgr.synx_signaling_en) {
+		rc = cam_icp_allocate_mem_for_fence_signaling();
+		if (rc) {
+			if (fwuncached_region_exists) {
+				cam_mem_mgr_free_memory_region(
+					&icp_hw_mgr.hfi_mem.fw_uncached_generic);
+				goto qtbl_alloc_failed;
+			} else {
+				goto get_io_mem_failed;
+			}
 		}
 	}
 
@@ -3150,7 +3326,7 @@ msg_q_alloc_failed:
 cmd_q_alloc_failed:
 	cam_mem_mgr_release_mem(&icp_hw_mgr.hfi_mem.qtbl);
 qtbl_alloc_failed:
-	cam_smmu_dealloc_qdss(icp_hw_mgr.iommu_hdl);
+	cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl, CAM_SMMU_REGION_QDSS, 0);
 fw_alloc_failed:
 	cam_icp_free_fw_mem();
 	return rc;
@@ -3403,7 +3579,7 @@ static void cam_icp_mgr_proc_shutdown(struct cam_icp_hw_mgr *hw_mgr)
 
 static int cam_icp_mgr_hfi_resume(struct cam_icp_hw_mgr *hw_mgr)
 {
-	struct hfi_mem_info hfi_mem;
+	struct hfi_mem_info hfi_mem = {0};
 
 	hfi_mem.qtbl.kva = icp_hw_mgr.hfi_mem.qtbl.kva;
 	hfi_mem.qtbl.iova = icp_hw_mgr.hfi_mem.qtbl.iova;
@@ -3446,6 +3622,14 @@ static int cam_icp_mgr_hfi_resume(struct cam_icp_hw_mgr *hw_mgr)
 	hfi_mem.qdss.iova = icp_hw_mgr.hfi_mem.qdss_buf.iova;
 	hfi_mem.qdss.len = icp_hw_mgr.hfi_mem.qdss_buf.len;
 
+	if (icp_hw_mgr.synx_signaling_en) {
+		hfi_mem.device_mem.iova = icp_hw_mgr.hfi_mem.device.iova_start;
+		hfi_mem.device_mem.len = icp_hw_mgr.hfi_mem.device.iova_len;
+		CAM_DBG(CAM_ICP,
+			"device memory [iova = 0x%llx len = 0x%llx]",
+			hfi_mem.device_mem.iova, hfi_mem.device_mem.len);
+	}
+
 	if (icp_hw_mgr.hfi_mem.io_mem.discard_iova_start &&
 		icp_hw_mgr.hfi_mem.io_mem.discard_iova_len) {
 		/* IO Region 1 */
@@ -3472,8 +3656,8 @@ static int cam_icp_mgr_hfi_resume(struct cam_icp_hw_mgr *hw_mgr)
 		hfi_mem.io_mem2.len = 0x0;
 	}
 
-	hfi_mem.fw_uncached.iova = icp_hw_mgr.hfi_mem.fw_uncached.iova;
-	hfi_mem.fw_uncached.len = icp_hw_mgr.hfi_mem.fw_uncached.len;
+	hfi_mem.fw_uncached.iova = icp_hw_mgr.hfi_mem.fw_uncached.iova_start;
+	hfi_mem.fw_uncached.len = icp_hw_mgr.hfi_mem.fw_uncached.iova_len;
 
 	CAM_DBG(CAM_ICP,
 		"IO region1 IOVA = %X length = %lld, IO region2 IOVA = %X length = %lld",
@@ -3967,7 +4151,7 @@ static int cam_icp_mgr_hfi_init(struct cam_icp_hw_mgr *hw_mgr)
 {
 	struct cam_hw_intf *icp_dev_intf = NULL;
 	struct cam_hw_info *icp_dev = NULL;
-	struct hfi_mem_info hfi_mem;
+	struct hfi_mem_info hfi_mem = {0};
 	const struct hfi_ops *hfi_ops;
 
 	icp_dev_intf = hw_mgr->icp_dev_intf;
@@ -4007,6 +4191,14 @@ static int cam_icp_mgr_hfi_init(struct cam_icp_hw_mgr *hw_mgr)
 	hfi_mem.qdss.iova = icp_hw_mgr.hfi_mem.qdss_buf.iova;
 	hfi_mem.qdss.len = icp_hw_mgr.hfi_mem.qdss_buf.len;
 
+	if (icp_hw_mgr.synx_signaling_en) {
+		hfi_mem.device_mem.iova = icp_hw_mgr.hfi_mem.device.iova_start;
+		hfi_mem.device_mem.len = icp_hw_mgr.hfi_mem.device.iova_len;
+		CAM_DBG(CAM_ICP,
+			"device memory [iova = 0x%llx len = 0x%llx]",
+			hfi_mem.device_mem.iova, hfi_mem.device_mem.len);
+	}
+
 	if (icp_hw_mgr.hfi_mem.io_mem.discard_iova_start &&
 		icp_hw_mgr.hfi_mem.io_mem.discard_iova_len) {
 		/* IO Region 1 */
@@ -4033,13 +4225,34 @@ static int cam_icp_mgr_hfi_init(struct cam_icp_hw_mgr *hw_mgr)
 		hfi_mem.io_mem2.len = 0x0;
 	}
 
-	hfi_mem.fw_uncached.iova = icp_hw_mgr.hfi_mem.fw_uncached.iova;
-	hfi_mem.fw_uncached.len = icp_hw_mgr.hfi_mem.fw_uncached.len;
+	hfi_mem.fw_uncached.iova = icp_hw_mgr.hfi_mem.fw_uncached.iova_start;
+	hfi_mem.fw_uncached.len = icp_hw_mgr.hfi_mem.fw_uncached.iova_len;
 
 	if (icp_dev_intf->hw_type == CAM_ICP_DEV_LX7)
 		hfi_ops = &hfi_lx7_ops;
 	else
 		hfi_ops = &hfi_a5_ops;
+
+	if (hw_mgr->synx_signaling_en) {
+		/* Expect global sync to be at the start of FW uncached region */
+		if (hw_mgr->hfi_mem.fw_uncached_global_sync.iova >=
+			hw_mgr->hfi_mem.fw_uncached_generic.iova) {
+			CAM_ERR(CAM_ICP,
+				"global sync memory [start: 0x%x] expected to be at the start of FW uncached [uncached_generic start: 0x%x]",
+				hw_mgr->hfi_mem.fw_uncached_global_sync.iova,
+				hw_mgr->hfi_mem.fw_uncached_generic.iova);
+			return -EINVAL;
+		}
+
+		/*
+		 * Global sync memory is part of FW uncached region, but to FW remove this entry
+		 * from FW uncached to avoid it being mapped with FW uncached. Global sync
+		 * mem will be mapped with sharable attributes for IPC access, and hence
+		 * an independent mapping of it's own.
+		 */
+		hfi_mem.fw_uncached.iova += hw_mgr->hfi_mem.fw_uncached_global_sync.len;
+		hfi_mem.fw_uncached.len -= hw_mgr->hfi_mem.fw_uncached_global_sync.len;
+	}
 
 	return cam_hfi_init(&hfi_mem, hfi_ops, icp_dev, 0);
 }
@@ -4075,6 +4288,101 @@ static int cam_icp_mgr_send_fw_init(struct cam_icp_hw_mgr *hw_mgr)
 	CAM_DBG(CAM_ICP, "Done Waiting for INIT DONE Message");
 
 	return rc;
+}
+
+static int cam_icp_mgr_send_memory_region_info(
+	struct cam_icp_hw_mgr *hw_mgr)
+{
+	struct hfi_cmd_prop *set_prop = NULL;
+	struct hfi_cmd_config_mem_regions *region_info = NULL;
+	uint32_t num_regions = 0;
+	size_t payload_size;
+
+	if (hw_mgr->synx_signaling_en)
+		num_regions += ICP_NUM_MEM_REGIONS_FOR_SYNX;
+
+	if (!num_regions)
+		return 0;
+
+	payload_size = sizeof(struct hfi_cmd_prop) +
+		(sizeof(struct hfi_cmd_config_mem_regions)) +
+		(sizeof(struct hfi_cmd_mem_region_info) * (num_regions - 1));
+
+	set_prop = kzalloc(payload_size, GFP_KERNEL);
+	if (!set_prop)
+		return -ENOMEM;
+
+	set_prop->size = payload_size;
+	set_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
+	set_prop->num_prop = 1;
+	set_prop->prop_data[0] = HFI_PROP_SYS_MEM_REGIONS;
+
+	region_info = (struct hfi_cmd_config_mem_regions *)&set_prop->prop_data[1];
+	if (hw_mgr->synx_signaling_en) {
+		/* Update synx global mem */
+		region_info->region_info[region_info->num_valid_regions].region_id =
+			HFI_MEM_REGION_ID_IPCLITE_SHARED_MEM;
+		region_info->region_info[region_info->num_valid_regions].region_type =
+			HFI_MEM_REGION_TYPE_UNCACHED;
+		region_info->region_info[region_info->num_valid_regions].start_addr =
+			hw_mgr->hfi_mem.fw_uncached_global_sync.iova;
+		region_info->region_info[region_info->num_valid_regions].size =
+			hw_mgr->hfi_mem.fw_uncached_global_sync.len;
+
+		region_info->num_valid_regions++;
+
+		/* Update synx hw_mutex mem */
+		region_info->region_info[region_info->num_valid_regions].region_id =
+			HFI_MEM_REGION_ID_SYNX_HW_MUTEX;
+		region_info->region_info[region_info->num_valid_regions].region_type =
+			HFI_MEM_REGION_TYPE_DEVICE;
+		region_info->region_info[region_info->num_valid_regions].start_addr =
+			hw_mgr->hfi_mem.synx_hwmutex.iova;
+		region_info->region_info[region_info->num_valid_regions].size =
+			hw_mgr->hfi_mem.synx_hwmutex.len;
+
+		region_info->num_valid_regions++;
+
+		/* Update ipc hw_mutex mem */
+		region_info->region_info[region_info->num_valid_regions].region_id =
+			HFI_MEM_REGION_ID_GLOBAL_ATOMIC_HW_MUTEX;
+		region_info->region_info[region_info->num_valid_regions].region_type =
+			HFI_MEM_REGION_TYPE_DEVICE;
+		region_info->region_info[region_info->num_valid_regions].start_addr =
+			hw_mgr->hfi_mem.ipc_hwmutex.iova;
+		region_info->region_info[region_info->num_valid_regions].size =
+			hw_mgr->hfi_mem.ipc_hwmutex.len;
+
+		region_info->num_valid_regions++;
+
+		/* Update global cntr mem */
+		region_info->region_info[region_info->num_valid_regions].region_id =
+			HFI_MEM_REGION_ID_GLOBAL_CNTR;
+		region_info->region_info[region_info->num_valid_regions].region_type =
+			HFI_MEM_REGION_TYPE_DEVICE;
+		region_info->region_info[region_info->num_valid_regions].start_addr =
+			hw_mgr->hfi_mem.global_cntr.iova;
+		region_info->region_info[region_info->num_valid_regions].size =
+			hw_mgr->hfi_mem.global_cntr.len;
+
+		region_info->num_valid_regions++;
+		CAM_DBG(CAM_ICP,
+			"Synx mem regions global_sync[0x%x:0x%x] synx_hw_mutex[0x%x:0x%x] ipc_hw_mutex[0x%x:0x%x] global_cntr[0x%x:0x%x]",
+			hw_mgr->hfi_mem.fw_uncached_global_sync.iova,
+			hw_mgr->hfi_mem.fw_uncached_global_sync.len,
+			hw_mgr->hfi_mem.synx_hwmutex.iova, hw_mgr->hfi_mem.synx_hwmutex.len,
+			hw_mgr->hfi_mem.ipc_hwmutex.iova, hw_mgr->hfi_mem.ipc_hwmutex.len,
+			hw_mgr->hfi_mem.global_cntr.iova, hw_mgr->hfi_mem.global_cntr.len);
+	}
+
+	CAM_DBG(CAM_ICP,
+		"Mem region property payload size: %zu num_regions: %u",
+		payload_size, region_info->num_valid_regions);
+
+	hfi_write_cmd(set_prop);
+	kfree(set_prop);
+
+	return 0;
 }
 
 static int cam_icp_mgr_hw_open_u(void *hw_mgr_priv, void *download_fw_args)
@@ -4187,6 +4495,12 @@ static int cam_icp_mgr_hw_open(void *hw_mgr_priv, void *download_fw_args)
 	rc = cam_icp_mgr_send_fw_init(hw_mgr);
 	if (rc)
 		goto fw_init_failed;
+
+	rc = cam_icp_mgr_send_memory_region_info(hw_mgr);
+	if (rc) {
+		CAM_ERR(CAM_ICP, "Failed in sending mem region info, rc %d", rc);
+		goto fw_init_failed;
+	}
 
 	hw_mgr->ctxt_cnt = 0;
 	hw_mgr->icp_booted = true;
@@ -6439,6 +6753,7 @@ static int cam_icp_mgr_alloc_devs(struct device_node *np)
 	icp_hw_mgr.ipe_bps_pc_flag = of_property_read_bool(np, "ipe_bps_pc_en");
 	icp_hw_mgr.icp_pc_flag = of_property_read_bool(np, "icp_pc_en");
 	icp_hw_mgr.icp_use_pil = of_property_read_bool(np, "icp_use_pil");
+	icp_hw_mgr.synx_signaling_en = of_property_read_bool(np, "synx_signaling_en");
 
 	return 0;
 
