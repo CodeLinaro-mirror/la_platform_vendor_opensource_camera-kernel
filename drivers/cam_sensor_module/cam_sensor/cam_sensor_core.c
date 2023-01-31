@@ -1438,7 +1438,7 @@ static int cam_sensor_apply_settings_no_crm(
 		return -EINVAL;
 	}
 
-	isp_req_id    = notify->request_id;
+	isp_req_id    = notify->ife_applied_req_id;
 	sensor_pd     = s_ctrl->pipeline_delay;
 	sensor_req_id = isp_req_id + (sensor_pd - isp_pd);
 	opcode        = CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE;
@@ -1463,6 +1463,7 @@ static int cam_sensor_apply_settings_no_crm(
 					opcode);
 			if (!rc) {
 				s_ctrl->last_applied_req = new_req_id;
+				notify->sensor_applied_req_id = new_req_id;
 				CAM_ERR(CAM_SENSOR,
 							"slot[%d] skiped apply[%llu]",
 							s_ctrl->soc_info.index,
@@ -1490,6 +1491,7 @@ static int cam_sensor_apply_settings_no_crm(
 						opcode);
 			if (!rc) {
 				s_ctrl->last_applied_req = sensor_req_id;
+				notify->sensor_applied_req_id = sensor_req_id;
 				CAM_DBG(CAM_SENSOR, "slot[%d] apply[%llu]",
 								s_ctrl->soc_info.index,
 								s_ctrl->last_applied_req);
