@@ -566,6 +566,7 @@ struct cam_hw_mini_dump_info {
  * @hw_reset:                  Function pointer for HW reset
  * @hw_dump:                   Function pointer for HW dump
  * @hw_recovery:               Function pointer for HW recovery callback
+ * @synx_trigger:              Function pointer for synx test trigger
  *
  */
 struct cam_hw_mgr_intf {
@@ -591,6 +592,7 @@ struct cam_hw_mgr_intf {
 	int (*hw_dump)(void *hw_priv, void *hw_dump_args);
 	int (*hw_recovery)(void *hw_priv, void *hw_recovery_args);
 	int (*hw_update_sensor_grp_stream_cfg)(void *hw_priv, void *hw_cfg_args);
+	int (*synx_trigger)(void *hw_priv, void *synx_params);
 };
 
 #endif /* _CAM_HW_MGR_INTF_H_ */

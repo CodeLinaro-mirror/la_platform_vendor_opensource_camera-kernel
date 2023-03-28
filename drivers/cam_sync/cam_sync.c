@@ -453,6 +453,7 @@ int cam_sync_merge(int32_t *sync_var, uint32_t num_objs, int32_t *merged_obj)
 	}
 	sync_dev->sync_table[idx].sync_manager_idx = sync_manager_idx;
 	CAM_DBG(CAM_SYNC, "Init row at idx:%ld to merge objects", idx);
+	*merged_obj = __add_sync_manager_idx(idx, sync_manager_idx);
 	spin_unlock_bh(&sync_dev->row_spinlocks[idx]);
 
 	return 0;
