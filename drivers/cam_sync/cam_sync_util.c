@@ -29,10 +29,11 @@ int cam_sync_get_ext_fence_payload(
 		struct sync_ext_fence_info, list);
 	list_del_init(&tmp_payload->list);
 	*ext_fence_payload = tmp_payload;
+	memset(&tmp_payload->synx_obj_info, 0, sizeof(struct sync_synx_obj_info));
+	memset(&tmp_payload->dma_fence_info, 0, sizeof(struct sync_dma_fence_info));
 
 unlock_end:
 	spin_unlock_bh(&sync_dev->payload_lock);
-	memset(tmp_payload, 0x0, sizeof(*tmp_payload));
 	return rc;
 }
 

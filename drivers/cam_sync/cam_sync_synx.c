@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
+#include <linux/soc/qcom/msm_hw_fence.h>
+
 #include "cam_sync_synx.h"
+#include <synx_extension_api.h>
+
+/* Max IPCC signals are 64 per client, starting from 0 */
+#define HW_FENCE_MAX_IPCC_SIGNALS_PER_CLIENT 63
 
 /**
  * struct cam_synx_obj_row - Synx obj row
@@ -118,6 +124,44 @@ static int __cam_synx_obj_release_row(int32_t row_idx)
 	}
 
 	return __cam_synx_obj_release(row_idx);
+}
+
+static enum synx_client_id cam_synx_map_camera_client_id_for_synx(
+	enum cam_sync_fencing_client_cores cam_client_id,
+	uint32_t signal_id)
+{
+	switch (cam_client_id) {
+	case CAM_SYNC_SYNX_CLIENT_ICP_0:
+		return SYNX_CLIENT_ICP_CTX0;
+	case CAM_SYNC_SYNX_CLIENT_ICP_1:
+		return SYNX_CLIENT_NATIVE;
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE0_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE0_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE1_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE1_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE2_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE2_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE3_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE3_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE4_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE4_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE5_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE5_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE6_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE6_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE7_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE7_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE8_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE8_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE9_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE9_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE10_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE10_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE11_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE11_CTX0 + signal_id);
+	default:
+		return SYNX_CLIENT_MAX;
+	}
 }
 
 static void __cam_synx_obj_signal_cb(u32 h_synx, int status, void *data)
@@ -516,6 +560,81 @@ int cam_synx_obj_register_cb(int32_t *sync_obj, int32_t row_idx,
 end:
 	spin_unlock_bh(&g_cam_synx_obj_dev->row_spinlocks[row_idx]);
 	return rc;
+}
+
+struct synx_session *cam_synx_initialize_hw_fence_session(
+	struct cam_sync_hwfence_session_initialize_params *init_params,
+	void **sw_tx_wm_vaddr)
+{
+	enum synx_client_id synx_client_id;
+	struct synx_queue_desc queue_desc;
+	struct synx_initialization_params params;
+	struct synx_session *session_handle = NULL;
+
+	if (!init_params || !sw_tx_wm_vaddr) {
+		CAM_ERR(CAM_SYNX, "Invalid arguments");
+		return ERR_PTR(-EINVAL);
+	}
+
+	if (unlikely(init_params->signal_id >= HW_FENCE_MAX_IPCC_SIGNALS_PER_CLIENT)) {
+		CAM_ERR(CAM_SYNX, "Invalid signal_id: %u max_supported: %u",
+			init_params->signal_id, HW_FENCE_MAX_IPCC_SIGNALS_PER_CLIENT);
+		return ERR_PTR(-EINVAL);
+	}
+
+	synx_client_id = cam_synx_map_camera_client_id_for_synx(init_params->client_core,
+		init_params->signal_id);
+
+	if (unlikely(synx_client_id >= SYNX_CLIENT_MAX)) {
+		CAM_ERR(CAM_SYNX, "Invalid client_core: %u signal_id: %u",
+			init_params->client_core, init_params->signal_id);
+		return ERR_PTR(-EINVAL);
+	}
+
+	params.name = init_params->name;
+	params.ptr = &queue_desc;
+	params.flags = SYNX_INIT_MAX;
+	params.id = synx_client_id;
+
+	session_handle = synx_initialize(&params);
+	if (IS_ERR_OR_NULL(session_handle)) {
+		CAM_ERR(CAM_SYNX,
+			"Failed to initialize session for client: %u %u [%s]",
+			init_params->client_core, synx_client_id, init_params->name);
+		return NULL;
+	}
+
+	if (init_params->fencing_protocol) {
+		struct msm_hw_fence_hfi_queue_table_header *queue_table;
+		uint32_t sw_tx_wm_offset;
+
+		queue_table = (struct msm_hw_fence_hfi_queue_table_header *)queue_desc.vaddr;
+		/* Gets queue start for camera fencing clients */
+		init_params->offset = queue_table->qhdr0_offset +
+			offsetof(struct synx_hw_fence_hfi_queue_header, write_index);
+		/* Gets the SW tx queue watermark */
+		sw_tx_wm_offset = queue_table->qhdr0_offset +
+			offsetof(struct synx_hw_fence_hfi_queue_header, tx_wm);
+
+		init_params->fenceq_dev_addr = queue_desc.dev_addr;
+		*sw_tx_wm_vaddr = queue_desc.vaddr + sw_tx_wm_offset;
+
+		/* Gets queue_desc.size */
+		init_params->len = queue_desc.size;
+	}
+
+	CAM_DBG(CAM_SYNX,
+		"Client [id: %u signal_id: %u name: %s] session: %p initialized",
+		init_params->client_core, init_params->signal_id,
+		init_params->name, session_handle);
+
+	return session_handle;
+}
+
+int cam_synx_uninitialize_hw_fence_session(
+	struct synx_session *session_handle)
+{
+	return synx_uninitialize(session_handle);
 }
 
 int __cam_synx_init_session(void)
