@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -737,6 +737,7 @@ int cam_context_init(struct cam_context *ctx,
 	uint64_t dev_id,
 	uint32_t ctx_id,
 	struct cam_req_mgr_kmd_ops *crm_node_intf,
+	struct cam_req_mgr_no_crm_kmd_ops *no_crm_intf,
 	struct cam_hw_mgr_intf *hw_mgr_intf,
 	struct cam_ctx_request *req_list,
 	uint32_t req_size, int img_iommu_hdl)
@@ -764,6 +765,7 @@ int cam_context_init(struct cam_context *ctx,
 	ctx->last_flush_req = 0;
 	ctx->ctx_crm_intf = NULL;
 	ctx->crm_ctx_intf = crm_node_intf;
+	ctx->no_crm_intf = no_crm_intf;
 	ctx->hw_mgr_intf = hw_mgr_intf;
 	ctx->irq_cb_intf = cam_context_handle_hw_event;
 
