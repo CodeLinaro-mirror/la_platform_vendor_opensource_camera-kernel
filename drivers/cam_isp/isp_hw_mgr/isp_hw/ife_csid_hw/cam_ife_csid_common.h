@@ -340,6 +340,11 @@ struct cam_ife_csid_cid_data {
 	uint32_t num_vc_dt;
 };
 
+struct cam_ife_csid_path_cfg_vcdt_data {
+	struct cam_ife_csid_vc_dt vc_dt[CAM_IFE_CSID_MULTI_VC_DT_GRP_MAX];
+	uint32_t num_vc_dt;
+};
+
 /*
  * struct cam_ife_csid_rx_cfg: place holder for rx cfg
  *

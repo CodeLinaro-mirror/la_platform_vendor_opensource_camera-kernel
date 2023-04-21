@@ -253,8 +253,50 @@ struct cam_req_mgr_no_crm_trigger_notify {
 	int32_t link_hdl;
 	int32_t res_id;
 	int64_t frame_id;
-	int64_t request_id;
+	uint64_t ife_applied_req_id;
+	uint64_t sensor_applied_req_id;
 	uint64_t sof_irq_ts;
+};
+
+/**
+ * struct sensor_pause_data
+ * @link_hdl:          link identifier
+ * @isp_dropped_req:   isp dropped request id
+ * @last_applied_req:  Last applied req by sensor
+ * @frame_duration:    frame duration considering all streams in a req
+ * @last_stream_vc:    last stream vc for last applied sensor req
+ * @last_stream_dt:    last stream dt for last applied sensor req
+ */
+struct sensor_pause_data {
+	uint32_t link_hdl;
+	uint64_t isp_dropped_req;
+	uint64_t last_applied_req;
+	uint64_t frame_duration;
+	uint32_t last_stream_vc;
+	uint32_t last_stream_dt;
+};
+
+/**
+ * struct sensor_resume_data
+ * @link_hdl:               link identifier
+ * @ife_applied_req:        ife applied req Id in recovery
+ * @sensor_applied_req_id:  last applied sensor req id
+ */
+struct sensor_resume_data {
+	uint32_t link_hdl;
+	uint64_t ife_applied_req;
+	uint64_t sensor_applied_req_id;
+};
+
+/**
+ * struct sensor_query_mcu
+ * @link_hdl:             link identifier
+ * @is_sensor_no_hw_ops:  will be true if external
+ *                      processor(fpga/mcu/helios) is present.
+ */
+struct sensor_query_mcu {
+	uint32_t link_hdl;
+	bool is_sensor_no_hw_ops;
 };
 
 /**

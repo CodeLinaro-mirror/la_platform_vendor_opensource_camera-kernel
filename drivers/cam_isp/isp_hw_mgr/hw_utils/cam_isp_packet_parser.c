@@ -1356,7 +1356,7 @@ int cam_isp_add_reg_update(
 			kmd_buf_info->offset;
 
 		/* Marking reg update as COMMON */
-		prepare->hw_update_entries[num_ent].flags = CAM_ISP_COMMON_CFG_BL;
+		prepare->hw_update_entries[num_ent].flags = CAM_ISP_RUP_BL;
 		CAM_DBG(CAM_ISP,
 			"num_ent=%d handle=0x%x, len=%u, offset=%u",
 			num_ent,
@@ -1864,7 +1864,7 @@ int cam_isp_add_csid_reg_update(
 			kmd_buf_info->offset;
 
 		/* Marking reg update as COMMON */
-		prepare->hw_update_entries[num_ent].flags = CAM_ISP_COMMON_CFG_BL;
+		prepare->hw_update_entries[num_ent].flags = CAM_ISP_RUP_BL;
 		CAM_DBG(CAM_ISP,
 			"num_ent=%d handle=0x%x, len=%u, offset=%u",
 			num_ent,

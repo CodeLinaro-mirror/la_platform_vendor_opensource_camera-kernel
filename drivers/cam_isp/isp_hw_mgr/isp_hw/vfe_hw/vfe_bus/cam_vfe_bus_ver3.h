@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 
@@ -295,6 +295,7 @@ struct cam_vfe_bus_ver3_vfe_out_hw_info {
  * @max_bw_counter_limit:     Max BW counter limit
  * @no_tunnelingId_shift:     Mask shift for no tunneling ID irq
  * @tunneling_overflow_shift: Mask shift for tunneling overflow irq
+ * @image_addr_fifo_cnt_mask: Mask for image address fifo count
  * @support_tunneling:        Indicate if bus support tunneling feature
  * @fifo_depth:               Max fifo depth
  */
@@ -321,6 +322,7 @@ struct cam_vfe_bus_ver3_hw_info {
 	uint32_t max_bw_counter_limit;
 	uint32_t no_tunnelingId_shift;
 	uint32_t tunneling_overflow_shift;
+	uint32_t image_addr_fifo_cnt_mask;
 	bool support_tunneling;
 	uint32_t fifo_depth;
 };
@@ -456,6 +458,7 @@ struct cam_vfe_bus_ver3_common_data {
 	uint32_t                                    max_bw_counter_limit;
 	uint32_t                                    no_tunnelingId_shift;
 	uint32_t                                    tunneling_overflow_shift;
+	uint32_t                                    image_addr_fifo_cnt_mask;
 	uint32_t                                    out_fifo_depth;
 };
 

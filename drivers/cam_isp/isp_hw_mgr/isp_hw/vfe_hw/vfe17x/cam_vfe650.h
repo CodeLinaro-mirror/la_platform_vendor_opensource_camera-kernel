@@ -2224,6 +2224,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe650_bus_hw_info = {
 	.max_bw_counter_limit  = 0xFF,
 	.support_tunneling = false,
 	.fifo_depth = 2,
+	.image_addr_fifo_cnt_mask = 0x7,
 };
 
 static struct cam_vfe_irq_hw_info vfe650_irq_hw_info = {

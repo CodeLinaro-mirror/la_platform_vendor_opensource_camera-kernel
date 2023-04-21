@@ -92,6 +92,7 @@ void cam_sync_util_dispatch_signaled_cb(struct cam_sync_signal_param *param,
  * @param id       : V4L event id to send
  * @param sync_obj : Sync obj for which event needs to be sent
  * @param status   : Status of the event
+ * @param req_id   : sensor req_id/dropped ife req_id sent as part of fence callback
  * @payload        : Payload that needs to be sent to user space
  * @len            : Length of the payload
  * @evt_param      : Event Paramenter
@@ -102,6 +103,7 @@ void cam_sync_util_dispatch_signaled_cb(struct cam_sync_signal_param *param,
 void cam_sync_util_send_v4l2_event(uint32_t id,
 	uint32_t sync_obj,
 	int status,
+	uint64_t req_id,
 	void *payload,
 	int len,
 	uint32_t evt_param,

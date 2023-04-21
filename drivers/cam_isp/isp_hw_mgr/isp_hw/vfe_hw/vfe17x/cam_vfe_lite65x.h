@@ -614,6 +614,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe650x_bus_hw_info = {
 	.tunneling_overflow_shift = 0x1A,
 	.no_tunnelingId_shift = 0x1B,
 	.fifo_depth = 2,
+	.image_addr_fifo_cnt_mask = 0x7,
 };
 
 static struct cam_vfe_irq_hw_info vfe65x_irq_hw_info = {
