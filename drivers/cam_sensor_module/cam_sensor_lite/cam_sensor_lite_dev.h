@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_SENSOR_LITE_DEV_H_
@@ -95,6 +95,8 @@ struct sensor_lite_device {
 	uint32_t                              dump_en;
 	uint32_t                              type;
 	bool                                  hw_no_ops;
+	bool                                  is_trigger_mode;
+	int                                   anchor_pd;
 
 	/* Request Queue */
 	struct list_head waiting_request_q;
