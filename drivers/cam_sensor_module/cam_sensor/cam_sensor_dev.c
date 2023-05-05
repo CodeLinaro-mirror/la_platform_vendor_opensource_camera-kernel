@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_sensor_dev.h"
@@ -178,15 +178,101 @@ static void cam_sensor_subdev_handle_message(
 				CAM_ERR(CAM_SENSOR, "Invalid notify received");
 				break;
 			}
+
 			if (s_ctrl->bridge_intf.link_hdl == notify->link_hdl) {
 				mutex_lock(&s_ctrl->cam_sensor_mutex);
 				if (!s_ctrl->bridge_intf.enable_crm &&
-						(s_ctrl->sof_notify_handler != NULL)) {
+						(s_ctrl->sof_notify_handler != NULL) && (s_ctrl->pause_state == false)) {
 					s_ctrl->sof_notify_handler(s_ctrl, notify);
+					notify->sensor_applied_req_id = s_ctrl->last_applied_req;
 				}
 				mutex_unlock(&s_ctrl->cam_sensor_mutex);
+
+				CAM_DBG(CAM_SENSOR, "notify_sensor slot[%d] link 0x%x ife_req: %llu sensor_req %llu pause_state: %d",
+					s_ctrl->soc_info.index,
+					notify->link_hdl,
+					notify->ife_applied_req_id,
+					notify->sensor_applied_req_id,
+					s_ctrl->pause_state);
 			}
 			break;
+		}
+		case CAM_SUBDEV_MESSAGE_SENSOR_PAUSE: {
+			struct sensor_pause_data *pause = NULL;
+
+			pause = (struct sensor_pause_data *)data;
+			if (!pause) {
+				CAM_ERR(CAM_SENSOR, "Invalid pause received");
+				break;
+			}
+
+			if (s_ctrl->bridge_intf.link_hdl == pause->link_hdl) {
+				mutex_lock(&s_ctrl->cam_sensor_mutex);
+				s_ctrl->pause_state = true;
+				pause->last_applied_req = s_ctrl->last_applied_req;
+				pause->frame_duration = s_ctrl->frame_duration;
+				pause->last_stream_vc = s_ctrl->vc;
+				pause->last_stream_dt = s_ctrl->dt;
+				mutex_unlock(&s_ctrl->cam_sensor_mutex);
+
+				CAM_INFO(CAM_SENSOR, "pause slot[%d] link 0x%x isp_dropped_req: %llu sensor_req %llu pause_state: %d, "
+									 "vc[%d] dt: [%d] frame_duration %llu ",
+					s_ctrl->soc_info.index,
+					pause->link_hdl,
+					pause->isp_dropped_req,
+					pause->last_applied_req,
+					s_ctrl->pause_state,
+					pause->last_stream_vc,
+					pause->last_stream_dt,
+					pause->frame_duration);
+			}
+			break;
+		}
+		case CAM_SUBDEV_MESSAGE_SENSOR_RESUME: {
+			struct sensor_resume_data *resume = NULL;
+			struct cam_req_mgr_no_crm_trigger_notify notify;
+
+			resume = (struct sensor_resume_data *)data;
+
+			notify.link_hdl = resume->link_hdl;
+
+			if (!resume) {
+				CAM_ERR(CAM_SENSOR, "Invalid resume received");
+				break;
+			}
+
+			if (s_ctrl->bridge_intf.link_hdl == resume->link_hdl) {
+				mutex_lock(&s_ctrl->cam_sensor_mutex);
+				if (!s_ctrl->bridge_intf.enable_crm &&
+						(s_ctrl->sof_notify_handler != NULL)) {
+					s_ctrl->pause_state = false;
+					notify.ife_applied_req_id = resume->ife_applied_req;
+
+					if (resume->ife_applied_req != 0)
+						s_ctrl->sof_notify_handler(s_ctrl, &notify);
+
+					notify.sensor_applied_req_id = s_ctrl->last_applied_req;
+					resume->sensor_applied_req_id = s_ctrl->last_applied_req;
+				}
+				mutex_unlock(&s_ctrl->cam_sensor_mutex);
+
+				CAM_INFO(CAM_SENSOR, "resume_sensor slot[%d] link: 0x%x ife_req: %llu sensor_req: %llu pause_state: %d",
+					s_ctrl->soc_info.index,
+					resume->link_hdl,
+					resume->ife_applied_req,
+					resume->sensor_applied_req_id,
+					s_ctrl->pause_state);
+			}
+			break;
+		}
+		case CAM_SUBDEV_MESSAGE_SENSOR_QUERY_MCU: {
+			struct sensor_query_mcu *query_mcu = NULL;
+
+			query_mcu = (struct sensor_query_mcu *)data;
+
+			if (s_ctrl->bridge_intf.link_hdl == query_mcu->link_hdl) {
+				query_mcu->is_sensor_no_hw_ops = s_ctrl->hw_no_ops;
+			}
 		}
 		default: {
 			CAM_DBG(CAM_SENSOR, "invalid message: %d ", message_type);

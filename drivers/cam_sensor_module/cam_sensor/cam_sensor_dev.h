@@ -160,6 +160,7 @@ struct cam_sensor_ctrl_t {
 	uint64_t                       frame_duration;
 
 	struct dentry                  *root_dentry;
+	bool                           pause_state;
 };
 
 /**
