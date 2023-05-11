@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_sensor_dev.h"
@@ -11,16 +11,30 @@
 #include "camera_main.h"
 #include "cam_compat.h"
 
-#define SENSOR_DEBUGFS_NAME_MAX_SIZE 10
+#define SENSOR_DEBUGFS_NAME_MAX_SIZE 16
 
 static int cam_sensor_debug_register(
 		struct cam_sensor_ctrl_t *s_ctrl)
 {
-	char debugfs_name[SENSOR_DEBUGFS_NAME_MAX_SIZE];
+	char debugfs_name[SENSOR_DEBUGFS_NAME_MAX_SIZE] = {0};
 
 	if (!s_ctrl) {
 		CAM_ERR(CAM_SENSOR, "null s_ctrl ptr");
 		return -EINVAL;
+	}
+
+	/* create root directory */
+	s_ctrl->root_dentry = debugfs_lookup("cam_sensor", NULL);
+	if (IS_ERR_OR_NULL(s_ctrl->root_dentry)) {
+		/* not able to look up !, then create one */
+		if (!s_ctrl->root_dentry)
+			s_ctrl->root_dentry = debugfs_create_dir("cam_sensor", NULL);
+
+		if (IS_ERR_OR_NULL(s_ctrl->root_dentry)) {
+			CAM_ERR(CAM_SENSOR, "Could not create a debugfs subdirectory rc: %ld",
+				s_ctrl->root_dentry);
+			return -ENOENT;
+		}
 	}
 
 	/* Create the sensor-* directory for this sensor*/
@@ -163,6 +177,34 @@ static const struct v4l2_subdev_internal_ops cam_sensor_internal_ops = {
 	.close = cam_sensor_subdev_close,
 };
 
+int32_t get_dev_hdl_from_link_hdl(
+	int32_t link_hdl)
+{
+	int32_t dev_hdl = -1;
+	struct cam_req_mgr_core_link *link = NULL;
+	struct cam_req_mgr_connected_device *dev = NULL;
+	int    i = 0;
+	link = (struct cam_req_mgr_core_link *)
+		cam_get_device_priv(link_hdl);
+
+	if (!link) {
+			CAM_ERR(CAM_CRM, "Invalid Link");
+			return dev_hdl;
+	}
+
+	for (i = 0; i < link->num_devs; i++) {
+		dev = &link->l_dev[i];
+		if (dev == NULL)
+				continue;
+
+		if (dev->dev_info.dev_id == CAM_REQ_MGR_DEVICE_SENSOR) {
+				dev_hdl = dev->dev_hdl;
+				break;
+		}
+	}
+	return dev_hdl;
+}
+
 static void cam_sensor_subdev_handle_message(
 	struct v4l2_subdev *sd,
 	enum cam_subdev_message_type_t message_type,
@@ -170,102 +212,13 @@ static void cam_sensor_subdev_handle_message(
 {
 	struct cam_sensor_ctrl_t *s_ctrl = v4l2_get_subdevdata(sd);
 
+	if (!s_ctrl) {
+		CAM_ERR(CAM_SENSOR, "invalid params");
+		return;
+	}
+
+
 	switch (message_type) {
-		case CAM_SUBDEV_MESSAGE_SENSOR_SOF_NOTIFY: {
-			struct cam_req_mgr_no_crm_trigger_notify *notify = NULL;
-
-			notify = (struct cam_req_mgr_no_crm_trigger_notify *)data;
-			if (!notify) {
-				CAM_ERR(CAM_SENSOR, "Invalid notify received");
-				break;
-			}
-
-			if (s_ctrl->bridge_intf.link_hdl == notify->link_hdl) {
-				mutex_lock(&s_ctrl->cam_sensor_mutex);
-				if (!s_ctrl->bridge_intf.enable_crm &&
-						(s_ctrl->sof_notify_handler != NULL) && (s_ctrl->pause_state == false)) {
-					s_ctrl->sof_notify_handler(s_ctrl, notify);
-					notify->sensor_applied_req_id = s_ctrl->last_applied_req;
-				}
-				mutex_unlock(&s_ctrl->cam_sensor_mutex);
-
-				CAM_DBG(CAM_SENSOR, "notify_sensor slot[%d] link 0x%x ife_req: %llu sensor_req %llu pause_state: %d",
-					s_ctrl->soc_info.index,
-					notify->link_hdl,
-					notify->ife_applied_req_id,
-					notify->sensor_applied_req_id,
-					s_ctrl->pause_state);
-			}
-			break;
-		}
-		case CAM_SUBDEV_MESSAGE_SENSOR_PAUSE: {
-			struct sensor_pause_data *pause = NULL;
-
-			pause = (struct sensor_pause_data *)data;
-			if (!pause) {
-				CAM_ERR(CAM_SENSOR, "Invalid pause received");
-				break;
-			}
-
-			if (s_ctrl->bridge_intf.link_hdl == pause->link_hdl) {
-				mutex_lock(&s_ctrl->cam_sensor_mutex);
-				s_ctrl->pause_state = true;
-				pause->last_applied_req = s_ctrl->last_applied_req;
-				pause->frame_duration = s_ctrl->frame_duration;
-				pause->last_stream_vc = s_ctrl->vc;
-				pause->last_stream_dt = s_ctrl->dt;
-				mutex_unlock(&s_ctrl->cam_sensor_mutex);
-
-				CAM_INFO(CAM_SENSOR, "pause slot[%d] link 0x%x isp_dropped_req: %llu sensor_req %llu pause_state: %d, "
-									 "vc[%d] dt: [%d] frame_duration %llu ",
-					s_ctrl->soc_info.index,
-					pause->link_hdl,
-					pause->isp_dropped_req,
-					pause->last_applied_req,
-					s_ctrl->pause_state,
-					pause->last_stream_vc,
-					pause->last_stream_dt,
-					pause->frame_duration);
-			}
-			break;
-		}
-		case CAM_SUBDEV_MESSAGE_SENSOR_RESUME: {
-			struct sensor_resume_data *resume = NULL;
-			struct cam_req_mgr_no_crm_trigger_notify notify;
-
-			resume = (struct sensor_resume_data *)data;
-
-			notify.link_hdl = resume->link_hdl;
-
-			if (!resume) {
-				CAM_ERR(CAM_SENSOR, "Invalid resume received");
-				break;
-			}
-
-			if (s_ctrl->bridge_intf.link_hdl == resume->link_hdl) {
-				mutex_lock(&s_ctrl->cam_sensor_mutex);
-				if (!s_ctrl->bridge_intf.enable_crm &&
-						(s_ctrl->sof_notify_handler != NULL)) {
-					s_ctrl->pause_state = false;
-					notify.ife_applied_req_id = resume->ife_applied_req;
-
-					if (resume->ife_applied_req != 0)
-						s_ctrl->sof_notify_handler(s_ctrl, &notify);
-
-					notify.sensor_applied_req_id = s_ctrl->last_applied_req;
-					resume->sensor_applied_req_id = s_ctrl->last_applied_req;
-				}
-				mutex_unlock(&s_ctrl->cam_sensor_mutex);
-
-				CAM_INFO(CAM_SENSOR, "resume_sensor slot[%d] link: 0x%x ife_req: %llu sensor_req: %llu pause_state: %d",
-					s_ctrl->soc_info.index,
-					resume->link_hdl,
-					resume->ife_applied_req,
-					resume->sensor_applied_req_id,
-					s_ctrl->pause_state);
-			}
-			break;
-		}
 		case CAM_SUBDEV_MESSAGE_SENSOR_QUERY_MCU: {
 			struct sensor_query_mcu *query_mcu = NULL;
 
@@ -277,7 +230,8 @@ static void cam_sensor_subdev_handle_message(
 			break;
 		}
 		default: {
-			CAM_DBG(CAM_SENSOR, "invalid message: %d ", message_type);
+			CAM_DBG(CAM_SENSOR, "sensor[%d] invalid message: %d ",
+							s_ctrl->soc_info.index, message_type);
 			break;
 		}
 	}
@@ -394,6 +348,11 @@ static int cam_sensor_i2c_component_bind(struct device *dev,
 	s_ctrl->bridge_intf.ops.notify_frame_skip =
 		cam_sensor_notify_frame_skip;
 	s_ctrl->bridge_intf.ops.flush_req = cam_sensor_flush_request;
+
+	s_ctrl->bridge_intf.no_crm_ops.handshake = cam_sensor_no_crm_handshake;
+	s_ctrl->bridge_intf.no_crm_ops.apply_req = cam_sensor_no_crm_apply_req;
+	s_ctrl->bridge_intf.no_crm_ops.pause_cb  = cam_sensor_no_crm_pause_apply;
+	s_ctrl->bridge_intf.no_crm_ops.resume_cb = cam_sensor_no_crm_resume_apply;
 
 	s_ctrl->sensordata->power_info.dev = soc_info->dev;
 	cam_sensor_debug_register(s_ctrl);
@@ -554,10 +513,15 @@ static int cam_sensor_component_bind(struct device *dev,
 	s_ctrl->bridge_intf.ops.notify_frame_skip =
 		cam_sensor_notify_frame_skip;
 	s_ctrl->bridge_intf.ops.flush_req = cam_sensor_flush_request;
+	s_ctrl->bridge_intf.no_crm_ops.handshake = cam_sensor_no_crm_handshake;
+	s_ctrl->bridge_intf.no_crm_ops.apply_req = cam_sensor_no_crm_apply_req;
+	s_ctrl->bridge_intf.no_crm_ops.pause_cb  = cam_sensor_no_crm_pause_apply;
+	s_ctrl->bridge_intf.no_crm_ops.resume_cb = cam_sensor_no_crm_resume_apply;
 
 	s_ctrl->sensordata->power_info.dev = &pdev->dev;
 	platform_set_drvdata(pdev, s_ctrl);
 	s_ctrl->sensor_state = CAM_SENSOR_INIT;
+	cam_sensor_debug_register(s_ctrl);
 	CAM_DBG(CAM_SENSOR, "Component bound successfully");
 
 	return rc;
@@ -598,6 +562,7 @@ static void cam_sensor_component_unbind(struct device *dev,
 	kfree(s_ctrl->i2c_data.frame_skip);
 	platform_set_drvdata(pdev, NULL);
 	v4l2_set_subdevdata(&(s_ctrl->v4l2_dev_str.sd), NULL);
+	cam_sensor_debug_unregister(s_ctrl);
 	devm_kfree(&pdev->dev, s_ctrl);
 }
 

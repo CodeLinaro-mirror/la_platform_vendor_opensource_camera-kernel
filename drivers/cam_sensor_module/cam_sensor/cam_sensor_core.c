@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -13,6 +13,9 @@
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
 
+#define MIN_PD 1
+#define DEFAULT_PD 2
+#define MAX_PD 3
 #define WITH_NO_CRM_MASK  0x1
 
 
@@ -1053,16 +1056,27 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			goto release_mutex;
 		}
 
-		bridge_params.session_hdl = sensor_acq_dev.session_handle;
-		bridge_params.ops = &s_ctrl->bridge_intf.ops;
+		bridge_params.session_hdl  = sensor_acq_dev.session_handle;
+		bridge_params.ops          = &s_ctrl->bridge_intf.ops;
+		bridge_params.no_crm_ops  = NULL;
 		bridge_params.v4l2_sub_dev_flag = 0;
 		bridge_params.media_entity_flag = 0;
 		bridge_params.priv = s_ctrl;
+		bridge_params.no_crm_priv = NULL;
 		bridge_params.dev_id = CAM_SENSOR;
 		s_ctrl->bridge_intf.enable_crm = 1;
 		/* add crm callbacks only in case of with crm is enabled */
-		if (sensor_acq_dev.info_handle & WITH_NO_CRM_MASK)
+		if (sensor_acq_dev.info_handle & WITH_NO_CRM_MASK) {
 			s_ctrl->bridge_intf.enable_crm = 0;
+			bridge_params.no_crm_ops  = &s_ctrl->bridge_intf.no_crm_ops;
+			bridge_params.no_crm_priv = s_ctrl;
+		}
+
+		/* no_hw_io_ops does'nt need to apply anything to hw */
+		if (s_ctrl->hw_no_io_ops) {
+			bridge_params.no_crm_ops  = NULL;
+			bridge_params.no_crm_priv = NULL;
+		}
 
 		sensor_acq_dev.device_handle =
 			cam_create_device_hdl(&bridge_params);
@@ -1101,10 +1115,11 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		s_ctrl->dt             = 0;
 		s_ctrl->frame_duration = 0;
 		CAM_INFO(CAM_SENSOR,
-			"CAM_ACQUIRE_DEV Success for %s sensor_id:0x%x,sensor_slave_addr:0x%x",
+			"CAM_ACQUIRE_DEV Success for %s id:0x%x,slave-addr:0x%x crm:[%d]",
 			s_ctrl->sensor_name,
 			s_ctrl->sensordata->slave_info.sensor_id,
-			s_ctrl->sensordata->slave_info.sensor_slave_addr);
+			s_ctrl->sensordata->slave_info.sensor_slave_addr,
+			s_ctrl->bridge_intf.enable_crm);
 	}
 		break;
 	case CAM_RELEASE_DEV: {
@@ -1437,6 +1452,38 @@ int cam_sensor_publish_dev_info(struct cam_req_mgr_device_info *info)
 	return rc;
 }
 
+int cam_sensor_no_crm_handshake(
+		struct cam_req_mgr_no_crm_handshake_data *info)
+{
+	int rc = 0;
+	struct cam_sensor_ctrl_t *s_ctrl = NULL;
+
+	if (!info) {
+		CAM_ERR(CAM_SENSOR, "handshake data: NULL");
+		return -EINVAL;
+	}
+
+	s_ctrl = (struct cam_sensor_ctrl_t *)
+		cam_get_device_no_crm_priv(info->dev_hdl);
+
+	if (!s_ctrl) {
+		CAM_ERR(CAM_SENSOR, "Device data is NULL");
+		return -EINVAL;
+	}
+
+	if (s_ctrl->pipeline_delay >= MIN_PD &&
+					s_ctrl->pipeline_delay <= MAX_PD)
+		info->pipeline_delay = s_ctrl->pipeline_delay;
+	else
+		info->pipeline_delay = DEFAULT_PD;
+
+	info->trigger = CAM_TRIGGER_POINT_SOF;
+	s_ctrl->bridge_intf.frame_skip_cb = info->frame_skip_cb;
+	s_ctrl->anchor_pd = info->anchor_pd;
+
+	return rc;
+}
+
 static int dump_settings_array(
 	int index,
 	uint64_t req_id,
@@ -1512,7 +1559,7 @@ static uint64_t cam_sensor_find_latest_req(
 
 static int cam_sensor_apply_settings_no_crm(
 	struct cam_sensor_ctrl_t *s_ctrl,
-	struct cam_req_mgr_no_crm_trigger_notify *notify)
+	struct cam_req_mgr_no_crm_apply_request *notify)
 {
 
 	int rc                                = 0;
@@ -1528,8 +1575,9 @@ static int cam_sensor_apply_settings_no_crm(
 		return -EINVAL;
 	}
 
-	isp_req_id    = notify->ife_applied_req_id;
+	isp_req_id    = notify->anchor_req_id;
 	sensor_pd     = s_ctrl->pipeline_delay;
+	isp_pd        = s_ctrl->anchor_pd;
 	sensor_req_id = isp_req_id + (sensor_pd - isp_pd);
 	opcode        = CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE;
 	i2c_set       = s_ctrl->i2c_data.per_frame;
@@ -1553,7 +1601,7 @@ static int cam_sensor_apply_settings_no_crm(
 					opcode);
 			if (!rc) {
 				s_ctrl->last_applied_req = new_req_id;
-				notify->sensor_applied_req_id = new_req_id;
+				notify->last_apply_req   = new_req_id;
 				CAM_ERR(CAM_SENSOR,
 							"slot[%d] skiped apply[%llu]",
 							s_ctrl->soc_info.index,
@@ -1581,7 +1629,7 @@ static int cam_sensor_apply_settings_no_crm(
 						opcode);
 			if (!rc) {
 				s_ctrl->last_applied_req = sensor_req_id;
-				notify->sensor_applied_req_id = sensor_req_id;
+				notify->last_apply_req   = sensor_req_id;
 				CAM_DBG(CAM_SENSOR, "slot[%d] apply[%llu]",
 								s_ctrl->soc_info.index,
 								s_ctrl->last_applied_req);
@@ -1591,13 +1639,96 @@ static int cam_sensor_apply_settings_no_crm(
 	return rc;
 }
 
-static int cam_sensor_handle_sof(
-	struct cam_sensor_ctrl_t *s_ctrl,
-	struct cam_req_mgr_no_crm_trigger_notify *notify)
+int cam_sensor_no_crm_pause_apply(
+	struct cam_req_mgr_no_crm_pause_evt_data *pause)
 {
 	int rc = 0;
+	struct cam_sensor_ctrl_t *s_ctrl = NULL;
+	s_ctrl = cam_get_device_no_crm_priv(pause->dev_hdl);
+	mutex_lock(&s_ctrl->cam_sensor_mutex);
+	s_ctrl->pause_state     = true;
+	pause->last_applied_req = s_ctrl->last_applied_req;
+	pause->frame_duration   = s_ctrl->frame_duration;
+	pause->last_stream_vc   = s_ctrl->vc;
+	pause->last_stream_dt   = s_ctrl->dt;
+	mutex_unlock(&s_ctrl->cam_sensor_mutex);
+	CAM_INFO(CAM_SENSOR, "pause slot[%d] link 0x%x "
+					     "sensor_req %llu"
+						 "pause_state: %d, "
+						 "vc[%d] dt: [%d] frame_duration %llu ",
+						s_ctrl->soc_info.index,
+						pause->link_hdl,
+						pause->last_applied_req,
+						s_ctrl->pause_state,
+						pause->last_stream_vc,
+						pause->last_stream_dt,
+						pause->frame_duration);
 
-	rc = cam_sensor_apply_settings_no_crm(s_ctrl, notify);
+	return rc;
+}
+
+int cam_sensor_no_crm_resume_apply(
+	struct cam_req_mgr_no_crm_resume_evt_data *resume)
+{
+	int rc = 0;
+	struct cam_sensor_ctrl_t *s_ctrl = NULL;
+	struct cam_req_mgr_no_crm_apply_request apply = {0};
+	s_ctrl = cam_get_device_no_crm_priv(resume->dev_hdl);
+
+	apply.link_hdl  = resume->link_hdl;
+	apply.dev_hdl   = resume->dev_hdl;
+
+	if (!resume) {
+		CAM_ERR(CAM_SENSOR, "Invalid resume received");
+		return -EINVAL;
+	}
+	
+	if (s_ctrl->bridge_intf.link_hdl == resume->link_hdl) {
+		mutex_lock(&s_ctrl->cam_sensor_mutex);
+		if (!s_ctrl->bridge_intf.enable_crm) {
+			s_ctrl->pause_state = false;
+			apply.anchor_req_id = resume->anchor_applied_req;
+
+			if (resume->anchor_applied_req != 0 &&
+					apply.dev_hdl != -1 &&
+					s_ctrl->bridge_intf.no_crm_ops.apply_req != NULL) {
+					mutex_unlock(&s_ctrl->cam_sensor_mutex);
+					s_ctrl->bridge_intf.no_crm_ops.apply_req(&apply);
+					mutex_lock(&s_ctrl->cam_sensor_mutex);
+			}
+
+			resume->applied_req_id = s_ctrl->last_applied_req;
+
+		}
+		mutex_unlock(&s_ctrl->cam_sensor_mutex);
+
+		CAM_INFO(CAM_SENSOR, "resume_sensor slot[%d] link: 0x%x "
+						"ife_req: %llu sensor_req: %llu pause_state: %d",
+						s_ctrl->soc_info.index,
+						resume->link_hdl,
+						resume->anchor_applied_req,
+						resume->applied_req_id,
+						s_ctrl->pause_state);
+	}
+
+	return rc;
+}
+
+int cam_sensor_no_crm_apply_req(
+	struct cam_req_mgr_no_crm_apply_request *apply)
+{
+	int rc = 0;
+	struct cam_sensor_ctrl_t *s_ctrl = NULL;
+
+	s_ctrl = cam_get_device_no_crm_priv(apply->dev_hdl);
+	if (!s_ctrl) {
+		CAM_ERR(CAM_SENSOR, "Invalid private data req[%llu]", apply->anchor_req_id);
+		return -EINVAL;
+	}
+
+	mutex_lock(&(s_ctrl->cam_sensor_mutex));
+	rc = cam_sensor_apply_settings_no_crm(s_ctrl, apply);
+	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
 	return rc;
 }
 
@@ -1619,11 +1750,9 @@ int cam_sensor_establish_link(struct cam_req_mgr_core_dev_link_setup *link)
 	if (link->link_enable) {
 		s_ctrl->bridge_intf.link_hdl = link->link_hdl;
 		s_ctrl->bridge_intf.crm_cb = link->crm_cb;
-		s_ctrl->sof_notify_handler = cam_sensor_handle_sof;
 	} else {
 		s_ctrl->bridge_intf.link_hdl = -1;
 		s_ctrl->bridge_intf.crm_cb = NULL;
-		s_ctrl->sof_notify_handler = NULL;
 	}
 	mutex_unlock(&s_ctrl->cam_sensor_mutex);
 
