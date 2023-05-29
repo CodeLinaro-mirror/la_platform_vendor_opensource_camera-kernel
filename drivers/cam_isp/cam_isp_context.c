@@ -5980,6 +5980,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_top_state(
 	CAM_DBG(CAM_ISP, "next Substate[%s] ctx:%d",
 		__cam_isp_ctx_substate_val_to_type(
 		ctx_isp->substate_activated), ctx->ctx_id);
+	ctx_isp->last_sof_timestamp = ctx_isp->sof_timestamp_val;
 	return rc;
 }
 
@@ -6012,6 +6013,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_applied_state(
 		__cam_isp_ctx_substate_val_to_type(
 		ctx_isp->substate_activated), ctx->ctx_id);
 
+	ctx_isp->last_sof_timestamp = ctx_isp->sof_timestamp_val;
 	return 0;
 }
 
@@ -6668,6 +6670,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_applied(
 		__cam_isp_ctx_substate_val_to_type(
 		ctx_isp->substate_activated));
 end:
+	ctx_isp->last_sof_timestamp = ctx_isp->sof_timestamp_val;
 	return 0;
 }
 
@@ -6772,6 +6775,16 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_state(
 			}
 			goto end;
 		}
+	}
+
+	if (ctx_isp->last_sof_timestamp ==
+		ctx_isp->sof_timestamp_val) {
+		CAM_WARN_RATE_LIMIT(CAM_ISP,
+			"Workq delay detected! Bubble frame: %lld check skipped, sof_timestamp: %lld, ctx_id: %d",
+			ctx_isp->frame_id,
+			ctx_isp->sof_timestamp_val,
+			ctx->ctx_id);
+		goto end;
 	}
 
 	/*
