@@ -3900,10 +3900,11 @@ static int __cam_req_mgr_setup_link_info(struct cam_req_mgr_core_link *link,
 {
 	int                                     rc = 0, i = 0, num_devices = 0;
 	struct cam_req_mgr_core_dev_link_setup  link_data;
-	struct cam_req_mgr_connected_device    *dev;
+	struct cam_req_mgr_connected_device    *dev = NULL;
 	struct cam_req_mgr_req_tbl             *pd_tbl;
 	enum cam_pipeline_delay                 max_delay;
 	uint32_t num_trigger_devices = 0;
+
 	if (link_info->version == VERSION_1) {
 		if (link_info->u.link_info_v1.num_devices >
 			CAM_REQ_MGR_MAX_HANDLES)
@@ -3935,6 +3936,8 @@ static int __cam_req_mgr_setup_link_info(struct cam_req_mgr_core_link *link,
 		num_devices = link_info->u.link_info_v3.num_devices;
 	for (i = 0; i < num_devices; i++) {
 		dev = &link->l_dev[i];
+		if (!dev)
+			continue;
 		/* Using dev hdl, get ops ptr to communicate with device */
 		if (link_info->version == VERSION_1)
 			dev->ops = (struct cam_req_mgr_kmd_ops *)
@@ -4051,7 +4054,8 @@ static int __cam_req_mgr_setup_link_info(struct cam_req_mgr_core_link *link,
 	num_trigger_devices = 0;
 	for (i = 0; i < num_devices; i++) {
 		dev = &link->l_dev[i];
-
+		if (!dev)
+			continue;
 		link_data.dev_hdl = dev->dev_hdl;
 		/*
 		 * For unique pipeline delay table create request
