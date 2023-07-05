@@ -549,6 +549,7 @@ static int __cam_isp_ctx_no_crm_apply_trigger_util(void *priv, void *data)
 	uint64_t                                      sof_ts = 0;
 	struct cam_ctx_request                        *req, *req_temp;
 	struct cam_isp_ctx_req                        *req_isp;
+	uint32_t                                      sensor_device_type;
 
 	if (!priv) {
 		CAM_ERR(CAM_CRM, "input args NULL %pK", priv);
@@ -582,12 +583,11 @@ static int __cam_isp_ctx_no_crm_apply_trigger_util(void *priv, void *data)
 				ctx_isp->frame_id, ctx->ctx_id,
 				ctx->link_hdl, ctx_isp->is_sensorlite,
 				sof_notify->ife_applied_req_id);
+			sensor_device_type = ctx_isp->is_sensorlite ?
+				CAM_SENSORLITE_DEVICE_TYPE : CAM_SENSOR_DEVICE_TYPE;
 
-			if (ctx_isp->is_sensorlite)
-				cam_subdev_notify_message(CAM_SENSORLITE_DEVICE_TYPE,
-					CAM_SUBDEV_MESSAGE_SENSOR_SOF_NOTIFY, (void *)sof_notify);
-			else
-				cam_subdev_notify_message(CAM_SENSOR_DEVICE_TYPE,
+			if (!ctx_isp->mcu_enable)
+				cam_subdev_notify_message(sensor_device_type,
 					CAM_SUBDEV_MESSAGE_SENSOR_SOF_NOTIFY, (void *)sof_notify);
 
 			ctx_isp->sensor_req_info.prev_applied_req =
@@ -654,12 +654,13 @@ static int __cam_isp_ctx_notify_trigger_util(
 	int trigger_type, struct cam_isp_context *ctx_isp, uint64_t  request_id, uint32_t res_id,
 	uint64_t sof_irq_ts)
 {
-	int                                rc = 0;
-	struct cam_context                *ctx = ctx_isp->base;
-	struct cam_req_mgr_trigger_notify  notify;
-	struct cam_req_mgr_no_crm_trigger_notify  sof_notify;
-	struct cam_req_mgr_no_crm_trigger_notify  *sof_notify_payload;
-	struct crm_workq_task            *task = NULL;
+	int                                      rc = 0;
+	struct cam_context                       *ctx = ctx_isp->base;
+	struct cam_req_mgr_trigger_notify        notify;
+	struct cam_req_mgr_no_crm_trigger_notify sof_notify;
+	struct cam_req_mgr_no_crm_trigger_notify *sof_notify_payload;
+	struct crm_workq_task                    *task = NULL;
+	uint32_t                                 sensor_device_type;
 
 	/* Trigger type not supported, return */
 	if (!(ctx_isp->subscribe_event & trigger_type)) {
@@ -714,21 +715,21 @@ static int __cam_isp_ctx_notify_trigger_util(
 				ctx_isp->last_applied_req_id : ctx->last_flush_req;
 			sof_notify.sensor_applied_req_id = 0;
 			/* Do not apply ife request just notify sensor to apply request */
-			if (ctx_isp->is_sensorlite)
-				cam_subdev_notify_message(CAM_SENSORLITE_DEVICE_TYPE,
+			sensor_device_type = ctx_isp->is_sensorlite ?
+				CAM_SENSORLITE_DEVICE_TYPE : CAM_SENSOR_DEVICE_TYPE;
+
+			if (!ctx_isp->mcu_enable)
+				cam_subdev_notify_message(sensor_device_type,
 					CAM_SUBDEV_MESSAGE_SENSOR_SOF_NOTIFY, (void *)&sof_notify);
-			else
-				cam_subdev_notify_message(CAM_SENSOR_DEVICE_TYPE,
-					CAM_SUBDEV_MESSAGE_SENSOR_SOF_NOTIFY, (void *)&sof_notify);
+
 			ctx_isp->sensor_pd_handled = true;
 
 			ctx_isp->sensor_req_info.prev_applied_req =
 				ctx_isp->sensor_req_info.last_applied_req;
 
-			if (sof_notify.sensor_applied_req_id) {
+			if (sof_notify.sensor_applied_req_id)
 				ctx_isp->sensor_req_info.last_applied_req =
 					sof_notify.sensor_applied_req_id;
-			}
 
 			if (ctx_isp->sensor_req_info.last_applied_req >=
 				ctx_isp->sensor_req_info.prev_applied_req) {
@@ -6038,7 +6039,6 @@ static int __cam_isp_send_pause_resume_cmd_to_sensor(void *priv, void *data)
 	struct cam_isp_ctx_req    *req_isp;
 	struct cam_ctx_request    *req, *req_temp;
 	uint32_t                   sensor_device_type;
-	struct sensor_query_mcu    sensor_query_mcu;
 	struct sensor_pause_data   sensor_pause_data;
 	struct sensor_resume_data  sensor_resume_data;
 	int rc = 0;
@@ -6049,14 +6049,6 @@ static int __cam_isp_send_pause_resume_cmd_to_sensor(void *priv, void *data)
 
 	sensor_device_type = ctx_isp->is_sensorlite ?
 		CAM_SENSORLITE_DEVICE_TYPE : CAM_SENSOR_DEVICE_TYPE;
-
-	if (!ctx_isp->mcu_enable_valid) {
-		sensor_query_mcu.link_hdl = ctx->link_hdl;
-		cam_subdev_notify_message(sensor_device_type,
-			CAM_SUBDEV_MESSAGE_SENSOR_QUERY_MCU, (void *)&sensor_query_mcu);
-		ctx_isp->mcu_enable = sensor_query_mcu.is_sensor_no_hw_ops;
-		ctx_isp->mcu_enable_valid = true;
-	}
 
 	if (ctx_isp->mcu_enable) {
 		CAM_DBG(CAM_ISP, "mcu is available, ctx:%d", ctx->ctx_id);
@@ -6329,8 +6321,6 @@ static int __cam_isp_send_pause_resume_cmd_impacted_ife_ctx(
 				return -ENOMEM;
 
 			active_ctx_isp->mcu_enable = ctx_isp->mcu_enable;
-			active_ctx_isp->mcu_enable_valid = ctx_isp->mcu_enable_valid;
-
 			pause_payload->request_id = active_ctx_isp->last_applied_req_id;
 			pause_payload->event_cmd = CAM_ISP_CTX_PAUSE_CMD;
 
@@ -7348,6 +7338,7 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 	ctx_isp->sensor_req_info.correction = 0;
 	ctx_isp->sensor_req_info.last_applied_req = 0;
 	ctx_isp->sensor_req_info.prev_applied_req = 0;
+	ctx_isp->mcu_enable = 0;
 
 	atomic64_set(&ctx_isp->state_monitor_head, -1);
 
@@ -8760,8 +8751,10 @@ static int __cam_isp_ctx_link_in_acquired(struct cam_context *ctx,
 	struct cam_req_mgr_core_dev_link_setup *link)
 {
 	int rc = 0;
+	struct sensor_query_mcu sensor_query_mcu;
 	struct cam_isp_context *ctx_isp =
 		(struct cam_isp_context *) ctx->ctx_priv;
+	uint32_t sensor_device_type;
 
 	if (!link) {
 		CAM_ERR(CAM_ISP, "setup link info is null: %pK ctx: %u",
@@ -8791,7 +8784,15 @@ static int __cam_isp_ctx_link_in_acquired(struct cam_context *ctx,
 	ctx_isp->debug_frame_drop_cnt = 0;
 	ctx_isp->frame_drop_cnt = 0;
 	ctx_isp->additional_timeout = 0;
+	ctx_isp->mcu_enable = 0;
 	atomic_set(&ctx_isp->pause_apply_req, 0);
+	sensor_device_type = ctx_isp->is_sensorlite ?
+		CAM_SENSORLITE_DEVICE_TYPE : CAM_SENSOR_DEVICE_TYPE;
+
+	sensor_query_mcu.link_hdl = ctx->link_hdl;
+	cam_subdev_notify_message(sensor_device_type,
+		CAM_SUBDEV_MESSAGE_SENSOR_QUERY_MCU, (void *)&sensor_query_mcu);
+	ctx_isp->mcu_enable = sensor_query_mcu.is_sensor_no_hw_ops;
 
 	/* change state only if we had the init config */
 	if (ctx_isp->init_received) {
@@ -8812,6 +8813,7 @@ static int __cam_isp_ctx_unlink_in_acquired(struct cam_context *ctx,
 		(struct cam_isp_context *) ctx->ctx_priv;
 
 	ctx->link_hdl = -1;
+	ctx_isp->mcu_enable = 0;
 	ctx->ctx_crm_intf = NULL;
 	ctx_isp->trigger_id = -1;
 
