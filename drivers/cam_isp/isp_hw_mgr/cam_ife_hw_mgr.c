@@ -16021,7 +16021,7 @@ static int cam_ife_mgr_update_frame_drop_recovery_progress(
 	struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
 {
 	int i = 0, j = 0;
-	struct cam_ife_hw_mgr_stream_grp_config  *grp_cfg;
+	struct cam_ife_hw_mgr_stream_grp_config  *grp_cfg = NULL;
 	bool found = false;
 	bool set_recovery;
 
