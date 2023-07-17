@@ -159,6 +159,7 @@ struct cam_isp_ctx_wait_last_stream_sof_info {
  * @reset_cdm:                 Indicates if cdm reset is required or not
  * @stop_only:                 Send stop only to hw drivers. No Deinit to be
  *                             done.
+ * @is_shutdown:               Is shut down
  *
  */
 struct cam_isp_stop_args {
@@ -166,6 +167,7 @@ struct cam_isp_stop_args {
 	bool                          is_internal_stop;
 	bool                          reset_cdm;
 	bool                          stop_only;
+	bool                          is_shutdown;
 };
 
 /**
