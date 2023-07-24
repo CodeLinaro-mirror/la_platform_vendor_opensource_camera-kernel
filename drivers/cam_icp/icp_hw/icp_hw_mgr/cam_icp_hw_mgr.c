@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
  */
 
 #include <linux/uaccess.h>
@@ -6507,8 +6508,8 @@ int cam_icp_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 {
 	int i, rc = 0;
 	struct cam_hw_mgr_intf *hw_mgr_intf;
-	struct cam_cpas_query_cap query;
-	uint32_t cam_caps, camera_hw_version;
+	uint32_t num_ipe;
+	uint32_t num_bps;
 
 	hw_mgr_intf = (struct cam_hw_mgr_intf *)hw_mgr_hdl;
 	if (!of_node || !hw_mgr_intf) {
@@ -6539,42 +6540,28 @@ int cam_icp_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 	for (i = 0; i < CAM_ICP_CTX_MAX; i++)
 		mutex_init(&icp_hw_mgr.ctx_data[i].ctx_mutex);
 
-	rc = cam_cpas_get_hw_info(&query.camera_family,
-			&query.camera_version, &query.cpas_version,
-			&cam_caps, NULL, NULL);
+	rc = of_property_read_u32(of_node, "num-ipe", &num_ipe);
 	if (rc) {
-		CAM_ERR(CAM_ICP, "failed to get hw info rc=%d", rc);
+		CAM_ERR(CAM_ICP, "Failed to read num-ipe");
 		goto destroy_mutex;
 	}
 
-	rc = cam_cpas_get_cpas_hw_version(&camera_hw_version);
+	rc = of_property_read_u32(of_node, "num-bps", &num_bps);
 	if (rc) {
-		CAM_ERR(CAM_ICP, "failed to get hw version rc=%d", rc);
+		CAM_ERR(CAM_ICP, "Failed to read num-bps");
 		goto destroy_mutex;
 	}
 
-	if ((camera_hw_version == CAM_CPAS_TITAN_480_V100) ||
-		(camera_hw_version == CAM_CPAS_TITAN_580_V100) ||
-		(camera_hw_version == CAM_CPAS_TITAN_570_V100) ||
-		(camera_hw_version == CAM_CPAS_TITAN_570_V200) ||
-		(camera_hw_version == CAM_CPAS_TITAN_680_V100) ||
-		(camera_hw_version == CAM_CPAS_TITAN_680_V110) ||
-		(camera_hw_version == CAM_CPAS_TITAN_780_V100) ||
-		(camera_hw_version == CAM_CPAS_TITAN_640_V200) ||
-		(camera_hw_version == CAM_CPAS_TITAN_650_V100) ||
-		(camera_hw_version == CAM_CPAS_TITAN_636_V100)) {
-		if (cam_caps & CPAS_TITAN_IPE0_CAP_BIT)
-			icp_hw_mgr.ipe0_enable = true;
-		if (cam_caps & CPAS_BPS_BIT)
-			icp_hw_mgr.bps_enable = true;
-	} else {
-		if (cam_caps & CPAS_IPE0_BIT)
-			icp_hw_mgr.ipe0_enable = true;
-		if (cam_caps & CPAS_IPE1_BIT)
-			icp_hw_mgr.ipe1_enable = true;
-		if (cam_caps & CPAS_BPS_BIT)
-			icp_hw_mgr.bps_enable = true;
+	if (num_ipe == 1) {
+		icp_hw_mgr.ipe0_enable = true;
+
+	} else if (num_ipe == 2) {
+		icp_hw_mgr.ipe0_enable = true;
+		icp_hw_mgr.ipe1_enable = true;
 	}
+
+	if (num_bps)
+		icp_hw_mgr.bps_enable = true;
 
 	rc = cam_icp_mgr_init_devs(of_node, node_check);
 	if (rc) {
