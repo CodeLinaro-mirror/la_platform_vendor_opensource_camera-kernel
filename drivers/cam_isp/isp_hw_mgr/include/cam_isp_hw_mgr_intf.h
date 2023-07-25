@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_ISP_HW_MGR_INTF_H_
@@ -25,6 +25,7 @@
 #define CAM_TFE_RDI_NUM_MAX      3
 #define CAM_IFE_SCRATCH_NUM_MAX  2
 #define CAM_IFE_MAX_PHY_ID       6
+#define CAM_ISP_HW_MAX_CSID_CID  4
 
 
 /* maximum context numbers for TFE */
@@ -412,6 +413,7 @@ enum cam_isp_hw_mgr_command {
 	CAM_ISP_HW_MGR_WAIT_CONFIG_DONE,
 	CAM_ISP_HW_MGR_UPDATE_FRAMEDROP_RECOVERY_PROGRESS,
 	CAM_HW_MGR_CMD_CHECK_RUP_APPLIED_REQ,
+	CAM_HW_MGR_CMD_GET_CSID_CID_INFO,
 	CAM_ISP_HW_MGR_CMD_MAX,
 };
 
@@ -521,6 +523,34 @@ struct cam_isp_start_args {
 struct cam_isp_lcr_rdi_cfg_args {
 	struct cam_isp_lcr_rdi_config *rdi_lcr_cfg;
 	bool                           is_init;
+};
+
+/**
+ * struct cam_isp_vc_dt_cid
+ * @vc         : VC value for which CID number required
+ * @dt         : DT value for which CID number required
+ * @cid        : outparam cid number for VC/DT
+ */
+struct cam_isp_vc_dt_cid {
+	uint32_t  vc;
+	uint32_t  dt;
+	uint32_t  cid;
+};
+
+/**
+ * struct cam_isp_get_csid_cid_info
+ * @phy_no     : phy number
+ * @vc         : VC value for which CID number required
+ * @dt         : DT value for which CID number required
+ * @csid_hw_no : outparam, CSID number to which this phy and VC/DT connected
+ * @cid        : outparam cid number for VC/DT
+ */
+
+struct cam_isp_get_csid_cid_info {
+	uint32_t  phy_no;
+	uint32_t  num_vc_dt;
+	struct cam_isp_vc_dt_cid vc_dt_cid[CAM_ISP_HW_MAX_CSID_CID];
+	uint32_t  csid_hw_no;
 };
 
 /**

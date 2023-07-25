@@ -592,7 +592,7 @@ static int __cam_isp_ctx_no_crm_apply_trigger_util(void *priv, void *data)
 	mutex_unlock(&ctx_isp->no_crm_mutex);
 
 	if (sof_notify && !rc && req_id &&
-		(ctx_isp->stream_type == CAM_REQ_MGR_LINK_STREAMING_TYPE)) {
+		(ctx_isp->acquire_type != CAM_ISP_ACQUIRE_TYPE_HYBRID)) {
 		sof_notify->ife_applied_req_id = req_id;
 		sof_notify->sensor_applied_req_id = 0;
 		open_cnt = cam_req_mgr_link_dec_open_cnt(ctx_isp->base->link_hdl);
@@ -7658,23 +7658,24 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 	struct cam_context *ctx, struct cam_config_dev_cmd *cmd)
 {
 	int rc = 0, i = 0;
-	struct cam_ctx_request           *req = NULL;
-	struct cam_isp_ctx_req           *req_isp;
-	struct cam_packet                *packet;
-	size_t                            remain_len = 0;
-	struct cam_hw_prepare_update_args cfg = {0};
-	struct cam_req_mgr_add_request    add_req;
-	struct cam_isp_context           *ctx_isp =
+	struct cam_ctx_request                   *req = NULL;
+	struct cam_isp_ctx_req                   *req_isp;
+	struct cam_packet                        *packet;
+	size_t                                    remain_len = 0;
+	struct cam_hw_prepare_update_args         cfg = {0};
+	struct cam_req_mgr_add_request            add_req;
+	struct cam_isp_context                   *ctx_isp =
 		(struct cam_isp_context *) ctx->ctx_priv;
-	struct cam_hw_cmd_args            hw_cmd_args;
-	struct cam_isp_hw_cmd_args        isp_hw_cmd_args;
-	struct crm_workq_task            *task = NULL;
-	uint32_t                          packet_opcode = 0;
-	uint32_t                          shndl;
-	uint32_t                         *slave_pkt, *pkt_offset;
-	int                               is_virt = 0;
-	struct cam_rpmsg_isp_init_cfg_payload *pld;
-	bool                             is_slave_down;
+	struct cam_hw_cmd_args                    hw_cmd_args;
+	struct cam_isp_hw_cmd_args                isp_hw_cmd_args;
+	struct crm_workq_task                    *task = NULL;
+	uint32_t                                  packet_opcode = 0;
+	uint32_t                                  shndl;
+	uint32_t                                 *slave_pkt, *pkt_offset;
+	int                                       is_virt = 0;
+	struct cam_rpmsg_isp_init_cfg_payload    *pld;
+	struct cam_req_mgr_no_crm_trigger_notify *sof_notify_payload;
+	bool                                      is_slave_down;
 
 	/* get free request */
 	mutex_lock(&ctx_isp->isp_mutex);
@@ -8010,30 +8011,46 @@ done:
 		if (ctx->state == CAM_CTX_ACTIVATED && ctx_isp->rdi_only_context) {
 			CAM_DBG(CAM_ISP,
 				"independent CRM apply from config_dev ctx:%u", ctx->ctx_id);
+
+			sof_notify_payload = kzalloc(sizeof(struct cam_req_mgr_no_crm_trigger_notify),
+						GFP_KERNEL);
+			if (!sof_notify_payload) {
+				CAM_ERR_RATE_LIMIT(CAM_ISP, "no memory for sof notify:%u", ctx->ctx_id);
+				rc = -ENOMEM;
+				goto put_ref;
+			}
+
 			task = cam_req_mgr_workq_get_task(ctx_isp->hw_mgr_workq);
 			if (PTR_ERR(task) == -EIO) {
 				CAM_DBG(CAM_CRM, "workq %s is paused, skip apply ctx:%u",
 						ctx_isp->hw_mgr_workq->workq_name, ctx->ctx_id);
 				rc = -EBUSY;
-				goto end;
+				goto put_ref;
 			}
 			if (!task) {
 				CAM_ERR_RATE_LIMIT(CAM_CRM, "no empty task ctx:%u", ctx->ctx_id);
-				return -EBUSY;
+				goto put_ref;
 			}
 
+			sof_notify_payload->link_hdl = ctx->link_hdl;
+			sof_notify_payload->frame_id = ctx_isp->frame_id;
+			sof_notify_payload->res_id   = CAM_IFE_PIX_PATH_RES_MAX;
+			sof_notify_payload->sof_irq_ts = 0;
+
 			task->process_cb = __cam_isp_ctx_no_crm_apply_trigger_util;
-			task->payload = NULL;
+			task->payload = sof_notify_payload;
+
 
 			rc = cam_req_mgr_workq_enqueue_task(task, ctx_isp, CRM_TASK_PRIORITY_0);
-			if (rc)
+			if (rc) {
 				CAM_ERR(CAM_REQ,
-					"Pending request processing failed:%d ctx:%u",
+					"Pending request processing failed rc:%d ctx:%u",
 					rc, ctx->ctx_id);
+				goto put_ref;
+			}
 		}
 	}
 
-end:
 	return rc;
 
 put_ref:
@@ -9711,7 +9728,8 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 	req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 
 	/* Timestamp matching is required only for trigger camera in no-crm mode*/
-	if (ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) {
+	if ((ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) &&
+		(res_id != CAM_IFE_PIX_PATH_RES_MAX)) {
 		rc = __cam_isp_ctx_get_hw_timestamp(cam_ctx, res_id, &prev_ts, &curr_ts, &boot_ts);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "ctx:%u Failed to get timestamp from HW",
@@ -9736,6 +9754,9 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 	apply_req.dev_hdl          = cam_ctx->dev_hdl;
 	apply_req.request_id       = req->request_id;
 	apply_req.trigger_point    = CAM_TRIGGER_POINT_SOF;
+	if ((ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) &&
+		(ctx_isp->acquire_type != CAM_ISP_ACQUIRE_TYPE_HYBRID))
+		apply_req.wait_for_request_apply = true;
 
 	if (ctx_isp->rdi_only_context && ctx_isp->waitlist_req_cnt >= ctx_isp->fifo_depth) {
 		CAM_DBG(CAM_ISP,
@@ -10277,12 +10298,108 @@ int cam_isp_no_crm_handshake_device(struct cam_req_mgr_no_crm_handshake_data *ha
 	return 0;
 }
 
+int cam_isp_no_crm_handle_get_csid_cid_info(
+	struct cam_context       *ctx,
+	struct cam_req_mgr_no_crm_notify_device *notify_subdev)
+{
+	int rc = 0, i;
+	struct cam_hw_cmd_args                        hw_cmd_args;
+	struct cam_isp_hw_cmd_args                    isp_hw_cmd_args;
+	struct cam_isp_get_csid_cid_info              isp_csid_cid_info;
+	struct cam_isp_context                       *ctx_isp = NULL;
+	struct cam_req_mgr_no_crm_get_csid_cid_info  *req_mgr_csid_cid_info;
+
+	if (!notify_subdev->data) {
+		CAM_ERR(CAM_ISP, "Invalid command :%d data, dev_hdl:0x%x link hdl:0x%x",
+			notify_subdev->command, notify_subdev->dev_hdl, notify_subdev->link_hdl);
+		return -EINVAL;
+	}
+
+	ctx_isp = ctx->ctx_priv;
+	req_mgr_csid_cid_info = (struct cam_req_mgr_no_crm_get_csid_cid_info  *)notify_subdev->data;
+	isp_csid_cid_info.phy_no = req_mgr_csid_cid_info->phy_no;
+	isp_csid_cid_info.num_vc_dt = req_mgr_csid_cid_info->num_vc_dt;
+
+	if (req_mgr_csid_cid_info->num_vc_dt > CAM_REQ_MGR_MAX_CSID_CID) {
+		CAM_ERR(CAM_ISP, "ctx id:%d Invalid num vc dt data :%d data, dev_hdl:0x%x link hdl:0x%x",
+			ctx->ctx_id, req_mgr_csid_cid_info->num_vc_dt, notify_subdev->dev_hdl, notify_subdev->link_hdl);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < req_mgr_csid_cid_info->num_vc_dt; i++) {
+		isp_csid_cid_info.vc_dt_cid[i].vc=  req_mgr_csid_cid_info->vc_dt_cid[i].vc;
+		isp_csid_cid_info.vc_dt_cid[i].dt=  req_mgr_csid_cid_info->vc_dt_cid[i].dt;
+	}
+
+	hw_cmd_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
+	hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+	isp_hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_GET_CSID_CID_INFO;
+	isp_hw_cmd_args.cmd_data = &isp_csid_cid_info;
+	hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+	rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
+		&hw_cmd_args);
+	if (rc) {
+		CAM_ERR(CAM_ISP, "ctx id:%d HW command:%d failed for trigger point dev_hdl:0x%x link hdl:0x%x",
+			ctx->ctx_id, notify_subdev->command,
+			notify_subdev->dev_hdl, notify_subdev->link_hdl);
+		goto end;
+	}
+
+	req_mgr_csid_cid_info->csid_hw_no = isp_csid_cid_info.csid_hw_no;
+	for (i = 0; i < req_mgr_csid_cid_info->num_vc_dt; i++)
+		req_mgr_csid_cid_info->vc_dt_cid[i].cid = isp_csid_cid_info.vc_dt_cid[i].cid;
+
+end:
+	return rc ;
+
+}
+
+int cam_isp_no_crm_handle_dev_notify(uint32_t dev_hdl,
+	struct cam_req_mgr_no_crm_notify_device *notify_subdev)
+{
+	int rc = 0;
+	struct cam_context           *ctx = NULL;
+
+	if (!dev_hdl || !notify_subdev) {
+		CAM_ERR(CAM_ISP, "invalid parameters for handle dev");
+		return -EINVAL;
+	}
+
+	ctx = (struct cam_context *) cam_get_device_priv(notify_subdev->dev_hdl);
+	if (!ctx) {
+		CAM_ERR(CAM_ISP, "Can not get context for handle 0x%x",
+			notify_subdev->dev_hdl);
+		return -EINVAL;
+	}
+
+	if (!ctx->state_machine) {
+		CAM_ERR(CAM_ISP, "ctx id :%d Context is not ready", ctx->ctx_id);
+		return -EINVAL;
+	}
+
+	CAM_DBG(CAM_ISP, "ctx id :%d NO CRM sub device handle for isp command:%d, dev_hdl:0x%x link hdl:0x%x",
+		ctx->ctx_id, notify_subdev->command, notify_subdev->dev_hdl, notify_subdev->link_hdl);
+
+	switch (notify_subdev->command) {
+		case CAM_SUBDEV_MESSAGE_GET_CSID_CID:
+			rc = cam_isp_no_crm_handle_get_csid_cid_info(ctx, notify_subdev);
+			break;
+		default:
+			CAM_ERR(CAM_ISP, "ctx id :%d Un supported command:%d for ISP device dev_hdl:0x%x link hdl:0x%x",
+				ctx->ctx_id, notify_subdev->command, notify_subdev->dev_hdl, notify_subdev->link_hdl);
+			break;
+	}
+
+	return rc;
+}
+
 /* No other driver except ISP needs this, so define it in ISP itself. */
 struct cam_req_mgr_no_crm_kmd_ops no_crm_isp_intf = {
 	.handshake = cam_isp_no_crm_handshake_device,
 	.apply_req = NULL,
 	.pause_cb = NULL,
 	.resume_cb = NULL,
+	.notify_dev = cam_isp_no_crm_handle_dev_notify,
 };
 
 int cam_isp_context_init(struct cam_isp_context *ctx,
