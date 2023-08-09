@@ -492,8 +492,7 @@ int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 			(uintptr_t)mapping.vaddr_iomem :
 			(uintptr_t)mapping.vaddr;
 		CAM_DBG(CAM_MEM,
-				"dmabuf=%p, *vaddr=%p, is_iomem=%d, vaddr_iomem=%p,
-				vaddr=%p",
+				"dmabuf=%p, *vaddr=%p, is_iomem=%d, vaddr_iomem=%p,vaddr=%p",
 				dmabuf, *vaddr, mapping.is_iomem, mapping.vaddr_iomem,
 				mapping.vaddr);
 	}
@@ -615,8 +614,8 @@ int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
 	soc_info->irq_num = platform_get_irq(soc_info->pdev, 0);
 	if (soc_info->irq_num < 0) {
 		rc = soc_info->irq_num;
-		return rc;
 	}
+	return rc;
 }
 
 #else
