@@ -85,4 +85,7 @@ int cam_req_mgr_ordered_list_cmp(void *priv,
 #endif
 
 int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info);
+struct file *cam_fcheck_files(struct files_struct *files, uint32_t fd);
+void cam_close_fd(struct files_struct *files, uint32_t fd);
+int cam_atomic_add_unless (struct file *file);
 #endif /* _CAM_COMPAT_H_ */
