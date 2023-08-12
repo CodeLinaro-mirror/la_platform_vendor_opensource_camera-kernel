@@ -888,6 +888,7 @@ static int cam_sensor_lite_validate_cmd_descriptor(
 		rc = -EINVAL;
 	}
 end:
+	cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 	return rc;
 }
 
@@ -1063,6 +1064,7 @@ static int cam_sensor_lite_packet_parse(
 		break;
 	}
 end:
+	cam_mem_put_cpu_buf(config->packet_handle);
 	return rc;
 }
 
@@ -1265,8 +1267,11 @@ int32_t __cam_sensor_lite_handle_probe(
 		ptr      = (void *) cmd_buf;
 		probe    = (struct probe_payload_v2 *) ptr;
 
-		if (probe->header.tag != SENSORLITE_CMD_TYPE_PROBE)
+		if (probe->header.tag != SENSORLITE_CMD_TYPE_PROBE) {
+			cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
+			cam_mem_put_cpu_buf(handle);
 			return -EINVAL;
+		}
 		pwr_on_cmd_size = sizeof(struct sensor_lite_acquire_cmd) +
 					(sizeof(struct sensor_power_setting) *
 					probe->power_up_settings_size);
@@ -1275,6 +1280,8 @@ int32_t __cam_sensor_lite_handle_probe(
 		if (!sensor_lite_dev->acquire_cmd) {
 			CAM_ERR(CAM_SENSOR_LITE,
 					"Could not allocate the memory for acquire_cmd");
+			cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
+			cam_mem_put_cpu_buf(handle);
 			return -ENOMEM;
 		}
 
@@ -1298,6 +1305,8 @@ int32_t __cam_sensor_lite_handle_probe(
 					"Could not allocate the memory for acquire_cmd");
 			kfree(sensor_lite_dev->acquire_cmd);
 			sensor_lite_dev->acquire_cmd = NULL;
+			cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
+			cam_mem_put_cpu_buf(handle);
 			return -ENOMEM;
 		}
 
@@ -1339,7 +1348,7 @@ int32_t __cam_sensor_lite_handle_probe(
 				probe->power_down_settings_offset,
 				probe->power_down_settings_size,
 				probe->header.size);
-
+		cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 	}
 
 	if (ptr != NULL) {
@@ -1349,6 +1358,7 @@ int32_t __cam_sensor_lite_handle_probe(
 		rc = -EINVAL;
 	}
 end:
+	cam_mem_put_cpu_buf(handle);
 	return rc;
 }
 
