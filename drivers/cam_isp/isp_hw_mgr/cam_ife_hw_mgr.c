@@ -1427,11 +1427,12 @@ err:
 }
 
 static void cam_ife_hw_mgr_stop_hw_res(
-	struct cam_isp_hw_mgr_res   *isp_hw_res)
+	struct cam_isp_hw_mgr_res   *isp_hw_res, bool is_internal_stop)
 {
 	int i;
 	struct cam_hw_intf      *hw_intf;
 	uint32_t dummy_args;
+	struct cam_vfe_hw_stop_args    stop;
 
 	for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
 		if (!isp_hw_res->hw_res[i])
@@ -1443,9 +1444,17 @@ static void cam_ife_hw_mgr_stop_hw_res(
 			continue;
 
 		if (hw_intf->hw_ops.stop) {
-			hw_intf->hw_ops.stop(hw_intf->hw_priv,
-				isp_hw_res->hw_res[i],
-				sizeof(struct cam_isp_resource_node));
+			if ((isp_hw_res->res_type == CAM_ISP_RESOURCE_VFE_IN) ||
+				(isp_hw_res->res_type == CAM_ISP_RESOURCE_VFE_OUT) ||
+				(isp_hw_res->res_type == CAM_ISP_RESOURCE_VFE_BUS_RD)) {
+				stop.node_res = isp_hw_res->hw_res[i];
+				stop.is_internal_stop = is_internal_stop;
+				hw_intf->hw_ops.stop(hw_intf->hw_priv, &stop, sizeof(stop));
+			} else {
+				hw_intf->hw_ops.stop(hw_intf->hw_priv,
+					isp_hw_res->hw_res[i],
+					sizeof(struct cam_isp_resource_node));
+			}
 		}
 		else
 			CAM_ERR(CAM_ISP, "stop null");
@@ -2130,7 +2139,7 @@ static int cam_ife_mgr_csid_change_halt_mode(struct cam_ife_hw_mgr_ctx *ctx,
 
 static int cam_ife_mgr_csid_stop_hw(
 	struct cam_ife_hw_mgr_ctx *ctx, struct list_head  *stop_list,
-		uint32_t  base_idx, uint32_t stop_cmd)
+		uint32_t  base_idx, uint32_t stop_cmd, bool is_internal_stop)
 {
 	struct cam_isp_hw_mgr_res      *hw_mgr_res;
 	struct cam_isp_resource_node   *isp_res;
@@ -2163,6 +2172,7 @@ static int cam_ife_mgr_csid_stop_hw(
 		stop.num_res = cnt;
 		stop.node_res = stop_res;
 		stop.stop_cmd = stop_cmd;
+		stop.is_internal_stop = is_internal_stop;
 		hw_intf->hw_ops.stop(hw_intf->hw_priv, &stop, sizeof(stop));
 		for (i = 0; i < cnt; i++)
 			stop_res[i]->rdi_only_ctx = false;
@@ -9526,7 +9536,7 @@ static int cam_ife_mgr_stop_hw_in_overflow(void *stop_hw_args)
 
 	/* stop the master CSID path first */
 	cam_ife_mgr_csid_stop_hw(ctx, &ctx->res_list_ife_csid,
-		master_base_idx, CAM_CSID_HALT_IMMEDIATELY);
+		master_base_idx, CAM_CSID_HALT_IMMEDIATELY, true);
 
 	/* Stop rest of the CSID paths  */
 	for (i = 0; i < ctx->num_base; i++) {
@@ -9534,22 +9544,22 @@ static int cam_ife_mgr_stop_hw_in_overflow(void *stop_hw_args)
 			continue;
 
 		cam_ife_mgr_csid_stop_hw(ctx, &ctx->res_list_ife_csid,
-			ctx->base[i].idx, CAM_CSID_HALT_IMMEDIATELY);
+			ctx->base[i].idx, CAM_CSID_HALT_IMMEDIATELY, true);
 	}
 
 	/* IFE mux in resources */
 	list_for_each_entry(hw_mgr_res, &ctx->res_list_ife_src, list) {
-		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res);
+		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res, true);
 	}
 
 	/* IFE bus rd resources */
 	list_for_each_entry(hw_mgr_res, &ctx->res_list_ife_in_rd, list) {
-		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res);
+		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res, true);
 	}
 
 	/* IFE out resources */
 	for (i = 0; i < max_ife_out_res; i++)
-		cam_ife_hw_mgr_stop_hw_res(&ctx->res_list_ife_out[i]);
+		cam_ife_hw_mgr_stop_hw_res(&ctx->res_list_ife_out[i], true);
 
 	/* Flush workq */
 	workq_info = (struct cam_req_mgr_core_workq *)ctx->common.workq_info;
@@ -9646,7 +9656,7 @@ static int cam_ife_mgr_stop_hw_res_stream_grp(
 	/* stop csid resources */
 	cam_ife_mgr_csid_stop_hw(ctx,
 		&g_ife_sns_grp_cfg.grp_cfg[grp_cfg_index].res_ife_csid_list,
-		master_base_idx, stop_cmd);
+		master_base_idx, stop_cmd, is_internal_stop);
 
 	/* Ensure HW layer does not reset any clk data since it's
 	 * internal stream off/resume
@@ -9658,7 +9668,7 @@ static int cam_ife_mgr_stop_hw_res_stream_grp(
 	for (i = 0; i < max_ife_out_res; i++) {
 		hw_mgr_res =
 			&g_ife_sns_grp_cfg.grp_cfg[grp_cfg_index].res_list_ife_out[i];
-		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res);
+		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res, is_internal_stop);
 	}
 
 	/* stop ife src resources */
@@ -9666,7 +9676,7 @@ static int cam_ife_mgr_stop_hw_res_stream_grp(
 		list_for_each_entry(hw_mgr_res,
 			&g_ife_sns_grp_cfg.grp_cfg[grp_cfg_index].res_ife_src_list,
 			list) {
-			cam_ife_hw_mgr_stop_hw_res(hw_mgr_res);
+			cam_ife_hw_mgr_stop_hw_res(hw_mgr_res, is_internal_stop);
 		}
 	}
 	return 0;
@@ -9896,7 +9906,7 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 
 	/* Stop the master CSID path first */
 	cam_ife_mgr_csid_stop_hw(ctx, &ctx->res_list_ife_csid,
-		master_base_idx, csid_halt_type);
+		master_base_idx, csid_halt_type, stop_isp->is_internal_stop);
 
 	/* stop rest of the CSID paths  */
 	for (i = 0; i < ctx->num_base; i++) {
@@ -9906,7 +9916,7 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 			ctx->base[i].idx, i, master_base_idx);
 
 		cam_ife_mgr_csid_stop_hw(ctx, &ctx->res_list_ife_csid,
-			ctx->base[i].idx, csid_halt_type);
+			ctx->base[i].idx, csid_halt_type, stop_isp->is_internal_stop);
 	}
 
 	/* Ensure HW layer does not reset any clk data since it's
@@ -9921,31 +9931,34 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 
 		/* SFE out resources */
 		for (i = 0; i < CAM_SFE_HW_OUT_RES_MAX; i++)
-			cam_ife_hw_mgr_stop_hw_res(&ctx->res_list_sfe_out[i]);
+			cam_ife_hw_mgr_stop_hw_res(&ctx->res_list_sfe_out[i],
+			stop_isp->is_internal_stop);
 
 		CAM_DBG(CAM_ISP, "Going to stop SFE SRC resources");
 
 		/* SFE in resources */
 		list_for_each_entry(hw_mgr_res, &ctx->res_list_sfe_src, list)
-			cam_ife_hw_mgr_stop_hw_res(hw_mgr_res);
+			cam_ife_hw_mgr_stop_hw_res(hw_mgr_res,
+				stop_isp->is_internal_stop);
 	}
 
 	CAM_DBG(CAM_ISP, "Going to stop IFE out resources");
 
 	/* IFE out resources */
 	for (i = 0; i < max_ife_out_res; i++)
-		cam_ife_hw_mgr_stop_hw_res(&ctx->res_list_ife_out[i]);
+		cam_ife_hw_mgr_stop_hw_res(&ctx->res_list_ife_out[i],
+			stop_isp->is_internal_stop);
 
 	CAM_DBG(CAM_ISP, "Going to stop IFE Mux");
 
 	/* IFE mux in resources */
 	list_for_each_entry(hw_mgr_res, &ctx->res_list_ife_src, list) {
-		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res);
+		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res, stop_isp->is_internal_stop);
 	}
 
 	/* bus rd resources */
 	list_for_each_entry(hw_mgr_res, &ctx->res_list_ife_in_rd, list) {
-		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res);
+		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res, stop_isp->is_internal_stop);
 	}
 
 reset_scratch_buffers:

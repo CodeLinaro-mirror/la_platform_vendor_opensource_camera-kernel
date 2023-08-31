@@ -9840,6 +9840,7 @@ struct cam_ctx_ops cam_isp_ctx_top_state_machine_no_crm[CAM_CTX_STATE_MAX] = {
 			.config_dev = __cam_isp_ctx_config_dev_in_acquired,
 			.flush_dev = __cam_isp_ctx_flush_dev_in_top_state,
 			.release_hw = __cam_isp_ctx_release_hw_in_top_state,
+			.get_async_task = __cam_isp_ctx_get_async_task_in_acquired,
 		},
 		.crm_ops = {
 			.link = __cam_isp_ctx_link_in_acquired,
@@ -9858,6 +9859,7 @@ struct cam_ctx_ops cam_isp_ctx_top_state_machine_no_crm[CAM_CTX_STATE_MAX] = {
 			.config_dev = __cam_isp_ctx_config_dev_in_top_state,
 			.flush_dev = __cam_isp_ctx_flush_dev_in_top_state,
 			.release_hw = __cam_isp_ctx_release_hw_in_top_state,
+			.get_async_task = __cam_isp_ctx_get_async_task_in_ready,
 		},
 		.crm_ops = {
 			.unlink = __cam_isp_ctx_unlink_in_ready,
@@ -9873,6 +9875,7 @@ struct cam_ctx_ops cam_isp_ctx_top_state_machine_no_crm[CAM_CTX_STATE_MAX] = {
 			.release_dev = __cam_isp_ctx_release_dev_in_activated,
 			.config_dev = __cam_isp_ctx_config_dev_in_flushed,
 			.release_hw = __cam_isp_ctx_release_hw_in_activated,
+			.get_async_task = __cam_isp_ctx_get_async_task_in_acquired,
 		},
 		.crm_ops = {
 			.unlink = __cam_isp_ctx_unlink_in_ready,
@@ -9889,6 +9892,7 @@ struct cam_ctx_ops cam_isp_ctx_top_state_machine_no_crm[CAM_CTX_STATE_MAX] = {
 			.config_dev = __cam_isp_ctx_config_dev_in_top_state,
 			.flush_dev = __cam_isp_ctx_flush_dev_in_top_state,
 			.release_hw = __cam_isp_ctx_release_hw_in_activated,
+			.get_async_task = __cam_isp_ctx_get_async_task_in_acquired,
 		},
 		.crm_ops = {
 			.unlink = __cam_isp_ctx_unlink_in_ready,

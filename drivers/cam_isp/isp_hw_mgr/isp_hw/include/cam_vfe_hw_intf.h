@@ -434,6 +434,16 @@ struct cam_vfe_generic_ubwc_config {
 		ubwc_plane_cfg[CAM_PACKET_MAX_PLANES - 1];
 };
 
+/**
+ * struct cam_vfe_hw_stop_args- stop resource
+ * @node_res :  reource pointer
+ * @is_internal_stop:  Stop triggered internally for reset & recovery
+ */
+struct cam_vfe_hw_stop_args {
+	struct cam_isp_resource_node            *node_res;
+	bool                                     is_internal_stop;
+};
+
 /*
  * cam_vfe_hw_init()
  *
