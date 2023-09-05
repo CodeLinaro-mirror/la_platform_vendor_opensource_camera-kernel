@@ -705,6 +705,8 @@ static int __cam_isp_ctx_notify_trigger_util(
 					ctx_isp->req_info.last_bufdone_req_id);
 			ctx_isp->debug_frame_drop_cnt++;
 			CAM_INFO(CAM_ISP, "pending list empty, skipping ctx:%u", ctx->ctx_id);
+			if (ctx_isp->rdi_only_context || ctx_isp->rdi_stats_context)
+				ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_SOF;
 			return -EINVAL;
 		}
 		if ((ctx_isp->sensor_pd > 1) &&
@@ -943,6 +945,30 @@ static inline void __cam_isp_ctx_update_sof_ts_util(
 	ctx_isp->frame_id++;
 	ctx_isp->sof_timestamp_val = sof_event_data->timestamp;
 	ctx_isp->boot_timestamp = sof_event_data->boot_time;
+
+	if (ctx_isp->independent_crm_en) {
+		if (ctx_isp->stream_type == CAM_REQ_MGR_LINK_STREAMING_TYPE)
+			crm_timer_modify(ctx_isp->independent_crm_sof_timer,
+				ctx_isp->additional_timeout +
+				CAM_REQ_MGR_WATCHDOG_TIMEOUT);
+
+		else
+			crm_timer_modify(ctx_isp->independent_crm_sof_timer,
+				CAM_REQ_MGR_WATCHDOG_MAX_TIMEOUT);
+	}
+}
+
+static inline void __cam_isp_ctx_handle_sof_util(
+	struct cam_isp_hw_epoch_event_data *epoch_event_data,
+	struct cam_isp_context *ctx_isp)
+{
+	/* Delayed update, skip if ts is already updated */
+	if (ctx_isp->sof_timestamp_val == epoch_event_data->timestamp)
+		return;
+
+	ctx_isp->frame_id++;
+	ctx_isp->sof_timestamp_val = epoch_event_data->timestamp;
+	ctx_isp->boot_timestamp = epoch_event_data->boot_time;
 
 	if (ctx_isp->independent_crm_en) {
 		if (ctx_isp->stream_type == CAM_REQ_MGR_LINK_STREAMING_TYPE)
@@ -3083,6 +3109,8 @@ static int __cam_isp_ctx_notify_sof_in_activated_state(
 
 	ctx_isp->frame_id_meta = epoch_done_event_data->frame_id_meta;
 
+	__cam_isp_ctx_handle_sof_util(epoch_done_event_data, ctx_isp);
+
 	list_for_each_entry_safe(req, req_temp, &ctx->active_req_list, list) {
 		req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 		if (req_isp->intermediate_irq_mask.epoch_irq_mask !=
@@ -3290,7 +3318,7 @@ static int __cam_isp_ctx_sof_in_activated_state(
 	return rc;
 }
 
-static int __cam_isp_ctx_reg_upd_in_sof(struct cam_isp_context *ctx_isp,
+static int __cam_isp_ctx_reg_upd_in_top_state(struct cam_isp_context *ctx_isp,
 	void *evt_data)
 {
 	int rc = 0;
@@ -3359,6 +3387,9 @@ static int __cam_isp_ctx_epoch_in_applied(struct cam_isp_context *ctx_isp,
 	}
 
 	ctx_isp->frame_id_meta = epoch_done_event_data->frame_id_meta;
+
+	__cam_isp_ctx_handle_sof_util(epoch_done_event_data, ctx_isp);
+
 	if (list_empty(&ctx->wait_req_list)) {
 		/*
 		 * If no wait req in epoch, this is an error case.
@@ -3610,6 +3641,8 @@ static int __cam_isp_ctx_epoch_in_bubble_applied(
 	}
 
 	ctx_isp->frame_id_meta = epoch_done_event_data->frame_id_meta;
+
+	__cam_isp_ctx_handle_sof_util(epoch_done_event_data, ctx_isp);
 
 	/*
 	 * This means we missed the reg upd ack. So we need to
@@ -4440,8 +4473,8 @@ static struct cam_isp_ctx_irq_ops
 	{
 		.irq_ops = {
 			__cam_isp_ctx_handle_error,
-			__cam_isp_ctx_sof_in_activated_state,
-			__cam_isp_ctx_reg_upd_in_sof,
+			NULL,
+			__cam_isp_ctx_reg_upd_in_top_state,
 			__cam_isp_ctx_notify_sof_in_activated_state,
 			__cam_isp_ctx_notify_eof_in_activated_state,
 			__cam_isp_ctx_buf_done_in_sof,
@@ -4452,7 +4485,7 @@ static struct cam_isp_ctx_irq_ops
 	{
 		.irq_ops = {
 			__cam_isp_ctx_handle_error,
-			__cam_isp_ctx_sof_in_activated_state,
+			NULL,
 			__cam_isp_ctx_reg_upd_in_applied_state,
 			__cam_isp_ctx_epoch_in_applied,
 			__cam_isp_ctx_notify_eof_in_activated_state,
@@ -4464,7 +4497,7 @@ static struct cam_isp_ctx_irq_ops
 	{
 		.irq_ops = {
 			__cam_isp_ctx_handle_error,
-			__cam_isp_ctx_sof_in_epoch,
+			NULL,
 			__cam_isp_ctx_reg_upd_in_epoch_bubble_state,
 			__cam_isp_ctx_notify_sof_in_activated_state,
 			__cam_isp_ctx_notify_eof_in_activated_state,
@@ -4476,7 +4509,7 @@ static struct cam_isp_ctx_irq_ops
 	{
 		.irq_ops = {
 			__cam_isp_ctx_handle_error,
-			__cam_isp_ctx_sof_in_activated_state,
+			NULL,
 			__cam_isp_ctx_reg_upd_in_epoch_bubble_state,
 			__cam_isp_ctx_notify_sof_in_activated_state,
 			__cam_isp_ctx_notify_eof_in_activated_state,
@@ -4488,7 +4521,7 @@ static struct cam_isp_ctx_irq_ops
 	{
 		.irq_ops = {
 			__cam_isp_ctx_handle_error,
-			__cam_isp_ctx_sof_in_activated_state,
+			NULL,
 			__cam_isp_ctx_reg_upd_in_applied_state,
 			__cam_isp_ctx_epoch_in_bubble_applied,
 			NULL,
@@ -4500,7 +4533,7 @@ static struct cam_isp_ctx_irq_ops
 	{
 		.irq_ops = {
 			NULL,
-			__cam_isp_ctx_sof_in_activated_state,
+			NULL,
 			__cam_isp_ctx_reg_upd_in_hw_error,
 			NULL,
 			NULL,
@@ -6526,7 +6559,7 @@ end:
 	return rc;
 }
 
-static int __cam_isp_ctx_rdi_only_epoch_in_bubble_applied(
+static int __cam_isp_ctx_rdi_only_epoch_in_applied(
 	struct cam_isp_context *ctx_isp, void *evt_data)
 {
 	struct cam_ctx_request    *req, *req_temp;
@@ -7063,21 +7096,15 @@ static int __cam_isp_ctx_rdi_only_epoch_in_top_state(
 	struct cam_isp_ctx_req  *req_isp;
 	struct cam_isp_hw_epoch_event_data  *epoch_event_data =
 		(struct cam_isp_hw_epoch_event_data *)evt_data;
+	uint64_t  request_id  = 0;
 
-	if (!ctx_isp->independent_crm_en)
-		return 0;
-
-	if (list_empty(&ctx->active_req_list)) {
-		CAM_ERR(CAM_ISP,
-			"epoch with no req in active list ctx:%d res_id:%d",
-			ctx->ctx_id, epoch_event_data->res_id);
-		return -EINVAL;
-	}
+	__cam_isp_ctx_handle_sof_util(epoch_event_data, ctx_isp);
 
 	list_for_each_entry_safe(req, req_temp, &ctx->active_req_list, list) {
 		req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 		if (req_isp->intermediate_irq_mask.epoch_irq_mask !=
 			req_isp->path_irq_mask) {
+			request_id = req->request_id;
 			req_isp->intermediate_irq_mask.epoch_irq_mask |=
 					1 << epoch_event_data->res_id;
 			CAM_DBG(CAM_ISP,
@@ -7091,10 +7118,30 @@ static int __cam_isp_ctx_rdi_only_epoch_in_top_state(
 				CAM_DBG(CAM_ISP,
 					"Epoch received for all resources for req %lld ctx:%d",
 					req->request_id, ctx->ctx_id);
-			return 0;
+			break;
 		}
 	}
 
+	/*
+	 * notify reqmgr with sof signal. Note, due to scheduling delay
+	 * we can run into situation that two active requests has already
+	 * be in the active queue while we try to do the notification.
+	 * In this case, we need to skip the current notification. This
+	 * helps the state machine to catch up the delay.
+	 */
+	if (ctx_isp->active_req_cnt <= 2) {
+		__cam_isp_ctx_notify_trigger_util(CAM_TRIGGER_POINT_SOF, ctx_isp, request_id,
+			epoch_event_data->res_id, epoch_event_data->timestamp);
+
+		__cam_isp_ctx_send_sof_timestamp(ctx_isp, request_id,
+			CAM_REQ_MGR_SOF_EVENT_SUCCESS);
+
+		__cam_isp_ctx_update_state_monitor_array(ctx_isp,
+			CAM_ISP_STATE_CHANGE_TRIGGER_EPOCH,
+			request_id);
+	}
+
+	ctx_isp->last_sof_timestamp = ctx_isp->sof_timestamp_val;
 	return 0;
 }
 
@@ -7106,8 +7153,8 @@ static struct cam_isp_ctx_irq_ops
 		.irq_ops = {
 			NULL,
 			__cam_isp_ctx_rdi_only_sof_in_top_state,
-			__cam_isp_ctx_reg_upd_in_sof,
-			NULL,
+			__cam_isp_ctx_reg_upd_in_top_state,
+			__cam_isp_ctx_rdi_only_epoch_in_top_state,
 			NULL,
 			__cam_isp_ctx_buf_done_in_sof,
 		},
@@ -7118,7 +7165,7 @@ static struct cam_isp_ctx_irq_ops
 			__cam_isp_ctx_handle_error,
 			__cam_isp_ctx_rdi_only_sof_in_applied_state,
 			__cam_isp_ctx_reg_upd_in_applied_state,
-			__cam_isp_ctx_rdi_only_epoch_in_top_state,
+			__cam_isp_ctx_rdi_only_epoch_in_applied,
 			NULL,
 			__cam_isp_ctx_buf_done_in_applied,
 		},
@@ -7128,7 +7175,7 @@ static struct cam_isp_ctx_irq_ops
 		.irq_ops = {
 			__cam_isp_ctx_handle_error,
 			__cam_isp_ctx_rdi_only_sof_in_top_state,
-			NULL,
+			__cam_isp_ctx_reg_upd_in_top_state,
 			__cam_isp_ctx_rdi_only_epoch_in_top_state,
 			NULL,
 			__cam_isp_ctx_buf_done_in_epoch,
@@ -7151,7 +7198,7 @@ static struct cam_isp_ctx_irq_ops
 			__cam_isp_ctx_handle_error,
 			__cam_isp_ctx_rdi_only_sof_in_bubble_applied,
 			__cam_isp_ctx_rdi_only_reg_upd_in_bubble_applied_state,
-			__cam_isp_ctx_rdi_only_epoch_in_bubble_applied,
+			NULL,
 			NULL,
 			__cam_isp_ctx_buf_done_in_bubble_applied,
 		},

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -544,8 +544,7 @@ static int cam_vfe_camif_ver3_resource_start(
 		goto subscribe_err;
 
 	irq_mask[CAM_IFE_IRQ_CAMIF_REG_STATUS1] =
-		rsrc_data->reg_data->epoch0_irq_mask |
-		rsrc_data->reg_data->eof_irq_mask;
+		rsrc_data->reg_data->epoch0_irq_mask;
 
 	if (!rsrc_data->irq_handle) {
 		rsrc_data->irq_handle = cam_irq_controller_subscribe_irq(
