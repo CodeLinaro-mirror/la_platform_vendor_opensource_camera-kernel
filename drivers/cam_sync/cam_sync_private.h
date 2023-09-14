@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __CAM_SYNC_PRIVATE_H__
@@ -37,7 +37,6 @@
 #define CAM_SYNC_DEBUG_BUF_SIZE         32
 #define CAM_SYNC_PAYLOAD_WORDS          2
 #define CAM_SYNC_NAME                   "cam_sync"
-#define CAM_SYNC_WORKQUEUE_NAME         "HIPRIO_SYNC_WORK_QUEUE"
 #define CAM_SYNC_MAX_SYNC_MANAGER       16
 
 #define CAM_SYNC_TYPE_INDV              0
@@ -106,8 +105,6 @@ struct sync_child_info {
  * @cb_data            : Callback data, registered by client driver
  * @status             : Status with which callback will be invoked in client
  * @sync_obj           : Sync id of the object for which callback is registered
- * @workq_scheduled_ts : workqueue scheduled timestamp
- * @cb_dispatch_work   : Work representing the call dispatch
  * @list               : List member used to append this node to a linked list
  */
 struct sync_callback_info {
@@ -115,8 +112,6 @@ struct sync_callback_info {
 	void *cb_data;
 	int status;
 	int32_t sync_obj;
-	ktime_t workq_scheduled_ts;
-	struct work_struct cb_dispatch_work;
 	struct list_head list;
 };
 
@@ -204,7 +199,7 @@ struct cam_signalable_info {
  * @sync_table            : Table of all sync objects
  * @row_spinlocks         : Spinlock array, one for each row in the table
  * @dentry                : Debugfs entry
- * @work_queue            : Work queue used for dispatching kernel callbacks
+ * @worker                : Worker queue used for dispatching kernel callbacks
  * @cam_sync_eventq       : Event queue used to dispatch user payloads to user space
  * @bitmap                : Bitmap representation of all sync objects
  * @sync_manager_id_mask  : Bit mask to get sync manager idx
@@ -218,7 +213,7 @@ struct sync_device {
 	struct sync_table_row *sync_table;
 	spinlock_t row_spinlocks[CAM_SYNC_MAX_OBJS];
 	struct dentry *dentry;
-	struct workqueue_struct *work_queue[CAM_SYNC_MAX_SYNC_MANAGER];
+	struct cam_req_mgr_core_worker *worker[CAM_SYNC_MAX_SYNC_MANAGER];
 	struct v4l2_fh *cam_sync_eventq[CAM_SYNC_MAX_SYNC_MANAGER];
 	spinlock_t cam_sync_eventq_lock[CAM_SYNC_MAX_SYNC_MANAGER];
 	DECLARE_BITMAP(bitmap, CAM_SYNC_MAX_OBJS);

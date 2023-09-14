@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_VFE_HW_INTF_H_
@@ -207,7 +207,7 @@ struct cam_vfe_hw_vfe_in_acquire_args {
  * struct cam_vfe_acquire_args:
  *
  * @rsrc_type:               Type of Resource (OUT/IN) to acquire
- * @workq:                   Workq to associate with this resource. This is
+ * @worker:                  Worker to associate with this resource. This is
  *                           used to schedule bottom of IRQ events associated
  *                           with this resource.
  * @priv:                    Context data
@@ -221,7 +221,7 @@ struct cam_vfe_hw_vfe_in_acquire_args {
  */
 struct cam_vfe_acquire_args {
 	enum cam_isp_resource_type           rsrc_type;
-	void                                *workq;
+	void                                *worker;
 	void                                *priv;
 	cam_hw_mgr_event_cb_func             event_cb;
 	void                                *buf_done_controller;
