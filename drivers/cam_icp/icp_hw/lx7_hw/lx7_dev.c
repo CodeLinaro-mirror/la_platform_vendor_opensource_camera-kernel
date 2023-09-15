@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -15,6 +16,30 @@
 #include "lx7_core.h"
 #include "lx7_soc.h"
 
+struct cam_lx7_hw_info cam_lx7_hw_info[] = {
+	{
+		.ob_irq_status = 0xC,
+		.ob_irq_mask   = 0x0,
+		.ob_irq_clear  = 0x4,
+		.ob_irq_set    = 0x8,
+		.ob_irq_cmd    = 0x10,
+		.host2icpint   = 0x124,
+		.pfault_info   = 0x128,
+	},
+};
+
+struct cam_lx7_hw_info cam_lx7_1_hw_info[] = {
+	{
+		.ob_irq_status = 0x20C,
+		.ob_irq_mask   = 0x200,
+		.ob_irq_clear  = 0x204,
+		.ob_irq_set    = 0x208,
+		.ob_irq_cmd    = 0x210,
+		.host2icpint   = 0x300,
+		.pfault_info   = 0x400,
+	},
+};
+
 static int cam_lx7_component_bind(struct device *dev,
 				struct device *mdev, void *data)
 {
@@ -23,7 +48,15 @@ static int cam_lx7_component_bind(struct device *dev,
 	struct cam_hw_info *lx7_info = NULL;
 	struct lx7_soc_info *lx7_soc_info = NULL;
 	struct cam_lx7_core_info *core_info = NULL;
+	const struct of_device_id *match_dev = NULL;
 	struct platform_device *pdev = to_platform_device(dev);
+
+	match_dev = of_match_device(
+		pdev->dev.driver->of_match_table, &pdev->dev);
+	if (!match_dev) {
+		CAM_DBG(CAM_ICP, "No ICP v2 hardware info");
+		return -EINVAL;
+	}
 
 	lx7_intf = kzalloc(sizeof(*lx7_intf), GFP_KERNEL);
 	if (!lx7_intf)
@@ -47,6 +80,7 @@ static int cam_lx7_component_bind(struct device *dev,
 		goto free_soc_info;
 	}
 
+	core_info->hw_info = (struct cam_lx7_hw_info *)match_dev->data;
 	lx7_info->core_info = core_info;
 	lx7_info->soc_info.pdev = pdev;
 	lx7_info->soc_info.dev = &pdev->dev;
@@ -63,6 +97,10 @@ static int cam_lx7_component_bind(struct device *dev,
 		CAM_ERR(CAM_ICP, "soc resources init failed rc=%d", rc);
 		goto free_core_info;
 	}
+
+	rc = cam_lx7_core_init(&lx7_info->soc_info, core_info);
+	if (rc)
+		goto free_soc_info;
 
 	lx7_intf->hw_priv = lx7_info;
 	lx7_intf->hw_type = CAM_ICP_DEV_LX7;
@@ -117,8 +155,15 @@ static const struct component_ops cam_lx7_component_ops = {
 };
 
 static const struct of_device_id cam_lx7_match[] = {
-	{ .compatible = "qcom,cam-lx7"},
-	{},
+	{
+		.compatible = "qcom,cam-lx7",
+		.data = &cam_lx7_hw_info,
+	},
+	{
+		.compatible = "qcom,cam-lx7_v2",
+		.data = &cam_lx7_1_hw_info,
+	},
+	{}
 };
 MODULE_DEVICE_TABLE(of, cam_lx7_match);
 

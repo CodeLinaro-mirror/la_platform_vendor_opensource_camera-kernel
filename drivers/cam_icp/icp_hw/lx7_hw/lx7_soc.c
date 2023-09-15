@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/interrupt.h>
@@ -80,9 +81,42 @@ static inline void cam_lx7_qos_get(
 	}
 }
 
-static int cam_lx7_dt_properties_get(struct cam_hw_soc_info *soc_info)
+static int cam_lx7_soc_get_hw_version(struct device_node *np,
+	struct lx7_soc_info *icp_soc_info)
 {
 	int rc;
+	const char *compatible_str;
+
+	rc = of_property_read_string(np, "compatible", &compatible_str);
+	if (rc) {
+		CAM_ERR(CAM_ICP, "read icp-compatible failed rc=%d", rc);
+		return -ENODEV;
+	}
+
+	if (strcmp(compatible_str, "qcom,cam-lx7") == 0)
+		 icp_soc_info->hw_version = CAM_LX7_VERSION;
+	else if (strcmp(compatible_str, "qcom,cam-lx7_v2") == 0)
+		 icp_soc_info->hw_version = CAM_LX7_1_VERSION;
+	else {
+		CAM_ERR(CAM_ICP, "Invalid ICP compatible: %s", compatible_str);
+		rc = -ENODEV;
+	}
+	return rc;
+}
+
+static int cam_lx7_dt_properties_get(struct cam_hw_soc_info *soc_info)
+{
+	struct lx7_soc_info *icp_soc_info;
+	struct device_node *np;
+	int rc;
+
+	if (!soc_info->soc_private) {
+		CAM_ERR(CAM_ICP, "soc private is NULL");
+		return -EINVAL;
+	}
+
+	icp_soc_info = (struct lx7_soc_info *)soc_info->soc_private;
+	np = soc_info->pdev->dev.of_node;
 
 	rc = cam_soc_util_get_dt_properties(soc_info);
 	if (rc) {
@@ -99,6 +133,12 @@ static int cam_lx7_dt_properties_get(struct cam_hw_soc_info *soc_info)
 
 	cam_lx7_qos_get(soc_info->soc_private,
 		soc_info->pdev->dev.of_node);
+
+	rc = cam_lx7_soc_get_hw_version(np, icp_soc_info);
+	if (rc) {
+		CAM_ERR(CAM_ICP, "Get ICP HW version failed");
+		return rc;
+	}
 
 	return 0;
 }
