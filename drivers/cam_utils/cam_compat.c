@@ -14,6 +14,8 @@
 #include "cam_cpas_api.h"
 #include "camera_main.h"
 #include <media/cam_isp.h>
+#include "cam_eeprom_dev.h"
+#include "cam_eeprom_core.h"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 int cam_reserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length)
@@ -651,6 +653,43 @@ int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
 	return rc;
 }
 
+void cam_eeprom_spi_driver_remove(struct spi_device *sdev)
+{
+	struct v4l2_subdev             *sd = spi_get_drvdata(sdev);
+	struct cam_eeprom_ctrl_t       *e_ctrl;
+	struct cam_eeprom_soc_private  *soc_private;
+	struct cam_hw_soc_info         *soc_info;
+
+	if (!sd) {
+		CAM_ERR(CAM_EEPROM, "Subdevice is NULL");
+		return;
+	}
+
+	e_ctrl = (struct cam_eeprom_ctrl_t *)v4l2_get_subdevdata(sd);
+	if (!e_ctrl) {
+		CAM_ERR(CAM_EEPROM, "eeprom device is NULL");
+		return;
+	}
+
+	soc_info = &e_ctrl->soc_info;
+	mutex_lock(&(e_ctrl->eeprom_mutex));
+	cam_eeprom_shutdown(e_ctrl);
+	mutex_unlock(&(e_ctrl->eeprom_mutex));
+	mutex_destroy(&(e_ctrl->eeprom_mutex));
+	cam_unregister_subdev(&(e_ctrl->v4l2_dev_str));
+	kfree(e_ctrl->io_master_info.spi_client);
+	e_ctrl->io_master_info.spi_client = NULL;
+	soc_private =
+		(struct cam_eeprom_soc_private *)e_ctrl->soc_info.soc_private;
+	if (soc_private) {
+		kfree(soc_private->power_info.gpio_num_info);
+		soc_private->power_info.gpio_num_info = NULL;
+		kfree(soc_private);
+		soc_private = NULL;
+	}
+	v4l2_set_subdevdata(&e_ctrl->v4l2_dev_str.sd, NULL);
+	kfree(e_ctrl);
+}
 #else
 int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
 {
@@ -664,5 +703,45 @@ int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
 	}
 	soc_info->irq_num = soc_info->irq_line->start;
 	return rc;
+}
+
+int cam_eeprom_spi_driver_remove(struct spi_device *sdev)
+{
+	struct v4l2_subdev             *sd = spi_get_drvdata(sdev);
+	struct cam_eeprom_ctrl_t       *e_ctrl;
+	struct cam_eeprom_soc_private  *soc_private;
+	struct cam_hw_soc_info         *soc_info;
+
+	if (!sd) {
+		CAM_ERR(CAM_EEPROM, "Subdevice is NULL");
+		return -EINVAL;
+	}
+
+	e_ctrl = (struct cam_eeprom_ctrl_t *)v4l2_get_subdevdata(sd);
+	if (!e_ctrl) {
+		CAM_ERR(CAM_EEPROM, "eeprom device is NULL");
+		return -EINVAL;
+	}
+
+	soc_info = &e_ctrl->soc_info;
+	mutex_lock(&(e_ctrl->eeprom_mutex));
+	cam_eeprom_shutdown(e_ctrl);
+	mutex_unlock(&(e_ctrl->eeprom_mutex));
+	mutex_destroy(&(e_ctrl->eeprom_mutex));
+	cam_unregister_subdev(&(e_ctrl->v4l2_dev_str));
+	kfree(e_ctrl->io_master_info.spi_client);
+	e_ctrl->io_master_info.spi_client = NULL;
+	soc_private =
+		(struct cam_eeprom_soc_private *)e_ctrl->soc_info.soc_private;
+	if (soc_private) {
+		kfree(soc_private->power_info.gpio_num_info);
+		soc_private->power_info.gpio_num_info = NULL;
+		kfree(soc_private);
+		soc_private = NULL;
+	}
+	v4l2_set_subdevdata(&e_ctrl->v4l2_dev_str.sd, NULL);
+	kfree(e_ctrl);
+
+	return 0;
 }
 #endif
