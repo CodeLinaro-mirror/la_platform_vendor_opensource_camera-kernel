@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_VFE_TOP_VER4_H_
@@ -13,7 +13,7 @@
 
 #define CAM_VFE_RDI_VER2_MAX                           4
 #define CAM_VFE_CAMIF_LITE_EVT_MAX                     256
-#define CAM_VFE_TOP_DBG_REG_MAX                        17
+#define CAM_VFE_TOP_DBG_REG_MAX                        18
 
 struct cam_vfe_top_ver4_common_data {
 	struct cam_hw_intf                         *hw_intf;
@@ -29,7 +29,9 @@ struct cam_vfe_top_ver4_reg_offset_common {
 	uint32_t stats_feature;
 	uint32_t color_feature;
 	uint32_t zoom_feature;
+	uint32_t irq_cmd;
 	uint32_t global_reset_cmd;
+	uint32_t irq_set;
 	uint32_t core_cgc_ovd_0;
 	uint32_t core_cgc_ovd_1;
 	uint32_t ahb_cgc_ovd;
@@ -68,6 +70,11 @@ struct cam_vfe_top_ver4_reg_offset_common {
 	uint32_t pdaf_input_cfg_1;
 	uint32_t num_top_debug_reg;
 	uint32_t top_debug[CAM_VFE_TOP_DBG_REG_MAX];
+	uint32_t core_cfg_7;
+	uint32_t noise_processing;
+	void *perf_regs_0;
+	void *perf_regs_1;
+	void *perf_regs_2;
 };
 
 struct cam_vfe_top_common_cfg {
@@ -79,6 +86,15 @@ struct cam_vfe_top_common_cfg {
 	uint32_t     ihist_src_sel;
 	uint32_t     input_pp_fmt;
 	uint32_t     hdr_mux_sel_pp;
+};
+
+struct cam_vfe_top_ver4_reg_offset_perf_count_regs {
+	uint32_t    count_cfg;
+	uint32_t    pixel_count;
+	uint32_t    line_count;
+	uint32_t    stall_count;
+	uint32_t    always_count;
+	uint32_t    count_status;
 };
 
 struct cam_vfe_top_ver4_module_desc {

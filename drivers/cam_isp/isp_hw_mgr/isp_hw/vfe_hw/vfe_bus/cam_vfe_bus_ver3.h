@@ -13,9 +13,11 @@
 #include "cam_vfe_hw_intf.h"
 
 #define CAM_VFE_BUS_VER3_MAX_SUB_GRPS        6
+#define CAM_VFE_BUS_VER3_PERF_COUNT          8
+#define CAM_VFE_BUS_VER3_MISR_COUNT          4
 #define CAM_VFE_BUS_VER3_MAX_MID_PER_PORT    4
 #define CAM_VFE_BUS_VER3_CONS_ERR_MAX        32
-#define CAM_VFE_BUS_VER3_MAX_CLIENTS         28
+#define CAM_VFE_BUS_VER3_MAX_CLIENTS         36
 #define CAM_VFE_BUS_VER3_ERR_IRQ_REG_MAX     2
 #define CAM_VFE_BUS_VER3_PAYLOAD_MAX         256
 #define CAM_VFE_BUS_VER3_IRQ_MAX             2
@@ -61,6 +63,8 @@ enum cam_vfe_bus_ver3_comp_grp_type {
 	CAM_VFE_BUS_VER3_COMP_GRP_14,
 	CAM_VFE_BUS_VER3_COMP_GRP_15,
 	CAM_VFE_BUS_VER3_COMP_GRP_16,
+	CAM_VFE_BUS_VER3_COMP_GRP_17,
+	CAM_VFE_BUS_VER3_COMP_GRP_18,
 	CAM_VFE_BUS_VER3_COMP_GRP_MAX,
 };
 
@@ -103,6 +107,11 @@ enum cam_vfe_bus_ver3_vfe_out_type {
 	CAM_VFE_BUS_VER3_VFE_OUT_STATS_LITE_BHIST,
 	CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_RAW1,
 	CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_RAW2,
+	CAM_VFE_BUS_VER3_VFE_OUT_MONO_DS_OUT,
+	CAM_VFE_BUS_VER3_VFE_OUT_MONO_FULL_OUT,
+	CAM_VFE_BUS_VER3_VFE_OUT_MONO_STATS_AEC_BE,
+	CAM_VFE_BUS_VER3_VFE_OUT_MONO_STATS_AEC_BHIST,
+	CAM_VFE_BUS_VER3_VFE_OUT_GAMMA_DS,
 	CAM_VFE_BUS_VER3_VFE_OUT_MAX,
 };
 
@@ -159,6 +168,18 @@ struct cam_vfe_bus_ver3_reg_offset_common {
 	uint32_t debug_status_top;
 	uint32_t test_bus_ctrl;
 	uint32_t top_irq_mask_0;
+	uint32_t perf_count_cfg[CAM_VFE_BUS_VER3_PERF_COUNT];
+	uint32_t perf_count_val[CAM_VFE_BUS_VER3_PERF_COUNT];
+	uint32_t perf_count_status;
+	uint32_t misr_cfg[CAM_VFE_BUS_VER3_MISR_COUNT];
+	uint32_t misr_rd_sel;
+	uint32_t misr_rst;
+	uint32_t misr_val;
+	uint32_t qos_eos_cfg;
+	uint32_t cgc_ovd_1;
+	uint32_t violation_status_1;
+	uint32_t overflow_status_1;
+	uint32_t image_size_violation_status_1;
 	struct cam_irq_controller_reg_info irq_reg_info;
 };
 

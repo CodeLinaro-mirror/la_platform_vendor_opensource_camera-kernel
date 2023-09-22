@@ -273,6 +273,21 @@ static enum cam_vfe_bus_ver3_vfe_out_type
 	case CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW2:
 		vfe_out_type = CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_RAW2;
 		break;
+	case CAM_ISP_IFE_OUT_RES_MONO_DS_OUT:
+		vfe_out_type = CAM_VFE_BUS_VER3_VFE_OUT_MONO_DS_OUT;
+		break;
+	case CAM_ISP_IFE_OUT_RES_MONO_FULL_OUT:
+		vfe_out_type = CAM_VFE_BUS_VER3_VFE_OUT_MONO_FULL_OUT;
+		break;
+	case CAM_ISP_IFE_OUT_RES_MONO_STATS_AEC_BE:
+		vfe_out_type = CAM_VFE_BUS_VER3_VFE_OUT_MONO_STATS_AEC_BE;
+		break;
+	case CAM_ISP_IFE_OUT_RES_MONO_STATS_AEC_BHIST:
+		vfe_out_type = CAM_VFE_BUS_VER3_VFE_OUT_MONO_STATS_AEC_BHIST;
+		break;
+	case CAM_ISP_IFE_LITE_OUT_RES_GAMMA_DS:
+		vfe_out_type = CAM_VFE_BUS_VER3_VFE_OUT_GAMMA_DS;
+		break;
 	default:
 		CAM_WARN(CAM_ISP, "Invalid isp res id: %d , assigning max",
 			res_type);
@@ -1991,6 +2006,12 @@ static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
 	if ((rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_FD) &&
 		(rsrc_data->format == CAM_FORMAT_Y_ONLY))
 		rsrc_data->num_wm = 1;
+	if (((rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_DS4)||
+		(rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_DS16)||
+		(rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_DS4_DISP)||
+		(rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_DS16_DISP)) &&
+		(rsrc_data->format == CAM_FORMAT_PD10))
+		rsrc_data->num_wm = 1;
 
 	/* Acquire WM and retrieve COMP GRP ID */
 	for (i = 0; i < rsrc_data->num_wm; i++) {
@@ -2077,6 +2098,12 @@ static int cam_vfe_bus_ver3_release_vfe_out(void *bus_priv, void *release_args,
 
 	if ((rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_FD) &&
 		(rsrc_data->format == CAM_FORMAT_Y_ONLY))
+		rsrc_data->num_wm = 2;
+	if (((rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_DS4)||
+		(rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_DS16)||
+		(rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_DS4_DISP)||
+		(rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_DS16_DISP)) &&
+		(rsrc_data->format == CAM_FORMAT_PD10))
 		rsrc_data->num_wm = 2;
 
 	if (rsrc_data->comp_grp)
@@ -4353,6 +4380,12 @@ static int cam_vfe_bus_ver3_update_res_vfe_out(void *bus_priv, void *acquire_arg
 
 	if ((rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_FD) &&
 		(rsrc_data->format == CAM_FORMAT_Y_ONLY))
+		rsrc_data->num_wm = 1;
+	if (((rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_DS4)||
+		(rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_DS16)||
+		(rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_DS4_DISP)||
+		(rsrc_data->out_type == CAM_VFE_BUS_VER3_VFE_OUT_DS16_DISP)) &&
+		(rsrc_data->format == CAM_FORMAT_PD10))
 		rsrc_data->num_wm = 1;
 
 	/* Update WM params and retrieve COMP GRP ID */
