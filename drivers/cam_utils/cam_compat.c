@@ -578,13 +578,6 @@ void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
 	dma_buf_vunmap(dmabuf, &mapping);
 }
 
-int cam_get_ddr_type(void)
-{
-	/* We assume all chipsets running kernel version 5.15+
-	 * to be using only DDR5 based memory.
-	 */
-	return DDR_TYPE_LPDDR5;
-}
 
 void cam_close_fd(struct files_struct *files, uint32_t fd)
 {
@@ -633,11 +626,6 @@ int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
 {
 	dma_buf_vunmap(dmabuf, vaddr);
-}
-
-int cam_get_ddr_type(void)
-{
-	return of_fdt_get_ddrtype();
 }
 
 void cam_close_fd(struct files_struct *files, uint32_t fd)
