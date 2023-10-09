@@ -110,7 +110,7 @@ static int cam_csiphy_cpas_ops(
 
 	if (start) {
 		ahb_vote.type = CAM_VOTE_ABSOLUTE;
-		ahb_vote.vote.level = CAM_LOWSVS_VOTE;
+		ahb_vote.vote.level = CAM_LOWSVS_D1_VOTE;
 		axi_vote.num_paths = 1;
 		axi_vote.axi_path[0].path_data_type =
 			CAM_AXI_PATH_DATA_ALL;

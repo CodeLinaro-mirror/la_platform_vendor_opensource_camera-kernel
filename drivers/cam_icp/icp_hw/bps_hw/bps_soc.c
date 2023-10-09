@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/io.h>
@@ -66,7 +67,7 @@ int cam_bps_enable_soc_resources(struct cam_hw_soc_info *soc_info)
 	int rc = 0;
 
 	rc = cam_soc_util_enable_platform_resource(soc_info, true,
-		CAM_SVS_VOTE, false);
+		soc_info->lowest_clk_level, false);
 	if (rc)
 		CAM_ERR(CAM_ICP, "enable platform failed");
 
@@ -163,7 +164,7 @@ int cam_bps_toggle_clk(struct cam_hw_soc_info *soc_info, bool clk_enable)
 	int rc = 0;
 
 	if (clk_enable)
-		rc = cam_soc_util_clk_enable_default(soc_info, CAM_SVS_VOTE);
+		rc = cam_soc_util_clk_enable_default(soc_info, soc_info->lowest_clk_level);
 	else
 		cam_soc_util_clk_disable_default(soc_info);
 

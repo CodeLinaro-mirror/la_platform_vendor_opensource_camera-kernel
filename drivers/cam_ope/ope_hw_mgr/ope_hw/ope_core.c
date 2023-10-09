@@ -203,7 +203,7 @@ int cam_ope_init_hw(void *device_priv,
 	}
 
 	cpas_vote->ahb_vote.type = CAM_VOTE_ABSOLUTE;
-	cpas_vote->ahb_vote.vote.level = CAM_SVS_VOTE;
+	cpas_vote->ahb_vote.vote.level = CAM_LOWSVS_D1_VOTE;
 	cpas_vote->axi_vote.num_paths = 1;
 	cpas_vote->axi_vote.axi_path[0].path_data_type =
 		CAM_AXI_PATH_DATA_ALL;
@@ -1702,7 +1702,7 @@ int cam_ope_process_cmd(void *device_priv, uint32_t cmd_type,
 
 		if (core_info->clk_enable == false) {
 			rc = cam_soc_util_clk_enable_default(soc_info,
-				CAM_SVS_VOTE);
+				soc_info->lowest_clk_level);
 			if (rc) {
 				CAM_ERR(CAM_OPE, "Clock enable is failed");
 				return rc;

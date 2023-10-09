@@ -62,6 +62,7 @@
  *
  * @CAM_SUSPEND_VOTE  : Suspend vote
  * @CAM_MINSVS_VOTE   : Min SVS vote
+ * @CAM_LOWSVS_D1_VOTE : Low SVS D1 vote
  * @CAM_LOWSVS_VOTE   : Low SVS vote
  * @CAM_SVS_VOTE      : SVS vote
  * @CAM_SVSL1_VOTE    : SVS Plus vote
@@ -73,6 +74,7 @@
 enum cam_vote_level {
 	CAM_SUSPEND_VOTE,
 	CAM_MINSVS_VOTE,
+	CAM_LOWSVS_D1_VOTE,
 	CAM_LOWSVS_VOTE,
 	CAM_SVS_VOTE,
 	CAM_SVSL1_VOTE,

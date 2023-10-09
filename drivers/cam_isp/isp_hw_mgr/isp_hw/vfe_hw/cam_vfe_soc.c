@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -255,7 +256,7 @@ int cam_vfe_enable_soc_resources(struct cam_hw_soc_info *soc_info)
 	soc_private = soc_info->soc_private;
 
 	ahb_vote.type       = CAM_VOTE_ABSOLUTE;
-	ahb_vote.vote.level = CAM_LOWSVS_VOTE;
+	ahb_vote.vote.level = CAM_LOWSVS_D1_VOTE;
 	axi_vote.num_paths = 1;
 	if (strnstr(soc_info->compatible, "lite",
 		strlen(soc_info->compatible))) {
@@ -279,7 +280,7 @@ int cam_vfe_enable_soc_resources(struct cam_hw_soc_info *soc_info)
 	}
 
 	rc = cam_soc_util_enable_platform_resource(soc_info, true,
-		CAM_LOWSVS_VOTE, true);
+		soc_info->lowest_clk_level, true);
 	if (rc) {
 		CAM_ERR(CAM_ISP, "Error! enable platform failed rc=%d", rc);
 		goto stop_cpas;

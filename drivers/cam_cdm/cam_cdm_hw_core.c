@@ -1946,7 +1946,7 @@ int cam_hw_cdm_get_cdm_config(struct cam_hw_info *cdm_hw)
 	core = (struct cam_cdm *)cdm_hw->core_info;
 	soc_info = &cdm_hw->soc_info;
 	rc = cam_soc_util_enable_platform_resource(soc_info, true,
-			CAM_SVS_VOTE, true);
+			soc_info->lowest_clk_level, true);
 	if (rc) {
 		CAM_ERR(CAM_CDM, "Enable platform failed for dev %s",
 				soc_info->dev_name);
@@ -2050,7 +2050,7 @@ int cam_hw_cdm_init(void *hw_priv,
 	cdm_core = (struct cam_cdm *)cdm_hw->core_info;
 
 	rc = cam_soc_util_enable_platform_resource(soc_info, true,
-		CAM_SVS_VOTE, true);
+		soc_info->lowest_clk_level, true);
 	if (rc) {
 		CAM_ERR(CAM_CDM, "Enable platform failed for %s%d",
 			soc_info->label_name, soc_info->index);
@@ -2346,7 +2346,7 @@ static int cam_hw_cdm_component_bind(struct device *dev,
 	cdm_core->cpas_handle = cpas_parms.client_handle;
 
 	ahb_vote.type = CAM_VOTE_ABSOLUTE;
-	ahb_vote.vote.level = CAM_LOWSVS_VOTE;
+	ahb_vote.vote.level = CAM_LOWSVS_D1_VOTE;
 	axi_vote.num_paths = 1;
 	axi_vote.axi_path[0].path_data_type = CAM_AXI_PATH_DATA_ALL;
 	axi_vote.axi_path[0].transac_type = CAM_AXI_TRANSACTION_READ;
