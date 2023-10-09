@@ -177,7 +177,7 @@ int cam_sync_register_callback(sync_callback cb_func,
 				row->name,
 				sync_cb->sync_obj,
 				sync_uid);
-			task = cam_req_mgr_worker_get_task(sync_dev->worker[sync_manager_idx]);
+			task = cam_req_mgr_worker_get_task(sync_dev->worker);
 			task->payload = sync_cb;
 			task->process_cb = cam_sync_util_cb_dispatch;
 			cam_req_mgr_worker_enqueue_task(task, NULL, CRM_TASK_PRIORITY_0);
@@ -1132,7 +1132,7 @@ static int cam_sync_close(struct file *filep)
 	 * Flush the work queue to wait for pending signal callbacks to
 	 * finish
 	 */
-	cam_req_mgr_worker_flush(sync_dev->worker[sync_manager_idx]);
+	cam_req_mgr_worker_flush(sync_dev->worker);
 
 	/*
 	 * Now that all callbacks worker threads have finished,
@@ -1487,16 +1487,14 @@ static int cam_sync_component_bind(struct device *dev,
 	cam_sync_init_entity(sync_dev);
 	video_set_drvdata(sync_dev->vdev, sync_dev);
 
-	for (idx = 0; idx < CAM_SYNC_MAX_SYNC_MANAGER; idx++) {
-		cam_req_mgr_worker_create("sync_worker", 5,
-			&sync_dev->worker[idx], CRM_WORKER_USAGE_NON_IRQ, 0);
+	cam_req_mgr_worker_create("sync_worker", 5,
+		&sync_dev->worker, CRM_WORKER_USAGE_NON_IRQ, 0);
 
-		if (!sync_dev->worker[idx]) {
-			CAM_ERR(CAM_SYNC,
-				"Error: high priority worker creation failed");
-			rc = -ENOMEM;
-			goto workqueue_create_fail;
-		}
+	if (!sync_dev->worker) {
+		CAM_ERR(CAM_SYNC,
+			"Error: high priority worker creation failed");
+		rc = -ENOMEM;
+		goto workqueue_create_fail;
 	}
 
 	trigger_cb_without_switch = false;
@@ -1521,8 +1519,6 @@ static int cam_sync_component_bind(struct device *dev,
 	return rc;
 
 workqueue_create_fail:
-	for (idx -= 1; idx >= 0; idx--)
-		cam_req_mgr_worker_destroy(&sync_dev->worker[idx]);
 v4l2_fail:
 	v4l2_device_unregister(sync_dev->vdev->v4l2_dev);
 register_fail:
@@ -1553,8 +1549,7 @@ static void cam_sync_component_unbind(struct device *dev,
 	for (j = 0; j < CAM_SYNC_MAX_OBJS; j++)
 		spin_lock_init(&sync_dev->row_spinlocks[j]);
 
-	for (j = 0; j < CAM_SYNC_MAX_SYNC_MANAGER; j++)
-		cam_req_mgr_worker_destroy(&sync_dev->worker[j]);
+	cam_req_mgr_worker_destroy(&sync_dev->worker);
 	kfree(sync_dev);
 	sync_dev = NULL;
 }
