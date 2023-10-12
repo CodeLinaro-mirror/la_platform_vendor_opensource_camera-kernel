@@ -13,7 +13,9 @@
 #include <linux/iommu.h>
 #include <linux/qcom_scm.h>
 #include <linux/list_sort.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 #include <linux/dma-iommu.h>
+#endif
 
 #include "cam_csiphy_dev.h"
 #include "cam_cpastop_hw.h"
