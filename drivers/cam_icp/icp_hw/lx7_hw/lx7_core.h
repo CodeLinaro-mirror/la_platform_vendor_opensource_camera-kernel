@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_LX7_CORE_H_
@@ -8,6 +9,8 @@
 
 #include "cam_hw_intf.h"
 #include "cam_icp_hw_intf.h"
+#include "lx7_soc.h"
+#include "lx7_reg.h"
 
 #define UNSUPPORTED_PROC_PAS_ID   30
 #define CAM_FW_PAS_ID             33
@@ -22,9 +25,10 @@ enum cam_lx7_reg_base {
 
 struct cam_lx7_core_info {
 	struct cam_icp_irq_cb irq_cb;
+	struct cam_lx7_hw_info *hw_info;
+	int32_t reg_base_idx[LX7_BASE_MAX];
 	uint32_t cpas_handle;
-	bool cpas_start;
-	bool use_sec_pil;
+	enum cam_lx7_reg_base irq_regbase_idx;
 	struct {
 		const struct firmware *fw_elf;
 		void *fw;
@@ -32,6 +36,8 @@ struct cam_lx7_core_info {
 		uintptr_t fw_kva_addr;
 		uint64_t fw_buf_len;
 	} fw_params;
+	bool cpas_start;
+	bool use_sec_pil;
 };
 
 int cam_lx7_hw_init(void *priv, void *args, uint32_t arg_size);
@@ -48,4 +54,7 @@ void cam_lx7_irq_raise(void *priv);
 void cam_lx7_irq_enable(void *priv);
 void __iomem *cam_lx7_iface_addr(void *priv);
 
+
+int cam_lx7_core_init(struct cam_hw_soc_info *soc_info,
+	struct cam_lx7_core_info *core_info);
 #endif /* _CAM_LX7_CORE_H_ */
