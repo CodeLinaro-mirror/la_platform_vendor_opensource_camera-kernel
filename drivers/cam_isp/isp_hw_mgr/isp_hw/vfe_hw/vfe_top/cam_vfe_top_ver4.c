@@ -1707,8 +1707,7 @@ skip_core_cfg:
 		rsrc_data->reg_data->error_irq_mask;
 
 	rsrc_data->stored_irq_masks[VFE_TOP_VER4_FRAME_IRQ_MASK][CAM_IFE_IRQ_CAMIF_REG_STATUS1] =
-		rsrc_data->reg_data->sof_irq_mask | rsrc_data->reg_data->epoch0_irq_mask |
-		rsrc_data->reg_data->eof_irq_mask;
+		rsrc_data->reg_data->epoch0_irq_mask;
 	rsrc_data->n_frame_irqs = hweight32(
 		rsrc_data->stored_irq_masks[VFE_TOP_VER4_FRAME_IRQ_MASK]
 		[CAM_IFE_IRQ_CAMIF_REG_STATUS1]);

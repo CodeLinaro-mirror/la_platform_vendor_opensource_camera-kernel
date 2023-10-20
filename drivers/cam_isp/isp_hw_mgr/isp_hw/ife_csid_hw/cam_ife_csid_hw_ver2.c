@@ -425,8 +425,8 @@ static int cam_ife_csid_ver2_path_top_half(
 		return rc;
 	}
 
-	if (th_payload->evt_status_arr[path_cfg->irq_reg_idx] & path_reg->sof_irq_mask)
-		complete_all(&path_cfg->sof_done);
+	if (th_payload->evt_status_arr[path_cfg->irq_reg_idx] & path_reg->epoch0_irq_mask)
+		complete_all(&path_cfg->epoch_done);
 
 	evt_payload->irq_reg_val[path_cfg->irq_reg_idx] =
 			th_payload->evt_status_arr[path_cfg->irq_reg_idx];
@@ -603,7 +603,7 @@ static int cam_ife_csid_ver2_discard_sof_rdi_bottom_half(
 	base  = soc_info->reg_map[CAM_IFE_CSID_CLC_MEM_BASE_ID].mem_base;
 	path_reg = csid_reg->path_reg[res->res_id];
 
-	reinit_completion(&path_cfg->sof_done);
+	reinit_completion(&path_cfg->epoch_done);
 	/* Count SOFs */
 	path_cfg->sof_cnt++;
 	CAM_DBG(CAM_ISP, "CSID[%u] Discard frame on %s path, num SOFs: %u",
@@ -1623,16 +1623,16 @@ static int cam_ife_csid_ver2_ipp_bottom_half(
 	if (irq_status_ipp & path_reg->eof_irq_mask)
 		csid_hw->event_cb(token, CAM_ISP_HW_EVENT_EOF, (void *)&evt_info);
 
-	if (irq_status_ipp & path_reg->sof_irq_mask) {
-		reinit_completion(&path_cfg->sof_done);
+	if (irq_status_ipp & path_reg->sof_irq_mask)
 		csid_hw->event_cb(token, CAM_ISP_HW_EVENT_SOF, (void *)&evt_info);
-	}
 
 	if (irq_status_ipp & path_reg->rup_irq_mask)
 		csid_hw->event_cb(token, CAM_ISP_HW_EVENT_REG_UPDATE, (void *)&evt_info);
 
-	if (irq_status_ipp & path_reg->epoch0_irq_mask)
+	if (irq_status_ipp & path_reg->epoch0_irq_mask) {
+		reinit_completion(&path_cfg->epoch_done);
 		csid_hw->event_cb(token, CAM_ISP_HW_EVENT_EPOCH, (void *)&evt_info);
+	}
 
 	err_mask = path_reg->fatal_err_mask | path_reg->non_fatal_err_mask;
 	spin_lock(&csid_hw->lock_state);
@@ -1880,7 +1880,7 @@ static int cam_ife_csid_ver2_rdi_bottom_half(
 			evt_info.is_secondary_evt = true;
 		}
 
-		reinit_completion(&path_cfg->sof_done);
+		reinit_completion(&path_cfg->epoch_done);
 		csid_hw->event_cb(token, CAM_ISP_HW_EVENT_SOF,	(void *)&evt_info);
 	}
 
@@ -2162,7 +2162,7 @@ static int cam_ife_csid_ver2_disable_path(
 	path_cfg->skip_discard_frame_cfg = false;
 	path_cfg->num_frames_discard = 0;
 	path_cfg->sof_cnt = 0;
-	reinit_completion(&path_cfg->sof_done);
+	reinit_completion(&path_cfg->epoch_done);
 	return rc;
 }
 
@@ -3499,7 +3499,7 @@ static int cam_ife_csid_ver2_program_rdi_path(
 
 	mem_base = soc_info->reg_map[CAM_IFE_CSID_CLC_MEM_BASE_ID].mem_base;
 	path_cfg = (struct cam_ife_csid_ver2_path_cfg *)res->res_priv;
-	reinit_completion(&path_cfg->sof_done);
+	reinit_completion(&path_cfg->epoch_done);
 
 	if (!csid_hw->flags.offline_mode) {
 		CAM_DBG(CAM_ISP, "CSID:%d Rdi res: %d epoch_cfg %x",
@@ -3516,7 +3516,7 @@ static int cam_ife_csid_ver2_program_rdi_path(
 		path_cfg->handle_camif_irq = true;
 		val |= path_reg->rup_irq_mask;
 		if (path_cfg->handle_camif_irq)
-			val |= path_reg->sof_irq_mask | path_reg->epoch0_irq_mask;
+			val |= path_reg->epoch0_irq_mask;
 	}
 
 	if ((csid_hw->flags.offline_mode ||
@@ -3528,9 +3528,6 @@ static int cam_ife_csid_ver2_program_rdi_path(
 
 	/* Enable secondary events dictated by HW mgr for RDI paths */
 	if (path_cfg->sec_evt_config.en_secondary_evt) {
-		if (path_cfg->sec_evt_config.evt_type & CAM_IFE_CSID_EVT_SOF)
-			val |= path_reg->sof_irq_mask;
-
 		if (path_cfg->sec_evt_config.evt_type & CAM_IFE_CSID_EVT_EPOCH)
 			val |= path_reg->epoch0_irq_mask;
 
@@ -3662,7 +3659,7 @@ static int cam_ife_csid_ver2_program_ipp_path(
 
 	mem_base = soc_info->reg_map[CAM_IFE_CSID_CLC_MEM_BASE_ID].mem_base;
 	path_cfg = (struct cam_ife_csid_ver2_path_cfg *)res->res_priv;
-	reinit_completion(&path_cfg->sof_done);
+	reinit_completion(&path_cfg->epoch_done);
 
 	cam_io_w_mb(path_cfg->epoch_cfg << path_reg->epoch0_shift_val,
 		mem_base + path_reg->epoch_irq_cfg_addr);
@@ -3683,8 +3680,7 @@ static int cam_ife_csid_ver2_program_ipp_path(
 		path_cfg->sync_mode == CAM_ISP_HW_SYNC_MASTER) {
 		val |= path_reg->rup_irq_mask;
 		if (path_cfg->handle_camif_irq)
-			val |= path_reg->sof_irq_mask | path_reg->epoch0_irq_mask |
-				path_reg->eof_irq_mask;
+			val |= path_reg->epoch0_irq_mask;
 	}
 
 	/*Get mask value for top irq*/
@@ -3802,7 +3798,7 @@ static int cam_ife_csid_ver2_enable_path(
 	soc_info = &csid_hw->hw_info->soc_info;
 	mem_base = soc_info->reg_map[CAM_IFE_CSID_CLC_MEM_BASE_ID].mem_base;
 
-	init_completion(&path_cfg->sof_done);
+	init_completion(&path_cfg->epoch_done);
 	if (path_cfg->discard_init_frames) {
 		CAM_DBG(CAM_ISP, "CSID[%u] skip start cmd for res: %s",
 			csid_hw->hw_intf->hw_idx, res->res_id);
@@ -3881,7 +3877,7 @@ static int cam_ife_csid_ver2_program_ppp_path(
 	mem_base = soc_info->reg_map[CAM_IFE_CSID_CLC_MEM_BASE_ID].mem_base;
 
 	path_cfg = (struct cam_ife_csid_ver2_path_cfg *)res->res_priv;
-	reinit_completion(&path_cfg->sof_done);
+	reinit_completion(&path_cfg->epoch_done);
 
 	path_cfg->irq_reg_idx = cam_ife_csid_get_rt_irq_idx(
 				CAM_IFE_CSID_IRQ_REG_PPP,
@@ -5631,15 +5627,14 @@ static int cam_ife_csid_ver2_subscribe_path_irqs(
 		path_cfg->handle_camif_irq = true;
 		val |= path_reg->rup_irq_mask;
 		if (path_cfg->handle_camif_irq)
-			val |= path_reg->sof_irq_mask | path_reg->epoch0_irq_mask;
+			val |= path_reg->epoch0_irq_mask;
 	} else {
 		if (res->res_id == CAM_IFE_PIX_PATH_RES_IPP) {
 			if (path_cfg->sync_mode == CAM_ISP_HW_SYNC_NONE ||
 				path_cfg->sync_mode == CAM_ISP_HW_SYNC_MASTER) {
 				val |= path_reg->rup_irq_mask;
 				if (path_cfg->handle_camif_irq)
-					val |= path_reg->sof_irq_mask | path_reg->epoch0_irq_mask |
-						path_reg->eof_irq_mask;
+					val |= path_reg->epoch0_irq_mask;
 			}
 		}
 	}
@@ -5898,7 +5893,7 @@ static int cam_ife_csid_ver2_wait_last_stream_sof(
 			if ((path_cfg->path_vcdt.vc_dt[j].vc == vcdt->vc) &&
 				(path_cfg->path_vcdt.vc_dt[j].dt == vcdt->dt)) {
 				rem_jiffies = cam_common_wait_for_completion_timeout(
-						&path_cfg->sof_done,
+						&path_cfg->epoch_done,
 						msecs_to_jiffies(vcdt->frame_duration));
 				if (rem_jiffies == 0) {
 					CAM_ERR(CAM_ISP,
@@ -6112,7 +6107,7 @@ static int cam_ife_ver2_hw_alloc_res(
 	res->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 	res->hw_intf = hw_intf;
 	res->res_priv = path_cfg;
-	init_completion(&path_cfg->sof_done);
+	init_completion(&path_cfg->epoch_done);
 	return 0;
 }
 

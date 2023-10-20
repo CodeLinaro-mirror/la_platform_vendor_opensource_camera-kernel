@@ -17349,6 +17349,7 @@ static int cam_ife_hw_mgr_handle_csid_camif_epoch(
 	int rc = 0;
 	cam_hw_event_cb_func ife_hw_irq_epoch_cb = ctx->common.event_cb;
 	struct cam_isp_hw_epoch_event_data    epoch_done_event_data  = {0};
+	struct timespec64                      ts;
 
 	if (event_info->is_secondary_evt) {
 		struct cam_isp_hw_secondary_event_data sec_evt_data;
@@ -17379,6 +17380,25 @@ static int cam_ife_hw_mgr_handle_csid_camif_epoch(
 		if (atomic_read(&ctx->overflow_pending))
 			break;
 		epoch_done_event_data.frame_id_meta = event_info->reg_val;
+		if (ctx->ctx_config & CAM_IFE_CTX_CFG_FRAME_HEADER_TS) {
+			epoch_done_event_data.timestamp = 0x0;
+			ktime_get_boottime_ts64(&ts);
+			epoch_done_event_data.boot_time =
+				(uint64_t)((ts.tv_sec * 1000000000) + ts.tv_nsec);
+			CAM_DBG(CAM_ISP, "boot_time 0x%llx, ctx_idx: %u",
+				epoch_done_event_data.boot_time, ctx->ctx_index);
+		} else {
+			if (ctx->flags.is_offline)
+				cam_ife_hw_mgr_get_offline_sof_timestamp(
+				&epoch_done_event_data.timestamp,
+				&epoch_done_event_data.boot_time);
+			else
+				cam_ife_mgr_cmd_get_sof_timestamp(
+				ctx, CAM_IFE_PIX_PATH_RES_MAX,
+				&epoch_done_event_data.timestamp,
+				&epoch_done_event_data.boot_time, NULL);
+		}
+
 		ife_hw_irq_epoch_cb(ctx->common.cb_priv,
 			CAM_ISP_HW_EVENT_EPOCH, (void *)&epoch_done_event_data);
 
@@ -17684,12 +17704,35 @@ static int cam_ife_hw_mgr_handle_hw_epoch(
 {
 	cam_hw_event_cb_func                  ife_hw_irq_epoch_cb;
 	struct cam_isp_hw_epoch_event_data    epoch_done_event_data;
+	struct timespec64                     ts;
 
 	ife_hw_irq_epoch_cb = ife_hw_mgr_ctx->common.event_cb;
 	epoch_done_event_data.res_id = event_info->res_id;
 
 	switch (event_info->res_id) {
 	case CAM_ISP_HW_VFE_IN_CAMIF:
+		/* if frame header is enabled reset qtimer ts */
+		if (ife_hw_mgr_ctx->ctx_config &
+			CAM_IFE_CTX_CFG_FRAME_HEADER_TS) {
+			epoch_done_event_data.timestamp = 0x0;
+			ktime_get_boottime_ts64(&ts);
+			epoch_done_event_data.boot_time =
+			(uint64_t)((ts.tv_sec * 1000000000) +
+			ts.tv_nsec);
+			CAM_DBG(CAM_ISP, "boot_time 0x%llx",
+				epoch_done_event_data.boot_time);
+		} else {
+			if (ife_hw_mgr_ctx->flags.is_offline)
+				cam_ife_hw_mgr_get_offline_sof_timestamp(
+				&epoch_done_event_data.timestamp,
+				&epoch_done_event_data.boot_time);
+			else
+				cam_ife_mgr_cmd_get_sof_timestamp(
+				ife_hw_mgr_ctx,
+				CAM_IFE_PIX_PATH_RES_MAX,
+				&epoch_done_event_data.timestamp,
+				&epoch_done_event_data.boot_time, NULL);
+		}
 		if (atomic_read(&ife_hw_mgr_ctx->overflow_pending))
 			break;
 

@@ -169,7 +169,7 @@ enum cam_ife_csid_ver2_stored_irq_masks {
  *                          the corresponding paths
  * @sfe_shdr:               flag to indicate if sfe is inline shdr
  * @lcr_en:                 Flag to indicate if path is part can be input to LCR
- * @sof_done:               indicator for sof event complete
+ * @epoch_done:             Indicator for epoch event complete
  * @vcdt_data:              vc dt data storage
  *
  */
@@ -212,7 +212,7 @@ struct cam_ife_csid_ver2_path_cfg {
 	bool                                 lcr_en;
 	bool                                 csid_out_unpack_msb;
 	bool                                 handle_camif_irq;
-	struct completion                    sof_done;
+	struct completion                    epoch_done;
 	struct cam_ife_csid_path_cfg_vcdt_data path_vcdt;
 };
 
