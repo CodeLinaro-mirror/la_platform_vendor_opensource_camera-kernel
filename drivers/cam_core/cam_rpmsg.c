@@ -13,6 +13,7 @@
 #include <linux/fs.h>
 #include <linux/version.h>
 
+#include "cam_compat.h"
 #include "cam_rpmsg.h"
 #include "cam_debug_util.h"
 #include "cam_req_mgr_dev.h"
@@ -834,7 +835,8 @@ send_ack:
 
 			rc = cam_jpeg_rpmsg_send(&cmd_msg);
 			CAM_DBG(CAM_RPMSG, "closing dmabuf fd %d", cmd_msg.buf_info.fd);
-			__close_fd(current->files, cmd_msg.buf_info.fd);
+			cam_close_fd(current->files, cmd_msg.buf_info.fd);
+
 			break;
 		case CAM_DSP2CPU_REGISTER_BUFFER:
 			map_cmd.flags = CAM_MEM_FLAG_NSP_ACCESS | CAM_MEM_FLAG_HW_READ_WRITE;
@@ -863,12 +865,7 @@ send_ack:
 			}
 			rcu_read_lock();
 			loop:
-			// TODO: Things like this should be moved in cam_compat.
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 13, 0))
-			file = fcheck_files(files, map_cmd.fd);
-#else
-			file = files_lookup_fd_rcu(files, map_cmd.fd);
-#endif
+			file = cam_fcheck_files(files, map_cmd.fd);
 			if (!file) {
 				rcu_read_unlock();
 				CAM_ERR(CAM_RPMSG, "null file");
@@ -888,7 +885,7 @@ send_ack:
 					cmd_msg.ret_val = -EINVAL;
 					goto registerEnd;
 				}
-				else if (!get_file_rcu_many(file, 1)) {
+				else if (!cam_atomic_add_unless(file)) {
 					CAM_ERR(CAM_RPMSG, "get_file_rcu_many 0");
 					goto loop;
 				}
@@ -924,7 +921,7 @@ send_ack:
 				cmd_msg.buf_info.fd, cmd_msg.buf_info.iova, cmd_msg.buf_info.size,
 				cmd_msg.buf_info.ipa_addr, cmd_msg.buf_info.buf_handle);
 			CAM_DBG(CAM_RPMSG, "closing dmabuf fd %d", map_cmd.fd);
-			__close_fd(current->files, map_cmd.fd);
+			cam_close_fd(current->files, map_cmd.fd);
 registerEnd:
 			rc = cam_jpeg_rpmsg_send(&cmd_msg);
 			break;

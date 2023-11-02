@@ -7,6 +7,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/of_address.h>
 #include <linux/slab.h>
+#include <linux/fdtable.h>
 
 #include "cam_compat.h"
 #include "cam_debug_util.h"
@@ -479,6 +480,18 @@ static int inline cam_subdev_list_cmp(struct cam_subdev *entry_1, struct cam_sub
 		return 0;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 13, 0))
+struct file *cam_fcheck_files(struct files_struct *files, uint32_t fd)
+{
+       return fcheck_files(files, fd);
+}
+#else
+struct file *cam_fcheck_files(struct files_struct *files, uint32_t fd)
+{
+       return files_lookup_fd_rcu(files, fd);
+}
+#endif
+
 #if (KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE)
 int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 {
@@ -492,8 +505,7 @@ int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 			(uintptr_t)mapping.vaddr_iomem :
 			(uintptr_t)mapping.vaddr;
 		CAM_DBG(CAM_MEM,
-				"dmabuf=%p, *vaddr=%p, is_iomem=%d, vaddr_iomem=%p,
-				vaddr=%p",
+				"dmabuf=%p, *vaddr=%p, is_iomem=%d, vaddr_iomem=%p,vaddr=%p",
 				dmabuf, *vaddr, mapping.is_iomem, mapping.vaddr_iomem,
 				mapping.vaddr);
 	}
@@ -519,6 +531,16 @@ void cam_smmu_util_iommu_custom(struct device *dev,
 	dma_addr_t discard_start, size_t discard_length)
 {
 	return;
+}
+
+void cam_close_fd(struct files_struct *files, uint32_t fd)
+{
+       close_fd(fd);
+}
+
+int cam_atomic_add_unless(struct file *file)
+{
+       return atomic_long_add_unless(&file->f_count, 1, 0);
 }
 
 #elif (KERNEL_VERSION(5, 15, 0) <= LINUX_VERSION_CODE)
@@ -556,13 +578,17 @@ void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
 	dma_buf_vunmap(dmabuf, &mapping);
 }
 
-int cam_get_ddr_type(void)
+
+void cam_close_fd(struct files_struct *files, uint32_t fd)
 {
-	/* We assume all chipsets running kernel version 5.15+
-	 * to be using only DDR5 based memory.
-	 */
-	return DDR_TYPE_LPDDR5;
+       __close_fd(files, fd);
 }
+
+int cam_atomic_add_unless(struct file *file)
+{
+       return get_file_rcu_many(file, 1);
+}
+
 #else
 void cam_smmu_util_iommu_custom(struct device *dev,
 	dma_addr_t discard_start, size_t discard_length)
@@ -602,10 +628,16 @@ void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
 	dma_buf_vunmap(dmabuf, vaddr);
 }
 
-int cam_get_ddr_type(void)
+void cam_close_fd(struct files_struct *files, uint32_t fd)
 {
-	return of_fdt_get_ddrtype();
+       __close_fd(files, fd);
 }
+
+int cam_atomic_add_unless(struct file *file)
+{
+       return get_file_rcu_many(file, 1);
+}
+
 #endif
 
 #if KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE
@@ -615,8 +647,8 @@ int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
 	soc_info->irq_num = platform_get_irq(soc_info->pdev, 0);
 	if (soc_info->irq_num < 0) {
 		rc = soc_info->irq_num;
-		return rc;
 	}
+	return rc;
 }
 
 #else

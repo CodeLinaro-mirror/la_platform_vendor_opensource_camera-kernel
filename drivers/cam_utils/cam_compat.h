@@ -13,6 +13,7 @@
 #include <linux/iommu.h>
 #include <linux/qcom_scm.h>
 #include <linux/list_sort.h>
+#include <soc/qcom/of_common.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 #include <linux/dma-iommu.h>
 #endif
@@ -29,7 +30,6 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) && \
 	LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
-#include <soc/qcom/of_common.h>
 #include <linux/qcom-dma-mapping.h>
 #endif
 
@@ -67,7 +67,7 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 void cam_free_clear(const void *);
 void cam_check_iommu_faults(struct iommu_domain *domain,
 	struct cam_smmu_pf_info *pf_info);
-int cam_get_ddr_type(void);
+static inline int cam_get_ddr_type(void) { return of_fdt_get_ddrtype(); }
 int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr);
 void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr);
 void cam_smmu_util_iommu_custom(struct device *dev,
@@ -85,4 +85,7 @@ int cam_req_mgr_ordered_list_cmp(void *priv,
 #endif
 
 int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info);
+struct file *cam_fcheck_files(struct files_struct *files, uint32_t fd);
+void cam_close_fd(struct files_struct *files, uint32_t fd);
+int cam_atomic_add_unless (struct file *file);
 #endif /* _CAM_COMPAT_H_ */
