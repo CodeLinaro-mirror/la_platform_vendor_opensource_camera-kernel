@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/io.h>
@@ -70,7 +70,7 @@ int cam_jpeg_enc_enable_soc_resources(struct cam_hw_soc_info *soc_info, bool ena
 	int rc;
 
 	rc = cam_soc_util_enable_platform_resource(soc_info, true,
-		CAM_LOWSVS_VOTE, enable_irq);
+		soc_info->lowest_clk_level, enable_irq);
 	if (rc)
 		CAM_ERR(CAM_JPEG, "enable platform failed %d", rc);
 
