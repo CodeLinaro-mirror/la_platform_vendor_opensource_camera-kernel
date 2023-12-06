@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_actuator_dev.h"
@@ -9,6 +10,7 @@
 #include "cam_actuator_core.h"
 #include "cam_trace.h"
 #include "camera_main.h"
+#include "cam_compat.h"
 
 static int cam_actuator_subdev_close_internal(struct v4l2_subdev *sd,
 	struct v4l2_subdev_fh *fh)
@@ -316,11 +318,9 @@ static int32_t cam_actuator_driver_i2c_probe(struct i2c_client *client,
 	return rc;
 }
 
-static int32_t cam_actuator_driver_i2c_remove(
-	struct i2c_client *client)
+void cam_actuator_i2c_component_del_wrapper(struct i2c_client *client)
 {
 	component_del(&client->dev, &cam_actuator_i2c_component_ops);
-	return 0;
 }
 
 static int cam_actuator_platform_component_bind(struct device *dev,

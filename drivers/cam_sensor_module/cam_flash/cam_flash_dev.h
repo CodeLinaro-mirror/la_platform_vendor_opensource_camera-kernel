@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_FLASH_DEV_H_
@@ -244,4 +245,9 @@ int32_t cam_flash_init_module(void);
  * @brief : API to remove FLASH Hw from platform framework.
  */
 void cam_flash_exit_module(void);
+
+/**
+ * @brief : API to remove FLASH component.
+ */
+void cam_flash_i2c_component_del_wrapper(struct i2c_client *client);
 #endif /*_CAM_FLASH_DEV_H_*/

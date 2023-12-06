@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef _CAM_EEPROM_DEV_H_
 #define _CAM_EEPROM_DEV_H_
@@ -208,4 +209,8 @@ int cam_eeprom_driver_init(void);
  */
 void cam_eeprom_driver_exit(void);
 
+/**
+ * @brief : API to remove EEPROM component.
+ */
+void cam_eeprom_i2c_component_del_wrapper(struct i2c_client *client);
 #endif /*_CAM_EEPROM_DEV_H_ */

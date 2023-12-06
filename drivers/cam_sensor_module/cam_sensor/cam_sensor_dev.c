@@ -9,6 +9,7 @@
 #include "cam_sensor_soc.h"
 #include "cam_sensor_core.h"
 #include "camera_main.h"
+#include "cam_compat.h"
 
 #define SENSOR_DEBUGFS_NAME_MAX_SIZE 10
 
@@ -470,11 +471,9 @@ static int cam_sensor_i2c_driver_probe(struct i2c_client *client,
 	return rc;
 }
 
-static int cam_sensor_i2c_driver_remove(struct i2c_client *client)
+void cam_sensor_i2c_component_del_wrapper(struct i2c_client *client)
 {
 	component_del(&client->dev, &cam_sensor_i2c_component_ops);
-
-	return 0;
 }
 
 static int cam_sensor_component_bind(struct device *dev,

@@ -339,11 +339,9 @@ static int cam_eeprom_i2c_driver_probe(struct i2c_client *client,
 	return rc;
 }
 
-static int cam_eeprom_i2c_driver_remove(struct i2c_client *client)
+void cam_eeprom_i2c_component_del_wrapper(struct i2c_client *client)
 {
 	component_del(&client->dev, &cam_eeprom_i2c_component_ops);
-
-	return 0;
 }
 
 static int cam_eeprom_spi_setup(struct spi_device *spi)

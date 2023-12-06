@@ -96,4 +96,18 @@ void cam_eeprom_spi_driver_remove(struct spi_device *sdev);
 int cam_eeprom_spi_driver_remove(struct spi_device *sdev);
 #endif
 
+#if KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE
+void cam_actuator_driver_i2c_remove(struct i2c_client *client);
+void cam_eeprom_i2c_driver_remove(struct i2c_client *client);
+void cam_flash_i2c_driver_remove(struct i2c_client *client);
+void cam_ois_i2c_driver_remove(struct i2c_client *client);
+void cam_sensor_i2c_driver_remove(struct i2c_client *client);
+#else
+int cam_actuator_driver_i2c_remove(struct i2c_client *client);
+int cam_eeprom_i2c_driver_remove(struct i2c_client *client);
+int cam_flash_i2c_driver_remove(struct i2c_client *client);
+int cam_ois_i2c_driver_remove(struct i2c_client *client);
+int cam_sensor_i2c_driver_remove(struct i2c_client *client);
+#endif
+
 #endif /* _CAM_COMPAT_H_ */

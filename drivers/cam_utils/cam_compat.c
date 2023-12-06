@@ -16,6 +16,10 @@
 #include <media/cam_isp.h>
 #include "cam_eeprom_dev.h"
 #include "cam_eeprom_core.h"
+#include "cam_actuator_dev.h"
+#include "cam_flash_dev.h"
+#include "cam_ois_dev.h"
+#include "cam_sensor_dev.h"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 int cam_reserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length)
@@ -741,6 +745,69 @@ int cam_eeprom_spi_driver_remove(struct spi_device *sdev)
 	}
 	v4l2_set_subdevdata(&e_ctrl->v4l2_dev_str.sd, NULL);
 	kfree(e_ctrl);
+
+	return 0;
+}
+#endif
+
+#if KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE
+void cam_actuator_driver_i2c_remove(struct i2c_client *client)
+{
+	cam_actuator_i2c_component_del_wrapper(client);
+}
+
+void cam_eeprom_i2c_driver_remove(struct i2c_client *client)
+{
+	cam_eeprom_i2c_component_del_wrapper(client);
+}
+
+void cam_flash_i2c_driver_remove(struct i2c_client *client)
+{
+	cam_flash_i2c_component_del_wrapper(client);
+}
+
+void cam_ois_i2c_driver_remove(struct i2c_client *client)
+{
+	cam_ois_i2c_component_del_wrapper(client);
+}
+
+void cam_sensor_i2c_driver_remove(struct i2c_client *client)
+{
+	cam_sensor_i2c_component_del_wrapper(client);
+}
+
+#else
+int cam_actuator_driver_i2c_remove(struct i2c_client *client)
+{
+	cam_actuator_i2c_component_del_wrapper(client);
+
+	return 0;
+}
+
+int cam_eeprom_i2c_driver_remove(struct i2c_client *client)
+{
+	cam_eeprom_i2c_component_del_wrapper(client);
+
+	return 0;
+}
+
+int cam_flash_i2c_driver_remove(struct i2c_client *client)
+{
+	cam_flash_i2c_component_del_wrapper(client);
+
+	return 0;
+}
+
+int cam_ois_i2c_driver_remove(struct i2c_client *client)
+{
+	cam_ois_i2c_component_del_wrapper(client);
+
+	return 0;
+}
+
+int cam_sensor_i2c_driver_remove(struct i2c_client *client)
+{
+	cam_sensor_i2c_component_del_wrapper(client);
 
 	return 0;
 }
