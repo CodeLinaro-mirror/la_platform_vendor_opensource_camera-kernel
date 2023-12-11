@@ -14,6 +14,7 @@
 #include <linux/qcom_scm.h>
 #include <linux/list_sort.h>
 #include <soc/qcom/of_common.h>
+#include <linux/spi/spi.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 #include <linux/dma-iommu.h>
 #endif
@@ -88,4 +89,11 @@ int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info);
 struct file *cam_fcheck_files(struct files_struct *files, uint32_t fd);
 void cam_close_fd(struct files_struct *files, uint32_t fd);
 int cam_atomic_add_unless (struct file *file);
+
+#if KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE
+void cam_eeprom_spi_driver_remove(struct spi_device *sdev);
+#else
+int cam_eeprom_spi_driver_remove(struct spi_device *sdev);
+#endif
+
 #endif /* _CAM_COMPAT_H_ */
