@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __CAM_SYNC_UTIL_H__
@@ -151,7 +151,7 @@ void cam_sync_util_cleanup_parents_list(struct sync_table_row *row,
  *
  * @return Status of operation.
  */
-int cam_sync_util_send_exit_poll_event(void);
+int cam_sync_util_send_exit_poll_event(void *fh);
 
 /**
  * @brief    : Checks if the uid is equal to or greater than the current uid
