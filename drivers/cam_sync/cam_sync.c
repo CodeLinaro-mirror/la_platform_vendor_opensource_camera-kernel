@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/init.h>
@@ -774,9 +774,9 @@ static int cam_sync_handle_wait(struct cam_private_ioctl_arg *k_ioctl)
 	return 0;
 }
 
-static inline int cam_sync_handle_exit_poll(void)
+static inline int cam_sync_handle_exit_poll(void *fh)
 {
-	return cam_sync_util_send_exit_poll_event();
+	return cam_sync_util_send_exit_poll_event(fh);
 }
 
 static int cam_sync_handle_destroy(struct cam_private_ioctl_arg *k_ioctl)
@@ -1034,7 +1034,7 @@ static long cam_sync_dev_ioctl(struct file *filep, void *fh,
 			k_ioctl.result;
 		break;
 	case CAM_SYNC_EXIT_DQ_THREAD:
-		rc = cam_sync_handle_exit_poll();
+		rc = cam_sync_handle_exit_poll(fh);
 		break;
 	default:
 		rc = -ENOIOCTLCMD;
