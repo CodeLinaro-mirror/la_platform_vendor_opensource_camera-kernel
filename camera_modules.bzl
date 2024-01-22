@@ -10,6 +10,7 @@ def _define_module(target, variant):
     ]
     if target == "niobe":
         deps.extend([
+		"//vendor/qcom/opensource/dsp-kernel:{}_frpc-adsprpc".format(tv),
         ])
     ddk_module(
         name = "{}_camera".format(tv),
