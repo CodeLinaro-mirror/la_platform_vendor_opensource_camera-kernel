@@ -419,6 +419,9 @@ static int cam_vfe_bus_ver3_get_comp_vfe_out_res_id_list(
 	if (comp_mask & (BIT_ULL(CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_RAW2)))
 		out_list[count++] = CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW2;
 
+	if (comp_mask & (BIT_ULL(CAM_VFE_BUS_VER3_VFE_OUT_GAMMA_DS)))
+		out_list[count++] = CAM_ISP_IFE_LITE_OUT_RES_GAMMA_DS;
+
 	*num_out = count;
 	return 0;
 }
@@ -869,6 +872,7 @@ static int cam_vfe_bus_ver3_config_rdi_wm(
 		rsrc_data->en_cfg = 0x1;
 		rsrc_data->stride = rsrc_data->width * 2;
 		break;
+	case CAM_FORMAT_PLAIN16_8:
 	case CAM_FORMAT_PLAIN16_10:
 	case CAM_FORMAT_PLAIN16_12:
 	case CAM_FORMAT_PLAIN16_14:
@@ -1159,7 +1163,8 @@ static int cam_vfe_bus_ver3_res_update_config_wm(
 		rsrc_data->en_cfg = (0x1 << 16) | 0x1;
 	} else if ((vfe_out_res_id == CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_RAW) ||
 		(vfe_out_res_id == CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_RAW1) ||
-		(vfe_out_res_id == CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_RAW2)) {
+		(vfe_out_res_id == CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_RAW2) ||
+		(vfe_out_res_id == CAM_VFE_BUS_VER3_VFE_OUT_GAMMA_DS)) {
 		switch (rsrc_data->format) {
 		case CAM_FORMAT_MIPI_RAW_8:
 		case CAM_FORMAT_MIPI_RAW_10:

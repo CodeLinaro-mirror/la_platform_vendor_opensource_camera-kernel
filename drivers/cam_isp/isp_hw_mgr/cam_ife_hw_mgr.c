@@ -1087,6 +1087,7 @@ static inline bool cam_ife_hw_mgr_check_outport_supported_for_lite(
 	case CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW2:
 	case CAM_ISP_IFE_LITE_OUT_RES_STATS_BG:
 	case CAM_ISP_IFE_LITE_OUT_RES_STATS_BHIST:
+	case CAM_ISP_IFE_LITE_OUT_RES_GAMMA_DS:
 		vfe_out_supported_lite = true;
 		break;
 	default:
@@ -6238,6 +6239,7 @@ static int cam_ife_hw_mgr_preprocess_port(
 				case CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW2:
 				case CAM_ISP_IFE_LITE_OUT_RES_STATS_BG:
 				case CAM_ISP_IFE_LITE_OUT_RES_STATS_BHIST:
+				case CAM_ISP_IFE_LITE_OUT_RES_GAMMA_DS:
 					in_port->lite_path_count++;
 				break;
 				default:
@@ -16199,6 +16201,7 @@ static int cam_ife_mgr_update_path_mask_trigger(
 		case CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW2:
 		case CAM_ISP_IFE_LITE_OUT_RES_STATS_BG:
 		case CAM_ISP_IFE_LITE_OUT_RES_STATS_BHIST:
+		case CAM_ISP_IFE_LITE_OUT_RES_GAMMA_DS:
 			isp_hw_cmd_args->u.path_mask.path_irq_mask |=
 				1 << CAM_IFE_PIX_PATH_RES_IPP;
 			break;
