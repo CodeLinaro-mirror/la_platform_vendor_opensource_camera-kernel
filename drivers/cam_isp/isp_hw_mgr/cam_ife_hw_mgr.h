@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_IFE_HW_MGR_H_
@@ -501,7 +501,7 @@ struct cam_ife_hw_mgr_sensor_stream_config {
 	uint32_t                                   decode_format;
 	uint32_t                                   rdi_vc_dt_updated;
 	bool                                       pxl_vc_dt_updated;
-	uint32_t                                   lcr_vc_dt_updated;
+	bool                                       lcr_vc_dt_updated;
 	bool                                       ppp_vc_dt_updated;
 	bool                                       acquired;
 	bool                                       is_streamon;
