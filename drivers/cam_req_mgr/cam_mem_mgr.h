@@ -41,8 +41,8 @@ enum cam_smmu_mapping_client {
  * @vaddr:          IOVA of buffer
  * @kmdvaddr:       Kernel virtual address
  * @active:         state of the buffer
- * @is_imported:    Flag indicating if buffer is imported from an FD
- *                  in user space
+ * @release_deferred: Buffer is deferred for release.
+ * @is_imported:    Flag indicating if buffer is imported from an FD in user space
  * @krefcount:      Reference counter to track whether the buffer is
  *                  mapped and in use
  * @smmu_mapping_client: Client buffer (User or kernel)
@@ -60,6 +60,7 @@ struct cam_mem_buf_queue {
 	uint64_t vaddr;
 	uintptr_t kmdvaddr;
 	bool active;
+	bool release_deferred;
 	bool is_imported;
 	struct kref krefcount;
 	enum cam_smmu_mapping_client smmu_mapping_client;
