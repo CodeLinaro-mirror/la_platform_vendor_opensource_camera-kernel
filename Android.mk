@@ -41,6 +41,8 @@ LOCAL_MODULE_TAGS           := optional
 #LOCAL_MODULE_KBUILD_NAME   := camera.ko
 #LOCAL_MODULE_DEBUG_ENABLE  := true
 
+BOARD_VENDOR_KERNEL_MODULES += $(LOCAL_MODULE_PATH)/$(LOCAL_MODULE)
+
 ifeq ($(TARGET_BOARD_PLATFORM), taro)
 	LOCAL_REQUIRED_MODULES        := mmrm-module-symvers
 	LOCAL_ADDITIONAL_DEPENDENCIES := $(call intermediates-dir-for,DLKM,mmrm-module-symvers)/Module.symvers
