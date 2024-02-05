@@ -989,7 +989,9 @@ static int cam_sensor_lite_cmd_buf_parse(
 		switch (cmd_type) {
 		case SENSORLITE_CMD_TYPE_SLAVEDESTINIT:
 			sensor_lite_dev->type = SLAVE_DEST_CAM;
+			fallthrough;
 		case SENSORLITE_CMD_TYPE_HOSTDESTINIT:
+			fallthrough;
 		case SENSORLITE_CMD_TYPE_RESOLUTIONINFO:
 			__send_pkt(sensor_lite_dev,
 				(struct sensor_lite_header *)cmd_addr);
@@ -1098,7 +1100,9 @@ static int cam_sensor_lite_packet_parse(
 			rc = -EINVAL;
 			goto end;
 		}
+		fallthrough;
 	case CAM_SENSOR_LITE_PACKET_OPCODE_UPDATE:
+		fallthrough;
 	case CAM_SENSOR_LITE_PACKET_OPCODE_NOP: {
 		rc = cam_sensor_lite_cmd_buf_parse(sensor_lite_dev, csl_packet);
 		if (rc < 0) {
