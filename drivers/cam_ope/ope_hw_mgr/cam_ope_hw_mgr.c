@@ -1877,7 +1877,8 @@ static int cam_ope_mgr_process_io_cfg(struct cam_ope_hw_mgr *hw_mgr,
 	if (prep_arg->num_in_map_entries > 1 &&
 		prep_arg->num_in_map_entries <= CAM_MAX_IN_RES) {
 		rc = cam_sync_merge(&sync_in_obj[0],
-			prep_arg->num_in_map_entries, &merged_sync_in_obj);
+			prep_arg->num_in_map_entries, &merged_sync_in_obj,
+			CAM_SYNC_TYPE_KMD);
 		if (rc) {
 			prep_arg->num_out_map_entries = 0;
 			prep_arg->num_in_map_entries = 0;

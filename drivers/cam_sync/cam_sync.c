@@ -59,7 +59,8 @@ static inline int get_sync_manager_idx(uint32_t sync_obj)
 	return (sync_obj >> sync_dev->sync_manager_id_shift) & sync_dev->sync_manager_id_mask;
 }
 
-int cam_sync_create(uint32_t sync_manager_idx, int32_t *sync_obj, const char *name)
+int cam_sync_create(uint32_t sync_manager_idx, int32_t *sync_obj, const char *name,
+	uint32_t type)
 {
 	int rc;
 	long idx;
@@ -80,7 +81,7 @@ int cam_sync_create(uint32_t sync_manager_idx, int32_t *sync_obj, const char *na
 
 	spin_lock_bh(&sync_dev->row_spinlocks[idx]);
 	rc = cam_sync_init_row(sync_dev->sync_table, idx, name,
-		CAM_SYNC_TYPE_INDV, sync_manager_idx);
+		type, sync_manager_idx);
 	if (rc) {
 		CAM_ERR(CAM_SYNC, "Error: Unable to init row at idx = %ld",
 			idx);
@@ -308,7 +309,7 @@ int cam_sync_signal(struct cam_sync_signal_param *param,
 		return -EINVAL;
 	}
 
-	if (row->type == CAM_SYNC_TYPE_GROUP) {
+	if (!list_empty(&row->children_list)) {
 		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 		CAM_ERR(CAM_SYNC,
 			"Error: Signaling a GROUP sync object = %s[%d], uid = %d",
@@ -392,7 +393,8 @@ signal_success_exit:
 	return 0;
 }
 
-int cam_sync_merge(int32_t *sync_var, uint32_t num_objs, int32_t *merged_obj)
+int cam_sync_merge(int32_t *sync_var, uint32_t num_objs, int32_t *merged_obj,
+	uint32_t type)
 {
 	int rc;
 	long idx = 0;
@@ -442,7 +444,8 @@ int cam_sync_merge(int32_t *sync_var, uint32_t num_objs, int32_t *merged_obj)
 	spin_lock_bh(&sync_dev->row_spinlocks[idx]);
 	rc = cam_sync_init_group_object(sync_dev->sync_table,
 		idx, sync_var,
-		num_objs);
+		num_objs,
+		type);
 	if (rc < 0) {
 		CAM_ERR(CAM_SYNC, "Error: Unable to init row at idx = %ld",
 			idx);
@@ -461,7 +464,7 @@ int cam_sync_merge(int32_t *sync_var, uint32_t num_objs, int32_t *merged_obj)
 int cam_sync_get_obj_ref(int32_t sync_var)
 {
 	struct sync_table_row *row = NULL;
-	uint32_t sync_obj, sync_manager_idx;
+	uint32_t sync_obj, sync_manager_idx, uid_validity;
 	uint16_t sync_uid;
 
 	sync_obj = (uint32_t)sync_var & sync_uid_access.fenceIdMask;
@@ -481,6 +484,18 @@ int cam_sync_get_obj_ref(int32_t sync_var)
 		spin_unlock(&sync_dev->row_spinlocks[sync_obj]);
 		return -EINVAL;
 	}
+
+	uid_validity = cam_sync_check_uid_valid(sync_var);
+	if (uid_validity == SYNC_UID_NEW) {
+		cam_sync_reinit_object(sync_dev->sync_table, sync_var);
+	} else if (uid_validity == SYNC_UID_OLD) {
+		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
+		CAM_ERR(CAM_SYNC, " Called for invalid fence, sync obj: %d, uid: %d",
+			sync_obj,
+			sync_uid);
+		return -EINVAL;
+	}
+
 	if (row->state != CAM_SYNC_STATE_ACTIVE) {
 		spin_unlock(&sync_dev->row_spinlocks[sync_obj]);
 		CAM_ERR(CAM_SYNC,
@@ -643,7 +658,7 @@ static int cam_sync_handle_create(int sync_manager_idx, struct cam_private_ioctl
 	sync_create.name[SYNC_DEBUG_NAME_LEN] = '\0';
 
 	result = cam_sync_create(sync_manager_idx, &sync_create.sync_obj,
-		sync_create.name);
+		sync_create.name, CAM_SYNC_TYPE_UMD);
 
 	if (!result)
 		if (copy_to_user(
@@ -736,7 +751,8 @@ static int cam_sync_handle_merge(struct cam_private_ioctl_arg *k_ioctl)
 
 	result = cam_sync_merge(sync_objs,
 		num_objs,
-		&sync_merge.merged);
+		&sync_merge.merged,
+		CAM_SYNC_TYPE_UMD);
 
 	if (!result)
 		if (copy_to_user(
@@ -1189,6 +1205,13 @@ static void cam_sync_event_queue_notify_error(const struct v4l2_event *old,
 			"Fail to notify event id %d fence %d status %d reason %u",
 			old->id, ev_header->sync_obj, ev_header->status,
 			ev_header->evt_param.event_cause);
+	} else if (sync_dev->version == CAM_SYNC_V4L_EVENT_V5) {
+		struct cam_sync_ev_header_v5 *ev_header;
+
+		ev_header = CAM_SYNC_GET_HEADER_PTR_V5((*old));
+		CAM_ERR(CAM_CRM,
+			"Fail to notify event id %d fence %d status %d",
+			old->id, ev_header->sync_obj, ev_header->status);
 	} else {
 		struct cam_sync_ev_header *ev_header;
 
@@ -1211,6 +1234,7 @@ int cam_sync_subscribe_event(struct v4l2_fh *fh,
 	case CAM_SYNC_V4L_EVENT_V2:
 	case CAM_SYNC_V4L_EVENT_V3:
 	case CAM_SYNC_V4L_EVENT_V4:
+	case CAM_SYNC_V4L_EVENT_V5:
 		break;
 	default:
 		CAM_ERR(CAM_SYNC, "Non supported event type 0x%x", sub->type);
@@ -1240,6 +1264,7 @@ int cam_sync_unsubscribe_event(struct v4l2_fh *fh,
 	case CAM_SYNC_V4L_EVENT_V2:
 	case CAM_SYNC_V4L_EVENT_V3:
 	case CAM_SYNC_V4L_EVENT_V4:
+	case CAM_SYNC_V4L_EVENT_V5:
 		break;
 	default:
 		CAM_ERR(CAM_SYNC, "Non supported event type 0x%x", sub->type);

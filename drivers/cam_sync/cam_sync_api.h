@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __CAM_SYNC_API_H__
@@ -12,6 +12,10 @@
 #include <linux/completion.h>
 #include <linux/videodev2.h>
 #include <media/cam_sync.h>
+
+/* Sync object types */
+#define CAM_SYNC_TYPE_UMD         0
+#define CAM_SYNC_TYPE_KMD         1
 
 #define SYNC_DEBUG_NAME_LEN 63
 typedef void (*sync_callback)(int32_t sync_obj, int status, void *data);
@@ -48,13 +52,15 @@ struct cam_sync_signal_param {
  * @param name : Optional parameter associating a name with the sync object for
  * debug purposes. Only first SYNC_DEBUG_NAME_LEN bytes are accepted,
  * rest will be ignored.
+ * @param type : Type of the sync object
  *
  * @return Status of operation. Zero in case of success.
  * -EINVAL will be returned if sync_obj is an invalid pointer.
  * -ENOMEM will be returned if the kernel can't allocate space for
  * sync object.
  */
-int cam_sync_create(uint32_t sync_manager_idx, int32_t *sync_obj, const char *name);
+int cam_sync_create(uint32_t sync_manager_idx, int32_t *sync_obj, const char *name,
+	uint32_t type);
 
 /**
  * @brief: Registers a callback with a sync object
@@ -117,10 +123,12 @@ int cam_sync_get_version(void);
  *
  * @param sync_obj: pointer to a block of ints to be merged
  * @param num_objs: Number of ints in the block
+ * @param type    : Type of the merged sync object
  *
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
-int cam_sync_merge(int32_t *sync_obj, uint32_t num_objs, int32_t *merged_obj);
+int cam_sync_merge(int32_t *sync_obj, uint32_t num_objs, int32_t *merged_obj,
+	uint32_t type);
 
 /**
  * @brief: get ref count of sync obj

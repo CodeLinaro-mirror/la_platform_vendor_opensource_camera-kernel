@@ -39,21 +39,6 @@
 #define CAM_SYNC_NAME                   "cam_sync"
 #define CAM_SYNC_MAX_SYNC_MANAGER       16
 
-#define CAM_SYNC_TYPE_INDV              0
-#define CAM_SYNC_TYPE_GROUP             1
-
-/**
- * enum sync_type - Enum to indicate the type of sync object,
- * i.e. individual or group.
- *
- * @SYNC_TYPE_INDV  : Object is an individual sync object
- * @SYNC_TYPE_GROUP : Object is a group sync object
- */
-enum sync_type {
-	SYNC_TYPE_INDV,
-	SYNC_TYPE_GROUP
-};
-
 /**
  * enum sync_list_clean_type - Enum to indicate the type of list clean action
  * to be peformed, i.e. specific sync ID or all list sync ids.
@@ -161,7 +146,7 @@ struct sync_uid_info {
  */
 struct sync_table_row {
 	char name[CAM_SYNC_OBJ_NAME_LEN];
-	enum sync_type type;
+	uint32_t type;
 	int32_t sync_id;
 	/* List of parents, which are merged objects */
 	struct list_head parents_list;

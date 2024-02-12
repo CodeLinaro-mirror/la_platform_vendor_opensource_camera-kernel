@@ -57,13 +57,15 @@ int cam_sync_reinit_object(struct sync_table_row *table, uint32_t idx);
  * @param sync_objs : Array of sync objects which will merged
  *                    or grouped together
  * @param num_objs  : Number of sync objects in the array
+ * @param type      : Type of row to be initialized
  *
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
 int cam_sync_init_group_object(struct sync_table_row *table,
 	uint32_t idx,
 	uint32_t *sync_objs,
-	uint32_t num_objs);
+	uint32_t num_objs,
+	uint32_t type);
 
 int cam_sync_deinit_object(struct sync_table_row *table, uint32_t idx);
 
