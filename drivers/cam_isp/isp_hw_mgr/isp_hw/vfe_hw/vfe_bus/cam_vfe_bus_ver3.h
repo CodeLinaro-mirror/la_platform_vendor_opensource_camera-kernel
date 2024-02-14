@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 
@@ -22,6 +22,7 @@
 #define CAM_VFE_BUS_VER3_ERR_IRQ_REG_MAX     2
 #define CAM_VFE_BUS_VER3_PAYLOAD_MAX         256
 #define CAM_VFE_BUS_VER3_IRQ_MAX             2
+#define CAM_VFE_BUS_VER3_MAX_SRC_GRPS        5
 
 #define MAX_BUF_UPDATE_REG_NUM   \
 	((sizeof(struct cam_vfe_bus_ver3_reg_offset_bus_client) +  \
@@ -44,6 +45,30 @@ enum cam_vfe_bus_ver3_src_grp {
 	CAM_VFE_BUS_VER3_SRC_GRP_4,
 	CAM_VFE_BUS_VER3_SRC_GRP_5,
 	CAM_VFE_BUS_VER3_SRC_GRP_MAX,
+};
+
+enum cam_vfe_bus_ver3_ipcc_id {
+	CAM_VFE_BUS_VER3_IPCC_ID_0,
+	CAM_VFE_BUS_VER3_IPCC_ID_1,
+	CAM_VFE_BUS_VER3_IPCC_ID_2,
+	CAM_VFE_BUS_VER3_IPCC_ID_3,
+	CAM_VFE_BUS_VER3_IPCC_ID_4,
+	CAM_VFE_BUS_VER3_IPCC_ID_5,
+	CAM_VFE_BUS_VER3_IPCC_ID_6,
+	CAM_VFE_BUS_VER3_IPCC_ID_7,
+	CAM_VFE_BUS_VER3_IPCC_ID_8,
+	CAM_VFE_BUS_VER3_IPCC_ID_9,
+	CAM_VFE_BUS_VER3_IPCC_ID_10,
+	CAM_VFE_BUS_VER3_IPCC_ID_11,
+	CAM_VFE_BUS_VER3_IPCC_ID_12,
+	CAM_VFE_BUS_VER3_IPCC_ID_13,
+	CAM_VFE_BUS_VER3_IPCC_ID_14,
+	CAM_VFE_BUS_VER3_IPCC_ID_15,
+	CAM_VFE_BUS_VER3_IPCC_ID_16,
+	CAM_VFE_BUS_VER3_IPCC_ID_17,
+	CAM_VFE_BUS_VER3_IPCC_ID_18,
+	CAM_VFE_BUS_VER3_IPCC_ID_19,
+	CAM_VFE_BUS_VER3_IPCC_ID_MAX,
 };
 
 enum cam_vfe_bus_ver3_comp_grp_type {
@@ -239,6 +264,14 @@ struct cam_vfe_bus_ver3_reg_offset_bus_client {
 	uint32_t bw_limiter_addr;
 	uint32_t comp_group;
 	uint32_t tunnel_cfg_idx;
+	uint32_t ipcc_id;
+	uint32_t ipcc_addr;
+	uint32_t ipcc_cfg_0;
+	uint32_t ipcc_cfg_1;
+	uint32_t fence_addr;
+	uint32_t fence_cfg_0;
+	uint32_t fence_cfg_1;
+	uint32_t hwfence_cap_mask;
 };
 
 enum cam_vfe_bus_ver3_stored_irq_masks {
@@ -298,6 +331,8 @@ struct cam_vfe_bus_ver3_vfe_out_hw_info {
 	uint32_t                            line_based;
 	uint32_t                            bufdone_shift;
 	uint32_t                            wm_idx[PLANE_MAX];
+	uint32_t                            fence_ipcc_cfg_mode;
+	uint32_t                            hwfence_cap;
 	uint8_t                            *name[PLANE_MAX];
 	uint32_t                            secure_mask;
 };
@@ -329,6 +364,7 @@ struct cam_vfe_bus_ver3_vfe_out_hw_info {
  * @support_tunneling:        Indicate if bus support tunneling feature
  * @virtual_frame_en_shift:   Virtual frame enable shift
  * @fifo_depth:               Max fifo depth
+ * @num_ipcc_clients:         Max number of IFE Bus Clients supporting HW Fencing
  */
 struct cam_vfe_bus_ver3_hw_info {
 	struct cam_vfe_bus_ver3_reg_offset_common common_reg;
@@ -357,6 +393,12 @@ struct cam_vfe_bus_ver3_hw_info {
 	uint32_t virtual_frame_en_shift;
 	bool support_tunneling;
 	uint32_t fifo_depth;
+	uint32_t num_ipcc_clients;
+	uint32_t ipcc_addr_violation_shift;
+	uint32_t ipcc_data_violation_shift;
+	uint32_t image_size_violation_shift;
+	uint32_t ccif_violation_shift;
+	uint32_t constraint_violation_shift;
 };
 
 /**
@@ -494,6 +536,11 @@ struct cam_vfe_bus_ver3_common_data {
 	uint32_t                                    image_addr_fifo_cnt_mask;
 	uint32_t                                    virtual_frame_en_shift;
 	uint32_t                                    out_fifo_depth;
+	uint32_t                                    image_size_violation_shift;
+	uint32_t                                    ccif_violation_shift;
+	uint32_t                                    constraint_violation_shift;
+	uint32_t                                    ipcc_addr_violation_shift;
+	uint32_t                                    ipcc_data_violation_shift;
 };
 
 int cam_vfe_populate_out(
