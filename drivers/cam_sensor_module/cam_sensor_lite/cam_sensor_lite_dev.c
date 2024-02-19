@@ -80,6 +80,7 @@ static void cam_sensor_lite_subdev_handle_message(
 			}
 			mutex_unlock(&sensor_lite_dev->mutex);
 		}
+		break;
 	}
 	default:
 		break;

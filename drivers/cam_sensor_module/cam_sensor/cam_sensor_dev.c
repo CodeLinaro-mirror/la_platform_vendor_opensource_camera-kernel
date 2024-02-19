@@ -274,6 +274,7 @@ static void cam_sensor_subdev_handle_message(
 			if (s_ctrl->bridge_intf.link_hdl == query_mcu->link_hdl) {
 				query_mcu->is_sensor_no_hw_ops = s_ctrl->hw_no_ops;
 			}
+			break;
 		}
 		default: {
 			CAM_DBG(CAM_SENSOR, "invalid message: %d ", message_type);
