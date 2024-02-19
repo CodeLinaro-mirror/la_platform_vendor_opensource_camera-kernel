@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <media/cam_defs.h>
@@ -269,10 +269,13 @@ int cam_isp_add_command_buffers(
 	enum cam_isp_hw_split_id           split_id;
 	struct cam_cmd_buf_desc           *cmd_desc = NULL;
 	struct cam_hw_update_entry        *hw_entry = NULL;
+	struct cam_isp_prepare_hw_update_data *prepare_hw_data;
 
 	split_id = base_info->split_id;
 	base_idx = base_info->idx;
 	hw_entry = prepare->hw_update_entries;
+
+	prepare_hw_data = (struct cam_isp_prepare_hw_update_data  *)prepare->priv;
 
 	/*
 	 * set the cmd_desc to point the first command descriptor in the
@@ -364,6 +367,21 @@ int cam_isp_add_command_buffers(
 				hw_entry[num_ent].flags = CAM_ISP_IQ_BL;
 
 			num_ent++;
+			break;
+		case CAM_ISP_PACKET_META_IFE_CROP:
+			if (cmd_desc[i].length) {
+				prepare_hw_data->is_crop_update_valid = true;
+				prepare_hw_data->crop_update_entry.len = cmd_desc[i].length;
+				prepare_hw_data->crop_update_entry.handle = cmd_desc[i].mem_handle;
+				prepare_hw_data->crop_update_entry.offset = cmd_desc[i].offset;
+				prepare_hw_data->crop_update_entry.flags = CAM_ISP_IQ_BL;
+				num_ent = prepare->num_hw_update_entries;
+				CAM_DBG(CAM_ISP, "get crop update handle=0x%x, len=%u, offset:%d",
+					cmd_desc[i].mem_handle,
+					cmd_desc[i].length,
+					cmd_desc[i].offset);
+			} else
+				prepare_hw_data->is_crop_update_valid = false;
 			break;
 		case CAM_ISP_PACKET_META_DUAL_CONFIG:
 			rc = cam_isp_update_dual_config(&cmd_desc[i],
@@ -676,6 +694,7 @@ int cam_sfe_add_command_buffers(
 		case CAM_ISP_PACKET_META_CSID_LEFT:
 		case CAM_ISP_PACKET_META_CSID_RIGHT:
 		case CAM_ISP_PACKET_META_CSID_COMMON:
+		case CAM_ISP_PACKET_META_IFE_CROP:
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "invalid cdm command meta data %d",
@@ -1749,6 +1768,7 @@ int cam_isp_add_csid_command_buffers(
 		case CAM_ISP_PACKET_META_REG_DUMP_ON_FLUSH:
 		case CAM_ISP_PACKET_META_REG_DUMP_ON_ERROR:
 		case CAM_ISP_PACKET_META_REG_DUMP_PER_REQUEST:
+		case CAM_ISP_PACKET_META_IFE_CROP:
 		case CAM_ISP_SFE_PACKET_META_LEFT:
 		case CAM_ISP_SFE_PACKET_META_RIGHT:
 		case CAM_ISP_SFE_PACKET_META_COMMON:
