@@ -9425,6 +9425,9 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].len,
 					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset);
 				cdm_cmd->cmd_arrary_count++;
+				cfg->applied_crop_req_id = ctx->latest_crop_update_req;
+			} else {
+				cfg->applied_crop_req_id = cfg->request_id;
 			}
 
 			if ((cdm_cmd->cmd_arrary_count + 1) >= CAM_ISP_CTX_CFG_MAX) {

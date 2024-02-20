@@ -884,7 +884,7 @@ static int cam_sync_handle_register_user_payload(
 
 		cam_sync_util_send_v4l2_event(CAM_SYNC_V4L_EVENT_ID_CB_TRIG,
 			sync_obj,
-			row->state, 0,
+			row->state, 0, 0,
 			user_payload_kernel->payload_data,
 			CAM_SYNC_USER_PAYLOAD_SIZE * sizeof(__u64),
 			CAM_SYNC_COMMON_REG_PAYLOAD_EVENT, NULL,

@@ -530,6 +530,7 @@ void cam_sync_util_dispatch_signaled_cb(struct cam_sync_signal_param *param,
 			param->sync_obj,
 			param->status,
 			param->request_id,
+			0,
 			payload_info->payload_data,
 			CAM_SYNC_PAYLOAD_WORDS * sizeof(__u64),
 			param->event_cause, time_stamp, param->fh);
@@ -551,6 +552,7 @@ void cam_sync_util_dispatch_signaled_cb(struct cam_sync_signal_param *param,
 			param->sync_obj,
 			param->status,
 			param->request_id,
+			param->applied_crop_req_id,
 			NULL,
 			0,
 			param->event_cause, time_stamp, param->fh);
@@ -567,6 +569,7 @@ void cam_sync_util_send_v4l2_event(uint32_t id,
 	uint32_t sync_obj,
 	int status,
 	uint64_t req_id,
+	uint64_t applied_crop_req_id,
 	void *payload, int len,
 	uint32_t event_cause, struct cam_sync_timestamp *time_stamp, void *fh)
 {
@@ -675,11 +678,14 @@ void cam_sync_util_send_v4l2_event(uint32_t id,
 				time_stamp->slave_timestamp;
 		}
 		ev_header->evt_param.sensor_req_id = req_id;
+		ev_header->evt_param.applied_crop_req_id = applied_crop_req_id;
+
 		CAM_DBG(CAM_SYNC,
-			"send v4l2 event version %d sync_obj %d status %d, event_cause %d req_id %lld tracker_id %d sof_timestamp %lld ",
+			"send v4l2 event version %d sync_obj %d status %d, event_cause %d sensor_req_id %lld applied_crop_req_id %lld tracker_id %d sof_timestamp %lld ",
 			sync_dev->version, ev_header->sync_obj, ev_header->status,
 			ev_header->evt_param.event_cause, ev_header->evt_param.sensor_req_id,
-			ev_header->evt_param.tracker_id, ev_header->evt_param.sof_timestamp);
+			ev_header->evt_param.applied_crop_req_id, ev_header->evt_param.tracker_id,
+			ev_header->evt_param.sof_timestamp);
 	} else {
 		struct cam_sync_ev_header *ev_header = NULL;
 
