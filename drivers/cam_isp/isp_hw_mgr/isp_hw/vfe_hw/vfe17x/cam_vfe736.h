@@ -2087,7 +2087,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe736_bus_hw_info = {
 			.ubwc_regs                = NULL,
 		},
 	},
-	.num_out = 33,
+	.num_out = 29,
 	.vfe_out_hw_info = {
 		{
 			.vfe_out_type  = CAM_VFE_BUS_VER3_VFE_OUT_RDI0,
