@@ -640,6 +640,7 @@ static int __cam_isp_ctx_no_crm_apply_trigger_util(void *priv, void *data)
 				"Skip sensor notification as no open request ctx:%u",
 				ctx->ctx_id);
 			ctx_isp->sensor_pd_handled = false;
+			ctx_isp->sensor_req_info.correction = 0;
 		}
 
 		list_for_each_entry_safe(req, req_temp, &ctx->wait_req_list, list) {
@@ -1831,7 +1832,10 @@ static int __cam_isp_ctx_handle_buf_done_for_req_list(
 				param.sync_obj = req_isp->fence_map_out[i].sync_id;
 				param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 				param.event_cause = CAM_SYNC_ISP_EVENT_BUBBLE;
-				param.request_id = req_isp->sensor_req_id;
+				if (!ctx_isp->independent_crm_en)
+					param.request_id = buf_done_req_id;
+				else
+					param.request_id = req_isp->sensor_req_id;
 				rc = cam_sync_signal(&param, &ev_timestamp);
 			}
 			list_add_tail(&req->list, &ctx->free_req_list);
@@ -1992,7 +1996,10 @@ static int __cam_isp_ctx_handle_buf_done_for_request(
 			param.sync_obj = req_isp->fence_map_out[j].sync_id;
 			param.status = CAM_SYNC_STATE_SIGNALED_SUCCESS;
 			param.event_cause = CAM_SYNC_COMMON_EVENT_SUCCESS;
-			param.request_id = req_isp->sensor_req_id;
+			if (!ctx_isp->independent_crm_en)
+				param.request_id = req->request_id;
+			else
+				param.request_id = req_isp->sensor_req_id;
 			rc = cam_sync_signal(&param, NULL);
 
 			if (rc)
@@ -2031,7 +2038,10 @@ static int __cam_isp_ctx_handle_buf_done_for_request(
 			param.sync_obj = req_isp->fence_map_out[j].sync_id;
 			param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 			param.event_cause = CAM_SYNC_ISP_EVENT_BUBBLE;
-			param.request_id = req_isp->sensor_req_id;
+			if (!ctx_isp->independent_crm_en)
+				param.request_id = req->request_id;
+			else
+				param.request_id = req_isp->sensor_req_id;
 			rc = cam_sync_signal(&param, &ev_timestamp);
 			if (rc)
 				CAM_ERR(CAM_ISP, "Sync failed with rc = %d",
@@ -2146,7 +2156,10 @@ static int __cam_isp_handle_deferred_buf_done(
 			param.sync_obj = req_isp->fence_map_out[j].sync_id;
 			param.status = status;
 			param.event_cause = event_cause;
-			param.request_id = req_isp->sensor_req_id;
+			if (!ctx_isp->independent_crm_en)
+				param.request_id = req->request_id;
+			else
+				param.request_id = req_isp->sensor_req_id;
 			rc = cam_sync_signal(&param, &ev_timestamp);
 			if (rc) {
 				CAM_ERR(CAM_ISP,
@@ -2344,7 +2357,10 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 			param.sync_obj = req_isp->fence_map_out[j].sync_id;
 			param.status = CAM_SYNC_STATE_SIGNALED_SUCCESS;
 			param.event_cause = CAM_SYNC_COMMON_EVENT_SUCCESS;
-			param.request_id = req_isp->sensor_req_id;
+			if (!ctx_isp->independent_crm_en)
+				param.request_id = req->request_id;
+			else
+				param.request_id = req_isp->sensor_req_id;
 			rc = cam_sync_signal(&param, &ev_timestamp);
 			if (rc) {
 				CAM_ERR(CAM_ISP, "Sync = %u for req = %llu failed with rc = %d",
@@ -2385,7 +2401,10 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 			param.sync_obj = req_isp->fence_map_out[j].sync_id;
 			param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 			param.event_cause = CAM_SYNC_ISP_EVENT_BUBBLE;
-			param.request_id = req_isp->sensor_req_id;
+			if (!ctx_isp->independent_crm_en)
+				param.request_id = req->request_id;
+			else
+				param.request_id = req_isp->sensor_req_id;
 			rc = cam_sync_signal(&param, &ev_timestamp);
 			if (rc) {
 				CAM_ERR(CAM_ISP, "Sync = %u for req = %llu failed with rc = %d",
@@ -3920,7 +3939,10 @@ static int __cam_isp_ctx_handle_error(struct cam_isp_context *ctx_isp,
 					param.sync_obj = fence_map_out->sync_id;
 					param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 					param.event_cause = evt_param;
-					param.request_id = req_isp->sensor_req_id;
+					if (!ctx_isp->independent_crm_en)
+						param.request_id = req->request_id;
+					else
+						param.request_id = req_isp->sensor_req_id;
 					rc = cam_sync_signal(&param, NULL);
 					fence_map_out->sync_id = -1;
 				}
@@ -3956,7 +3978,10 @@ static int __cam_isp_ctx_handle_error(struct cam_isp_context *ctx_isp,
 					param.sync_obj = fence_map_out[i].sync_id;
 					param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 					param.event_cause = evt_param;
-					param.request_id = req_isp->sensor_req_id;
+					if (!ctx_isp->independent_crm_en)
+						param.request_id = req->request_id;
+					else
+						param.request_id = req_isp->sensor_req_id;
 					CAM_DBG(CAM_ISP, "ife req: %lld sensor req: %lld",
 						req->request_id, req_isp->sensor_req_id);
 					rc = cam_sync_signal(&param, NULL);
@@ -4024,7 +4049,10 @@ end:
 				param.sync_obj = req_isp->fence_map_out[i].sync_id;
 				param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 				param.event_cause = evt_param;
-				param.request_id = req_isp->sensor_req_id;
+				if (!ctx_isp->independent_crm_en)
+					param.request_id = req->request_id;
+				else
+					param.request_id = req_isp->sensor_req_id;
 				rc = cam_sync_signal(&param, NULL);
 			}
 			req_isp->fence_map_out[i].sync_id = -1;
@@ -6877,7 +6905,10 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_state(
 				param.sync_obj = req_isp->fence_map_out[i].sync_id;
 				param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 				param.event_cause = CAM_SYNC_ISP_EVENT_BUBBLE;
-				param.request_id = req_isp->sensor_req_id;
+				if (!ctx_isp->independent_crm_en)
+					param.request_id = req->request_id;
+				else
+					param.request_id = req_isp->sensor_req_id;
 				cam_sync_signal(&param, NULL);
 			}
 		list_add_tail(&req->list, &ctx->free_req_list);
@@ -9169,7 +9200,10 @@ static int __cam_isp_ctx_stop_dev_in_activated_unlock(
 				param.sync_obj = req_isp->fence_map_out[i].sync_id;
 				param.status = CAM_SYNC_STATE_SIGNALED_CANCEL;
 				param.event_cause = CAM_SYNC_ISP_EVENT_HW_STOP;
-				param.request_id = req_isp->sensor_req_id;
+				if (!ctx_isp->independent_crm_en)
+					param.request_id = req->request_id;
+				else
+					param.request_id = req_isp->sensor_req_id;
 				cam_sync_signal(&param, NULL);
 			}
 		list_add_tail(&req->list, &ctx->free_req_list);
@@ -9188,7 +9222,10 @@ static int __cam_isp_ctx_stop_dev_in_activated_unlock(
 				param.sync_obj = req_isp->fence_map_out[i].sync_id;
 				param.status = CAM_SYNC_STATE_SIGNALED_CANCEL;
 				param.event_cause = CAM_SYNC_ISP_EVENT_HW_STOP;
-				param.request_id = req_isp->sensor_req_id;
+				if (!ctx_isp->independent_crm_en)
+					param.request_id = req->request_id;
+				else
+					param.request_id = req_isp->sensor_req_id;
 				cam_sync_signal(&param, NULL);
 			}
 		list_add_tail(&req->list, &ctx->free_req_list);
@@ -9208,7 +9245,10 @@ static int __cam_isp_ctx_stop_dev_in_activated_unlock(
 				param.sync_obj = req_isp->fence_map_out[i].sync_id;
 				param.status = CAM_SYNC_STATE_SIGNALED_CANCEL;
 				param.event_cause = CAM_SYNC_ISP_EVENT_HW_STOP;
-				param.request_id = req_isp->sensor_req_id;
+				if (!ctx_isp->independent_crm_en)
+					param.request_id = req->request_id;
+				else
+					param.request_id = req_isp->sensor_req_id;
 				cam_sync_signal(&param, NULL);
 			}
 		list_add_tail(&req->list, &ctx->free_req_list);
