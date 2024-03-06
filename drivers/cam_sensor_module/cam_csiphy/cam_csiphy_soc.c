@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_csiphy_soc.h"
@@ -13,6 +13,7 @@
 #include "include/cam_csiphy_1_2_2_hwreg.h"
 #include "include/cam_csiphy_1_2_3_hwreg.h"
 #include "include/cam_csiphy_1_2_5_hwreg.h"
+#include "include/cam_csiphy_1_2_6_hwreg.h"
 #include "include/cam_csiphy_2_0_hwreg.h"
 #include "include/cam_csiphy_2_1_0_hwreg.h"
 #include "include/cam_csiphy_2_1_1_hwreg.h"
@@ -284,6 +285,11 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 	else
 		csiphy_dev->is_aggregator_rx = true;
 
+	if (!of_property_read_bool(soc_info->dev->of_node, "is_standard_channel"))
+		csiphy_dev->channel_type = CSIPHY_CHANNEL_TYPE_SHORT;
+	else
+		csiphy_dev->is_aggregator_rx = CSIPHY_CHANNEL_TYPE_STANDARD;
+
 	if (of_property_read_bool(soc_info->dev->of_node, "is-phy-protect"))
 		csiphy_dev->is_phy_protect = true;
 	else
@@ -436,6 +442,22 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->hw_version = CSIPHY_VERSION_V125;
 		csiphy_dev->clk_lane = 0;
 		csiphy_dev->ctrl_reg->data_rates_settings_table = NULL;
+	}  else if (of_device_is_compatible(soc_info->dev->of_node,
+		"qcom,csiphy-v1.2.6")) {
+		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v1_2_6_reg;
+		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v1_2_6_combo_mode_reg;
+		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v1_2_6_reg;
+		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_1_2_6;
+		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_1_2_6;
+		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_enter_reg_1_2_6;
+		csiphy_dev->ctrl_reg->csiphy_reset_exit_regs = csiphy_reset_exit_reg_1_2_6;
+		csiphy_dev->ctrl_reg->getclockvoting = get_clk_vote_default;
+		csiphy_dev->ctrl_reg->csiphy_reg = csiphy_v1_2_6;
+		csiphy_dev->is_divisor_32_comp = true;
+		csiphy_dev->hw_version = CSIPHY_VERSION_V126;
+		csiphy_dev->clk_lane = 0;
+		csiphy_dev->ctrl_reg->data_rates_settings_table = &data_rate_delta_table_1_2_6;
 	} else if (of_device_is_compatible(soc_info->dev->of_node,
 		"qcom,csiphy-v2.0")) {
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v2_0_reg;
