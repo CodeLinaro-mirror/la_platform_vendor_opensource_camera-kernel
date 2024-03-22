@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_CSIPHY_DEV_H_
@@ -53,6 +53,8 @@
 #define CSIPHY_3PH_COMBO_REGS            9
 #define CSIPHY_2PH_3PH_COMBO_REGS        10
 #define CSIPHY_AUXILIARY_SETTING         11
+#define CSIPHY_SHORT_CHANNEL_PARAMS      12
+#define CSIPHY_STANDARD_CHANNEL_PARAMS   13
 
 #define CSIPHY_MAX_INSTANCES_PER_PHY           3
 #define CSIPHY_MAX_INSTANCES_PER_AGGREG_RX_PHY 6
@@ -74,6 +76,9 @@
 #define PREAMBLE_PATTERN_SET_CHECKER    BIT(4)
 #define PREAMBLE_PATTERN_BIST_DONE      BIT(0)
 #define PREAMBLE_MAX_ERR_COUNT_ALLOWED  2
+#define CSIPHY_CHANNEL_TYPE_INVALID  0x0
+#define CSIPHY_CHANNEL_TYPE_SHORT    0x1
+#define CSIPHY_CHANNEL_TYPE_STANDARD 0x2
 
 enum cam_csiphy_state {
 	CAM_CSIPHY_INIT,
@@ -338,6 +343,8 @@ struct csiphy_work_queue {
  * @preamble_enable            : To enable preamble pattern
  * @is_aggregator_rx           : Is PHY an RX for aggregator
  * @is_phy_protect             : Is PHY based protection or lane based protection
+ * @channel_type               : channel type (short / standard)
+ * 								 TODO: This needs to be per sensor instance not per phy
  */
 struct csiphy_device {
 	char                           device_name[CAM_CTX_DEV_NAME_MAX_LENGTH];
@@ -377,6 +384,7 @@ struct csiphy_device {
 	bool                           is_aggregator_rx;
 	bool                           is_phy_protect;
 	uint32_t                       lanes_enabled;
+	uint32_t                       channel_type;
 };
 
 /**

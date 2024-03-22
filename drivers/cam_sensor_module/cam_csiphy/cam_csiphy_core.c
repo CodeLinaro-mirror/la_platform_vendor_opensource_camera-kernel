@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -1004,6 +1004,14 @@ static int cam_csiphy_cphy_data_rate_config(
 					}
 				}
 				break;
+				case CSIPHY_SHORT_CHANNEL_PARAMS:
+					if (csiphy_device->channel_type == CSIPHY_CHANNEL_TYPE_SHORT)
+						cam_io_w_mb(reg_data, csiphybase + reg_addr);
+					break;
+				case CSIPHY_STANDARD_CHANNEL_PARAMS:
+					if (csiphy_device->channel_type == CSIPHY_CHANNEL_TYPE_STANDARD)
+						cam_io_w_mb(reg_data, csiphybase + reg_addr);
+					break;
 				default:
 					CAM_DBG(CAM_CSIPHY, "Do Nothing");
 				break;
