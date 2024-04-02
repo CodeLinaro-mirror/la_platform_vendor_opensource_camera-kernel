@@ -30,6 +30,7 @@ struct cam_req_mgr_no_crm_handshake_data;
 struct cam_req_mgr_no_crm_apply_request;
 struct cam_req_mgr_no_crm_pause_evt_data;
 struct cam_req_mgr_no_crm_resume_evt_data;
+struct cam_req_mgr_no_crm_notify_device;
 
 /* Request Manager -- camera device driver interface */
 /**
@@ -41,6 +42,11 @@ struct cam_req_mgr_no_crm_resume_evt_data;
  * @cam_req_mgr_add_req        : to info CRM about new rqeuest received from
  *                               userspace
  * @cam_req_mgr_notify_timer   : start the timer
+ * @cam_req_mgr_no_crm_notify_pause: notify the pause to all the devices
+ * @cam_req_mgr_no_crm_notify_resume : notify the resume to all the devices
+ * @cam_req_mgr_no_crm_notify_sub_dev: notify the sub devices in the link, if device_type is
+ *                          CAM_REQ_MGR_DEVICE then notify to all devices, if specific device id
+ *                          passed notify only that device id
  */
 typedef int (*cam_req_mgr_notify_trigger)(struct cam_req_mgr_trigger_notify *,
 	struct cam_req_mgr_core_workq *);
@@ -52,6 +58,8 @@ typedef int (*cam_req_mgr_notify_stop)(struct cam_req_mgr_notify_stop *);
 typedef int (*cam_req_mgr_no_crm_notify_pause)(struct cam_req_mgr_no_crm_pause_evt_data *);
 typedef int (*cam_req_mgr_no_crm_notify_resume)(struct cam_req_mgr_no_crm_resume_evt_data *,
 	uint64_t *);
+typedef int (*cam_req_mgr_no_crm_notify_dev)(u32 device_type,
+	struct cam_req_mgr_no_crm_notify_device *);
 
 /**
  * @brief: cam req mgr to camera device drivers
@@ -69,6 +77,7 @@ typedef int (*cam_req_mgr_no_crm_notify_resume)(struct cam_req_mgr_no_crm_resume
  * @cam_req_mgr_no_crm_apply_req         : no_crm apply request callback type
  * @cam_req_mgr_no_crm_pause             : no_crm pause callback type
  * @cam_req_mgr_no_crm_resume            : no_crm resume callback type
+ * @cam_req_mgr_no_crm_notify            : no_crm notify call back for devices
  */
 typedef int (*cam_req_mgr_get_dev_info) (struct cam_req_mgr_device_info *);
 typedef int (*cam_req_mgr_link_setup)(struct cam_req_mgr_core_dev_link_setup *);
@@ -84,28 +93,32 @@ typedef int (*cam_req_mgr_no_crm_handshake_device)(struct cam_req_mgr_no_crm_han
 typedef int (*cam_req_mgr_no_crm_apply_req)(struct cam_req_mgr_no_crm_apply_request *);
 typedef int (*cam_req_mgr_no_crm_pause)(struct cam_req_mgr_no_crm_pause_evt_data *);
 typedef int (*cam_req_mgr_no_crm_resume)(struct cam_req_mgr_no_crm_resume_evt_data *);
+typedef int (*cam_req_mgr_no_crm_notify)(uint32_t dev_hdl,
+	struct cam_req_mgr_no_crm_notify_device *);
 
 /**
  * @brief          : cam_req_mgr_crm_cb - func table
  *
- * @notify_trigger : payload for trigger indication event
- * @notify_err     : payload for different error occurred at device
- * @add_req        : payload to inform which device and what request is received
- * @notify_timer   : payload for timer start event
- * @notify_stop    : payload to inform stop event
- * @no_crm_trigger : payload for trigger indication event in no-crm useacases
- * @no_crm_pause   : payload for pause event in no-crm useacases
- * @no_crm_resume  : payload for resume event in no-crm useacases
+ * @notify_trigger    : payload for trigger indication event
+ * @notify_err        : payload for different error occurred at device
+ * @add_req           : payload to inform which device and what request is received
+ * @notify_timer      : payload for timer start event
+ * @notify_stop       : payload to inform stop event
+ * @no_crm_trigger    : payload for trigger indication event in no-crm useacases
+ * @no_crm_pause      : payload for pause event in no-crm useacases
+ * @no_crm_resume     : payload for resume event in no-crm useacases
+ * @no_crm_notify_dev : payload for notify the sub devices in no crm usecases.
  */
 struct cam_req_mgr_crm_cb {
-	cam_req_mgr_notify_trigger       notify_trigger;
-	cam_req_mgr_notify_err           notify_err;
-	cam_req_mgr_add_req              add_req;
-	cam_req_mgr_notify_timer         notify_timer;
-	cam_req_mgr_notify_stop          notify_stop;
-	cam_req_mgr_no_crm_trigger       no_crm_trigger;
-	cam_req_mgr_no_crm_notify_pause  no_crm_pause;
-        cam_req_mgr_no_crm_notify_resume no_crm_resume;
+	cam_req_mgr_notify_trigger        notify_trigger;
+	cam_req_mgr_notify_err            notify_err;
+	cam_req_mgr_add_req               add_req;
+	cam_req_mgr_notify_timer          notify_timer;
+	cam_req_mgr_notify_stop           notify_stop;
+	cam_req_mgr_no_crm_trigger        no_crm_trigger;
+	cam_req_mgr_no_crm_notify_pause   no_crm_pause;
+	cam_req_mgr_no_crm_notify_resume  no_crm_resume;
+	cam_req_mgr_no_crm_notify_dev     no_crm_notify_dev;
 };
 
 /**
@@ -134,12 +147,16 @@ struct cam_req_mgr_kmd_ops {
  *
  * @handshake    : Handshake method, exchange data b/w drivers
  * @apply_req    : apply request callback for drivers
+ * @pause_cb     : Pause call back to devices
+ * @resume_cb    : resume call back to devices
+ * @notify_dev   : notify to device for specific command
  */
 struct cam_req_mgr_no_crm_kmd_ops {
 	cam_req_mgr_no_crm_handshake_device handshake;
 	cam_req_mgr_no_crm_apply_req        apply_req;
 	cam_req_mgr_no_crm_pause            pause_cb;
 	cam_req_mgr_no_crm_resume           resume_cb;
+	cam_req_mgr_no_crm_notify           notify_dev;
 };
 
 /**
@@ -221,18 +238,18 @@ enum cam_req_mgr_device_error {
  * @MAX         : invalid device id
  */
 enum cam_req_mgr_device_id {
-	CAM_REQ_MGR_DEVICE,
-	CAM_REQ_MGR_DEVICE_SENSOR,
-	CAM_REQ_MGR_DEVICE_FLASH,
-	CAM_REQ_MGR_DEVICE_ACTUATOR,
-	CAM_REQ_MGR_DEVICE_IFE,
-	CAM_REQ_MGR_DEVICE_CUSTOM_HW,
-	CAM_REQ_MGR_DEVICE_EXTERNAL_1,
-	CAM_REQ_MGR_DEVICE_EXTERNAL_2,
-	CAM_REQ_MGR_DEVICE_EXTERNAL_3,
-	CAM_REQ_MGR_DEVICE_TPG,
-	CAM_REQ_MGR_DEVICE_SENSOR_LITE,
-	CAM_REQ_MGR_DEVICE_ID_MAX,
+	CAM_REQ_MGR_DEVICE             = BIT(0),
+	CAM_REQ_MGR_DEVICE_SENSOR      = BIT(1),
+	CAM_REQ_MGR_DEVICE_FLASH       = BIT(2),
+	CAM_REQ_MGR_DEVICE_ACTUATOR    = BIT(3),
+	CAM_REQ_MGR_DEVICE_IFE         = BIT(4),
+	CAM_REQ_MGR_DEVICE_CUSTOM_HW   = BIT(5),
+	CAM_REQ_MGR_DEVICE_EXTERNAL_1  = BIT(6),
+	CAM_REQ_MGR_DEVICE_EXTERNAL_2  = BIT(7),
+	CAM_REQ_MGR_DEVICE_EXTERNAL_3  = BIT(8),
+	CAM_REQ_MGR_DEVICE_TPG         = BIT(9),
+	CAM_REQ_MGR_DEVICE_SENSOR_LITE = BIT(10),
+	CAM_REQ_MGR_DEVICE_ID_MAX      = BIT(11),
 };
 
 /* Camera device driver to Req Mgr device interface */
@@ -494,6 +511,20 @@ struct cam_req_mgr_no_crm_resume_evt_data {
 };
 
 /**
+ * struct cam_req_mgr_no_crm_notify_device
+ * @link_hdl              : link identifier
+ * @dev_hdl               : device handle of calling device
+ * @subdev_notify_cmd     : subdev notification command for other devices
+ * @data                  : pvt structure pointer for command
+ */
+struct cam_req_mgr_no_crm_notify_device {
+	uint32_t link_hdl;
+	uint32_t dev_hdl;
+	uint32_t command;
+	void *   data;
+};
+
+/**
  * struct cam_req_mgr_flush_request
  * @link_hdl    : link identifier
  * @dev_hdl     : device handle for cross check
@@ -579,6 +610,35 @@ struct cam_req_mgr_no_crm_handshake_data {
 struct cam_req_mgr_no_crm_frame_skip_evt_data {
 	int trigger;
 	uint64_t req_id;
+};
+
+#define CAM_REQ_MGR_MAX_CSID_CID  4
+
+/**
+ * struct cam_cam_req_mgr_no_crm_vc_dt_cid
+ * @vc         : VC value for which CID number required
+ * @dt         : DT value for which CID number required
+ * @cid        : outparam cid number for VC/DT
+ */
+struct cam_cam_req_mgr_no_crm_vc_dt_cid {
+	uint32_t  vc;
+	uint32_t  dt;
+	uint32_t  cid;
+};
+
+/**
+ * struct cam_req_mgr_no_crm_get_csid_cid_info
+ * @phy_no    : phy number
+ * @vc        : VC value for which CID number required
+ * @dt         : DT value for which CID number required
+ * @csid_hw_no : outparam, CSID number to which this phy and VC/DT connected
+ * @cid        : outparam cid number for VC/DT
+ */
+struct cam_req_mgr_no_crm_get_csid_cid_info {
+	uint32_t  phy_no;
+	uint32_t  num_vc_dt;
+	uint32_t  csid_hw_no;
+	struct cam_cam_req_mgr_no_crm_vc_dt_cid vc_dt_cid[CAM_REQ_MGR_MAX_CSID_CID];
 };
 
 #endif

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_SUBDEV_H_
@@ -26,6 +26,7 @@ enum cam_subdev_message_type_t {
 	CAM_SUBDEV_MESSAGE_SENSOR_PAUSE = 0x6,
 	CAM_SUBDEV_MESSAGE_SENSOR_RESUME = 0x7,
 	CAM_SUBDEV_MESSAGE_SENSOR_QUERY_MCU = 0x8,
+	CAM_SUBDEV_MESSAGE_GET_CSID_CID = 0x9,
 };
 
 /* Enum for close sequence priority */

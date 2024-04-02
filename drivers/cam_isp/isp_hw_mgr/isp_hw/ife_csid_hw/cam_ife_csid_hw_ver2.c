@@ -5950,6 +5950,69 @@ static int cam_ife_csid_init_config_update(
 	return 0;
 }
 
+static int cam_ife_csid_ver2_get_csid_cid_info(struct cam_ife_csid_ver2_hw *csid_hw,
+	void *cmd_args)
+{
+	struct cam_isp_resource_node                *res = NULL;
+	struct cam_ife_csid_ver2_path_cfg           *path_cfg = NULL;
+	struct cam_isp_get_csid_cid_info            *csid_cid_info;
+	struct cam_ife_csid_get_csid_cid_info_args  *csid_cid_cmd;
+	int  i, j;
+	bool vc_dt_found = false;
+
+	if (!cmd_args) {
+		CAM_ERR(CAM_ISP, "CSID :%d Invalid params", csid_hw->hw_intf->hw_idx);
+		return  -EINVAL;
+	}
+	csid_cid_cmd = (struct cam_ife_csid_get_csid_cid_info_args  *)cmd_args;
+
+	if (!csid_cid_cmd->data) {
+		CAM_ERR(CAM_ISP, "CSID :%d Invalid params", csid_hw->hw_intf->hw_idx);
+		return  -EINVAL;
+	}
+
+	res = (struct cam_isp_resource_node *) csid_cid_cmd->res;
+	path_cfg = (struct cam_ife_csid_ver2_path_cfg *)res->res_priv;
+	csid_cid_info = (struct cam_isp_get_csid_cid_info   *)csid_cid_cmd->data;
+
+	/* CSID driver stores the phy selection data always with phy no +1 */
+	if ((csid_hw->rx_cfg.phy_sel -1) != csid_cid_info->phy_no) {
+		CAM_ERR(CAM_ISP, "CSID:%d request phy no:%d  is not matching with CSID HW phy no :%d",
+			csid_hw->hw_intf->hw_idx, csid_cid_info->phy_no, (csid_hw->rx_cfg.phy_sel-1));
+		return  -EINVAL;
+	}
+
+	for (i = 0; i < csid_cid_info->num_vc_dt; i++) {
+		for ( j =0 ; j < path_cfg->path_vcdt.num_vc_dt; j++) {
+			if ((csid_cid_info->vc_dt_cid[i].vc == path_cfg->path_vcdt.vc_dt[j].vc) &&
+				(csid_cid_info->vc_dt_cid[i].dt == path_cfg->path_vcdt.vc_dt[j].dt)) {
+				csid_cid_info->vc_dt_cid[i].cid = path_cfg->cid;
+				csid_cid_info->csid_hw_no = csid_hw->hw_intf->hw_idx;
+				vc_dt_found = true;
+				break;
+			}
+		}
+
+		if (vc_dt_found)
+			break;
+	}
+
+	if (i == csid_cid_info->num_vc_dt) {
+		CAM_ERR(CAM_ISP, "CSID:%d given num vc_dt:%d vc[0]:%d dt[0]:%d vc[1]:%d dt[1]:%d vc[2]:%d dt[2]:%d vc[3]:%d dt[3]:%d match not found for resource VC:%d DT:%d",
+			csid_hw->hw_intf->hw_idx, csid_cid_info->num_vc_dt,
+			csid_cid_info->vc_dt_cid[0].vc, csid_cid_info->vc_dt_cid[0].dt,
+			csid_cid_info->vc_dt_cid[1].vc, csid_cid_info->vc_dt_cid[1].dt,
+			csid_cid_info->vc_dt_cid[2].vc, csid_cid_info->vc_dt_cid[2].dt,
+			csid_cid_info->vc_dt_cid[3].vc, csid_cid_info->vc_dt_cid[3].dt,
+			path_cfg->path_vcdt.vc_dt[0].vc, path_cfg->path_vcdt.vc_dt[0].dt);
+
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+
 static int cam_ife_csid_ver2_process_cmd(void *hw_priv,
 	uint32_t cmd_type, void *cmd_args, uint32_t arg_size)
 {
@@ -6041,6 +6104,9 @@ static int cam_ife_csid_ver2_process_cmd(void *hw_priv,
 		break;
 	case CAM_ISP_HW_CMD_WAIT_LAST_STREAM_SOF:
 		rc = cam_ife_csid_ver2_wait_last_stream_sof(csid_hw, cmd_args);
+		break;
+	case CAM_ISP_HW_CMD_GET_CSID_CID_INFO:
+		rc = cam_ife_csid_ver2_get_csid_cid_info(csid_hw, cmd_args);
 		break;
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d unsupported cmd:%d",

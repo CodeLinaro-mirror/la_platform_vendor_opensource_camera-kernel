@@ -3865,6 +3865,73 @@ end:
 }
 
 /**
+ * cam_req_mgr_no_crm_notify_subdev()
+ *
+ * @brief        : SOF received from device, sends trigger through workqueue
+ * @trigger_point: apply trigger point SOF or EOF
+ * @apply_info   : contains information about frame_id, link etc.
+ *
+ * @return  : 0 on success
+ *
+ */
+static int cam_req_mgr_no_crm_notify_devices(u32 device_id_mask,
+	struct cam_req_mgr_no_crm_notify_device * notify_dev)
+{
+	int rc = -EINVAL, i;
+	struct cam_req_mgr_core_link *link;
+	struct cam_req_mgr_connected_device *dev;
+	uint32_t caller_dev_hdl;
+
+	link = cam_get_link_priv(notify_dev->link_hdl);
+	if (!link) {
+		CAM_ERR(CAM_CRM, "Failed to get link priv from %08x", notify_dev->link_hdl);
+		goto end;
+	}
+
+	if (!notify_dev->dev_hdl) {
+		CAM_ERR(CAM_CRM, "invalid caller dev hdl link hdl:%x caller dev_hdl:%x",
+			notify_dev->link_hdl, notify_dev->dev_hdl);
+		goto end;
+	}
+
+	caller_dev_hdl = notify_dev->dev_hdl;
+	for (i = 0; i < link->num_devs; i++) {
+		dev = &link->l_dev[i];
+		if (dev->dev_info.dev_hdl == caller_dev_hdl) {
+			CAM_DBG(CAM_CRM, "skip as notify device hdl does not need to handle \"%s\"",
+					dev->dev_info.name);
+			continue;
+		}
+
+		/* send notification for device id mask devices */
+		if (dev->dev_info.dev_id  & device_id_mask) {
+			if (!dev->no_crm_ops->notify_dev) {
+				CAM_ERR(CAM_CRM,
+				"Failed notify sub device  for \"%s\" device_id 0x%x",
+				dev->dev_info.name, device_id_mask);
+				continue;
+			}
+
+			notify_dev->dev_hdl =  dev->dev_hdl;
+			CAM_DBG(CAM_CRM, "Calling sub dev for \"%s\" link_hdl %x dev_hdl %x cmd:%d",
+				dev->dev_info.name, notify_dev->link_hdl, notify_dev->dev_hdl,
+				notify_dev->command);
+
+			rc = dev->no_crm_ops->notify_dev(dev->dev_info.dev_hdl, notify_dev);
+			if (rc) {
+				CAM_ERR(CAM_CRM,
+					"Failed notify sub dev for \"%s\" link_hdl %x dev_hdl %x",
+					dev->dev_info.name, notify_dev->link_hdl, dev->dev_hdl);
+				rc = 0;
+			}
+		}
+	}
+
+end:
+	return rc;
+}
+
+/**
  * cam_req_mgr_cb_notify_trigger()
  *
  * @brief   : SOF received from device, sends trigger through workqueue
@@ -3999,14 +4066,15 @@ end:
 }
 
 static struct cam_req_mgr_crm_cb cam_req_mgr_ops = {
-	.notify_trigger  = cam_req_mgr_cb_notify_trigger,
-	.notify_err      = cam_req_mgr_cb_notify_err,
-	.add_req         = cam_req_mgr_cb_add_req,
-	.notify_timer    = cam_req_mgr_cb_notify_timer,
-	.notify_stop     = cam_req_mgr_cb_notify_stop,
-	.no_crm_trigger  = cam_req_mgr_no_crm_trigger_cb,
-	.no_crm_pause    = cam_req_mgr_no_crm_pause_cb,
-	.no_crm_resume   = cam_req_mgr_no_crm_resume_cb,
+	.notify_trigger     = cam_req_mgr_cb_notify_trigger,
+	.notify_err         = cam_req_mgr_cb_notify_err,
+	.add_req            = cam_req_mgr_cb_add_req,
+	.notify_timer       = cam_req_mgr_cb_notify_timer,
+	.notify_stop        = cam_req_mgr_cb_notify_stop,
+	.no_crm_trigger     = cam_req_mgr_no_crm_trigger_cb,
+	.no_crm_pause       = cam_req_mgr_no_crm_pause_cb,
+	.no_crm_resume      = cam_req_mgr_no_crm_resume_cb,
+	.no_crm_notify_dev  = cam_req_mgr_no_crm_notify_devices,
 };
 
 /**

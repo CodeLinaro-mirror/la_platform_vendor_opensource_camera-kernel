@@ -16391,6 +16391,40 @@ static int cam_ife_mgr_update_path_mask(
 		return cam_ife_mgr_update_path_mask_streaming(ctx, isp_hw_cmd_args);
 }
 
+static int cam_ife_hw_mgr_get_csid_cid_info(
+	struct cam_ife_hw_mgr_ctx *ctx,
+	struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
+{
+	struct cam_isp_hw_mgr_res                  *hw_mgr_res;
+	struct cam_isp_resource_node               *isp_res;
+	struct cam_hw_intf                         *hw_intf;
+	struct cam_ife_csid_get_csid_cid_info_args  csid_cid_get_info_cmd;
+	uint32_t i;
+	int rc = 0;
+
+	list_for_each_entry(hw_mgr_res, &ctx->res_list_ife_csid, list) {
+		for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
+			if (!hw_mgr_res->hw_res[i])
+				continue;
+
+			isp_res = hw_mgr_res->hw_res[i];
+			hw_intf = isp_res->hw_intf;
+			csid_cid_get_info_cmd.res = isp_res;
+			csid_cid_get_info_cmd.data = (void*) isp_hw_cmd_args->cmd_data;
+			rc = hw_intf->hw_ops.process_cmd(
+				hw_intf->hw_priv,
+				CAM_ISP_HW_CMD_GET_CSID_CID_INFO,
+				&csid_cid_get_info_cmd,
+				sizeof(struct cam_ife_csid_get_csid_cid_info_args));
+			if (rc)
+				CAM_ERR(CAM_ISP, "ctx:%id get CSID CID info failed rc :%d",
+				ctx->ctx_index, rc);
+			break;
+		}
+	}
+	return rc;
+}
+
 static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 {
 	int rc = 0;
@@ -16525,6 +16559,9 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			break;
 		case CAM_HW_MGR_CMD_CHECK_RUP_APPLIED_REQ:
 			rc = cam_ife_hw_mgr_check_rup_applied_req(ctx, isp_hw_cmd_args);
+			break;
+		case CAM_HW_MGR_CMD_GET_CSID_CID_INFO:
+			rc = cam_ife_hw_mgr_get_csid_cid_info(ctx, isp_hw_cmd_args);
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "Invalid HW mgr command:0x%x",
