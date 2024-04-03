@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_VFE736_H_
@@ -2097,6 +2097,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe736_bus_hw_info = {
 			.mid[0]        = 34,
 			.num_wm        = 1,
 			.line_based    = 1,
+			.bufdone_shift = 2,
 			.wm_idx        = {
 				24,
 			},
@@ -2113,6 +2114,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe736_bus_hw_info = {
 			.mid[0]        = 35,
 			.num_wm        = 1,
 			.line_based    = 1,
+			.bufdone_shift = 2,
 			.wm_idx        = {
 				25,
 			},
@@ -2129,6 +2131,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe736_bus_hw_info = {
 			.mid[0]        = 36,
 			.num_wm        = 1,
 			.line_based    = 1,
+			.bufdone_shift = 2,
 			.wm_idx        = {
 				26,
 			},
@@ -2402,6 +2405,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe736_bus_hw_info = {
 			.mid[0]        = 33,
 			.mid[1]        = 34,
 			.num_wm        = 1,
+			.bufdone_shift = 2,
 			.wm_idx        = {
 				21,
 			},
@@ -2447,6 +2451,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe736_bus_hw_info = {
 			.source_group  = CAM_VFE_BUS_VER3_SRC_GRP_1,
 			.mid[0]        = 35,
 			.num_wm        = 1,
+			.bufdone_shift = 2,
 			.wm_idx        = {
 				22,
 			},
