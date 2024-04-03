@@ -3225,6 +3225,14 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_state(
 				struct cam_ctx_request, list);
 		req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 
+		if ((!req_isp->bubble_detected) && (ctx_isp->active_req_cnt > 1)) {
+			req = list_last_entry(&ctx->active_req_list, struct cam_ctx_request, list);
+			req_isp = (struct cam_isp_ctx_req *) req->req_priv;
+			CAM_WARN(CAM_ISP,
+				"Two req in active list, check second req %lld ctx_id: %d",
+				req->request_id, ctx->ctx_id);
+		}
+
 		if (req_isp->bubble_detected) {
 			req_isp->num_acked = 0;
 			req_isp->bubble_detected = false;
