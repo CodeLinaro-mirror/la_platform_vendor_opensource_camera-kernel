@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CPASTOP_V736_100_H_
@@ -109,7 +109,7 @@ static struct cam_camnoc_irq_err
 	},
 	{
 		.irq_type = CAM_CAMNOC_HW_IRQ_IPE0_UBWC_DECODE_ERROR,
-		.enable = true,
+		.enable = false,
 		.sbm_port = 0x4, /* SBM_FAULTINSTATUS0_LOW_PORT2_MASK */
 		.err_enable = {
 			.access_type = CAM_REG_TYPE_READ_WRITE,
