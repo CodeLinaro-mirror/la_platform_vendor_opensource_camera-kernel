@@ -1247,15 +1247,6 @@ int32_t cam_csiphy_config_dev(struct csiphy_device *csiphy_dev,
 				csiphy_common_reg->delay + 5);
 	}
 
-	if (csiphy_dev->csiphy_info[index].csiphy_3phase) {
-		rc = cam_csiphy_cphy_data_rate_config(csiphy_dev, index);
-		if (rc) {
-			CAM_ERR(CAM_CSIPHY,
-				"Date rate specific configuration failed rc: %d",
-				rc);
-			return rc;
-		}
-	}
 
 	intermediate_var = csiphy_dev->csiphy_info[index].settle_time;
 	do_div(intermediate_var, 200000000);
@@ -1304,6 +1295,16 @@ int32_t cam_csiphy_config_dev(struct csiphy_device *csiphy_dev,
 		}
 	}
 	csiphy_dev->lanes_enabled = lane_enable;
+	if (csiphy_dev->csiphy_info[index].csiphy_3phase) {
+		rc = cam_csiphy_cphy_data_rate_config(csiphy_dev, index);
+		if (rc) {
+			CAM_ERR(CAM_CSIPHY,
+				"Date rate specific configuration failed rc: %d",
+				rc);
+			return rc;
+		}
+	}
+
 
 	if (csiphy_dev->preamble_enable)
 		__cam_csiphy_prgm_bist_reg(csiphy_dev, is_3phase);
