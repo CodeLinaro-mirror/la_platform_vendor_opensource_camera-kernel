@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_DEFS_H__
@@ -281,6 +281,10 @@ struct cam_iommu_handle {
 /* synx test cmd types */
 #define CAM_SYNX_TEST_CMD_TYPE_CORE_CTRL       1
 #define CAM_SYNX_TEST_CMD_TYPE_SYNX_CMD        2
+
+/* Macros for populating supported fencing modes */
+#define CAM_HW_FENCE_FRAME_BASED    BIT(0)
+#define CAM_HW_FENCE_SLICE_BASED    BIT(1)
 
 /**
  * struct cam_plane_cfg - Plane configuration info
