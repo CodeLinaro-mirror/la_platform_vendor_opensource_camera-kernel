@@ -9303,6 +9303,7 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 		ctx->cdm_userdata.support_cdm_cb_reg_dump = TRUE;
 
 	if (cfg->init_packet || hw_update_data->mup_en ||
+		g_ife_hw_mgr.debug_cfg.per_req_reg_dump ||
 		(ctx->ctx_config & CAM_IFE_CTX_CFG_SW_SYNC_ON) || cfg->wait_for_request_apply)
 		is_genirq_required = true;
 	else
