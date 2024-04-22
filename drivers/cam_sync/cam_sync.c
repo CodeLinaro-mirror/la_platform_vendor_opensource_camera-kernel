@@ -18,7 +18,7 @@
 #include "cam_common_util.h"
 #include "cam_compat.h"
 #include "camera_main.h"
-#include "cam_req_mgr_workq.h"
+#include "cam_req_mgr_worker_wrapper.h"
 
 struct sync_device *sync_dev;
 struct sync_uid_info sync_uid_access;
@@ -26,7 +26,7 @@ struct sync_uid_info sync_uid_access;
 
 /*
  * Flag to determine whether to enqueue cb of a
- * signaled fence onto the workq or invoke it
+ * signaled fence onto the worker or invoke it
  * directly in the same context
  */
 static bool trigger_cb_without_switch;
@@ -110,6 +110,7 @@ int cam_sync_register_callback(sync_callback cb_func,
 	uint32_t sync_obj, uid_validity;
 	uint16_t sync_uid;
 	int rc, sync_manager_idx;
+	struct crm_worker_task *task = NULL;
 
 	sync_obj = (uint32_t)sync_var & sync_uid_access.fenceIdMask;
 	sync_uid = (uint32_t)sync_var >> sync_uid_access.uidShift;
@@ -171,16 +172,15 @@ int cam_sync_register_callback(sync_callback cb_func,
 			sync_cb->callback_func = cb_func;
 			sync_cb->cb_data = userdata;
 			sync_cb->sync_obj = sync_var;
-			INIT_WORK(&sync_cb->cb_dispatch_work,
-				cam_sync_util_cb_dispatch);
 			sync_cb->status = row->state;
 			CAM_DBG(CAM_SYNC, "Enqueue callback for sync object:%s[%d], sync_uid: %d",
 				row->name,
 				sync_cb->sync_obj,
 				sync_uid);
-			sync_cb->workq_scheduled_ts = ktime_get();
-			queue_work(sync_dev->work_queue[sync_manager_idx],
-				&sync_cb->cb_dispatch_work);
+			task = cam_req_mgr_worker_get_task(sync_dev->worker[sync_manager_idx]);
+			task->payload = sync_cb;
+			task->process_cb = cam_sync_util_cb_dispatch;
+			cam_req_mgr_worker_enqueue_task(task, NULL, CRM_TASK_PRIORITY_0);
 			spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 		}
 
@@ -190,7 +190,6 @@ int cam_sync_register_callback(sync_callback cb_func,
 	sync_cb->callback_func = cb_func;
 	sync_cb->cb_data = userdata;
 	sync_cb->sync_obj = sync_var;
-	INIT_WORK(&sync_cb->cb_dispatch_work, cam_sync_util_cb_dispatch);
 	list_add_tail(&sync_cb->list, &row->callback_list);
 	spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 
@@ -1133,7 +1132,7 @@ static int cam_sync_close(struct file *filep)
 	 * Flush the work queue to wait for pending signal callbacks to
 	 * finish
 	 */
-	flush_workqueue(sync_dev->work_queue[sync_manager_idx]);
+	cam_req_mgr_worker_flush(sync_dev->worker[sync_manager_idx]);
 
 	/*
 	 * Now that all callbacks worker threads have finished,
@@ -1489,12 +1488,12 @@ static int cam_sync_component_bind(struct device *dev,
 	video_set_drvdata(sync_dev->vdev, sync_dev);
 
 	for (idx = 0; idx < CAM_SYNC_MAX_SYNC_MANAGER; idx++) {
-		sync_dev->work_queue[idx] = alloc_workqueue(CAM_SYNC_WORKQUEUE_NAME,
-			WQ_HIGHPRI | WQ_UNBOUND, 1);
+		cam_req_mgr_worker_create("sync_worker", 5,
+			&sync_dev->worker[idx], CRM_WORKER_USAGE_NON_IRQ, 0);
 
-		if (!sync_dev->work_queue[idx]) {
+		if (!sync_dev->worker[idx]) {
 			CAM_ERR(CAM_SYNC,
-				"Error: high priority work queue creation failed");
+				"Error: high priority worker creation failed");
 			rc = -ENOMEM;
 			goto workqueue_create_fail;
 		}
@@ -1523,7 +1522,7 @@ static int cam_sync_component_bind(struct device *dev,
 
 workqueue_create_fail:
 	for (idx -= 1; idx >= 0; idx--)
-		destroy_workqueue(sync_dev->work_queue[idx]);
+		cam_req_mgr_worker_destroy(&sync_dev->worker[idx]);
 v4l2_fail:
 	v4l2_device_unregister(sync_dev->vdev->v4l2_dev);
 register_fail:
@@ -1555,7 +1554,7 @@ static void cam_sync_component_unbind(struct device *dev,
 		spin_lock_init(&sync_dev->row_spinlocks[j]);
 
 	for (j = 0; j < CAM_SYNC_MAX_SYNC_MANAGER; j++)
-		destroy_workqueue(sync_dev->work_queue[j]);
+		cam_req_mgr_worker_destroy(&sync_dev->worker[j]);
 	kfree(sync_dev);
 	sync_dev = NULL;
 }

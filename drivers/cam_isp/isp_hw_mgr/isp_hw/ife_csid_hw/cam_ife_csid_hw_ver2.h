@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_IFE_CSID_HW_VER2_H_
@@ -563,7 +563,7 @@ struct cam_ife_csid_token_info {
  * @clk_rate:                 clk rate for csid hw
  * @res_type:                 cur res type for active hw
  * @dual_core_idx:            core idx in case of dual csid
- * @workq:                    Workq for irq events
+ * @worker:                   Worker for irq events
  * @reset_irq_handle:         Reset irq handle
  * @buf_done_irq_handle:      Buf done irq handle
  * @sync_mode:                Master/Slave modes
@@ -605,7 +605,7 @@ struct cam_ife_csid_ver2_hw {
 	uint64_t                               clk_rate;
 	uint32_t                               res_type;
 	uint32_t                               dual_core_idx;
-	void                                  *workq;
+	void                                  *worker;
 	int                                    reset_irq_handle;
 	int                                    buf_done_irq_handle;
 	int                                    top_err_irq_handle;
