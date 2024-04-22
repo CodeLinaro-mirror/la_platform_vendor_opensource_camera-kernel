@@ -825,15 +825,8 @@ static int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 	struct cam_isp_sensor_group_config       *sensor_grp_config = NULL;
 	struct cam_isp_stream_grp_config         *stream_grp_cfg;
 
-	if (atomic_read(&g_ife_hw_mgr.active_ctx_cnt)) {
-		CAM_ERR(CAM_ISP,
-			"Cannot update sensor_data as there are active ife ctx_cnt :%d",
-			atomic_read(&g_ife_hw_mgr.active_ctx_cnt));
-		goto end;
-	} else {
-		if (g_ife_sns_grp_cfg.num_grp_cfg)
-			cam_ife_mr_clear_sensor_stream_cfg();
-	}
+	if (g_ife_sns_grp_cfg.num_grp_cfg)
+		cam_ife_mr_clear_sensor_stream_cfg();
 
 	sensor_grp_config = kzalloc(sizeof(struct cam_isp_sensor_group_config), GFP_KERNEL);
 	if (!sensor_grp_config) {
@@ -951,7 +944,7 @@ static int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 	}
 	cam_ife_mgr_dump_sensor_grp_stream_cfg();
 	kfree(sensor_grp_config);
-end:
+
 	return rc;
 err:
 	kfree(sensor_grp_config);
