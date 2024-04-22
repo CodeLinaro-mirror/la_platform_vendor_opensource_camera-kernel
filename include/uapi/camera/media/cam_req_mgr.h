@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_LINUX_CAM_REQ_MGR_H
@@ -327,6 +327,30 @@ struct cam_req_mgr_link_control {
 };
 
 /**
+ * struct cam_req_mgr_thread_prop_control
+ * @version:       Version
+ * @session_hdl:   Identifier for session
+ * @link_hdl:      Identifier for link
+ * @dev_hdl:       device handle
+ * @policy:        Scheduling Policy ie: SCHED_FIFO, SCHED_RR, SCHED_OTHER
+ * @priority:      Scheduling Priority for realtime scheduling policy
+ * @nice:          nice value for scheduling in CFS policy
+ * @affinity:      Core Affinity mask
+ *
+ * @opcode: CAM_REQ_MGR_THREAD_PROP_CONTROL
+ */
+struct cam_req_mgr_thread_prop_control {
+	__u32                          version;
+	__s32                          session_hdl;
+	__s32                          link_hdl;
+	__s32                          dev_hdl;
+	__u32                          policy;
+	__s32                          priority;
+	__s32                          nice;
+	__u32                          affinity;
+};
+
+/**
  * cam_req_mgr specific opcode ids
  */
 #define CAM_REQ_MGR_CREATE_DEV_NODES            (CAM_COMMON_OPCODE_MAX + 1)
@@ -347,6 +371,7 @@ struct cam_req_mgr_link_control {
 #define CAM_REQ_MGR_LINK_V3                     (CAM_COMMON_OPCODE_MAX + 16)
 #define CAM_REQ_MGR_EXIT_DQ_THREAD              (CAM_COMMON_OPCODE_MAX + 17)
 #define CAM_REQ_MGR_SYNC_MODE_V2                (CAM_COMMON_OPCODE_MAX + 18)
+#define CAM_REQ_MGR_THREAD_PROP_CONTROL         (CAM_COMMON_OPCODE_MAX + 19)
 
 /* end of cam_req_mgr opcodes */
 
