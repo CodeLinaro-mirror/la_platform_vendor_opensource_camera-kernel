@@ -199,7 +199,7 @@ struct cam_signalable_info {
  * @sync_table            : Table of all sync objects
  * @row_spinlocks         : Spinlock array, one for each row in the table
  * @dentry                : Debugfs entry
- * @worker                : Worker queue used for dispatching kernel callbacks
+ * @worker                : Worker used for dispatching kernel callbacks
  * @cam_sync_eventq       : Event queue used to dispatch user payloads to user space
  * @bitmap                : Bitmap representation of all sync objects
  * @sync_manager_id_mask  : Bit mask to get sync manager idx
@@ -213,7 +213,7 @@ struct sync_device {
 	struct sync_table_row *sync_table;
 	spinlock_t row_spinlocks[CAM_SYNC_MAX_OBJS];
 	struct dentry *dentry;
-	struct cam_req_mgr_core_worker *worker[CAM_SYNC_MAX_SYNC_MANAGER];
+	struct cam_req_mgr_core_worker *worker;
 	struct v4l2_fh *cam_sync_eventq[CAM_SYNC_MAX_SYNC_MANAGER];
 	spinlock_t cam_sync_eventq_lock[CAM_SYNC_MAX_SYNC_MANAGER];
 	DECLARE_BITMAP(bitmap, CAM_SYNC_MAX_OBJS);
