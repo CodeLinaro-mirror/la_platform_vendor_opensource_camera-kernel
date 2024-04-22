@@ -12,6 +12,8 @@
 #include "camera_main.h"
 #include "cam_compat.h"
 
+#define WITH_NO_CRM_MASK  0x1
+
 static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 		void *arg, struct cam_flash_private_soc *soc_private)
 {
@@ -59,12 +61,22 @@ static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 			goto release_mutex;
 		}
 
+		fctrl->last_applied_req = 0;
+		fctrl->pause_state = false;
 		bridge_params.session_hdl = flash_acq_dev.session_handle;
 		bridge_params.ops = &fctrl->bridge_intf.ops;
 		bridge_params.v4l2_sub_dev_flag = 0;
 		bridge_params.media_entity_flag = 0;
 		bridge_params.priv = fctrl;
 		bridge_params.dev_id = CAM_FLASH;
+		fctrl->bridge_intf.enable_crm = 1;
+
+		/* add crm callbacks only in case of with crm is enabled */
+		if (flash_acq_dev.info_handle & WITH_NO_CRM_MASK) {
+			fctrl->bridge_intf.enable_crm = 0;
+			bridge_params.no_crm_ops = &fctrl->bridge_intf.no_crm_ops;
+			bridge_params.no_crm_priv = fctrl;
+		}
 
 		flash_acq_dev.device_handle =
 			cam_create_device_hdl(&bridge_params);
@@ -89,8 +101,9 @@ static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 		}
 		fctrl->flash_state = CAM_FLASH_STATE_ACQUIRE;
 
-		CAM_INFO(CAM_FLASH, "CAM_ACQUIRE_DEV for dev_hdl: 0x%x",
-			fctrl->bridge_intf.device_hdl);
+		CAM_INFO(CAM_FLASH, "CAM_ACQUIRE_DEV for dev_hdl: 0x%x CRM[%d]",
+			fctrl->bridge_intf.device_hdl,
+			fctrl->bridge_intf.enable_crm);
 		break;
 	}
 	case CAM_RELEASE_DEV: {
@@ -480,12 +493,16 @@ static int cam_flash_component_bind(struct device *dev,
 		fctrl->func_tbl.apply_setting = cam_flash_i2c_apply_setting;
 		fctrl->func_tbl.power_ops = cam_flash_i2c_power_ops;
 		fctrl->func_tbl.flush_req = cam_flash_i2c_flush_request;
+		fctrl->func_tbl.apply_settings_no_crm =
+				cam_flash_i2c_apply_setting;
 	} else {
 		/* PMIC Flash */
 		fctrl->func_tbl.parser = cam_flash_pmic_pkt_parser;
 		fctrl->func_tbl.apply_setting = cam_flash_pmic_apply_setting;
 		fctrl->func_tbl.power_ops = NULL;
 		fctrl->func_tbl.flush_req = cam_flash_pmic_flush_request;
+		fctrl->func_tbl.apply_settings_no_crm =
+				cam_flash_pmic_apply_setting;
 	}
 
 	rc = cam_flash_init_subdev(fctrl);
@@ -502,6 +519,10 @@ static int cam_flash_component_bind(struct device *dev,
 	fctrl->bridge_intf.ops.link_setup = cam_flash_establish_link;
 	fctrl->bridge_intf.ops.apply_req = cam_flash_apply_request;
 	fctrl->bridge_intf.ops.flush_req = cam_flash_flush_request;
+	fctrl->bridge_intf.no_crm_ops.handshake = cam_flash_no_crm_handshake;
+	fctrl->bridge_intf.no_crm_ops.apply_req = cam_flash_no_crm_apply;
+	fctrl->bridge_intf.no_crm_ops.pause_cb  = cam_flash_no_crm_pause_apply;
+	fctrl->bridge_intf.no_crm_ops.resume_cb = cam_flash_no_crm_resume_apply;
 	fctrl->last_flush_req = 0;
 
 	mutex_init(&(fctrl->flash_mutex));
