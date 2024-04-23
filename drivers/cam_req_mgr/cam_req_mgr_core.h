@@ -154,6 +154,18 @@ enum cam_req_mgr_link_state {
 };
 
 /**
+ * enum cam_req_mgr_ul_link_state
+ * State machine for life cycle of link in ultra lite path
+ * IDLE       : link initialized but not ready yet
+ * READY      : link is ready for use
+ */
+enum cam_req_mgr_ul_link_state {
+	CAM_CRM_UL_LINK_STATE_INIT,
+	CAM_CRM_UL_LINK_STATE_READY
+};
+
+
+/**
  * struct cam_req_mgr_traverse_result
  * @req_id        : Req id that is not ready
  * @pd            : pipeline delay
@@ -412,6 +424,7 @@ struct cam_req_mgr_core_link {
 	struct cam_req_mgr_timer            *watchdog;
 	struct completion                    worker_comp;
 	enum cam_req_mgr_link_state          state;
+	enum cam_req_mgr_ul_link_state       ul_state;
 	void                                *parent;
 	struct mutex                         lock;
 	struct mutex                         link_state_mutex_lock;
@@ -705,4 +718,7 @@ void cam_req_mgr_link_reset_open_cnt(int32_t link_hdl);
  * @link_hdl: handle of link
  */
 int32_t cam_req_mgr_link_get_additional_timeout(int32_t link_hdl);
+
+int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd);
+
 #endif
