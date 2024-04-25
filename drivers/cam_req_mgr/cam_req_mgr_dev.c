@@ -27,6 +27,7 @@
 #include "cam_mem_mgr.h"
 #include "cam_debug_util.h"
 #include "cam_common_util.h"
+#include "cam_compat.h"
 
 #define CAM_REQ_MGR_EVENT_MAX 30
 
@@ -704,7 +705,7 @@ EXPORT_SYMBOL(cam_req_mgr_is_shutdown);
 int cam_register_subdev(struct cam_subdev *csd)
 {
 	struct v4l2_subdev *sd;
-	int rc;
+	int rc, ret;
 
 	if (g_dev.state != true) {
 		CAM_ERR(CAM_CRM, "camera root device not ready yet");
@@ -720,7 +721,11 @@ int cam_register_subdev(struct cam_subdev *csd)
 	sd = &csd->sd;
 	v4l2_subdev_init(sd, csd->ops);
 	sd->internal_ops = csd->internal_ops;
-	snprintf(sd->name, V4L2_SUBDEV_NAME_SIZE, "%s", csd->name);
+	ret = snprintf(sd->name, CAM_SUBDEV_NAME_SIZE, "%s", csd->name);
+	if (ret >= CAM_SUBDEV_NAME_SIZE) {
+		CAM_WARN(CAM_CRM, "Subdevice name truncated: %s (length: %d, max: %d)",
+		csd->name, ret, CAM_SUBDEV_NAME_SIZE - 1);
+		}
 	v4l2_set_subdevdata(sd, csd->token);
 
 	sd->flags = csd->sd_flags;
