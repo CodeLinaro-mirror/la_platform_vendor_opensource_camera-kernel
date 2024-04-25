@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_COMPAT_H_
@@ -33,6 +33,23 @@ MODULE_IMPORT_NS(DMA_BUF);
 #include <linux/IClientEnv.h>
 #include <linux/ITrustedCameraDriver.h>
 #include <linux/CTrustedCameraDriver.h>
+#endif
+
+#if IS_REACHABLE(CONFIG_INTERCONNECT_QCOM)
+#include <linux/interconnect.h>
+#endif
+
+#if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
+#ifdef CONFIG_ARCH_QTI_VM
+#include <linux/dma-heap.h>
+#include <linux/qcom_tui_heap.h>
+#endif
+#endif
+
+#if (KERNEL_VERSION(6, 7, 0) <= LINUX_VERSION_CODE)
+#define CAM_SUBDEV_NAME_SIZE 32
+#else
+#define CAM_SUBDEV_NAME_SIZE V4L2_SUBDEV_NAME_SIZE
 #endif
 
 #define IS_CSF25(x, y) ((((x) == 2) && ((y) == 5)) ? 1 : 0)

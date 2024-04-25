@@ -890,7 +890,7 @@ EXPORT_SYMBOL(cam_req_mgr_is_shutdown);
 int cam_register_subdev(struct cam_subdev *csd)
 {
 	struct v4l2_subdev *sd;
-	int rc;
+	int csd_name_len, rc;
 
 	if (!g_dev.state) {
 		CAM_DBG(CAM_CRM, "camera root device not ready yet");
@@ -907,7 +907,15 @@ int cam_register_subdev(struct cam_subdev *csd)
 	sd = &csd->sd;
 	v4l2_subdev_init(sd, csd->ops);
 	sd->internal_ops = csd->internal_ops;
-	snprintf(sd->name, V4L2_SUBDEV_NAME_SIZE, "%s", csd->name);
+	csd_name_len = strlen(csd->name);
+	if (csd_name_len < CAM_SUBDEV_NAME_SIZE) {
+		snprintf(sd->name, CAM_SUBDEV_NAME_SIZE, "%s", csd->name);
+	} else {
+		CAM_ERR(CAM_CRM, "Subdevice Name %s to big %d <= %d",
+			csd->name, CAM_SUBDEV_NAME_SIZE,
+			csd_name_len);
+		return -EINVAL;
+	}
 	v4l2_set_subdevdata(sd, csd->token);
 
 	sd->flags = csd->sd_flags;
