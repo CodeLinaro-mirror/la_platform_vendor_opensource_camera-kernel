@@ -277,6 +277,18 @@ int cam_isp_add_io_buffers(
 	bool                                     need_cpu_addr,
 	struct cam_isp_foveation_info           *foveation_info);
 
+int cam_isp_ul_parse_io_config(struct cam_isp_ctx_ul_data *ul_data,
+	struct cam_packet                       *packet,
+	void                                    *priv,
+	int                                      iommu_hdl,
+	int                                      sec_iommu_hdl,
+	uint32_t                                 out_base,
+	uint32_t                                 out_max,
+	struct cam_isp_hw_mgr_res               *res_list_isp_out,
+	uint32_t                                 base_idx,
+	bool                                     per_port_enable,
+	cam_hw_get_virtual_rdi_mapping_cb_func   virtual_rdi_mapping_cb);
+
 /*
  * cam_isp_add_reg_update()
  *
