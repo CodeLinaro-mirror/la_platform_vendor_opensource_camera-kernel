@@ -198,6 +198,7 @@
 #define CAM_ISP_AEB_MODE_EN                    BIT(7)
 #define CAM_ISP_INDEPENDENT_CRM                BIT(8)
 #define CAM_ISP_SLAVE_METADATA_EN              BIT(9)
+#define CAM_ISP_UL_PATH                        BIT(10)
 
 #define CAM_ISP_ACQUIRE_TYPE_NONE              0
 #define CAM_ISP_ACQUIRE_TYPE_VIRTUAL           1

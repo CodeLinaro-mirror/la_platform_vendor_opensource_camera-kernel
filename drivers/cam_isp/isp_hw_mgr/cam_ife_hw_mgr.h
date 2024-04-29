@@ -185,6 +185,7 @@ struct cam_ife_hw_mgr_sfe_info {
  * @slave_metadata_en:        Flag to indicate if metadata is enabled in RDI path
  * @per_port_en               Indicates if per port feature is enabled or not
  * @is_trigger_type           Context type trigger
+ * @is_ul_path                Ultra lite path context
  */
 struct cam_ife_hw_mgr_ctx_flags {
 	bool   ctx_in_use;
@@ -212,6 +213,7 @@ struct cam_ife_hw_mgr_ctx_flags {
 	bool   slave_metadata_en;
 	bool   per_port_en;
 	bool   is_trigger_type;
+	bool   is_ul_path;
 };
 
 /**
@@ -663,6 +665,11 @@ void cam_ife_hw_mgr_populate_regs(struct cam_ife_hw_mgr_ctx *ctx, int acquire_ty
  */
 void cam_ife_hw_mgr_populate_out_ports(struct cam_ife_hw_mgr_ctx *ctx,
 		int acquire_type, uint32_t *pkt, uint32_t *off);
+
+int cam_ife_hw_mgr_ul_setup_change_base(struct cam_isp_ctx_ul_data *ul_data,
+	void                    *priv);
+
+
 
 /**
  * cam_ife_hw_mgr_init()

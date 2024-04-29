@@ -315,6 +315,11 @@ struct cam_isp_context_event_record {
 	ktime_t                          timestamp;
 };
 
+struct cam_isp_context_ul_setting_data {
+	bool is_setting_valid;
+	struct cam_isp_ctx_req req_isp;
+};
+
 /**
  * struct cam_isp_context   -  ISP context object
  *
@@ -455,6 +460,7 @@ struct cam_isp_context {
 	uint32_t                              pkt_offset;
 	bool                                  independent_crm_en;
 	bool                                  slave_metadata_en;
+	bool                                  ul_path_en;
 	int8_t                                stream_type;
 	struct cam_req_mgr_timer              *independent_crm_sof_timer;
 	struct cam_req_mgr_core_worker         *hw_mgr_worker;
@@ -479,6 +485,8 @@ struct cam_isp_context {
 	uint64_t                               csid_rup_aup_mask;
 	uint64_t                               path_irq_mask;
 	uint32_t                               frame_drop_cnt;
+	struct cam_isp_context_ul_setting_data setting_data[MAX_SETTING_PACKETS];
+	struct cam_isp_ctx_ul_data             ul_data;
 };
 
 /**

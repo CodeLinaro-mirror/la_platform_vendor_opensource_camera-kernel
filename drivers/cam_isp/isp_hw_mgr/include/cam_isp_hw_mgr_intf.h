@@ -12,6 +12,8 @@
 #include <linux/list.h>
 #include <media/cam_isp.h>
 #include "cam_hw_mgr_intf.h"
+#include "cam_packet_util.h"
+#include "cam_isp_hw.h"
 
 /* MAX IFE instance */
 #define CAM_IFE_HW_NUM_MAX       16
@@ -45,6 +47,7 @@
 #define CAM_IFE_CTX_AEB_EN             BIT(5)
 #define CAM_IFE_CTX_INDEPENDENT_CRM_EN BIT(6)
 #define CAM_IFE_CTX_SLAVE_METADTA_EN   BIT(7)
+#define CAM_IFE_CTX_UL_PATH            BIT(8)
 
 /*
  * Maximum configuration entry size  - This is based on the
@@ -149,6 +152,37 @@ struct cam_isp_ctx_wait_last_stream_sof_info {
 	uint32_t      vc;
 	uint32_t      dt;
 	uint64_t      frame_duration;
+};
+
+struct cam_isp_ul_resource_update_entry {
+	int                            resource_type;
+	int                            buf_count;
+	struct cam_hw_update_entry     hw_update_entries[MAX_IO_PACKETS];
+	struct cam_hw_fence_map_entry  out_map_entries[MAX_IO_PACKETS];
+	int                            curr_buf_index;
+};
+
+struct cam_isp_ul_change_base_cmd {
+	bool is_valid;
+	struct cam_hw_update_entry    change_base_cmd[CAM_ISP_HW_TYPE_MAX][CAM_IFE_HW_NUM_MAX];
+};
+
+struct cam_isp_ul_rup_aup_cmd {
+	bool is_valid;
+	int num_rup_aup_cmd;
+	struct cam_hw_update_entry    rup_aup_cmd[4];
+};
+
+/**
+ * sturct cam_isp_ctx_ul_data
+*/
+struct cam_isp_ctx_ul_data {
+	struct port_pattern_period pattern_period[MAX_IO_RESOURCES];
+	int curr_index_period;
+	struct cam_kmd_buf_info    kmd_buf;
+	struct cam_isp_ul_resource_update_entry     resource_data[MAX_IO_RESOURCES];
+	struct cam_isp_ul_change_base_cmd   change_base;
+	struct cam_isp_ul_rup_aup_cmd         rup_aup_cmd;
 };
 
 /**
@@ -282,6 +316,9 @@ struct cam_isp_prepare_hw_update_data {
 	cam_hw_get_virtual_rdi_mapping_cb_func virtual_rdi_mapping_cb;
 	bool                                  per_port_enable;
 	bool                                  mup_en;
+	struct cam_isp_ctx_ul_data           *ul_data;
+	bool                                  is_ul_setup;
+	bool                                  is_ul_update;
 };
 
 
