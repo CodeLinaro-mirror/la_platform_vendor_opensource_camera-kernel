@@ -472,6 +472,7 @@ struct cam_req_mgr_no_crm_apply_request {
 	uint64_t anchor_req_id;
 	uint64_t sof_irq_ts;
 	uint64_t last_apply_req;
+	uint64_t setting_id;
 };
 
 /**

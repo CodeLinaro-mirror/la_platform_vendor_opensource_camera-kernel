@@ -3994,6 +3994,9 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd) {
 							link->l_dev[j].no_crm_ops->add_req(ul_packet->device_hdl[i], packet, port_enable_pattern_period);
 							port_enable_pattern_period = NULL;
 						}
+						memcpy(&link->setting_period_packet, &ul_packet->setting_pattern_period, sizeof(struct setting_pattern_period));
+						link->curr_seting_idx = 0;
+						link->is_setting_period_valid = true;
 					}
 				}
 			}
@@ -4028,6 +4031,9 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd) {
 					}
 				}
 			}
+			memcpy(&link->setting_period_packet, &ul_packet->setting_pattern_period, sizeof(struct setting_pattern_period));
+			link->curr_seting_idx = 0;
+			link->is_setting_period_valid = true;
 		}
 	}
 	if (ul_packet->batch_packet_type == BATCH_PACKET_TYPE_UPDATE_RETREIVE ||
@@ -4046,6 +4052,23 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd) {
 		}
 	}
 	return 0;
+}
+
+int cam_req_mgr_get_setting_id(int link_hdl, int pd) {
+	struct cam_req_mgr_core_link    *link = cam_get_link_priv(link_hdl);
+	if (!link->is_setting_period_valid)
+		return -1;
+	if (pd <= 0) {
+		CAM_ERR(CAM_ISP, "PD not valid %d", pd);
+		return -1;
+	}
+	return link->setting_period_packet.pattern[(link->curr_seting_idx + pd -1) % link->setting_period_packet.period];
+}
+
+int cam_req_mgr_increase_setting_idx(int link_hdl) {
+	struct cam_req_mgr_core_link    *link = cam_get_link_priv(link_hdl);
+	link->curr_seting_idx = (link->curr_seting_idx + 1) % link->setting_period_packet.period;
+	return link->curr_seting_idx;
 }
 
 /**
