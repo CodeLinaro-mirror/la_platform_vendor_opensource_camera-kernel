@@ -177,7 +177,7 @@ static struct cam_camnoc_specific
 	{
 		.port_type = CAM_CAMNOC_IFE_RDI_WR,
 		.port_name = "IFE_RDI_WR",
-		.enable = false,
+		.enable = true,
 		.priority_lut_low = {
 			.enable = true,
 			.access_type = CAM_REG_TYPE_READ_WRITE,
@@ -253,7 +253,7 @@ static struct cam_camnoc_specific
 	{
 		.port_type = CAM_CAMNOC_IFE_LINEAR_STATS,
 		.port_name = "IFE_LINEAR_STATS",
-		.enable = false,
+		.enable = true,
 		.priority_lut_low = {
 			.enable = true,
 			.access_type = CAM_REG_TYPE_READ_WRITE,
@@ -329,7 +329,7 @@ static struct cam_camnoc_specific
 	{
 		.port_type = CAM_CAMNOC_SFE_RD,
 		.port_name = "SFE_RD",
-		.enable = false,
+		.enable = true,
 		.priority_lut_low = {
 			.enable = false,
 			.access_type = CAM_REG_TYPE_READ_WRITE,
@@ -398,7 +398,7 @@ static struct cam_camnoc_specific
 	{
 		.port_type = CAM_CAMNOC_IPE_WR,
 		.port_name = "IPE_WR",
-		.enable = false,
+		.enable = true,
 		.priority_lut_low = {
 			.enable = true,
 			.access_type = CAM_REG_TYPE_READ_WRITE,
@@ -469,7 +469,7 @@ static struct cam_camnoc_specific
 	{
 		.port_type = CAM_CAMNOC_IPE0_RD,
 		.port_name = "IPE0_RD",
-		.enable = false,
+		.enable = true,
 		.priority_lut_low = {
 			.enable = false,
 			.access_type = CAM_REG_TYPE_READ_WRITE,
@@ -537,7 +537,7 @@ static struct cam_camnoc_specific
 	{
 		.port_type = CAM_CAMNOC_CDM,
 		.port_name = "CDM",
-		.enable = false,
+		.enable = true,
 		.priority_lut_low = {
 			.enable = false,
 			.access_type = CAM_REG_TYPE_READ_WRITE,
@@ -601,7 +601,7 @@ static struct cam_camnoc_specific
 	{
 		.port_type = CAM_CAMNOC_ICP,
 		.port_name = "ICP",
-		.enable = false,
+		.enable = true,
 		.flag_out_set0_low = {
 			.enable = false,
 			.access_type = CAM_REG_TYPE_WRITE,
