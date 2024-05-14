@@ -16,7 +16,8 @@
 #define MIN_PD 1
 #define DEFAULT_PD 2
 #define MAX_PD 3
-#define WITH_NO_CRM_MASK  0x1
+#define WITH_NO_CRM_MASK BIT(0)
+#define UL_MASK BIT(1)
 
 
 static int cam_sensor_update_req_mgr(
@@ -1065,11 +1066,15 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		bridge_params.no_crm_priv = NULL;
 		bridge_params.dev_id = CAM_SENSOR;
 		s_ctrl->bridge_intf.enable_crm = 1;
+		s_ctrl->is_setting_id_valid = 0;
 		/* add crm callbacks only in case of with crm is enabled */
 		if (sensor_acq_dev.info_handle & WITH_NO_CRM_MASK) {
 			s_ctrl->bridge_intf.enable_crm = 0;
 			bridge_params.no_crm_ops  = &s_ctrl->bridge_intf.no_crm_ops;
 			bridge_params.no_crm_priv = s_ctrl;
+			if (sensor_acq_dev.info_handle & UL_MASK) {
+				s_ctrl->is_setting_id_valid = 1;
+			}
 		}
 
 		/* no_hw_io_ops does'nt need to apply anything to hw */
@@ -1557,11 +1562,104 @@ static uint64_t cam_sensor_find_latest_req(
 	return latest_request_id;
 }
 
+int cam_sensor_no_crm_add_req_ul(
+	struct cam_sensor_ctrl_t* s_ctrl,
+	struct cam_packet *packet,
+	struct port_pattern_period *port_enable_pattern_period)
+{
+	int                         rc = 0;
+	struct cam_cmd_buf_desc     *cmd_desc  = NULL;
+	struct i2c_data_settings    *i2c_data = NULL;
+	struct i2c_settings_array   *i2c_reg_settings = NULL;
+	struct cam_buf_io_cfg       *io_cfg = NULL;
+	uint32_t                    *offset;
+
+	if (!packet) {
+		CAM_ERR(CAM_SENSOR, "invalid pointer");
+		return -EINVAL;
+	}
+
+	if (!s_ctrl) {
+		CAM_ERR(CAM_SENSOR, "Device data is NULL");
+		return -EINVAL;
+	}
+
+	offset   = (uint32_t *)&packet->payload;
+	offset  += packet->cmd_buf_offset / 4;
+	cmd_desc = (struct cam_cmd_buf_desc *)(offset);
+
+	CAM_DBG(CAM_SENSOR, "slot[%d] Add Req %d, num_cmd_buf %d, num_io_configs %d ",
+			s_ctrl->soc_info.index,
+			packet->header.request_id,
+			packet->num_cmd_buf, packet->num_io_configs);
+
+	i2c_data = &(s_ctrl->i2c_data);
+	if ((packet->header.op_code & 0xFFFFFF) == CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE) {
+		i2c_reg_settings = &i2c_data->per_frame[packet->header.request_id % MAX_PER_FRAME_ARRAY];
+		if (i2c_reg_settings->is_settings_valid == 1) {
+			CAM_DBG(CAM_SENSOR, "Clear old settings for request %d and update new", packet->header.request_id);
+			rc = delete_request(i2c_reg_settings);
+			if (rc < 0)
+				CAM_WARN(CAM_SENSOR, "Failed to clear old settings %d", packet->header.request_id);
+		}
+		rc = cam_sensor_i2c_command_parser(&s_ctrl->io_master_info,
+			i2c_reg_settings, cmd_desc, 1, io_cfg);
+		if (rc < 0)
+			CAM_ERR(CAM_SENSOR, "parsing I2C packet %d", rc);
+		else {
+			i2c_reg_settings->request_id = -1;
+			i2c_reg_settings->setting_id = packet->header.request_id;
+		}
+	}
+	else {
+		CAM_WARN(CAM_SENSOR, "invalid opcode %x", packet->header.op_code);
+	}
+
+	return rc;
+}
+
+static int cam_sensor_apply_settings_ul(
+	struct cam_sensor_ctrl_t *s_ctrl,
+	struct cam_req_mgr_no_crm_apply_request *notify)
+{
+	int rc                                = 0;
+	struct i2c_settings_array *i2c_set    = NULL;
+	int64_t setting_id                    = 0;
+	int offset                            = 0;
+	enum cam_sensor_packet_opcodes opcode;
+
+	if (!s_ctrl || !notify) {
+		CAM_ERR(CAM_SENSOR, "Invalid params");
+		return -EINVAL;
+	}
+
+	setting_id  = notify->setting_id;
+	offset      = setting_id % MAX_PER_FRAME_ARRAY;
+	opcode      = CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE;
+	i2c_set     = s_ctrl->i2c_data.per_frame;
+
+	if (i2c_set[offset].setting_id == setting_id) {
+		rc = cam_sensor_apply_settings(
+				s_ctrl,
+				setting_id,
+				opcode);
+		if (!rc) {
+			CAM_DBG(CAM_SENSOR, "slot [%d] apply[%llu]",
+					s_ctrl->soc_info.index,
+					setting_id);
+		} else {
+			CAM_ERR(CAM_SENSOR, "slot [%d] failed to apply setting %d",
+					s_ctrl->soc_info.index,
+					setting_id);
+		}
+	}
+	return rc;
+}
+
 static int cam_sensor_apply_settings_no_crm(
 	struct cam_sensor_ctrl_t *s_ctrl,
 	struct cam_req_mgr_no_crm_apply_request *notify)
 {
-
 	int rc                                = 0;
 	uint64_t isp_req_id                   = 0;
 	int sensor_pd                         = 2;
@@ -1714,6 +1812,26 @@ int cam_sensor_no_crm_resume_apply(
 	return rc;
 }
 
+int cam_sensor_no_crm_add_req(
+	int32_t dev_hdl,
+	struct cam_packet *packet,
+	struct port_pattern_period *port_enable_pattern_period)
+{
+	int rc = 0;
+	struct cam_sensor_ctrl_t *s_ctrl = NULL;
+
+	s_ctrl = cam_get_device_no_crm_priv(dev_hdl);
+	if (!s_ctrl) {
+		CAM_ERR(CAM_SENSOR, "Invalid private data");
+		return -EINVAL;
+	}
+
+	mutex_lock(&(s_ctrl->cam_sensor_mutex));
+	rc = cam_sensor_no_crm_add_req_ul(s_ctrl, packet, port_enable_pattern_period);
+	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
+	return rc;
+}
+
 int cam_sensor_no_crm_apply_req(
 	struct cam_req_mgr_no_crm_apply_request *apply)
 {
@@ -1727,7 +1845,11 @@ int cam_sensor_no_crm_apply_req(
 	}
 
 	mutex_lock(&(s_ctrl->cam_sensor_mutex));
-	rc = cam_sensor_apply_settings_no_crm(s_ctrl, apply);
+	if (!s_ctrl->is_setting_id_valid) {
+		rc = cam_sensor_apply_settings_no_crm(s_ctrl, apply);
+	} else {
+		rc = cam_sensor_apply_settings_ul(s_ctrl, apply);
+	}
 	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
 	return rc;
 }
@@ -1950,8 +2072,9 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 					req_id,
 					opcode);
 			rc = 0;
-		} else if (i2c_set[offset].is_settings_valid == 1 &&
-			i2c_set[offset].request_id == req_id) {
+	} else if ((i2c_set[offset].is_settings_valid == 1) &&
+			((i2c_set[offset].request_id == req_id) ||
+			(i2c_set[offset].setting_id == req_id))) {
 			list_for_each_entry(i2c_list,
 				&(i2c_set[offset].list_head), list) {
 				struct cam_sensor_i2c_reg_setting *s_array =
@@ -1978,25 +2101,27 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 				"Invalid/NOP request to apply: %lld", req_id);
 		}
 
-		/* Change the logic dynamically */
-		for (i = 0; i < MAX_PER_FRAME_ARRAY; i++) {
-			if ((req_id >=
-				i2c_set[i].request_id) &&
-				(top <
-				i2c_set[i].request_id) &&
-				(i2c_set[i].is_settings_valid
-					== 1)) {
-				del_req_id = top;
-				top = i2c_set[i].request_id;
+		if (!s_ctrl->is_setting_id_valid) {
+			/* Change the logic dynamically */
+			for (i = 0; i < MAX_PER_FRAME_ARRAY; i++) {
+				if ((req_id >=
+					i2c_set[i].request_id) &&
+					(top <
+					i2c_set[i].request_id) &&
+					(i2c_set[i].is_settings_valid
+						== 1)) {
+					del_req_id = top;
+					top = i2c_set[i].request_id;
+				}
 			}
-		}
 
-		if (top < req_id) {
-			if ((((top % MAX_PER_FRAME_ARRAY) - (req_id %
-				MAX_PER_FRAME_ARRAY)) >= BATCH_SIZE_MAX) ||
-				(((top % MAX_PER_FRAME_ARRAY) - (req_id %
-				MAX_PER_FRAME_ARRAY)) <= -BATCH_SIZE_MAX))
-				del_req_id = req_id;
+			if (top < req_id) {
+				if ((((top % MAX_PER_FRAME_ARRAY) - (req_id %
+					MAX_PER_FRAME_ARRAY)) >= BATCH_SIZE_MAX) ||
+					(((top % MAX_PER_FRAME_ARRAY) - (req_id %
+					MAX_PER_FRAME_ARRAY)) <= -BATCH_SIZE_MAX))
+					del_req_id = req_id;
+			}
 		}
 
 		if (!del_req_id)
