@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include "cam_sync_dma_fence.h"
 
@@ -646,6 +646,12 @@ void cam_dma_fence_close(void)
 
 			/* Signal and put if the dma fence is created from camera */
 			if (!row->ext_dma_fence) {
+				if (row->cb_registered_for_sync) {
+					if (!dma_fence_remove_callback(row->fence, &row->fence_cb))
+						CAM_ERR(CAM_DMA_FENCE,
+							"Failed to remove cb for dma fence seqno: %llu fd: %d",
+							row->fence->seqno, row->fd);
+				}
 				if (row->state != CAM_DMA_FENCE_STATE_SIGNALED)
 					__cam_dma_fence_signal_fence(row->fence, -EADV);
 				dma_fence_put(row->fence);

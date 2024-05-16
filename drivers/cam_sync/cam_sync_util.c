@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2018, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_sync_util.h"
@@ -9,6 +9,45 @@
 #include "cam_common_util.h"
 
 extern struct sync_uid_info sync_uid_access;
+
+int cam_sync_get_ext_fence_payload(
+	struct sync_ext_fence_info **ext_fence_payload)
+{
+	int rc = 0;
+	struct sync_ext_fence_info *tmp_payload = NULL;
+
+	*ext_fence_payload = NULL;
+
+	spin_lock_bh(&sync_dev->payload_lock);
+	if (list_empty(&sync_dev->free_ext_fence_list)) {
+		CAM_ERR(CAM_SYNC, "No free payload for associated fences");
+		rc = -EINVAL;
+		goto unlock_end;
+	}
+
+	tmp_payload = list_first_entry(&sync_dev->free_ext_fence_list,
+		struct sync_ext_fence_info, list);
+	list_del_init(&tmp_payload->list);
+	*ext_fence_payload = tmp_payload;
+
+unlock_end:
+	spin_unlock_bh(&sync_dev->payload_lock);
+	memset(tmp_payload, 0x0, sizeof(*tmp_payload));
+	return rc;
+}
+
+int cam_sync_put_ext_fence_payload(
+	struct sync_ext_fence_info **ext_fence_payload)
+{
+	struct sync_ext_fence_info *tmp_payload = *ext_fence_payload;
+
+	spin_lock_bh(&sync_dev->payload_lock);
+	list_del_init(&tmp_payload->list);
+	list_add_tail(&tmp_payload->list, &sync_dev->free_ext_fence_list);
+	spin_unlock_bh(&sync_dev->payload_lock);
+
+	return 0;
+}
 
 int cam_sync_util_send_exit_poll_event(void *fh)
 {
@@ -67,6 +106,7 @@ int cam_sync_init_row(struct sync_table_row *table,
 	atomic_set(&row->ref_cnt, 0);
 	INIT_LIST_HEAD(&row->callback_list);
 	INIT_LIST_HEAD(&row->user_payload_list);
+	INIT_LIST_HEAD(&row->ext_fences);
 	CAM_DBG(CAM_SYNC,
 		"row name:%s sync_id:%i [idx:%u] row_state:%u ",
 		row->name, row->sync_id, idx, row->state);
@@ -181,9 +221,7 @@ clean_children_info:
 	return rc;
 }
 
-int cam_sync_deinit_object(struct sync_table_row *table, uint32_t sync_var,
-	struct cam_sync_check_for_dma_release *check_for_dma_release,
-	struct cam_sync_check_for_synx_release *check_for_synx_release)
+int cam_sync_deinit_object(struct sync_table_row *table, uint32_t sync_var)
 {
 	struct sync_table_row      *row;
 	struct sync_child_info     *child_info, *temp_child;
@@ -192,8 +230,14 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t sync_var,
 	struct sync_user_payload   *upayload_info, *temp_upayload;
 	struct sync_table_row      *child_row = NULL, *parent_row = NULL;
 	struct list_head            temp_child_list, temp_parent_list;
+	struct sync_ext_fence_info *ext_fence_info, *tmp;
+	struct cam_dma_fence_release_params release_params;
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
+	struct cam_synx_obj_release_params synx_release_params;
+#endif
 	uint32_t idx, sync_id;
 	uint16_t sync_uid;
+	int rc;
 
 	idx = (uint32_t)sync_var & sync_uid_access.fenceIdMask;
 	sync_uid = (uint32_t)sync_var >> sync_uid_access.uidShift;
@@ -323,31 +367,38 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t sync_var,
 	}
 
 	/* Decrement ref cnt for imported dma fence */
-	if (test_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &row->ext_fence_mask)) {
-		cam_dma_fence_get_put_ref(false, row->dma_fence_info.dma_fence_row_idx);
 
-		/* Check if same dma fence is being released with the sync obj */
-		if (check_for_dma_release) {
-			if (row->dma_fence_info.dma_fence_fd ==
-				check_for_dma_release->dma_fence_fd) {
-				check_for_dma_release->sync_created_with_dma =
-					row->dma_fence_info.sync_created_with_dma;
-				check_for_dma_release->dma_fence_row_idx =
-					row->dma_fence_info.dma_fence_row_idx;
-			}
-		}
-	}
+	if (test_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &row->ext_fence_mask) ||
+		test_bit(CAM_GENERIC_FENCE_TYPE_SYNX_OBJ, &row->ext_fence_mask)) {
 
-	/* Check if same synx obj is being released with the sync obj */
-	if (test_bit(CAM_GENERIC_FENCE_TYPE_SYNX_OBJ, &row->ext_fence_mask)) {
-		if (check_for_synx_release) {
-			if (row->synx_obj_info.synx_obj ==
-				check_for_synx_release->synx_obj) {
-				check_for_synx_release->synx_obj_row_idx =
-					row->synx_obj_info.synx_obj_row_idx;
-				check_for_synx_release->sync_created_with_synx =
-					row->synx_obj_info.sync_created_with_synx;
+		list_for_each_entry_safe(ext_fence_info, tmp, &row->ext_fences, list) {
+			if (ext_fence_info->dma_fence_info.is_valid) {
+				cam_dma_fence_get_put_ref(false,
+					ext_fence_info->dma_fence_info.dma_fence_row_idx);
+				release_params.use_row_idx = true;
+				release_params.u.dma_row_idx =
+					ext_fence_info->dma_fence_info.dma_fence_row_idx;
+				rc = cam_dma_fence_release(&release_params);
+				if (rc)
+					CAM_ERR(CAM_SYNC,
+						"Failed to destroy dma fence fd: %d rc: %d associated with sync: %d",
+						ext_fence_info->dma_fence_info.dma_fence_fd,
+						rc, idx);
 			}
+
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
+			if (ext_fence_info->synx_obj_info.is_valid) {
+				synx_release_params.use_row_idx = true;
+				synx_release_params.u.synx_row_idx =
+					ext_fence_info->synx_obj_info.synx_obj_row_idx;
+				rc = cam_synx_obj_release(&synx_release_params);
+				if (rc)
+					CAM_ERR(CAM_SYNC,
+						"Failed to destroy synx_obj: %d rc: %d associated with sync: %d",
+						ext_fence_info->synx_obj_info.synx_obj, rc, idx);
+			}
+#endif
+			cam_sync_put_ext_fence_payload(&ext_fence_info);
 		}
 	}
 
@@ -357,6 +408,7 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t sync_var,
 	INIT_LIST_HEAD(&row->parents_list);
 	INIT_LIST_HEAD(&row->children_list);
 	INIT_LIST_HEAD(&row->user_payload_list);
+	INIT_LIST_HEAD(&row->ext_fences);
 	spin_unlock_bh(&sync_dev->row_spinlocks[idx]);
 
 	return 0;
