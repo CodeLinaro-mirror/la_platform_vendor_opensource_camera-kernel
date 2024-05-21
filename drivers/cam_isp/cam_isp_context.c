@@ -8743,6 +8743,7 @@ static void cam_isp_update_fastpath_result_queue(void *data,
 	uint32_t value)
 {
 	uint32_t wr_idx;
+	struct cam_context *ctx;
 	struct cam_isp_context *isp_ctx;
 
 	if (!data) {
@@ -8751,6 +8752,7 @@ static void cam_isp_update_fastpath_result_queue(void *data,
 	}
 
 	isp_ctx = (struct cam_isp_context *)data;
+	ctx = (struct cam_context *)isp_ctx->base;
 
 	spin_lock(&isp_ctx->ul_fp_params.fast_path_lock);
 	wr_idx = atomic_read(&isp_ctx->ul_fp_params.write_idx);
@@ -8759,6 +8761,7 @@ static void cam_isp_update_fastpath_result_queue(void *data,
 	isp_ctx->ul_fp_results[wr_idx].boot_timestamp = isp_ctx->boot_timestamp;
 	atomic_set(&isp_ctx->ul_fp_params.write_idx, INC_VAL(wr_idx, 1, MAX_IO_PACKETS));
 	complete(&isp_ctx->ul_fp_params.fast_path_buf_done);
+	trace_cam_ul_fastpath_bufdone("UL_Bufdone", ctx->ctx_id, isp_ctx->sof_timestamp_val);
 	spin_unlock(&isp_ctx->ul_fp_params.fast_path_lock);
 }
 
@@ -8768,7 +8771,9 @@ static void __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 	struct response_buffer *response_buffers)
 {
 	int idx = *result_idx, i, num_out = 0;
+	struct cam_context *ctx;
 
+	ctx = (struct cam_context *)isp_ctx->base;
 	response_buffers[idx].setting_id = 0x0;
 	for (i = 0; i < req_isp->num_fence_map_out; i++) {
 		response_buffers[idx].buffer_hdl[num_out++] =
@@ -8779,6 +8784,8 @@ static void __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 	response_buffers[idx].sof_timestamp = timestamp;
 	response_buffers[idx].boot_timestamp = boot_timestamp;
 	response_buffers[idx].num_buffer = num_out;
+	trace_cam_ul_fastpath_retrieve("UL_Retrieve", ctx->ctx_id,
+		response_buffers[idx].setting_id, timestamp);
 	*result_idx = ++idx;
 }
 
