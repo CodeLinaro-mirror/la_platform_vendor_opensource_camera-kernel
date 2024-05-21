@@ -35,13 +35,18 @@
 #define BYTE_SIZE 8
 #define COOKIE_NUM_BYTE 2
 #define COOKIE_SIZE (BYTE_SIZE*COOKIE_NUM_BYTE)
-#define COOKIE_MASK ((1<<COOKIE_SIZE)-1)
+#define COOKIE_MASK ((1<<COOKIE_SIZE) - 1)
+#define MULTI_CLIENT_REGION_SHIFT 28
+#define CAM_SMMU_HDL_MASK ((BIT(MULTI_CLIENT_REGION_SHIFT)) - 1)
 #define HANDLE_INIT (-1)
 #define CAM_SMMU_CB_MAX 6
 #define CAM_SMMU_SHARED_HDL_MAX 6
+#define CAM_SMMU_MULTI_REGION_MAX 2
 
 #define GET_SMMU_HDL(x, y) (((x) << COOKIE_SIZE) | ((y) & COOKIE_MASK))
-#define GET_SMMU_TABLE_IDX(x) (((x) >> COOKIE_SIZE) & COOKIE_MASK)
+#define GET_SMMU_TABLE_IDX(x) ((((x) & CAM_SMMU_HDL_MASK) >> COOKIE_SIZE) & COOKIE_MASK)
+#define GET_SMMU_MULTI_CLIENT_IDX(x) (((x) >> MULTI_CLIENT_REGION_SHIFT))
+#define CAM_SMMU_HDL_VALIDATE(x, y) ((x) != ((y) & CAM_SMMU_HDL_MASK))
 
 #define CAM_SMMU_MONITOR_MAX_ENTRIES   100
 #define CAM_SMMU_INC_MONITOR_HEAD(head, ret) \
@@ -100,12 +105,6 @@ struct scratch_mapping {
 	dma_addr_t base;
 };
 
-struct region_buf_info {
-	struct dma_buf *buf;
-	struct dma_buf_attachment *attach;
-	struct sg_table *table;
-};
-
 struct cam_smmu_monitor {
 	struct timespec64       timestamp;
 	bool                    is_map;
@@ -116,6 +115,43 @@ struct cam_smmu_monitor {
 	dma_addr_t              paddr;
 	size_t                  len;
 	enum cam_smmu_region_id region_id;
+};
+
+struct cam_smmu_subregion_info {
+	enum cam_smmu_subregion_id  subregion_id;
+	struct cam_smmu_region_info subregion_info;
+
+	int32_t mapped_refcnt;
+	unsigned long mapped_client_mask;
+	bool is_allocated;
+};
+
+struct cam_smmu_nested_region_info {
+	uint32_t num_subregions;
+	struct cam_smmu_subregion_info subregions[
+		CAM_SMMU_SUBREGION_MAX];
+	struct cam_smmu_region_info region_info;
+
+	int32_t mapped_refcnt;
+	unsigned long mapped_client_mask;
+	bool is_allocated;
+	bool subregion_support;
+};
+
+/*
+ * This struct holds info on multiple regions of the
+ * same type, and each such region can have multiple
+ * unique subregions
+ *
+ * A0 --> a : b : c
+ * A1 --> a : c
+ *
+ * Here A0 & A1 are 2 umbrella regions of the same type,
+ * and a, b & c are the subregions within them
+ */
+struct cam_smmu_multi_region_info {
+	int32_t num_regions;
+	struct cam_smmu_nested_region_info nested_regions[CAM_SMMU_MULTI_REGION_MAX];
 };
 
 struct cam_context_bank_info {
@@ -132,24 +168,29 @@ struct cam_context_bank_info {
 	uint8_t secheap_support;
 	uint8_t fwuncached_region_support;
 	uint8_t qdss_support;
+	uint8_t device_region_support;
+	uint8_t fence_queue_pool_support;
 	dma_addr_t qdss_phy_addr;
 	bool is_fw_allocated;
 	bool is_secheap_allocated;
-	bool is_fwuncached_buf_allocated;
 	bool is_qdss_allocated;
 
 	struct scratch_mapping scratch_map;
-	struct gen_pool *shared_mem_pool;
+	struct gen_pool *shared_mem_pool[CAM_SMMU_MULTI_REGION_MAX];
+	struct gen_pool *fence_queue_mem_pool;
 
+	/* Regular singleton regions */
 	struct cam_smmu_region_info scratch_info;
 	struct cam_smmu_region_info firmware_info;
-	struct cam_smmu_region_info shared_info;
-	struct cam_smmu_region_info io_info;
 	struct cam_smmu_region_info secheap_info;
-	struct cam_smmu_region_info fwuncached_region;
-	struct cam_smmu_region_info qdss_info;
-	struct region_buf_info secheap_buf;
-	struct region_buf_info fwuncached_reg_buf;
+	struct cam_smmu_region_info fence_queue_pool;
+
+	/* Regions capable of having multiple of them */
+	struct cam_smmu_multi_region_info shared_info;
+	struct cam_smmu_multi_region_info io_info;
+	struct cam_smmu_multi_region_info fwuncached_region;
+	struct cam_smmu_multi_region_info device_region;
+	struct cam_smmu_multi_region_info qdss_info;
 
 	struct list_head smmu_buf_list;
 	struct list_head smmu_buf_kernel_list;
@@ -167,6 +208,8 @@ struct cam_context_bank_info {
 	bool is_mul_client;
 	int device_count;
 	int num_shared_hdl;
+	int num_multi_regions;
+	const char *multi_region_clients[CAM_SMMU_MULTI_REGION_MAX];
 	enum cam_io_coherency_mode coherency_mode;
 
 	/* discard iova - non-zero values are valid */
@@ -223,6 +266,7 @@ struct cam_smmu_mini_dump_cb_info {
 	struct cam_smmu_region_info io_info;
 	struct cam_smmu_region_info secheap_info;
 	struct cam_smmu_region_info fwuncached_region;
+	struct cam_smmu_region_info device_mem_region;
 	struct cam_smmu_region_info qdss_info;
 	struct region_buf_info secheap_buf;
 	struct region_buf_info fwuncached_reg_buf;
@@ -261,8 +305,6 @@ struct cam_smmu_mini_dump_info {
 	uint32_t cb_num;
 	struct   cam_smmu_mini_dump_cb_info *cb;
 };
-
-static const char *qdss_region_name = "qdss";
 
 static struct cam_iommu_cb_set iommu_cb_set;
 
@@ -520,6 +562,82 @@ int cam_smmu_need_force_alloc_cached(bool *force_alloc_cached)
 	return 0;
 }
 
+static struct cam_smmu_subregion_info *cam_smmu_find_subregion(
+	enum cam_smmu_subregion_id subregion_id,
+	struct cam_smmu_subregion_info *subregions)
+{
+	int i;
+
+	for (i = 0; i < CAM_SMMU_SUBREGION_MAX; i++) {
+		if (subregions[i].subregion_id == subregion_id)
+			return &subregions[i];
+	}
+
+	return NULL;
+}
+
+static int cam_smmu_validate_nested_region_idx(
+	struct cam_context_bank_info *cb_info,
+	int32_t *nested_reg_idx, int32_t region_id)
+{
+	/* Array indexing starts from 0, subtracting number of regions by 1 */
+	switch (region_id) {
+	case CAM_SMMU_REGION_SHARED:
+		if ((*nested_reg_idx) > (cb_info->shared_info.num_regions - 1))
+			goto err;
+
+		break;
+	case CAM_SMMU_REGION_FWUNCACHED:
+		if ((*nested_reg_idx) > (cb_info->fwuncached_region.num_regions - 1))
+			goto err;
+
+		break;
+	/* For device and IO, if there is no additional region, default to index 0 */
+	case CAM_SMMU_REGION_DEVICE:
+		if ((*nested_reg_idx) > (cb_info->device_region.num_regions - 1))
+			*nested_reg_idx = 0;
+
+		break;
+	case CAM_SMMU_REGION_IO:
+		if ((*nested_reg_idx) > (cb_info->io_info.num_regions - 1))
+			*nested_reg_idx = 0;
+
+		break;
+	case CAM_SMMU_REGION_QDSS:
+		fallthrough;
+	case CAM_SMMU_REGION_SECHEAP:
+		fallthrough;
+	case CAM_SMMU_REGION_SCRATCH:
+		*nested_reg_idx = 0;
+		break;
+	default:
+		CAM_DBG(CAM_SMMU,
+			"Invalid region id=%u on cb=%s to get nested region index",
+			region_id, cb_info->name[0]);
+		break;
+	}
+
+	return 0;
+
+err:
+	CAM_ERR(CAM_SMMU,
+		"Nested region idx=%d exceeds max regions=%d for region_id=%d in cb=%s",
+		nested_reg_idx, cb_info->shared_info.num_regions, region_id, cb_info->name[0]);
+	return -EINVAL;
+}
+
+static inline int cam_smmu_get_multiregion_client_dev_idx(
+	struct cam_context_bank_info *cb_info, int32_t multi_client_device_idx,
+	int32_t region_id, int32_t *region_idx)
+{
+	if (cb_info->num_multi_regions && multi_client_device_idx) {
+		*region_idx = multi_client_device_idx;
+		return cam_smmu_validate_nested_region_idx(cb_info, region_idx, region_id);
+	}
+
+	return 0;
+}
+
 static void cam_smmu_page_fault_work(struct work_struct *work)
 {
 	int j;
@@ -568,21 +686,28 @@ static void cam_smmu_page_fault_work(struct work_struct *work)
 static void cam_smmu_dump_cb_info(int idx)
 {
 	struct cam_dma_buff_info *mapping, *mapping_temp;
+	struct cam_smmu_nested_region_info *nested_reg_info;
 	size_t shared_reg_len = 0, io_reg_len = 0;
 	size_t shared_free_len = 0, io_free_len = 0;
-	uint32_t i = 0;
+	int32_t i = 0, j;
 	uint64_t ms, hrs, min, sec;
 	struct timespec64 current_ts;
 	struct cam_context_bank_info *cb_info =
 		&iommu_cb_set.cb_info[idx];
 
 	if (cb_info->shared_support) {
-		shared_reg_len = cb_info->shared_info.iova_len;
+		for (j = 0; j < cb_info->shared_info.num_regions; j++) {
+			nested_reg_info = &cb_info->shared_info.nested_regions[j];
+			shared_reg_len += nested_reg_info->region_info.iova_len;
+		}
 		shared_free_len = shared_reg_len - cb_info->shared_mapping_size;
 	}
 
 	if (cb_info->io_support) {
-		io_reg_len = cb_info->io_info.iova_len;
+		for (j = 0; j < cb_info->shared_info.num_regions; j++) {
+			nested_reg_info = &cb_info->io_info.nested_regions[j];
+			io_reg_len += nested_reg_info->region_info.iova_len;
+		}
 		io_free_len = io_reg_len - cb_info->io_mapping_size;
 	}
 
@@ -741,7 +866,7 @@ void cam_smmu_set_client_page_fault_handler(int handle,
 	}
 
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].handle != handle) {
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, handle)) {
 		CAM_ERR(CAM_SMMU,
 			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
 			iommu_cb_set.cb_info[idx].handle, handle);
@@ -804,7 +929,7 @@ void cam_smmu_unset_client_page_fault_handler(int handle, void *token)
 	}
 
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].handle != handle) {
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, handle)) {
 		CAM_ERR(CAM_SMMU,
 			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
 			iommu_cb_set.cb_info[idx].handle, handle);
@@ -1004,6 +1129,20 @@ static int cam_smmu_attach_device(int idx)
 	return rc;
 }
 
+static inline void cam_smmu_update_multiregion_dev_id(
+	struct cam_context_bank_info *cb_info, char *name,
+	int *hdl)
+{
+	int k;
+
+	for (k = 0; k < cb_info->num_multi_regions; k++) {
+		if (strcmp(cb_info->multi_region_clients[k], name)) {
+			*hdl |= ((k + 1) << MULTI_CLIENT_REGION_SHIFT);
+			CAM_DBG(CAM_SMMU, "%s got shared multi region handle 0x%x",
+				name, *hdl);
+		}
+	}
+}
 static int cam_smmu_create_add_handle_in_table(char *name,
 	int *hdl)
 {
@@ -1053,12 +1192,15 @@ static int cam_smmu_create_add_handle_in_table(char *name,
 				if (iommu_cb_set.cb_info[i].is_mul_client) {
 					iommu_cb_set.cb_info[i].device_count++;
 					*hdl = iommu_cb_set.cb_info[i].handle;
+					if (iommu_cb_set.cb_info[i].num_multi_regions) {
+						cam_smmu_update_multiregion_dev_id(
+							&iommu_cb_set.cb_info[i], name, hdl);
+					}
 					mutex_unlock(
 						&iommu_cb_set.cb_info[i].lock);
 					CAM_DBG(CAM_SMMU,
-						"%s already got handle 0x%x",
-						name,
-						iommu_cb_set.cb_info[i].handle);
+						"%s already got handle 0x%x cb_handle 0x%x",
+						name, *hdl, iommu_cb_set.cb_info[i].handle);
 					return 0;
 				}
 
@@ -1168,12 +1310,31 @@ static int cam_smmu_free_scratch_va(struct scratch_mapping *mapping,
 	return 0;
 }
 
-static struct cam_dma_buff_info *cam_smmu_find_mapping_by_virt_address(int idx,
-	dma_addr_t virt_addr)
+static struct cam_dma_buff_info *cam_smmu_find_mapping_by_virt_address(
+	int idx, dma_addr_t virt_addr)
 {
 	struct cam_dma_buff_info *mapping;
 
 	list_for_each_entry(mapping, &iommu_cb_set.cb_info[idx].smmu_buf_list,
+			list) {
+		if (mapping->paddr == virt_addr) {
+			CAM_DBG(CAM_SMMU, "Found virtual address %lx",
+				 (unsigned long)virt_addr);
+			return mapping;
+		}
+	}
+
+	CAM_ERR(CAM_SMMU, "Error: Cannot find virtual address %lx by index %d",
+		(unsigned long)virt_addr, idx);
+	return NULL;
+}
+
+static struct cam_dma_buff_info *cam_smmu_find_kernel_mapping_by_virt_address(
+	int idx, dma_addr_t virt_addr)
+{
+	struct cam_dma_buff_info *mapping;
+
+	list_for_each_entry(mapping, &iommu_cb_set.cb_info[idx].smmu_buf_kernel_list,
 			list) {
 		if (mapping->paddr == virt_addr) {
 			CAM_DBG(CAM_SMMU, "Found virtual address %lx",
@@ -1369,20 +1530,64 @@ static int cam_smmu_detach_device(int idx)
 	return rc;
 }
 
-static int cam_smmu_alloc_iova(size_t size,
-	int32_t smmu_hdl, unsigned long *iova)
+static int cam_smmu_find_genpool_for_a_region(int32_t idx,
+	enum cam_smmu_region_id region_id, struct gen_pool **mem_pool)
 {
 	int rc = 0;
-	int idx;
+
+	switch (region_id) {
+	case CAM_SMMU_REGION_SHARED: {
+		int shared_mem_pool_idx = 0, multi_client_device_idx = 0;
+
+		if (!iommu_cb_set.cb_info[idx].shared_support) {
+			CAM_ERR(CAM_SMMU,
+				"Error: Shared memory not supported for cb = %s",
+				iommu_cb_set.cb_info[idx].name[0]);
+			rc = -EINVAL;
+			goto end;
+		}
+
+		rc = cam_smmu_get_multiregion_client_dev_idx(&iommu_cb_set.cb_info[idx],
+			multi_client_device_idx, CAM_SMMU_REGION_SHARED, &shared_mem_pool_idx);
+			if (rc)
+				goto end;
+
+		*mem_pool = iommu_cb_set.cb_info[idx].shared_mem_pool[shared_mem_pool_idx];
+	}
+		break;
+	case CAM_SMMU_REGION_FENCE_QUEUE: {
+		if (!iommu_cb_set.cb_info[idx].fence_queue_pool_support) {
+			CAM_ERR(CAM_SMMU,
+				"Error: Fence queue pool not supported for cb = %s",
+				iommu_cb_set.cb_info[idx].name[0]);
+			rc = -EINVAL;
+			goto end;
+		}
+
+		*mem_pool = iommu_cb_set.cb_info[idx].fence_queue_mem_pool;
+	}
+		break;
+	default:
+		CAM_ERR(CAM_SMMU, "Error: region = %d not supported for iova allocation");
+		rc = -EINVAL;
+		goto end;
+	}
+
+end:
+	return rc;
+}
+
+static int cam_smmu_alloc_iova(enum cam_smmu_region_id region_id,
+	size_t size, int32_t smmu_hdl, unsigned long *iova)
+{
+	int rc = 0, idx;
 	unsigned long vaddr = 0;
+	struct gen_pool *mem_pool = NULL;
 
 	if (!iova || !size || (smmu_hdl == HANDLE_INIT)) {
 		CAM_ERR(CAM_SMMU, "Error: Input args are invalid");
 		return -EINVAL;
 	}
-
-	CAM_DBG(CAM_SMMU, "Allocating iova size = %zu for smmu hdl=%X",
-		size, smmu_hdl);
 
 	idx = GET_SMMU_TABLE_IDX(smmu_hdl);
 	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
@@ -1392,7 +1597,7 @@ static int cam_smmu_alloc_iova(size_t size,
 		return -EINVAL;
 	}
 
-	if (iommu_cb_set.cb_info[idx].handle != smmu_hdl) {
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, smmu_hdl)) {
 		CAM_ERR(CAM_SMMU,
 			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
 			iommu_cb_set.cb_info[idx].handle, smmu_hdl);
@@ -1400,29 +1605,28 @@ static int cam_smmu_alloc_iova(size_t size,
 		goto get_addr_end;
 	}
 
-	if (!iommu_cb_set.cb_info[idx].shared_support) {
-		CAM_ERR(CAM_SMMU,
-			"Error: Shared memory not supported for hdl = %X",
-			smmu_hdl);
-		rc = -EINVAL;
+	rc = cam_smmu_find_genpool_for_a_region(idx, region_id, &mem_pool);
+	if (rc)
 		goto get_addr_end;
-	}
 
-	vaddr = gen_pool_alloc(iommu_cb_set.cb_info[idx].shared_mem_pool, size);
+	vaddr = gen_pool_alloc(mem_pool, size);
+
 	if (!vaddr)
 		return -ENOMEM;
 
 	*iova = vaddr;
+	CAM_DBG(CAM_SMMU, "Allocating iova size = %zu for smmu hdl=%X",
+		size, smmu_hdl);
 
 get_addr_end:
 	return rc;
 }
 
-static int cam_smmu_free_iova(unsigned long iova, size_t size,
-	int32_t smmu_hdl)
+static int cam_smmu_free_iova(enum cam_smmu_region_id region_id,
+	unsigned long iova, size_t size, int32_t smmu_hdl)
 {
-	int rc = 0;
-	int idx;
+	int rc = 0, idx;
+	struct gen_pool *mem_pool = NULL;
 
 	if (!size || (smmu_hdl == HANDLE_INIT)) {
 		CAM_ERR(CAM_SMMU, "Error: Input args are invalid");
@@ -1437,7 +1641,7 @@ static int cam_smmu_free_iova(unsigned long iova, size_t size,
 		return -EINVAL;
 	}
 
-	if (iommu_cb_set.cb_info[idx].handle != smmu_hdl) {
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, smmu_hdl)) {
 		CAM_ERR(CAM_SMMU,
 			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
 			iommu_cb_set.cb_info[idx].handle, smmu_hdl);
@@ -1445,7 +1649,11 @@ static int cam_smmu_free_iova(unsigned long iova, size_t size,
 		goto get_addr_end;
 	}
 
-	gen_pool_free(iommu_cb_set.cb_info[idx].shared_mem_pool, iova, size);
+	rc = cam_smmu_find_genpool_for_a_region(idx, region_id, &mem_pool);
+	if (rc)
+		goto get_addr_end;
+
+	gen_pool_free(mem_pool, iova, size);
 
 get_addr_end:
 	return rc;
@@ -1605,18 +1813,113 @@ end:
 }
 EXPORT_SYMBOL(cam_smmu_dealloc_firmware);
 
-int cam_smmu_alloc_qdss(int32_t smmu_hdl,
-	dma_addr_t *iova,
-	size_t *len)
+static int cam_smmu_retrieve_region_info(
+	struct cam_context_bank_info *cb_info,
+	uint32_t region_id, uint32_t subregion_id,
+	int32_t nested_reg_idx,
+	bool *is_supported, int32_t **ref_cnt,
+	unsigned long **mapping_mask, bool **is_allocated,
+	struct cam_smmu_region_info **region_info)
 {
-	int rc;
-	int32_t idx;
-	size_t qdss_len = 0;
-	size_t qdss_start = 0;
-	dma_addr_t qdss_phy_addr;
-	struct iommu_domain *domain;
+	int rc = 0;
+	struct cam_smmu_subregion_info *subregion = NULL;
 
-	if (!iova || !len || (smmu_hdl == HANDLE_INIT)) {
+	switch (region_id) {
+	case CAM_SMMU_REGION_QDSS: {
+		struct cam_smmu_multi_region_info *qdss_region;
+
+		qdss_region =  &cb_info->qdss_info;
+
+		/* No subregion for QDSS */
+		*is_supported = cb_info->qdss_support;
+		*is_allocated = &qdss_region->nested_regions[nested_reg_idx].is_allocated;
+		*region_info = &qdss_region->nested_regions[nested_reg_idx].region_info;
+		*ref_cnt = &qdss_region->nested_regions[nested_reg_idx].mapped_refcnt;
+		*mapping_mask =  &qdss_region->nested_regions[nested_reg_idx].mapped_client_mask;
+	}
+		break;
+	case CAM_SMMU_REGION_DEVICE: {
+		struct cam_smmu_multi_region_info *device_region;
+
+		*is_supported = cb_info->device_region_support;
+		device_region = &cb_info->device_region;
+
+		if (device_region->nested_regions[nested_reg_idx].subregion_support) {
+			subregion = cam_smmu_find_subregion(subregion_id,
+				device_region->nested_regions[nested_reg_idx].subregions);
+			if (IS_ERR_OR_NULL(subregion)) {
+				CAM_ERR(CAM_SMMU,
+					"Failed to find subregion: %d in region: %d cb: %s",
+					subregion, region_id, cb_info->name[0]);
+				rc = PTR_ERR(subregion);
+				goto end;
+			}
+
+			*is_allocated = &subregion->is_allocated;
+			*region_info = &subregion->subregion_info;
+			*ref_cnt = &subregion->mapped_refcnt;
+			*mapping_mask =  &subregion->mapped_client_mask;
+		} else {
+			*is_allocated = &device_region->nested_regions[nested_reg_idx].is_allocated;
+			*region_info = &device_region->nested_regions[nested_reg_idx].region_info;
+			*ref_cnt = &device_region->nested_regions[nested_reg_idx].mapped_refcnt;
+			*mapping_mask =
+				&device_region->nested_regions[nested_reg_idx].mapped_client_mask;
+		}
+	}
+		break;
+	case CAM_SMMU_REGION_FWUNCACHED: {
+		struct cam_smmu_multi_region_info *fw_uncached;
+
+		fw_uncached = &cb_info->fwuncached_region;
+		if (fw_uncached->nested_regions[nested_reg_idx].subregion_support) {
+			subregion = cam_smmu_find_subregion(subregion_id,
+				fw_uncached->nested_regions[nested_reg_idx].subregions);
+			if (IS_ERR_OR_NULL(subregion)) {
+				CAM_ERR(CAM_SMMU,
+					"Failed to find subregion: %d in region: %d cb: %s",
+					subregion, region_id, cb_info->name[0]);
+				rc = PTR_ERR(subregion);
+				goto end;
+			}
+
+			*is_supported = true;
+			*is_allocated = &subregion->is_allocated;
+			*region_info = &subregion->subregion_info;
+			*ref_cnt = &subregion->mapped_refcnt;
+			*mapping_mask =  &subregion->mapped_client_mask;
+		} else {
+			*is_allocated = &fw_uncached->nested_regions[nested_reg_idx].is_allocated;
+			*region_info = &fw_uncached->nested_regions[nested_reg_idx].region_info;
+			*ref_cnt = &fw_uncached->nested_regions[nested_reg_idx].mapped_refcnt;
+			*mapping_mask =
+				&fw_uncached->nested_regions[nested_reg_idx].mapped_client_mask;
+		}
+	}
+		break;
+	default:
+		CAM_ERR(CAM_SMMU,
+			"Unsupported region: %u in cb: %s for mapping known phy addr",
+			region_id, cb_info->name[0]);
+		rc = -EINVAL;
+		break;
+	}
+
+end:
+	return rc;
+}
+
+int cam_smmu_map_phy_mem_in_fence_queue_region(
+	int smmu_hdl, phys_addr_t phy_addr,
+	size_t size, dma_addr_t *iova)
+{
+	int rc, idx, prot = IOMMU_READ | IOMMU_WRITE;
+	struct cam_context_bank_info *cb_info;
+	struct iommu_domain *domain = NULL;
+	unsigned long alloc_iova = 0;
+	struct cam_dma_buff_info *mapping_info = NULL;
+
+	if (!iova || !size || (smmu_hdl == HANDLE_INIT) || !phy_addr) {
 		CAM_ERR(CAM_SMMU, "Error: Input args are invalid");
 		return -EINVAL;
 	}
@@ -1630,26 +1933,214 @@ int cam_smmu_alloc_qdss(int32_t smmu_hdl,
 		goto end;
 	}
 
-	if (!iommu_cb_set.cb_info[idx].qdss_support) {
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, smmu_hdl)) {
 		CAM_ERR(CAM_SMMU,
-			"QDSS memory not supported for this SMMU handle");
+			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
+			iommu_cb_set.cb_info[idx].handle, smmu_hdl);
 		rc = -EINVAL;
 		goto end;
 	}
 
-	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].is_qdss_allocated) {
-		CAM_ERR(CAM_SMMU, "Trying to allocate twice");
+	cb_info = &iommu_cb_set.cb_info[idx];
+	domain = cb_info->domain;
+
+	rc = cam_smmu_alloc_iova(CAM_SMMU_REGION_FENCE_QUEUE, size,
+		iommu_cb_set.cb_info[idx].handle, &alloc_iova);
+	if (rc)
+		goto end;
+
+	rc = iommu_map(domain, alloc_iova, phy_addr, size, prot);
+	if (rc)
+		goto free_iova;
+
+	 mapping_info = kzalloc(sizeof(struct cam_dma_buff_info), GFP_KERNEL);
+	if (!mapping_info) {
+		rc = -ENOMEM;
+		goto unmap;
+	}
+
+	mapping_info->ion_fd = -1;
+	mapping_info->buf = NULL;
+	mapping_info->attach = NULL;
+	mapping_info->table = NULL;
+	mapping_info->paddr = alloc_iova;
+	mapping_info->len = size;
+	mapping_info->ref_count = 1;
+	mapping_info->region_id = CAM_SMMU_REGION_FENCE_QUEUE;
+
+	list_add(&mapping_info->list, &iommu_cb_set.cb_info[idx].smmu_buf_kernel_list);
+
+	*iova = alloc_iova;
+	CAM_DBG(CAM_SMMU, "Mapped iova = 0x%x len = 0x%x for phy_addr = %pK in cb = %s",
+		alloc_iova, size, phy_addr, cb_info->name[0]);
+
+	return 0;
+
+unmap:
+	iommu_unmap(domain, alloc_iova, size);
+free_iova:
+	cam_smmu_free_iova(CAM_SMMU_REGION_FENCE_QUEUE, alloc_iova,
+		size, iommu_cb_set.cb_info[idx].handle);
+end:
+	return rc;
+}
+
+int cam_smmu_unmap_phy_mem_in_fence_queue_region(int smmu_hdl,
+	dma_addr_t paddr, size_t size)
+{
+	int rc = 0, idx;
+	size_t unmapped = 0;
+	struct cam_context_bank_info *cb_info;
+	struct cam_dma_buff_info *mapping_info = NULL;
+
+	if (!size || (smmu_hdl == HANDLE_INIT) || !paddr) {
+		CAM_ERR(CAM_SMMU, "Error: Input args are invalid");
+		return -EINVAL;
+	}
+
+	idx = GET_SMMU_TABLE_IDX(smmu_hdl);
+	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
+		CAM_ERR(CAM_SMMU,
+			"Error: handle or index invalid. idx = %d hdl = %x",
+			idx, smmu_hdl);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, smmu_hdl)) {
+		CAM_ERR(CAM_SMMU,
+			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
+			iommu_cb_set.cb_info[idx].handle, smmu_hdl);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	cb_info = &iommu_cb_set.cb_info[idx];
+	mapping_info = cam_smmu_find_kernel_mapping_by_virt_address(idx, paddr);
+	if (!mapping_info) {
+		CAM_ERR(CAM_SMMU, "Error: Invalid params");
+		rc = -ENODEV;
+		goto end;
+	}
+
+	unmapped = iommu_unmap(cb_info->domain, paddr, size);
+	if (unmapped != size) {
+		CAM_ERR(CAM_SMMU, "Only %zu unmapped out of total %zu",
+			unmapped, size);
+		rc = -EINVAL;
+	}
+
+	cam_smmu_free_iova(CAM_SMMU_REGION_FENCE_QUEUE, paddr,
+		size, iommu_cb_set.cb_info[idx].handle);
+
+	list_del_init(&mapping_info->list);
+	kfree(mapping_info);
+	CAM_DBG(CAM_SMMU, "Unmap paddr = %pK for cb = %s",
+		paddr, cb_info->name[0]);
+
+end:
+	return rc;
+}
+
+int cam_smmu_map_phy_mem_region(int32_t smmu_hdl,
+	uint32_t region_id, uint32_t subregion_id,
+	dma_addr_t *iova, size_t *len)
+{
+	int rc, idx, prot = IOMMU_READ | IOMMU_WRITE;
+	int multi_client_device_idx = 0, nested_reg_idx = 0;
+	int32_t *ref_cnt;
+	unsigned long *map_client_mask;
+	size_t region_len = 0;
+	dma_addr_t region_start;
+	bool is_supported = false;
+	bool *is_allocated;
+	struct iommu_domain *domain;
+	struct cam_context_bank_info *cb_info;
+	struct cam_smmu_region_info *region_info = NULL;
+
+	if (!iova || !len || (smmu_hdl == HANDLE_INIT)) {
+		CAM_ERR(CAM_SMMU, "Error: Input args are invalid");
+		return -EINVAL;
+	}
+
+	idx = GET_SMMU_TABLE_IDX(smmu_hdl);
+	multi_client_device_idx = GET_SMMU_MULTI_CLIENT_IDX(smmu_hdl);
+	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
+		CAM_ERR(CAM_SMMU,
+			"Error: handle or index invalid. idx = %d hdl = %x",
+			idx, smmu_hdl);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, smmu_hdl)) {
+		CAM_ERR(CAM_SMMU,
+			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
+			iommu_cb_set.cb_info[idx].handle, smmu_hdl);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	cb_info = &iommu_cb_set.cb_info[idx];
+	rc = cam_smmu_get_multiregion_client_dev_idx(&iommu_cb_set.cb_info[idx],
+		multi_client_device_idx, region_id, &nested_reg_idx);
+	if (rc)
+		goto end;
+
+	rc = cam_smmu_retrieve_region_info(cb_info, region_id, subregion_id,
+		nested_reg_idx, &is_supported, &ref_cnt, &map_client_mask,
+		&is_allocated, &region_info);
+	if (rc)
+		goto end;
+
+	if (!is_supported) {
+		CAM_ERR(CAM_SMMU,
+			"region: %u not supported for phy addr mapping in cb: %s",
+			region_id, cb_info->name[0]);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	mutex_lock(&cb_info->lock);
+	if ((*is_allocated)) {
+		if (test_bit(multi_client_device_idx, map_client_mask)) {
+			CAM_ERR(CAM_SMMU,
+				"Trying to allocate region: %u [subregion: %u] twice on cb: %s",
+				region_id, subregion_id, cb_info->name[0]);
+			rc = -ENOMEM;
+			goto unlock_and_end;
+		}
+
+		set_bit(multi_client_device_idx, map_client_mask);
+		(*ref_cnt)++;
+		CAM_DBG(CAM_SMMU,
+			"Trying to allocate region: %u [subregion: %u] on cb: %s for different clients: 0x%x ref_cnt: %u",
+			region_id, subregion_id, cb_info->name[0], *map_client_mask, *ref_cnt);
+
+		*iova = region_info->iova_start;
+		*len = region_info->iova_len;
+		rc = 0;
+		goto unlock_and_end;
+	}
+
+	if (!region_info->phy_addr) {
+		CAM_ERR(CAM_SMMU,
+			"Invalid phy addr for region: %u [subregion: %u] on cb: %s",
+			region_id, subregion_id, cb_info->name[0]);
 		rc = -ENOMEM;
 		goto unlock_and_end;
 	}
 
-	qdss_len = iommu_cb_set.cb_info[idx].qdss_info.iova_len;
-	qdss_start = iommu_cb_set.cb_info[idx].qdss_info.iova_start;
-	qdss_phy_addr = iommu_cb_set.cb_info[idx].qdss_phy_addr;
-	CAM_DBG(CAM_SMMU, "QDSS area len from DT = %zu", qdss_len);
+	region_len = region_info->iova_len;
+	region_start = region_info->iova_start;
 
-	domain = iommu_cb_set.cb_info[idx].domain;
+	CAM_DBG(CAM_SMMU,
+		"mapping region= %u [subregion = %u] for va = 0x%x len = %zu phy = 0x%x prot=0x%x",
+		region_id, subregion_id, region_start, region_len, region_info->phy_addr, prot);
+
+	domain = cb_info->domain;
+	if (region_id == CAM_SMMU_REGION_DEVICE)
+		prot |=  IOMMU_MMIO;
 
 	/*
 	 * Revisit this - what should we map this with - CACHED or UNCACHED?
@@ -1658,21 +2149,18 @@ int cam_smmu_alloc_qdss(int32_t smmu_hdl,
 	 * But on chipsets which use dma-coherent - all the buffers that are
 	 * being mapped to this CB must be CACHED
 	 */
-	rc = iommu_map(domain,
-		qdss_start,
-		qdss_phy_addr,
-		qdss_len,
-		IOMMU_READ|IOMMU_WRITE);
-
+	rc = iommu_map(domain, region_start, region_info->phy_addr, region_len, prot);
 	if (rc) {
-		CAM_ERR(CAM_SMMU, "Failed to map QDSS into IOMMU");
+		CAM_ERR(CAM_SMMU, "Failed to map region = %u into IOMMU cb = %s",
+			region_id, cb_info->name[0]);
 		goto unlock_and_end;
 	}
 
-	iommu_cb_set.cb_info[idx].is_qdss_allocated = true;
-
-	*iova = iommu_cb_set.cb_info[idx].qdss_info.iova_start;
-	*len = qdss_len;
+	*is_allocated = true;
+	(*ref_cnt)++;
+	*iova = region_info->iova_start;
+	*len = region_info->iova_len;
+	set_bit(multi_client_device_idx, map_client_mask);
 	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
 
 	return rc;
@@ -1682,16 +2170,23 @@ unlock_and_end:
 end:
 	return rc;
 }
-EXPORT_SYMBOL(cam_smmu_alloc_qdss);
+EXPORT_SYMBOL(cam_smmu_map_phy_mem_region);
 
-int cam_smmu_dealloc_qdss(int32_t smmu_hdl)
+int cam_smmu_unmap_phy_mem_region(int32_t smmu_hdl,
+	uint32_t region_id, uint32_t subregion_id)
 {
-	int rc = 0;
-	int32_t idx;
-	size_t qdss_len = 0;
-	size_t qdss_start = 0;
+	int rc = 0, idx;
+	int multi_client_device_idx = 0, nested_reg_idx = 0;
+	int32_t *ref_cnt;
+	unsigned long *map_client_mask;
+	size_t len = 0;
+	dma_addr_t start = 0;
 	struct iommu_domain *domain;
 	size_t unmapped = 0;
+	bool is_supported = false;
+	bool *is_allocated = NULL;
+	struct cam_context_bank_info *cb_info;
+	struct cam_smmu_region_info *region_info = NULL;
 
 	if (smmu_hdl == HANDLE_INIT) {
 		CAM_ERR(CAM_SMMU, "Error: Invalid handle");
@@ -1699,6 +2194,7 @@ int cam_smmu_dealloc_qdss(int32_t smmu_hdl)
 	}
 
 	idx = GET_SMMU_TABLE_IDX(smmu_hdl);
+	multi_client_device_idx = GET_SMMU_MULTI_CLIENT_IDX(smmu_hdl);
 	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
 		CAM_ERR(CAM_SMMU,
 			"Error: handle or index invalid. idx = %d hdl = %x",
@@ -1707,47 +2203,82 @@ int cam_smmu_dealloc_qdss(int32_t smmu_hdl)
 		goto end;
 	}
 
-	if (!iommu_cb_set.cb_info[idx].qdss_support) {
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, smmu_hdl)) {
 		CAM_ERR(CAM_SMMU,
-			"QDSS memory not supported for this SMMU handle");
+			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
+			iommu_cb_set.cb_info[idx].handle, smmu_hdl);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	cb_info = &iommu_cb_set.cb_info[idx];
+	rc = cam_smmu_get_multiregion_client_dev_idx(cb_info,
+		multi_client_device_idx, region_id, &nested_reg_idx);
+	if (rc)
+		goto end;
+
+	rc = cam_smmu_retrieve_region_info(cb_info, region_id, subregion_id,
+		nested_reg_idx, &is_supported, &ref_cnt, &map_client_mask,
+		&is_allocated, &region_info);
+	if (rc)
+		goto end;
+
+	if (!is_supported) {
+		CAM_ERR(CAM_SMMU,
+			"region: %u not supported for this SMMU handle cb: %s",
+			region_id, cb_info->name[0]);
 		rc = -EINVAL;
 		goto end;
 	}
 
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (!iommu_cb_set.cb_info[idx].is_qdss_allocated) {
+	if (!(*is_allocated)) {
 		CAM_ERR(CAM_SMMU,
-			"Trying to deallocate qdss that is not allocated");
+			"Trying to free region: %u that is not allocated on cb: %s",
+			region_id, cb_info->name[0]);
 		rc = -ENOMEM;
 		goto unlock_and_end;
 	}
 
-	qdss_len = iommu_cb_set.cb_info[idx].qdss_info.iova_len;
-	qdss_start = iommu_cb_set.cb_info[idx].qdss_info.iova_start;
-	domain = iommu_cb_set.cb_info[idx].domain;
-	unmapped = iommu_unmap(domain, qdss_start, qdss_len);
+	(*ref_cnt)--;
+	clear_bit(multi_client_device_idx, map_client_mask);
+	if ((*ref_cnt) > 0) {
+		CAM_DBG(CAM_SMMU,
+			"Mapping for region: %u on cb: %s still in use refcnt: %d mapping_mask: 0x%x",
+			region_id, cb_info->name[0], *ref_cnt, *map_client_mask);
+		goto unlock_and_end;
+	}
 
-	if (unmapped != qdss_len) {
+	len = region_info->iova_len;
+	start = region_info->iova_start;
+	domain = cb_info->domain;
+	unmapped = iommu_unmap(domain, start, len);
+
+	if (unmapped != len) {
 		CAM_ERR(CAM_SMMU, "Only %zu unmapped out of total %zu",
 			unmapped,
-			qdss_len);
+			len);
 		rc = -EINVAL;
 	}
 
-	iommu_cb_set.cb_info[idx].is_qdss_allocated = false;
+	*is_allocated = false;
+	*ref_cnt = 0;
+	*map_client_mask = 0;
 
 unlock_and_end:
 	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
 end:
 	return rc;
 }
-EXPORT_SYMBOL(cam_smmu_dealloc_qdss);
+EXPORT_SYMBOL(cam_smmu_unmap_phy_mem_region);
 
 int cam_smmu_get_io_region_info(int32_t smmu_hdl,
 	dma_addr_t *iova, size_t *len,
 	dma_addr_t *discard_iova_start, size_t *discard_iova_len)
 {
-	int32_t idx;
+	int32_t idx, rc;
+	int multi_client_device_idx = 0, nested_reg_idx = 0;
+	struct cam_smmu_nested_region_info *io_region;
 
 	if (!iova || !len || !discard_iova_start || !discard_iova_len ||
 		(smmu_hdl == HANDLE_INIT)) {
@@ -1756,6 +2287,7 @@ int cam_smmu_get_io_region_info(int32_t smmu_hdl,
 	}
 
 	idx = GET_SMMU_TABLE_IDX(smmu_hdl);
+	multi_client_device_idx = GET_SMMU_MULTI_CLIENT_IDX(smmu_hdl);
 	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
 		CAM_ERR(CAM_SMMU,
 			"Error: handle or index invalid. idx = %d hdl = %x",
@@ -1769,13 +2301,20 @@ int cam_smmu_get_io_region_info(int32_t smmu_hdl,
 		return -EINVAL;
 	}
 
+	rc = cam_smmu_get_multiregion_client_dev_idx(&iommu_cb_set.cb_info[idx],
+		multi_client_device_idx, CAM_SMMU_REGION_IO, &nested_reg_idx);
+	if (rc)
+		return rc;
+
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	*iova = iommu_cb_set.cb_info[idx].io_info.iova_start;
-	*len = iommu_cb_set.cb_info[idx].io_info.iova_len;
+	io_region = &iommu_cb_set.cb_info[idx].io_info.nested_regions[nested_reg_idx];
+
+	*iova = io_region->region_info.iova_start;
+	*len = io_region->region_info.iova_len;
 	*discard_iova_start =
-		iommu_cb_set.cb_info[idx].io_info.discard_iova_start;
+		io_region->region_info.discard_iova_start;
 	*discard_iova_len =
-		iommu_cb_set.cb_info[idx].io_info.discard_iova_len;
+		io_region->region_info.discard_iova_len;
 
 	CAM_DBG(CAM_SMMU,
 		"I/O area for hdl = %x Region:[%pK %zu] Discard:[%pK %zu]",
@@ -1790,11 +2329,11 @@ int cam_smmu_get_region_info(int32_t smmu_hdl,
 	enum cam_smmu_region_id region_id,
 	struct cam_smmu_region_info *region_info)
 {
-	int32_t idx;
+	int32_t idx, multi_client_device_idx = 0, nested_reg_idx = 0;
 	struct cam_context_bank_info *cb = NULL;
 
 	if (!region_info) {
-		CAM_ERR(CAM_SMMU, "Invalid region_info pointer");
+		CAM_ERR(CAM_SMMU, "Invalid params");
 		return -EINVAL;
 	}
 
@@ -1804,11 +2343,16 @@ int cam_smmu_get_region_info(int32_t smmu_hdl,
 	}
 
 	idx = GET_SMMU_TABLE_IDX(smmu_hdl);
+	multi_client_device_idx = GET_SMMU_MULTI_CLIENT_IDX(smmu_hdl);
 	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
 		CAM_ERR(CAM_SMMU, "Handle or index invalid. idx = %d hdl = %x",
 			idx, smmu_hdl);
 		return -EINVAL;
 	}
+
+	if (cam_smmu_get_multiregion_client_dev_idx(&iommu_cb_set.cb_info[idx],
+		multi_client_device_idx, region_id, &nested_reg_idx))
+		return -EINVAL;
 
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
 	cb = &iommu_cb_set.cb_info[idx];
@@ -1825,17 +2369,24 @@ int cam_smmu_get_region_info(int32_t smmu_hdl,
 			mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
 			return -ENODEV;
 		}
+
 		region_info->iova_start = cb->firmware_info.iova_start;
 		region_info->iova_len = cb->firmware_info.iova_len;
 		break;
-	case CAM_SMMU_REGION_SHARED:
+	case CAM_SMMU_REGION_SHARED: {
+		struct cam_smmu_nested_region_info *nested_reg_info;
+
 		if (!cb->shared_support) {
 			CAM_ERR(CAM_SMMU, "Shared mem not supported");
 			mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
 			return -ENODEV;
 		}
-		region_info->iova_start = cb->shared_info.iova_start;
-		region_info->iova_len = cb->shared_info.iova_len;
+
+		nested_reg_info = &cb->shared_info.nested_regions[nested_reg_idx];
+
+		region_info->iova_start = nested_reg_info->region_info.iova_start;
+		region_info->iova_len = nested_reg_info->region_info.iova_len;
+	}
 		break;
 	case CAM_SMMU_REGION_SCRATCH:
 		if (!cb->scratch_buf_support) {
@@ -1843,17 +2394,24 @@ int cam_smmu_get_region_info(int32_t smmu_hdl,
 			mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
 			return -ENODEV;
 		}
+
 		region_info->iova_start = cb->scratch_info.iova_start;
 		region_info->iova_len = cb->scratch_info.iova_len;
 		break;
-	case CAM_SMMU_REGION_IO:
+	case CAM_SMMU_REGION_IO: {
+		struct cam_smmu_nested_region_info *nested_reg_info;
+
 		if (!cb->io_support) {
 			CAM_ERR(CAM_SMMU, "IO memory not supported");
 			mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
 			return -ENODEV;
 		}
-		region_info->iova_start = cb->io_info.iova_start;
-		region_info->iova_len = cb->io_info.iova_len;
+
+		nested_reg_info = &cb->io_info.nested_regions[nested_reg_idx];
+
+		region_info->iova_start = nested_reg_info->region_info.iova_start;
+		region_info->iova_len = nested_reg_info->region_info.iova_len;
+	}
 		break;
 	case CAM_SMMU_REGION_SECHEAP:
 		if (!cb->secheap_support) {
@@ -1861,17 +2419,39 @@ int cam_smmu_get_region_info(int32_t smmu_hdl,
 			mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
 			return -ENODEV;
 		}
+
 		region_info->iova_start = cb->secheap_info.iova_start;
 		region_info->iova_len = cb->secheap_info.iova_len;
 		break;
-	case CAM_SMMU_REGION_FWUNCACHED:
+	case CAM_SMMU_REGION_FWUNCACHED: {
+		struct cam_smmu_nested_region_info *nested_reg_info;
+
 		if (!cb->fwuncached_region_support) {
 			CAM_WARN(CAM_SMMU, "FW uncached region not supported");
 			mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
 			return -ENODEV;
 		}
-		region_info->iova_start = cb->fwuncached_region.iova_start;
-		region_info->iova_len = cb->fwuncached_region.iova_len;
+
+		nested_reg_info = &cb->fwuncached_region.nested_regions[nested_reg_idx];
+
+		region_info->iova_start = nested_reg_info->region_info.iova_start;
+		region_info->iova_len = nested_reg_info->region_info.iova_len;
+	}
+		break;
+	case CAM_SMMU_REGION_DEVICE: {
+		struct cam_smmu_nested_region_info *nested_reg_info;
+
+		if (!cb->device_region_support) {
+			CAM_WARN(CAM_SMMU, "device memory region not supported");
+			mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
+			return -ENODEV;
+		}
+
+		nested_reg_info = &cb->device_region.nested_regions[nested_reg_idx];
+
+		region_info->iova_start = nested_reg_info->region_info.iova_start;
+		region_info->iova_len = nested_reg_info->region_info.iova_len;
+	}
 		break;
 	default:
 		CAM_ERR(CAM_SMMU, "Invalid region id: %d for smmu hdl: %X",
@@ -1886,22 +2466,20 @@ int cam_smmu_get_region_info(int32_t smmu_hdl,
 EXPORT_SYMBOL(cam_smmu_get_region_info);
 
 int cam_smmu_reserve_buf_region(enum cam_smmu_region_id region,
-	int32_t smmu_hdl,
-	struct dma_buf *buf,
-	dma_addr_t *iova,
+	int32_t smmu_hdl, struct dma_buf *buf, dma_addr_t *iova,
 	size_t *request_len)
 {
 	struct cam_context_bank_info *cb_info;
 	struct region_buf_info *buf_info = NULL;
 	struct cam_smmu_region_info *region_info = NULL;
+	struct cam_smmu_subregion_info *subregion_info = NULL;
 	bool *is_buf_allocated;
 	bool region_supported;
 	size_t size = 0;
-	int idx;
-	int rc = 0;
-	int prot = 0;
+	int idx, rc = 0, multi_client_device_idx, prot, nested_reg_idx;
 
 	idx = GET_SMMU_TABLE_IDX(smmu_hdl);
+	multi_client_device_idx = GET_SMMU_MULTI_CLIENT_IDX(smmu_hdl);
 	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
 		CAM_ERR(CAM_SMMU,
 			"Error: handle or index invalid. idx = %d hdl = %x",
@@ -1910,6 +2488,10 @@ int cam_smmu_reserve_buf_region(enum cam_smmu_region_id region,
 	}
 
 	cb_info = &iommu_cb_set.cb_info[idx];
+	rc = cam_smmu_get_multiregion_client_dev_idx(cb_info,
+		multi_client_device_idx, region, &nested_reg_idx);
+	if (rc)
+		return rc;
 
 	if (region == CAM_SMMU_REGION_SECHEAP) {
 		region_supported = cb_info->secheap_support;
@@ -1931,12 +2513,33 @@ int cam_smmu_reserve_buf_region(enum cam_smmu_region_id region,
 
 	if (region == CAM_SMMU_REGION_SECHEAP) {
 		is_buf_allocated = &cb_info->is_secheap_allocated;
-		buf_info = &cb_info->secheap_buf;
+		buf_info = &cb_info->secheap_info.buf_info;
 		region_info = &cb_info->secheap_info;
 	} else if (region == CAM_SMMU_REGION_FWUNCACHED) {
-		is_buf_allocated = &cb_info->is_fwuncached_buf_allocated;
-		buf_info = &cb_info->fwuncached_reg_buf;
-		region_info = &cb_info->fwuncached_region;
+		struct cam_smmu_nested_region_info *nested_reg_info;
+
+		nested_reg_info =
+			&cb_info->fwuncached_region.nested_regions[nested_reg_idx];
+
+		if (nested_reg_info->subregion_support) {
+			/* For FW uncached, subregion generic is to be used */
+			subregion_info = cam_smmu_find_subregion(CAM_SMMU_SUBREGION_GENERIC,
+				nested_reg_info->subregions);
+			if (IS_ERR_OR_NULL(subregion_info)) {
+				CAM_ERR(CAM_SMMU,
+					"Failed to find free uncached subregion on cb: %s",
+					cb_info->name[0]);
+				mutex_unlock(&cb_info->lock);
+				return -EINVAL;
+			}
+			region_info = &subregion_info->subregion_info;
+			buf_info = &subregion_info->subregion_info.buf_info;
+			is_buf_allocated = &subregion_info->is_allocated;
+		} else {
+			region_info = &nested_reg_info->region_info;
+			buf_info = &nested_reg_info->region_info.buf_info;
+			is_buf_allocated = &nested_reg_info->is_allocated;
+		}
 	} else {
 		CAM_ERR(CAM_SMMU, "Region not supported for reserving %d",
 			region);
@@ -1944,8 +2547,8 @@ int cam_smmu_reserve_buf_region(enum cam_smmu_region_id region,
 		return -EINVAL;
 	}
 
-	if (*is_buf_allocated) {
-		CAM_ERR(CAM_SMMU, "Trying to allocate heap twice for region %d",
+	if ((*is_buf_allocated)) {
+		CAM_ERR(CAM_SMMU, "Trying to allocate twice for region %d",
 			region);
 		rc = -ENOMEM;
 		mutex_unlock(&cb_info->lock);
@@ -1958,6 +2561,9 @@ int cam_smmu_reserve_buf_region(enum cam_smmu_region_id region,
 			"Error: dma get buf failed. rc = %d", rc);
 		goto err_out;
 	}
+
+	CAM_DBG(CAM_SMMU, "Map region=%d iova=0x%x len=0x%x",
+		region, region_info->iova_start, region_info->iova_len);
 
 	buf_info->buf = buf;
 	buf_info->attach = dma_buf_attach(buf_info->buf,
@@ -1989,12 +2595,13 @@ int cam_smmu_reserve_buf_region(enum cam_smmu_region_id region,
 		CAM_ERR(CAM_SMMU,
 			"IOMMU mapping failed size=%zu, iova_len=%zu",
 			size, region_info->iova_len);
+		rc = -EINVAL;
 		goto err_unmap_sg;
 	}
 
-	*is_buf_allocated = true;
 	*iova = (uint32_t)region_info->iova_start;
 	*request_len = region_info->iova_len;
+	*is_buf_allocated = true;
 	mutex_unlock(&cb_info->lock);
 
 	return rc;
@@ -2017,15 +2624,17 @@ EXPORT_SYMBOL(cam_smmu_reserve_buf_region);
 int cam_smmu_release_buf_region(enum cam_smmu_region_id region,
 	int32_t smmu_hdl)
 {
-	int idx;
+	int idx, multi_client_device_idx, nested_reg_idx;
 	size_t size = 0;
 	struct region_buf_info *buf_info = NULL;
 	struct cam_context_bank_info *cb_info;
 	bool *is_buf_allocated;
 	bool region_supported;
 	struct cam_smmu_region_info *region_info = NULL;
+	struct cam_smmu_subregion_info *subregion_info = NULL;
 
 	idx = GET_SMMU_TABLE_IDX(smmu_hdl);
+	multi_client_device_idx = GET_SMMU_MULTI_CLIENT_IDX(smmu_hdl);
 	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
 		CAM_ERR(CAM_SMMU,
 			"Error: handle or index invalid. idx = %d hdl = %x",
@@ -2034,40 +2643,65 @@ int cam_smmu_release_buf_region(enum cam_smmu_region_id region,
 	}
 
 	cb_info = &iommu_cb_set.cb_info[idx];
+	if (cam_smmu_get_multiregion_client_dev_idx(cb_info,
+		multi_client_device_idx, region, &nested_reg_idx))
+		return -EINVAL;
 
 	if (region == CAM_SMMU_REGION_SECHEAP) {
 		region_supported = cb_info->secheap_support;
 	} else if (region == CAM_SMMU_REGION_FWUNCACHED) {
 		region_supported = cb_info->fwuncached_region_support;
 	} else {
-		CAM_ERR(CAM_SMMU, "Region not supported for reserving %d",
+		CAM_ERR(CAM_SMMU, "Region not supported for release %d",
 			region);
 		return -EINVAL;
 	}
 
 	if (!region_supported) {
-		CAM_ERR(CAM_SMMU, "Secondary heap not supported");
+		CAM_ERR(CAM_SMMU, "region: %d not supported", region);
 		return -EINVAL;
 	}
 	mutex_lock(&cb_info->lock);
 
 	if (region == CAM_SMMU_REGION_SECHEAP) {
 		is_buf_allocated = &cb_info->is_secheap_allocated;
-		buf_info = &cb_info->secheap_buf;
+		buf_info = &cb_info->secheap_info.buf_info;
 		region_info = &cb_info->secheap_info;
 	} else if (region == CAM_SMMU_REGION_FWUNCACHED) {
-		is_buf_allocated = &cb_info->is_fwuncached_buf_allocated;
-		buf_info = &cb_info->fwuncached_reg_buf;
-		region_info = &cb_info->fwuncached_region;
+		struct cam_smmu_nested_region_info *nested_reg_info;
+
+		nested_reg_info =
+			&cb_info->fwuncached_region.nested_regions[nested_reg_idx];
+		if (nested_reg_info->subregion_support) {
+			subregion_info = cam_smmu_find_subregion(CAM_SMMU_SUBREGION_GENERIC,
+				nested_reg_info->subregions);
+			if (IS_ERR_OR_NULL(subregion_info)) {
+				CAM_ERR(CAM_SMMU,
+					"Failed to find uncached subregion on cb: %s",
+					cb_info->name[0]);
+				mutex_unlock(&cb_info->lock);
+				return -EINVAL;
+			}
+
+			is_buf_allocated = &subregion_info->is_allocated;
+			buf_info = &subregion_info->subregion_info.buf_info;
+			region_info = &subregion_info->subregion_info;
+		} else {
+			is_buf_allocated = &nested_reg_info->is_allocated;
+			buf_info = &nested_reg_info->region_info.buf_info;
+			region_info = &nested_reg_info->region_info;
+		}
 	} else {
-		CAM_ERR(CAM_SMMU, "Region not supported for reserving %d",
+		CAM_ERR(CAM_SMMU, "Region not supported for release %d",
 			region);
 		mutex_unlock(&cb_info->lock);
 		return -EINVAL;
 	}
 
 	if (!(*is_buf_allocated)) {
-		CAM_ERR(CAM_SMMU, "Trying to release secheap twice");
+		CAM_ERR(CAM_SMMU,
+			"Trying to release freed region cb: %s region: %d",
+			cb_info->name[0], region);
 		mutex_unlock(&cb_info->lock);
 		return -ENOMEM;
 	}
@@ -2143,7 +2777,8 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 			goto err_unmap_sg;
 		}
 
-		rc = cam_smmu_alloc_iova(*len_ptr, iommu_cb_set.cb_info[idx].handle, &iova);
+		rc = cam_smmu_alloc_iova(region_id, *len_ptr,
+			iommu_cb_set.cb_info[idx].handle, &iova);
 
 		if (rc < 0) {
 			CAM_ERR(CAM_SMMU,
@@ -2162,7 +2797,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 
 		if (size < 0) {
 			CAM_ERR(CAM_SMMU, "IOMMU mapping failed");
-			rc = cam_smmu_free_iova(iova,
+			rc = cam_smmu_free_iova(region_id, iova,
 				size, iommu_cb_set.cb_info[idx].handle);
 			if (rc)
 				CAM_ERR(CAM_SMMU, "IOVA free failed");
@@ -2261,13 +2896,11 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 
 err_alloc:
 	if (region_id == CAM_SMMU_REGION_SHARED) {
-		cam_smmu_free_iova(iova,
-			size,
-			iommu_cb_set.cb_info[idx].handle);
+		cam_smmu_free_iova(region_id, iova,
+			size, iommu_cb_set.cb_info[idx].handle);
 
 		iommu_unmap(iommu_cb_set.cb_info[idx].domain,
-			*paddr_ptr,
-			*len_ptr);
+			*paddr_ptr, *len_ptr);
 	}
 err_unmap_sg:
 	dma_buf_unmap_attachment(attach, table, dma_dir);
@@ -2394,8 +3027,8 @@ static int cam_smmu_unmap_buf_and_remove_from_list(
 				mapping_info->len);
 		}
 
-		rc = cam_smmu_free_iova(mapping_info->paddr,
-			mapping_info->len,
+		rc = cam_smmu_free_iova(mapping_info->region_id,
+			mapping_info->paddr, mapping_info->len,
 			iommu_cb_set.cb_info[idx].handle);
 
 		if (rc)
@@ -2999,7 +3632,7 @@ int cam_smmu_map_stage2_iova(int handle, int ion_fd, struct dma_buf *dmabuf,
 	}
 
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].handle != handle) {
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, handle)) {
 		CAM_ERR(CAM_SMMU,
 			"Error: hdl is not valid, idx=%d, table_hdl=%x, hdl=%x",
 			idx, iommu_cb_set.cb_info[idx].handle, handle);
@@ -3083,7 +3716,7 @@ int cam_smmu_unmap_stage2_iova(int handle, int ion_fd, struct dma_buf *dma_buf)
 	}
 
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].handle != handle) {
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, handle)) {
 		CAM_ERR(CAM_SMMU,
 			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
 			iommu_cb_set.cb_info[idx].handle, handle);
@@ -3203,7 +3836,7 @@ int cam_smmu_map_user_iova(int mmu_handle, int ion_fd, struct dma_buf *dmabuf,
 		goto get_addr_end;
 	}
 
-	if (iommu_cb_set.cb_info[idx].handle != mmu_handle) {
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, mmu_handle)) {
 		CAM_ERR(CAM_SMMU,
 			"hdl is not valid, idx=%d, table_hdl = %x, hdl = %x",
 			idx, iommu_cb_set.cb_info[idx].handle, mmu_handle);
@@ -3352,7 +3985,7 @@ int cam_smmu_unmap_user_iova(int handle,
 		goto unmap_end;
 	}
 
-	if (iommu_cb_set.cb_info[idx].handle != handle) {
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, handle)) {
 		CAM_ERR(CAM_SMMU,
 			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
 			iommu_cb_set.cb_info[idx].handle, handle);
@@ -3506,7 +4139,7 @@ int cam_smmu_destroy_handle(int handle)
 	}
 
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].handle != handle) {
+	if (CAM_SMMU_HDL_VALIDATE(iommu_cb_set.cb_info[idx].handle, handle)) {
 		CAM_ERR(CAM_SMMU,
 			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
 			iommu_cb_set.cb_info[idx].handle, handle);
@@ -3575,12 +4208,23 @@ EXPORT_SYMBOL(cam_smmu_get_coherency_mode);
 
 static void cam_smmu_deinit_cb(struct cam_context_bank_info *cb)
 {
+	int i;
+
 	if (cb->io_support && cb->domain)
 		cb->domain = NULL;
 
 	if (cb->shared_support) {
-		gen_pool_destroy(cb->shared_mem_pool);
-		cb->shared_mem_pool = NULL;
+		for (i = 0; i < cb->shared_info.num_regions; i++) {
+			if (cb->shared_mem_pool[i]) {
+				gen_pool_destroy(cb->shared_mem_pool[i]);
+				cb->shared_mem_pool[i] = NULL;
+			}
+		}
+	}
+
+	if (cb->fence_queue_pool_support) {
+		gen_pool_destroy(cb->fence_queue_mem_pool);
+		cb->fence_queue_mem_pool = NULL;
 	}
 
 	if (cb->scratch_buf_support) {
@@ -3603,7 +4247,7 @@ static void cam_smmu_release_cb(struct platform_device *pdev)
 static int cam_smmu_setup_cb(struct cam_context_bank_info *cb,
 	struct device *dev)
 {
-	int rc = 0;
+	int rc = 0, i;
 
 	if (!cb || !dev) {
 		CAM_ERR(CAM_SMMU, "Error: invalid input params");
@@ -3613,33 +4257,33 @@ static int cam_smmu_setup_cb(struct cam_context_bank_info *cb,
 	cb->dev = dev;
 	cb->is_fw_allocated = false;
 	cb->is_secheap_allocated = false;
-	cb->is_fwuncached_buf_allocated = false;
 
 	atomic64_set(&cb->monitor_head, -1);
 
 	/* Create a pool with 64K granularity for supporting shared memory */
 	if (cb->shared_support) {
-		cb->shared_mem_pool = gen_pool_create(
-			SHARED_MEM_POOL_GRANULARITY, -1);
+		for (i = 0; i < cb->shared_info.num_regions; i++) {
+			cb->shared_mem_pool[i] = gen_pool_create(
+				SHARED_MEM_POOL_GRANULARITY, -1);
 
-		if (!cb->shared_mem_pool)
-			return -ENOMEM;
+			if (!cb->shared_mem_pool[i])
+				goto end;
 
-		rc = gen_pool_add(cb->shared_mem_pool,
-			cb->shared_info.iova_start,
-			cb->shared_info.iova_len,
-			-1);
+			rc = gen_pool_add(cb->shared_mem_pool[i],
+					cb->shared_info.nested_regions[i].region_info.iova_start,
+					cb->shared_info.nested_regions[i].region_info.iova_len,
+					-1);
+			if (rc) {
+				CAM_ERR(CAM_SMMU, "Genpool chunk creation failed");
+				gen_pool_destroy(cb->shared_mem_pool[i]);
+				cb->shared_mem_pool[i] = NULL;
+				goto end;
+			}
 
-		CAM_DBG(CAM_SMMU, "Shared mem start->%lX",
-			(unsigned long)cb->shared_info.iova_start);
-		CAM_DBG(CAM_SMMU, "Shared mem len->%zu",
-			cb->shared_info.iova_len);
-
-		if (rc) {
-			CAM_ERR(CAM_SMMU, "Genpool chunk creation failed");
-			gen_pool_destroy(cb->shared_mem_pool);
-			cb->shared_mem_pool = NULL;
-			return rc;
+			CAM_DBG(CAM_SMMU, "cb: %s Shared mem start->%lX len->%zu",
+				cb->name[0], (unsigned long)
+				cb->shared_info.nested_regions[i].region_info.iova_start,
+				cb->shared_info.nested_regions[i].region_info.iova_len);
 		}
 	}
 
@@ -3676,11 +4320,36 @@ static int cam_smmu_setup_cb(struct cam_context_bank_info *cb,
 		goto end;
 	}
 
+	if (cb->fence_queue_pool_support) {
+		/* Align allocations to a page size */
+		cb->fence_queue_mem_pool = gen_pool_create(PAGE_SHIFT, -1);
+		if (!cb->fence_queue_mem_pool)
+			goto end;
+
+		rc = gen_pool_add(cb->fence_queue_mem_pool, cb->fence_queue_pool.iova_start,
+				cb->fence_queue_pool.iova_len, -1);
+		if (rc) {
+			CAM_ERR(CAM_SMMU, "Genpool chunk creation failed");
+			gen_pool_destroy(cb->fence_queue_mem_pool);
+			cb->fence_queue_mem_pool = NULL;
+			goto end;
+		}
+
+		CAM_DBG(CAM_SMMU, "cb: %s fence_queue pool mem start->%lX len->%zu",
+			cb->name[0], (unsigned long)cb->fence_queue_pool.iova_start,
+			cb->fence_queue_pool.iova_start);
+	}
+
 	return rc;
+
 end:
 	if (cb->shared_support) {
-		gen_pool_destroy(cb->shared_mem_pool);
-		cb->shared_mem_pool = NULL;
+		for (--i; i >= 0; i--) {
+			if (cb->shared_mem_pool[i]) {
+				gen_pool_destroy(cb->shared_mem_pool[i]);
+				cb->shared_mem_pool[i] = NULL;
+			}
+		}
 	}
 
 	if (cb->scratch_buf_support) {
@@ -3781,10 +4450,240 @@ static int cam_smmu_get_discard_memory_regions(struct device_node *of_node,
 	return 0;
 }
 
+static int cam_smmu_get_iova_info_util(
+	struct device_node **child_node, dma_addr_t *region_start,
+	size_t *region_len, uint32_t *region_id)
+{
+	int rc;
+	uint32_t id;
+	dma_addr_t start = 0;
+	size_t len = 0;
+
+	if (iommu_cb_set.is_expanded_memory) {
+		rc = of_property_read_u64(*child_node, "iova-region-start", &start);
+		if (rc < 0) {
+			CAM_ERR(CAM_SMMU, "Failed to read iova-region-start");
+			return -EINVAL;
+		}
+
+		rc = of_property_read_u64(*child_node, "iova-region-len",
+			(uint64_t *)&len);
+		if (rc < 0) {
+			CAM_ERR(CAM_SMMU, "Failed to read iova-region-len");
+			return -EINVAL;
+		}
+	} else {
+		rc = of_property_read_u32(*child_node, "iova-region-start",
+			(uint32_t *)&start);
+		if (rc < 0) {
+			CAM_ERR(CAM_SMMU, "Failed to read iova-region-start");
+			return -EINVAL;
+		}
+
+		rc = of_property_read_u32(*child_node, "iova-region-len",
+			(uint32_t *)&len);
+		if (rc < 0) {
+			CAM_ERR(CAM_SMMU, "Failed to read iova-region-len");
+			return -EINVAL;
+		}
+	}
+
+	rc = of_property_read_u32(*child_node, "iova-region-id", &id);
+	if (rc < 0) {
+		CAM_ERR(CAM_SMMU, "Failed to read iova-region-id");
+		return -EINVAL;
+	}
+
+	*region_start = start;
+	*region_len = len;
+	*region_id = id;
+
+	return 0;
+}
+
+static int cam_smmu_get_subregions_memory_info(
+	struct device_node **of_node,
+	struct cam_smmu_nested_region_info *nested_regions,
+	struct cam_context_bank_info *cb)
+{
+	int rc;
+	uint32_t subregion_count = 0, subregion_mask = 0;
+	enum cam_smmu_subregion_id subregion_id;
+	struct device_node *sub_node = NULL;
+	const char *subregion_name;
+	dma_addr_t subregion_start = 0;
+	size_t subregion_len = 0;
+	struct cam_smmu_subregion_info *subregions = NULL;
+	struct device_node *child_node = *of_node;
+
+	/* Count number of child nodes */
+	for_each_available_child_of_node(child_node, sub_node)
+		subregion_count++;
+
+	if (subregion_count > CAM_SMMU_SUBREGION_MAX) {
+		CAM_ERR(CAM_SMMU,
+			"Invalid number of subregions max=%u count=%u cb=%s",
+			CAM_SMMU_SUBREGION_MAX, subregion_count, cb->name[0]);
+		return -EINVAL;
+	}
+
+	for_each_available_child_of_node(child_node, sub_node) {
+		subregions =
+			&nested_regions->subregions[nested_regions->num_subregions];
+
+		rc = of_property_read_string(sub_node,
+			"iova-region-name", &subregion_name);
+		if (rc < 0) {
+			CAM_ERR(CAM_SMMU, "IOVA subregion not found");
+			goto err;
+		}
+
+		rc = cam_smmu_get_iova_info_util(&sub_node, &subregion_start,
+			&subregion_len, &subregion_id);
+		if (rc)
+			goto err;
+
+		switch (subregion_id) {
+		case CAM_SMMU_SUBREGION_GENERIC:
+			if (subregion_mask & BIT(subregion_id))
+				goto repeated_subregion;
+
+			subregions->subregion_id = subregion_id;
+			subregions->subregion_info.iova_len = subregion_len;
+			subregions->subregion_info.iova_start = subregion_start;
+			break;
+		case CAM_SMMU_SUBREGION_SYNX_HWMUTEX:
+			if (subregion_mask & BIT(subregion_id))
+				goto repeated_subregion;
+
+			subregions->subregion_id = subregion_id;
+			subregions->subregion_info.iova_len = subregion_len;
+			subregions->subregion_info.iova_start = subregion_start;
+			rc = of_property_read_u32(sub_node,
+				"phy-addr", (uint32_t *)&subregions->subregion_info.phy_addr);
+			if (rc < 0) {
+				CAM_ERR(CAM_SMMU, "Failed to read phy addr");
+				goto err;
+			}
+			break;
+		case CAM_SMMU_SUBREGION_IPC_HWMUTEX:
+			if (subregion_mask & BIT(subregion_id))
+				goto repeated_subregion;
+
+			subregions->subregion_id = subregion_id;
+			subregions->subregion_info.iova_len = subregion_len;
+			subregions->subregion_info.iova_start = subregion_start;
+			rc = of_property_read_u32(sub_node,
+				"phy-addr", (uint32_t *)&subregions->subregion_info.phy_addr);
+			if (rc < 0) {
+				CAM_ERR(CAM_SMMU, "Failed to read phy addr");
+				goto err;
+			}
+			break;
+		case CAM_SMMU_SUBREGION_GLOBAL_SYNC_MEM:
+			if (subregion_mask & BIT(subregion_id))
+				goto repeated_subregion;
+
+			subregions->subregion_id = subregion_id;
+			subregions->subregion_info.iova_len = subregion_len;
+			subregions->subregion_info.iova_start = subregion_start;
+			rc = of_property_read_u32(sub_node,
+				"phy-addr", (uint32_t *)&subregions->subregion_info.phy_addr);
+			if (rc < 0) {
+				CAM_ERR(CAM_SMMU, "Failed to read phy addr");
+				goto err;
+			}
+			break;
+		case CAM_SMMU_SUBREGION_GLOBAL_CNTR:
+			if (subregion_mask & BIT(subregion_id))
+				goto repeated_subregion;
+
+			subregions->subregion_id = subregion_id;
+			subregions->subregion_info.iova_len = subregion_len;
+			subregions->subregion_info.iova_start = subregion_start;
+			rc = of_property_read_u32(sub_node,
+				"phy-addr", (uint32_t *)&subregions->subregion_info.phy_addr);
+			if (rc < 0) {
+				CAM_ERR(CAM_SMMU, "Failed to read phy addr");
+				goto err;
+			}
+			break;
+		default:
+			CAM_ERR(CAM_SMMU, "Unsupported subregion_id: %d", subregion_id);
+			rc = -EINVAL;
+			goto err;
+		}
+
+		subregion_mask |= BIT(subregion_id);
+		nested_regions->num_subregions++;
+		CAM_DBG(CAM_SMMU,
+			"cb=%s region=%d iova=0x%x len=0x%x phy=0x%pK num_subregions=%u",
+			cb->name[0], subregion_id, subregions->subregion_info.iova_start,
+			subregions->subregion_info.iova_len,
+			subregions->subregion_info.phy_addr, nested_regions->num_subregions);
+	}
+
+	return 0;
+
+repeated_subregion:
+	CAM_ERR(CAM_SMMU,
+		"Subregion=%u was already populated in cb=%s subregion_mask=0x%x",
+		subregion_id, cb->name[0], subregion_mask);
+	rc = -EINVAL;
+err:
+	of_node_put(child_node);
+	return rc;
+}
+
+static int cam_smmu_validate_discard_iova_region(
+	struct cam_context_bank_info *cb,
+	struct cam_smmu_region_info *region_info)
+{
+	/* Make sure Discard region is properly specified */
+	if ((cb->discard_iova_start !=
+		region_info->discard_iova_start) ||
+		(cb->discard_iova_len !=
+		region_info->discard_iova_len)) {
+		CAM_ERR(CAM_SMMU,
+			"Mismatch Discard region specified, [0x%x 0x%x] [0x%x 0x%x]",
+			cb->discard_iova_start,
+			cb->discard_iova_len,
+			region_info->discard_iova_start,
+			region_info->discard_iova_len);
+		return -EINVAL;
+	} else if (cb->discard_iova_start && cb->discard_iova_len) {
+		if ((cb->discard_iova_start <=
+		region_info->iova_start) ||
+		(cb->discard_iova_start >=
+		region_info->iova_start + region_info->iova_len) ||
+		(cb->discard_iova_start + cb->discard_iova_len >=
+		region_info->iova_start + region_info->iova_len)) {
+			CAM_ERR(CAM_SMMU,
+			"[%s] : Incorrect Discard region specified [0x%x 0x%x] in [0x%x 0x%x]",
+			cb->name[0],
+			cb->discard_iova_start,
+			cb->discard_iova_start + cb->discard_iova_len,
+			region_info->iova_start,
+			region_info->iova_start + region_info->iova_len);
+			return -EINVAL;
+		}
+
+		CAM_INFO(CAM_SMMU,
+			"[%s] : Discard region specified [0x%x 0x%x] in [0x%x 0x%x]",
+			cb->name[0],
+			cb->discard_iova_start,
+			cb->discard_iova_start + cb->discard_iova_len,
+			region_info->iova_start,
+			region_info->iova_start + region_info->iova_len);
+	}
+
+	return 0;
+}
+
 static int cam_smmu_get_memory_regions_info(struct device_node *of_node,
 	struct cam_context_bank_info *cb)
 {
-	int rc = 0;
+	int rc = 0, i;
 	struct device_node *mem_map_node = NULL;
 	struct device_node *child_node = NULL;
 	dma_addr_t region_start = 0;
@@ -3826,55 +4725,11 @@ static int cam_smmu_get_memory_regions_info(struct device_node *of_node,
 			return -EINVAL;
 		}
 
-		if (iommu_cb_set.is_expanded_memory) {
-			rc = of_property_read_u64(child_node, "iova-region-start", &region_start);
-			if (rc < 0) {
-				of_node_put(mem_map_node);
-				CAM_ERR(CAM_SMMU, "Failed to read iova-region-start");
-				return -EINVAL;
-			}
-
-			rc = of_property_read_u64(child_node, "iova-region-len",
-				(uint64_t *)&region_len);
-			if (rc < 0) {
-				of_node_put(mem_map_node);
-				CAM_ERR(CAM_SMMU, "Failed to read iova-region-len");
-				return -EINVAL;
-			}
-		} else {
-			rc = of_property_read_u32(child_node, "iova-region-start",
-				(uint32_t *)&region_start);
-			if (rc < 0) {
-				of_node_put(mem_map_node);
-				CAM_ERR(CAM_SMMU, "Failed to read iova-region-start");
-				return -EINVAL;
-			}
-
-			rc = of_property_read_u32(child_node, "iova-region-len",
-				(uint32_t *)&region_len);
-			if (rc < 0) {
-				of_node_put(mem_map_node);
-				CAM_ERR(CAM_SMMU, "Failed to read iova-region-len");
-				return -EINVAL;
-			}
-		}
-
-		rc = of_property_read_u32(child_node, "iova-region-id", &region_id);
-		if (rc < 0) {
+		rc = cam_smmu_get_iova_info_util(&child_node,
+			&region_start, &region_len, &region_id);
+		if (rc) {
 			of_node_put(mem_map_node);
-			CAM_ERR(CAM_SMMU, "Failed to read iova-region-id");
-			return -EINVAL;
-		}
-
-		if (strcmp(region_name, qdss_region_name) == 0) {
-			rc = of_property_read_u32(child_node,
-				"qdss-phy-addr", &qdss_region_phy_addr);
-			if (rc < 0) {
-				of_node_put(mem_map_node);
-				CAM_ERR(CAM_SMMU,
-					"Failed to read qdss phy addr");
-				return -EINVAL;
-			}
+			return rc;
 		}
 
 		switch (region_id) {
@@ -3883,46 +4738,201 @@ static int cam_smmu_get_memory_regions_info(struct device_node *of_node,
 			cb->firmware_info.iova_start = region_start;
 			cb->firmware_info.iova_len = region_len;
 			break;
-		case CAM_SMMU_REGION_SHARED:
+		case CAM_SMMU_REGION_SHARED: {
+			int32_t num_shared_regions = cb->shared_info.num_regions;
+			struct cam_smmu_nested_region_info *nested_reg_info;
+
+			if (num_shared_regions >= CAM_SMMU_MULTI_REGION_MAX) {
+				CAM_ERR(CAM_SMMU,
+					"Exceeding max supported number of regions max: %u current: %u in cb: %s for region: %d",
+					CAM_SMMU_MULTI_REGION_MAX, num_shared_regions,
+					cb->name[0], region_id);
+				rc = -EINVAL;
+				goto end;
+			}
+
+			nested_reg_info = &cb->shared_info.nested_regions[num_shared_regions];
+			nested_reg_info->subregion_support =
+				of_property_read_bool(child_node, "subregion_support");
+
+			if (nested_reg_info->subregion_support) {
+				rc = cam_smmu_get_subregions_memory_info(&child_node,
+					nested_reg_info, cb);
+				if (rc)
+					goto end;
+			}
+
+			nested_reg_info->region_info.iova_start = region_start;
+			nested_reg_info->region_info.iova_len = region_len;
+
+			cb->shared_info.num_regions++;
 			cb->shared_support = 1;
-			cb->shared_info.iova_start = region_start;
-			cb->shared_info.iova_len = region_len;
+		}
 			break;
 		case CAM_SMMU_REGION_SCRATCH:
 			cb->scratch_buf_support = 1;
 			cb->scratch_info.iova_start = region_start;
 			cb->scratch_info.iova_len = region_len;
 			break;
-		case CAM_SMMU_REGION_IO:
-			cb->io_support = 1;
-			cb->io_info.iova_start = region_start;
-			cb->io_info.iova_len = region_len;
+		case CAM_SMMU_REGION_IO: {
+			int32_t num_io_regions = cb->io_info.num_regions;
+			struct cam_smmu_nested_region_info *nested_reg_info;
+
+			if (num_io_regions >= CAM_SMMU_MULTI_REGION_MAX) {
+				CAM_ERR(CAM_SMMU,
+					"Exceeding max supported number of regions max: %u current: %u in cb: %s for region: %d",
+					CAM_SMMU_MULTI_REGION_MAX, num_io_regions,
+					cb->name[0], region_id);
+				rc = -EINVAL;
+				goto end;
+			}
+
+			nested_reg_info = &cb->io_info.nested_regions[num_io_regions];
+			nested_reg_info->subregion_support =
+				of_property_read_bool(child_node, "subregion_support");
+
+			if (nested_reg_info->subregion_support) {
+				rc = cam_smmu_get_subregions_memory_info(&child_node,
+					nested_reg_info, cb);
+				if (rc)
+					goto end;
+			}
+
+			nested_reg_info->region_info.iova_start = region_start;
+			nested_reg_info->region_info.iova_len = region_len;
 			rc = cam_smmu_get_discard_memory_regions(child_node,
-				&cb->io_info.discard_iova_start,
-				&cb->io_info.discard_iova_len);
+				&nested_reg_info->region_info.discard_iova_start,
+				&nested_reg_info->region_info.discard_iova_len);
 			if (rc) {
 				CAM_ERR(CAM_SMMU,
-					"Invalid Discard region specified in IO region, rc=%d",
-					rc);
-				of_node_put(mem_map_node);
-				return -EINVAL;
+					"Invalid Discard region specified in IO region, rc: %d cb: %s",
+					rc, cb->name[0]);
+				goto end;
 			}
+			cb->io_info.num_regions++;
+			cb->io_support = 1;
+		}
 			break;
 		case CAM_SMMU_REGION_SECHEAP:
 			cb->secheap_support = 1;
 			cb->secheap_info.iova_start = region_start;
 			cb->secheap_info.iova_len = region_len;
 			break;
-		case CAM_SMMU_REGION_FWUNCACHED:
+		case CAM_SMMU_REGION_FWUNCACHED:{
+			int32_t num_fwuncached_regions = cb->fwuncached_region.num_regions;
+			struct cam_smmu_nested_region_info *nested_reg_info;
+
+			if (num_fwuncached_regions >= CAM_SMMU_MULTI_REGION_MAX) {
+				CAM_ERR(CAM_SMMU,
+					"Exceeding max supported number of regions max: %u current: %u in cb: %s for region: %d",
+					CAM_SMMU_MULTI_REGION_MAX, num_fwuncached_regions,
+					cb->name[0], region_id);
+				rc = -EINVAL;
+				goto end;
+			}
+
+			nested_reg_info =
+				&cb->fwuncached_region.nested_regions[num_fwuncached_regions];
+			nested_reg_info->subregion_support =
+				of_property_read_bool(child_node, "subregion_support");
+
+			if (nested_reg_info->subregion_support) {
+				rc = cam_smmu_get_subregions_memory_info(&child_node,
+					nested_reg_info, cb);
+				if (rc)
+					goto end;
+			}
+
+			nested_reg_info->region_info.iova_start = region_start;
+			nested_reg_info->region_info.iova_len = region_len;
+
+			cb->fwuncached_region.num_regions++;
 			cb->fwuncached_region_support = 1;
-			cb->fwuncached_region.iova_start = region_start;
-			cb->fwuncached_region.iova_len = region_len;
+		}
 			break;
-		case CAM_SMMU_REGION_QDSS:
+		case CAM_SMMU_REGION_QDSS: {
+			int32_t num_qdss_regions = cb->qdss_info.num_regions;
+			struct cam_smmu_nested_region_info *nested_reg_info;
+
+			if (num_qdss_regions >= CAM_SMMU_MULTI_REGION_MAX) {
+				CAM_ERR(CAM_SMMU,
+					"Exceeding max supported number of regions max: %u current: %u in cb: %s for region: %d",
+					CAM_SMMU_MULTI_REGION_MAX, num_qdss_regions,
+					cb->name[0], region_id);
+				rc = -EINVAL;
+				goto end;
+			}
+
+			nested_reg_info =
+				&cb->qdss_info.nested_regions[num_qdss_regions];
+			nested_reg_info->subregion_support =
+				of_property_read_bool(child_node, "subregion_support");
+
+			if (nested_reg_info->subregion_support) {
+				CAM_ERR(CAM_SMMU,
+					"Subregion for QDSS not supported, failing cb: %s initialization",
+					cb->name[0]);
+				goto end;
+			}
+
+			nested_reg_info->region_info.iova_start = region_start;
+			nested_reg_info->region_info.iova_len = region_len;
+			/* phy-addr field is mandatory for QDSS */
+			rc = of_property_read_u32(child_node, "qdss-phy-addr",
+				(uint32_t *)&nested_reg_info->region_info.phy_addr);
+			if (rc) {
+				CAM_ERR(CAM_SMMU, "No phy-addr field for qdss in cb: %s",
+					cb->name[0]);
+				goto end;
+			}
+
+			cb->qdss_info.num_regions++;
 			cb->qdss_support = 1;
-			cb->qdss_info.iova_start = region_start;
-			cb->qdss_info.iova_len = region_len;
-			cb->qdss_phy_addr = qdss_region_phy_addr;
+		}
+			break;
+		case CAM_SMMU_REGION_DEVICE:{
+			int32_t num_device_regions = cb->device_region.num_regions;
+			struct cam_smmu_nested_region_info *nested_reg_info;
+
+			if (num_device_regions >= CAM_SMMU_MULTI_REGION_MAX) {
+				CAM_ERR(CAM_SMMU,
+					"Exceeding max supported number of regions max: %u current: %u in cb: %s for region: %d",
+					CAM_SMMU_MULTI_REGION_MAX, num_device_regions,
+					cb->name[0], region_id);
+				rc = -EINVAL;
+				goto end;
+			}
+
+			nested_reg_info = &cb->device_region.nested_regions[num_device_regions];
+			nested_reg_info->subregion_support =
+				of_property_read_bool(child_node, "subregion_support");
+
+			if (nested_reg_info->subregion_support) {
+				rc = cam_smmu_get_subregions_memory_info(&child_node,
+					nested_reg_info, cb);
+				if (rc)
+					goto end;
+			}
+
+			nested_reg_info->region_info.iova_start = region_start;
+			nested_reg_info->region_info.iova_len = region_len;
+
+			rc = of_property_read_u32(child_node,
+				"phy-addr", (uint32_t *)&nested_reg_info->region_info.phy_addr);
+			if (rc) {
+				CAM_DBG(CAM_SMMU, "No phy-addr field in fwuncached in cb: %s",
+					cb->name[0]);
+				rc = 0;
+			}
+
+			cb->device_region.num_regions++;
+			cb->device_region_support = 1;
+		}
+			break;
+		case CAM_SMMU_REGION_FENCE_QUEUE:
+			cb->fence_queue_pool_support = 1;
+			cb->fence_queue_pool.iova_start = region_start;
+			cb->fence_queue_pool.iova_len = region_len;
 			break;
 		default:
 			CAM_ERR(CAM_SMMU,
@@ -3945,52 +4955,16 @@ static int cam_smmu_get_memory_regions_info(struct device_node *of_node,
 			CAM_ERR(CAM_SMMU,
 				"Invalid Discard region specified in CB, rc=%d",
 				rc);
-			of_node_put(mem_map_node);
-			return -EINVAL;
+			goto end;
 		}
 
-		/* Make sure Discard region is properly specified */
-		if ((cb->discard_iova_start !=
-			cb->io_info.discard_iova_start) ||
-			(cb->discard_iova_len !=
-			cb->io_info.discard_iova_len)) {
-			CAM_ERR(CAM_SMMU,
-				"Mismatch Discard region specified, [0x%x 0x%x] [0x%x 0x%x]",
-				cb->discard_iova_start,
-				cb->discard_iova_len,
-				cb->io_info.discard_iova_start,
-				cb->io_info.discard_iova_len);
-			of_node_put(mem_map_node);
-			return -EINVAL;
-		} else if (cb->discard_iova_start && cb->discard_iova_len) {
-			if ((cb->discard_iova_start <=
-			cb->io_info.iova_start) ||
-			(cb->discard_iova_start >=
-			cb->io_info.iova_start + cb->io_info.iova_len) ||
-			(cb->discard_iova_start + cb->discard_iova_len >=
-			cb->io_info.iova_start + cb->io_info.iova_len)) {
-				CAM_ERR(CAM_SMMU,
-				"[%s] : Incorrect Discard region specified [0x%x 0x%x] in [0x%x 0x%x]",
-				cb->name[0],
-				cb->discard_iova_start,
-				cb->discard_iova_start + cb->discard_iova_len,
-				cb->io_info.iova_start,
-				cb->io_info.iova_start + cb->io_info.iova_len);
-				of_node_put(mem_map_node);
-				return -EINVAL;
-			}
-
-			CAM_INFO(CAM_SMMU,
-				"[%s] : Discard region specified [0x%x 0x%x] in [0x%x 0x%x]",
-				cb->name[0],
-				cb->discard_iova_start,
-				cb->discard_iova_start + cb->discard_iova_len,
-				cb->io_info.iova_start,
-				cb->io_info.iova_start + cb->io_info.iova_len);
+		for (i = 0; i < cb->io_info.num_regions; i++) {
+			rc = cam_smmu_validate_discard_iova_region(cb,
+				&cb->io_info.nested_regions[i].region_info);
+			if (rc)
+				goto end;
 		}
 	}
-
-	of_node_put(mem_map_node);
 
 	if (!num_regions) {
 		CAM_ERR(CAM_SMMU,
@@ -3998,17 +4972,18 @@ static int cam_smmu_get_memory_regions_info(struct device_node *of_node,
 		rc = -ENODEV;
 	}
 
+end:
+	of_node_put(mem_map_node);
 	return rc;
 }
 
 static int cam_populate_smmu_context_banks(struct device *dev,
 	enum cam_iommu_type type)
 {
-	int rc = 0;
+	int rc = 0, i, j;
 	struct cam_context_bank_info *cb;
 	struct device *ctx = NULL;
-	int i = 0;
-	bool dma_coherent, dma_coherent_hint;
+	bool dma_coherent, dma_coherent_hint, is_found;
 
 	if (!dev) {
 		CAM_ERR(CAM_SMMU, "Error: Invalid device");
@@ -4027,7 +5002,6 @@ static int cam_populate_smmu_context_banks(struct device *dev,
 
 	cb->is_mul_client =
 		of_property_read_bool(dev->of_node, "multiple-client-devices");
-
 	cb->num_shared_hdl = of_property_count_strings(dev->of_node,
 		"cam-smmu-label");
 
@@ -4042,7 +5016,7 @@ static int cam_populate_smmu_context_banks(struct device *dev,
 	/* set the name of the context bank */
 	for (i = 0; i < cb->num_shared_hdl; i++) {
 		rc = of_property_read_string_index(dev->of_node,
-		"cam-smmu-label", i, &cb->name[i]);
+			"cam-smmu-label", i, &cb->name[i]);
 		if (rc < 0) {
 			CAM_ERR(CAM_SMMU,
 				"Error: failed to read label from sub device");
@@ -4050,8 +5024,44 @@ static int cam_populate_smmu_context_banks(struct device *dev,
 		}
 	}
 
-	rc = cam_smmu_get_memory_regions_info(dev->of_node,
-		cb);
+	cb->num_multi_regions = of_property_count_strings(dev->of_node,
+		"multiple-same-region-clients");
+	if (cb->num_multi_regions > CAM_SMMU_MULTI_REGION_MAX) {
+		CAM_ERR(CAM_CDM, "Invalid count of multi region clients = %d",
+			cb->num_multi_regions);
+		rc = -EINVAL;
+		goto cb_init_fail;
+	}
+
+	for (j = 0; j < cb->num_multi_regions; j++) {
+		is_found = false;
+
+		rc = of_property_read_string_index(dev->of_node,
+			"multiple-same-region-clients", j, &cb->multi_region_clients[j]);
+		if (rc < 0) {
+			CAM_ERR(CAM_SMMU,
+				"Error: failed to read label from sub device");
+			goto cb_init_fail;
+		}
+
+		/* Needs to match shared hdl client list */
+		for (i = 0; i < cb->num_shared_hdl; i++) {
+			if (strcmp(cb->name[i], cb->multi_region_clients[j])) {
+				is_found = true;
+				break;
+			}
+		}
+
+		if (!is_found) {
+			CAM_ERR(CAM_SMMU,
+				"%s multi region client not found in shared client list cb = %s",
+				cb->multi_region_clients[j], cb->name[0]);
+			rc = -EINVAL;
+			goto cb_init_fail;
+		}
+	}
+
+	rc = cam_smmu_get_memory_regions_info(dev->of_node, cb);
 	if (rc < 0) {
 		CAM_ERR(CAM_SMMU, "Error: Getting region info");
 		return rc;
@@ -4210,7 +5220,6 @@ static unsigned long cam_smmu_mini_dump_cb(void *dst, unsigned long len)
 		cb_md->is_secure = cb->is_secure;
 		cb_md->is_fw_allocated = cb->is_fw_allocated;
 		cb_md->is_secheap_allocated = cb->is_secheap_allocated;
-		cb_md->is_fwuncached_buf_allocated = cb->is_fwuncached_buf_allocated;
 		cb_md->is_qdss_allocated = cb->is_qdss_allocated;
 		cb_md->scratch_buf_support = cb->scratch_buf_support;
 		cb_md->firmware_support = cb->firmware_support;
@@ -4247,10 +5256,8 @@ static unsigned long cam_smmu_mini_dump_cb(void *dst, unsigned long len)
 			sizeof(struct cam_smmu_region_info));
 		memcpy(&cb_md->qdss_info, &cb->qdss_info,
 			sizeof(struct cam_smmu_region_info));
-		memcpy(&cb_md->secheap_buf, &cb->secheap_buf,
-			sizeof(struct region_buf_info));
-		memcpy(&cb_md->fwuncached_reg_buf, &cb->fwuncached_reg_buf,
-			sizeof(struct region_buf_info));
+		memcpy(&cb_md->device_mem_region, &cb->device_region,
+			sizeof(struct cam_smmu_region_info));
 
 		for (j = 0; j < iommu_cb_set.cb_info[i].num_shared_hdl; j++)
 			scnprintf(cb_md->name[j], 16, cb->name[j]);

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_HFI_REG_H_
@@ -12,23 +13,25 @@
 /* general purpose registers */
 #define GEN_PURPOSE_REG(n)              (n * 4)
 
-#define HFI_REG_FW_VERSION              GEN_PURPOSE_REG(1)
-#define HFI_REG_HOST_ICP_INIT_REQUEST   GEN_PURPOSE_REG(2)
-#define HFI_REG_ICP_HOST_INIT_RESPONSE  GEN_PURPOSE_REG(3)
-#define HFI_REG_SHARED_MEM_PTR          GEN_PURPOSE_REG(4)
-#define HFI_REG_SHARED_MEM_SIZE         GEN_PURPOSE_REG(5)
-#define HFI_REG_QTBL_PTR                GEN_PURPOSE_REG(6)
-#define HFI_REG_SECONDARY_HEAP_PTR      GEN_PURPOSE_REG(7)
-#define HFI_REG_SECONDARY_HEAP_SIZE     GEN_PURPOSE_REG(8)
-#define HFI_REG_SFR_PTR                 GEN_PURPOSE_REG(10)
-#define HFI_REG_QDSS_IOVA               GEN_PURPOSE_REG(11)
-#define HFI_REG_QDSS_IOVA_SIZE          GEN_PURPOSE_REG(12)
-#define HFI_REG_IO_REGION_IOVA          GEN_PURPOSE_REG(13)
-#define HFI_REG_IO_REGION_SIZE          GEN_PURPOSE_REG(14)
-#define HFI_REG_IO2_REGION_IOVA         GEN_PURPOSE_REG(15)
-#define HFI_REG_IO2_REGION_SIZE         GEN_PURPOSE_REG(16)
-#define HFI_REG_FWUNCACHED_REGION_IOVA  GEN_PURPOSE_REG(17)
-#define HFI_REG_FWUNCACHED_REGION_SIZE  GEN_PURPOSE_REG(18)
+#define HFI_REG_FW_VERSION                   GEN_PURPOSE_REG(1)
+#define HFI_REG_HOST_ICP_INIT_REQUEST        GEN_PURPOSE_REG(2)
+#define HFI_REG_ICP_HOST_INIT_RESPONSE       GEN_PURPOSE_REG(3)
+#define HFI_REG_SHARED_MEM_PTR               GEN_PURPOSE_REG(4)
+#define HFI_REG_SHARED_MEM_SIZE              GEN_PURPOSE_REG(5)
+#define HFI_REG_QTBL_PTR                     GEN_PURPOSE_REG(6)
+#define HFI_REG_SECONDARY_HEAP_PTR           GEN_PURPOSE_REG(7)
+#define HFI_REG_SECONDARY_HEAP_SIZE          GEN_PURPOSE_REG(8)
+#define HFI_REG_SFR_PTR                      GEN_PURPOSE_REG(10)
+#define HFI_REG_QDSS_IOVA                    GEN_PURPOSE_REG(11)
+#define HFI_REG_QDSS_IOVA_SIZE               GEN_PURPOSE_REG(12)
+#define HFI_REG_IO_REGION_IOVA               GEN_PURPOSE_REG(13)
+#define HFI_REG_IO_REGION_SIZE               GEN_PURPOSE_REG(14)
+#define HFI_REG_IO2_REGION_IOVA              GEN_PURPOSE_REG(15)
+#define HFI_REG_IO2_REGION_SIZE              GEN_PURPOSE_REG(16)
+#define HFI_REG_FWUNCACHED_REGION_IOVA       GEN_PURPOSE_REG(17)
+#define HFI_REG_FWUNCACHED_REGION_SIZE       GEN_PURPOSE_REG(18)
+#define HFI_REG_DEVICE_REGION_IOVA           GEN_PURPOSE_REG(19)
+#define HFI_REG_DEVICE_REGION_IOVA_SIZE      GEN_PURPOSE_REG(20)
 
 /* start of Queue table and queues */
 #define MAX_ICP_HFI_QUEUES                      4
