@@ -18,6 +18,8 @@
 #define CAM_SYNC_TYPE_KMD         1
 
 #define SYNC_DEBUG_NAME_LEN 63
+#define CAM_GENERIC_FENCE_BATCH_MAX     10
+#define CAM_GENERIC_FENCE_TYPE_HW_FENCE 0x4
 
 typedef void (*sync_callback)(int32_t sync_obj, int status, void *data);
 
@@ -68,6 +70,35 @@ struct cam_sync_hwfence_session_initialize_params {
 	size_t len;
 
 	bool fencing_protocol;
+};
+
+/**
+ * @brief: HW fence tx queue wr pointer info
+ *
+ * @client_core: Client core ID pertaining to the HW fence
+ * @signal_id: Signal ID associated with the HW fence
+ * @wr_pntr: write pointer index for this hw fence for this client
+ */
+struct cam_sync_hwfence_tx_q_wr_pntr_info {
+	enum cam_sync_fencing_client_cores client_core;
+	int32_t signal_id;
+	int32_t wr_pntr;
+};
+
+/**
+ * @brief: Update HW fence info in the tx queue for the given sync object
+ *
+ * @sync_object: Sync object backing associated HW fences
+ * @is_hwfence: Set if the sync object is a HW fence
+ * @num_hwfences: Number of HW fences associated with the given sync object
+ * @wr_pntr_arr: Write pointer array for the associated HW fences
+ */
+struct cam_sync_hwfence_info {
+	int32_t sync_object;
+	int32_t is_hwfence;
+	int32_t num_hwfences;
+	uint32_t reserved;
+	struct cam_sync_hwfence_tx_q_wr_pntr_info wr_pntr_arr[CAM_GENERIC_FENCE_BATCH_MAX];
 };
 
 /* Kernel APIs */
@@ -271,6 +302,16 @@ int cam_sync_initialize_hw_fence_session(
  * @return status of operation zero in case of success
  */
 int cam_sync_deinitialize_hw_fence_session(int32_t session_hdl);
+
+/**
+ * @brief: Validates sync obj and updates hw fence queue pntrs
+ *
+ * @param hwfence_info: pointer to structure having sync_object
+ *
+ * @return status of operation zero in case of success
+ */
+int cam_sync_check_and_update_hw_fence_queue_pntrs(
+	struct cam_sync_hwfence_info *hwfence_info);
 
 /**
  * @brief : API to register SYNC to platform framework.

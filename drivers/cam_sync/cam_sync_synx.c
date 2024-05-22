@@ -19,6 +19,7 @@ struct cam_synx_obj_row {
 	uint32_t                        synx_obj;
 	enum cam_synx_obj_state         state;
 	cam_sync_callback_for_synx_obj  sync_cb;
+	struct synx_session            *session_hdl;
 	bool                            cb_registered_for_sync;
 	bool                            sync_signal_synx;
 	int32_t                         sync_obj;
@@ -37,6 +38,32 @@ struct cam_synx_obj_device {
 
 static struct cam_synx_obj_device *g_cam_synx_obj_dev;
 static char cam_synx_session_name[64] = "Camera_Generic_Synx_Session";
+
+/*
+ * Synx APIs need to be invoked in non atomic context,
+ * all these utils invoke synx driver
+ */
+static inline int __cam_synx_signal_util(
+	struct synx_session *session_hdl,
+	uint32_t synx_hdl, uint32_t signal_status)
+{
+	return synx_signal((session_hdl ? session_hdl :
+		g_cam_synx_obj_dev->session_handle), synx_hdl, signal_status);
+}
+
+static inline int __cam_synx_create_hdl_util(
+	struct synx_session *session_hdl, struct synx_create_params *params)
+{
+	return synx_create((session_hdl ? session_hdl :
+		g_cam_synx_obj_dev->session_handle), params);
+}
+
+static void *__cam_synx_get_fence(
+	struct synx_session *session_hdl, int32_t synx_hdl)
+{
+	return synx_get_fence((session_hdl ? session_hdl :
+		g_cam_synx_obj_dev->session_handle), synx_hdl);
+}
 
 static int __cam_synx_obj_map_sync_status_util(uint32_t sync_status,
 	uint32_t *out_synx_status)
@@ -64,7 +91,7 @@ static int __cam_synx_obj_release(int32_t row_idx)
 	spin_lock_bh(&g_cam_synx_obj_dev->row_spinlocks[row_idx]);
 	row = &g_cam_synx_obj_dev->rows[row_idx];
 
-	if (row->state == CAM_SYNX_OBJ_STATE_ACTIVE) {
+	if (row->state == CAM_SYNX_OBJ_STATE_ACTIVE && NULL != row->session_hdl) {
 		CAM_WARN(CAM_SYNX,
 			"Unsignaled synx obj being released name: %s synx_obj:%d",
 			row->name, row->synx_obj);
@@ -76,7 +103,8 @@ static int __cam_synx_obj_release(int32_t row_idx)
 		"Releasing synx_obj: %d[%s] row_idx: %u",
 		row->synx_obj, row->name, row_idx);
 
-	synx_release(g_cam_synx_obj_dev->session_handle, row->synx_obj);
+	synx_release(g_cam_synx_obj_dev->session_handle,
+		row->synx_obj);
 
 	/* deinit row */
 	memset(row, 0, sizeof(struct cam_synx_obj_row));
@@ -102,7 +130,7 @@ static int __cam_synx_obj_find_free_idx(uint32_t *idx)
 }
 
 static void __cam_synx_obj_init_row(uint32_t idx, const char *name,
-	uint32_t synx_obj)
+	uint32_t synx_obj, struct synx_session *session_hdl)
 {
 	struct cam_synx_obj_row *row;
 
@@ -111,6 +139,7 @@ static void __cam_synx_obj_init_row(uint32_t idx, const char *name,
 	memset(row, 0, sizeof(*row));
 	row->synx_obj = synx_obj;
 	row->state = CAM_SYNX_OBJ_STATE_ACTIVE;
+	row->session_hdl = session_hdl;
 	strscpy(row->name, name, CAM_SYNX_OBJ_NAME_LEN);
 	spin_unlock_bh(&g_cam_synx_obj_dev->row_spinlocks[idx]);
 }
@@ -126,7 +155,7 @@ static int __cam_synx_obj_release_row(int32_t row_idx)
 	return __cam_synx_obj_release(row_idx);
 }
 
-static enum synx_client_id cam_synx_map_camera_client_id_for_synx(
+enum synx_client_id cam_synx_map_camera_client_id_for_synx(
 	enum cam_sync_fencing_client_cores cam_client_id,
 	uint32_t signal_id)
 {
@@ -271,7 +300,7 @@ static int __cam_synx_obj_import(const char *name,
 	}
 
 	*row_idx = idx;
-	__cam_synx_obj_init_row(idx, name, *params->indv.new_h_synx);
+	__cam_synx_obj_init_row(idx, name, *params->indv.new_h_synx, NULL);
 
 	CAM_DBG(CAM_SYNX, "Imported synx obj handle: %d[%s] row_idx: %u",
 		*params->indv.new_h_synx, name, idx);
@@ -316,8 +345,8 @@ static int __cam_synx_map_generic_flags_to_import(uint32_t generic_flags,
 	return 0;
 }
 
-int cam_synx_obj_create(const char *name, uint32_t flags, uint32_t *synx_obj,
-	int32_t *row_idx)
+int cam_synx_obj_create(const char *name, struct synx_session *session_hdl,
+	uint32_t flags, uint32_t *synx_obj, int32_t *row_idx)
 {
 	int rc = -1;
 	uint32_t idx;
@@ -343,14 +372,14 @@ int cam_synx_obj_create(const char *name, uint32_t flags, uint32_t *synx_obj,
 	 */
 	params.flags |= SYNX_CREATE_GLOBAL_FENCE;
 
-	rc = synx_create(g_cam_synx_obj_dev->session_handle, &params);
+	rc = __cam_synx_create_hdl_util(session_hdl, &params);
 	if (rc) {
 		CAM_ERR(CAM_SYNX, "Failed to create synx obj");
 		goto free_idx;
 	}
 
 	*row_idx = idx;
-	__cam_synx_obj_init_row(idx, name, *synx_obj);
+	__cam_synx_obj_init_row(idx, name, *synx_obj, session_hdl);
 
 	CAM_DBG(CAM_SYNX, "Created synx obj handle: %d[%s] row_idx: %u",
 		*synx_obj, name, idx);
@@ -361,6 +390,18 @@ free_idx:
 	clear_bit(idx, g_cam_synx_obj_dev->bitmap);
 end:
 	return rc;
+}
+
+int cam_synx_update_hw_fence_queue(void *session_hdl, int32_t synx_hdl)
+{
+	return __cam_synx_signal_util(session_hdl, synx_hdl, SYNX_STATE_SIGNALED_SUCCESS);
+}
+
+void *cam_synx_obj_get_native_fence(struct synx_session *session_hdl,
+	int32_t synx_hdl)
+{
+
+	return __cam_synx_get_fence(session_hdl, synx_hdl);
 }
 
 int cam_synx_obj_import_dma_fence(const char *name, uint32_t flags, void *fence,
@@ -424,11 +465,12 @@ int cam_synx_obj_internal_signal(int32_t row_idx,
 			signal_synx_obj->synx_obj);
 	}
 
-	rc = synx_signal(g_cam_synx_obj_dev->session_handle,
-		signal_synx_obj->synx_obj, signal_status);
-	if (rc)
-		CAM_WARN(CAM_SYNX, "synx obj: %d already signaled rc: %d",
-			row->synx_obj, rc);
+	rc = __cam_synx_signal_util(NULL, signal_synx_obj->synx_obj, signal_status);
+	if (rc) {
+		CAM_ERR(CAM_SYNX, "Failed to signal synx hdl: %u with status: %u rc: %d",
+			signal_synx_obj->synx_obj, signal_status, rc);
+		return rc;
+	}
 
 	row->state = CAM_SYNX_OBJ_STATE_SIGNALED;
 	spin_unlock_bh(&g_cam_synx_obj_dev->row_spinlocks[row_idx]);
@@ -696,8 +738,7 @@ void cam_synx_obj_close(void)
 
 		/* Signal and release the synx obj */
 		if (row->state != CAM_SYNX_OBJ_STATE_SIGNALED)
-			synx_signal(g_cam_synx_obj_dev->session_handle,
-				row->synx_obj, SYNX_STATE_SIGNALED_CANCEL);
+			__cam_synx_signal_util(NULL, row->synx_obj, SYNX_STATE_SIGNALED_CANCEL);
 		synx_release(g_cam_synx_obj_dev->session_handle,
 			row->synx_obj);
 

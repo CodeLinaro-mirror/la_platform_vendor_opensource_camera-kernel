@@ -18,6 +18,7 @@ struct cam_dma_fence_row {
 	bool                            cb_registered_for_sync;
 	bool                            ext_dma_fence;
 	bool                            sync_signal_dma;
+	bool                            is_hwfence;
 };
 
 /**
@@ -121,7 +122,7 @@ static struct dma_fence *__cam_dma_fence_find_fence_in_table(
 
 static void __cam_dma_fence_init_row(const char *name,
 	struct dma_fence *dma_fence, int32_t fd, uint32_t idx,
-	bool ext_dma_fence)
+	bool ext_dma_fence, bool is_hwfence)
 {
 	struct cam_dma_fence_row *row;
 
@@ -132,6 +133,7 @@ static void __cam_dma_fence_init_row(const char *name,
 	row->fd = fd;
 	row->state = CAM_DMA_FENCE_STATE_ACTIVE;
 	row->ext_dma_fence = ext_dma_fence;
+	row->is_hwfence = is_hwfence;
 	strscpy(row->name, name, CAM_DMA_FENCE_NAME_LEN);
 	spin_unlock_bh(&g_cam_dma_fence_dev->row_spinlocks[idx]);
 }
@@ -226,7 +228,7 @@ static struct dma_fence *cam_dma_fence_get_fence_from_sync_file(
 	}
 
 	__cam_dma_fence_init_row(dma_fence->ops->get_driver_name(dma_fence),
-		dma_fence, fd, idx, true);
+		dma_fence, fd, idx, true, false);
 	*dma_fence_row_idx = idx;
 	CAM_DBG(CAM_DMA_FENCE,
 		"External dma fence with fd: %d seqno: %llu ref_cnt: %u updated in tbl",
@@ -348,11 +350,11 @@ static int __cam_dma_fence_signal_fence(
 {
 	bool fence_signaled = false;
 
-	fence_signaled = dma_fence_is_signaled(dma_fence);
+	fence_signaled = dma_fence_get_status_locked(dma_fence);
 	if (fence_signaled) {
 		CAM_WARN(CAM_DMA_FENCE,
-			"dma fence seqno: %llu is already signaled",
-			dma_fence->seqno);
+			"dma fence seqno: %llu is already signaled %d",
+			dma_fence->seqno, fence_signaled);
 		return 0;
 	}
 
@@ -515,7 +517,7 @@ static int __cam_dma_fence_get_fd(int32_t *row_idx,
 	fd_install(fd, sync_file->file);
 
 	*row_idx = idx;
-	__cam_dma_fence_init_row(name, dma_fence, fd, idx, false);
+	__cam_dma_fence_init_row(name, dma_fence, fd, idx, false, false);
 
 	CAM_DBG(CAM_DMA_FENCE, "Created dma fence fd: %d[%s] seqno: %llu row_idx: %u ref_cnt: %u",
 		fd, name, dma_fence->seqno, idx, kref_read(&dma_fence->refcount));
@@ -551,6 +553,53 @@ end:
 	return rc;
 }
 
+int cam_dma_fence_get_fd(const char *name,
+	void *fence, int32_t *dma_fence_fd, int32_t *dma_fence_row_idx, bool is_hwfence)
+{
+	int fd, rc = 0, idx;
+	struct dma_fence *dma_fence =  NULL;
+	struct sync_file *sync_file = NULL;
+
+	if (!fence || !dma_fence_row_idx || !dma_fence_fd) {
+		CAM_ERR(CAM_SYNC, "Invalid params");
+		return -EINVAL;
+	}
+
+	dma_fence = (struct dma_fence *)fence;
+	if (__cam_dma_fence_find_free_idx(&idx)) {
+		rc = -EINVAL;
+		goto end;
+	}
+
+	fd = get_unused_fd_flags(O_CLOEXEC);
+	if (fd < 0) {
+		CAM_ERR(CAM_DMA_FENCE, "failed to get a unused fd: %d", fd);
+		rc = -EAGAIN;
+		goto free_idx;
+	}
+
+	sync_file = sync_file_create(dma_fence);
+	if (!sync_file) {
+		put_unused_fd(fd);
+		fd = -1;
+		rc = -EINVAL;
+		goto free_idx;
+	}
+
+	fd_install(fd, sync_file->file);
+
+	*dma_fence_row_idx = idx;
+	*dma_fence_fd = fd;
+
+	__cam_dma_fence_init_row(name, dma_fence, fd, idx, false, is_hwfence);
+	return rc;
+
+free_idx:
+	clear_bit(idx, g_cam_dma_fence_dev->bitmap);
+end:
+	return rc;
+}
+
 static int __cam_dma_fence_release(int32_t dma_row_idx)
 {
 	struct dma_fence *dma_fence = NULL;
@@ -567,7 +616,7 @@ static int __cam_dma_fence_release(int32_t dma_row_idx)
 		return -EINVAL;
 	}
 
-	if (row->state == CAM_DMA_FENCE_STATE_ACTIVE) {
+	if (row->state == CAM_DMA_FENCE_STATE_ACTIVE && !row->is_hwfence) {
 		CAM_WARN(CAM_DMA_FENCE,
 			"Unsignaled fence being released name: %s seqno: %llu fd:%d",
 			row->name, dma_fence->seqno, row->fd);

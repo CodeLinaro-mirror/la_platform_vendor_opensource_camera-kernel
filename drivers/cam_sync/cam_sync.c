@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/debugfs.h>
+#include <linux/remoteproc/qcom_rproc.h>
 #if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX) || IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
 #include <synx_api.h>
 #endif
@@ -119,6 +120,7 @@ static struct cam_sync_hw_fence_info hw_fence_info;
  * directly in the same context
  */
 static bool trigger_cb_without_switch;
+#define CAM_SYNC_IS_HW_FENCE_SESSION(val) ((val) ? true : false)
 
 #if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
 static bool cam_sync_validate_and_get_hw_fence_client_info(
@@ -479,6 +481,77 @@ static inline int cam_sync_signal_dma_fence_util(
 		&signal_dma_fence);
 }
 
+static inline int cam_synx_update_hw_fence_queue_util(
+	struct sync_table_row *row,
+	struct cam_sync_hwfence_info *hwfence_info,
+	int32_t *wr_pnt_arr_idx)
+{
+	int rc = 0;
+	int32_t client_entry_idx;
+	struct cam_sync_hw_fence_client_entries *client_entry;
+	struct synx_session *session_hdl;
+	struct sync_ext_fence_info *ext_fence_info, *ext_fence_tmp;
+	int32_t wr_ptr_idx;
+
+	wr_ptr_idx = *wr_pnt_arr_idx;
+	client_entry_idx = row->hw_fence_client_idx;
+	spin_lock(hw_fence_info.hw_fence_locks[client_entry_idx]);
+	client_entry = &hw_fence_info.hw_fence_tbl[client_entry_idx];
+	session_hdl = client_entry->session_hdl;
+	spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
+
+	list_for_each_entry_safe(ext_fence_info, ext_fence_tmp, &row->ext_fences,
+		list) {
+		if (ext_fence_info->synx_obj_info.is_valid) {
+			rc = cam_synx_update_hw_fence_queue(session_hdl,
+				ext_fence_info->synx_obj_info.synx_obj);
+			if (rc) {
+				CAM_ERR(CAM_SYNC,
+					"Failed to update hw fence queue for synx: 0x%x",
+					ext_fence_info->synx_obj_info.synx_obj);
+				goto end;
+			}
+			hwfence_info->wr_pntr_arr[wr_ptr_idx].client_core =
+				client_entry->client_core;
+			hwfence_info->wr_pntr_arr[wr_ptr_idx].signal_id =
+				client_entry->signal_id;
+			hwfence_info->wr_pntr_arr[wr_ptr_idx].wr_pntr =
+				*(int32_t *)client_entry->txq_wr_ptr;
+			wr_ptr_idx++;
+		}
+	}
+	*wr_pnt_arr_idx = wr_ptr_idx;
+end:
+	return rc;
+}
+
+static inline int cam_sync_merged_primary_update_hw_fence_queue(
+	struct cam_sync_hwfence_info *hwfence_info)
+{
+	int rc = 0;
+	int32_t wr_pnt_arr_idx = 0;
+	struct sync_table_row *row, *child_row = NULL;
+	struct sync_child_info *child_info, *child_tmp;
+
+	row = sync_dev->sync_table + hwfence_info->sync_object;
+
+	list_for_each_entry_safe(child_info, child_tmp, &row->children_list, list) {
+		child_row = sync_dev->sync_table + child_info->sync_id;
+		rc = cam_synx_update_hw_fence_queue_util(child_row, hwfence_info,
+			&wr_pnt_arr_idx);
+		if (rc) {
+			CAM_ERR(CAM_SYNC,
+				"Failed to update hw fence queue for child_sync: 0x%x",
+				child_info->sync_id);
+			goto end;
+		}
+	}
+	hwfence_info->num_hwfences = wr_pnt_arr_idx;
+
+end:
+	return rc;
+}
+
 static void cam_sync_signal_parent_util(
 	struct cam_sync_signal_param *param, struct list_head *parents_list,
 	struct cam_sync_timestamp *time_stamp)
@@ -534,13 +607,6 @@ static int cam_sync_signal_validate_util(
 		return -EINVAL;
 	}
 
-	if (!list_empty(&row->children_list)) {
-		CAM_ERR(CAM_SYNC,
-			"Error: Signaling a GROUP sync object = %s[%d]",
-			row->name, sync_obj);
-		return -EINVAL;
-	}
-
 	if (row->state != CAM_SYNC_STATE_ACTIVE) {
 		CAM_ERR(CAM_SYNC,
 			"Error: Sync object already signaled sync_obj = %s[%d]",
@@ -559,28 +625,93 @@ static int cam_sync_signal_validate_util(
 	return 0;
 }
 
-int cam_sync_signal(struct cam_sync_signal_param *param,
-	struct cam_sync_timestamp *time_stamp)
+static int cam_sync_signal_synx_dma_fence_util_locked(int32_t sync_obj,
+	struct cam_sync_signal_param *param, struct cam_sync_timestamp *time_stamp)
 {
+	uint32_t status, event_cause;
+	int rc = 0;
 	struct sync_table_row *row = NULL;
 	struct list_head parents_list;
-	uint32_t sync_obj, uid_validity, sync_manager_idx;
-	int16_t sync_uid;
-	int rc = 0;
 	struct sync_ext_fence_info *ext_fence_info, *tmp;
 
+	status = param->status;
+	event_cause = param->event_cause;
+
+	row = sync_dev->sync_table + sync_obj;
+	row->state = param->status;
+
+	if (test_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &row->ext_fence_mask) ||
+		test_bit(CAM_GENERIC_FENCE_TYPE_SYNX_OBJ, &row->ext_fence_mask)) {
+		list_for_each_entry_safe(ext_fence_info, tmp, &row->ext_fences, list) {
+			if ((ext_fence_info->dma_fence_info.is_valid) &&
+				((row->hw_fence_client_idx == -1) ||
+				(row->state != CAM_SYNC_STATE_SIGNALED_SUCCESS))) {
+				rc = cam_sync_signal_dma_fence_util(&ext_fence_info->dma_fence_info,
+					row->state);
+				if (rc) {
+					CAM_ERR(CAM_SYNC,
+						"Error: Failed to signal associated dma fencefd = %d for sync_obj = %s[%d]",
+						ext_fence_info->dma_fence_info.dma_fence_fd,
+						row->name, sync_obj);
+				}
+			}
+
+			/* signaling synx incase of SW fence only */
+			if ((row->hw_fence_client_idx == -1) &&
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
+				ext_fence_info->synx_obj_info.is_valid) {
+				spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
+				rc = cam_sync_signal_synx_fence_util(&ext_fence_info->synx_obj_info,
+					row->state);
+				spin_lock_bh(&sync_dev->row_spinlocks[sync_obj]);
+				if (rc) {
+					CAM_ERR(CAM_SYNC,
+						"Error: Failed to signal associated synx obj = %d for sync_obj = %d",
+						ext_fence_info->synx_obj_info.synx_obj, sync_obj);
+				}
+#endif
+			}
+		}
+	}
+
+	cam_sync_util_dispatch_signaled_cb(param, time_stamp);
+
+	/* copy parent list to local and release child lock */
+	INIT_LIST_HEAD(&parents_list);
+	list_splice_init(&row->parents_list, &parents_list);
+
+	spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
+	if (list_empty(&parents_list))
+		return 0;
+
+	cam_sync_signal_parent_util(param, &parents_list, time_stamp);
+
+	return rc;
+}
+
+int cam_sync_signal(struct cam_sync_signal_param *param, struct cam_sync_timestamp *time_stamp)
+{
+	struct sync_table_row *row = NULL;
+	struct sync_table_row *child_row = NULL;
+	struct sync_child_info *child_info, *child_tmp;
+	int rc = 0;
+	uint32_t sync_obj, uid_validity, sync_manager_idx, sync_var;
+	int16_t sync_uid;
+
+	sync_var = param->sync_obj;
 	sync_obj = param->sync_obj & sync_uid_access.fenceIdMask;
 	sync_uid = param->sync_obj >> sync_uid_access.uidShift;
 	sync_manager_idx = get_sync_manager_idx(param->sync_obj);
 	param->fh = sync_dev->cam_sync_eventq[sync_manager_idx];
 
-	if (sync_obj >= CAM_SYNC_MAX_OBJS || sync_obj <= 0) {
+	if ((sync_obj >= CAM_SYNC_MAX_OBJS) || (sync_obj <= 0)) {
 		CAM_ERR(CAM_SYNC, "Error: Out of range sync obj (0 <= %d < %d)",
-			param->sync_obj, CAM_SYNC_MAX_OBJS);
+			sync_obj, CAM_SYNC_MAX_OBJS);
 		return -EINVAL;
 	}
-	row = sync_dev->sync_table + sync_obj;
+
 	spin_lock_bh(&sync_dev->row_spinlocks[sync_obj]);
+	row = sync_dev->sync_table + sync_obj;
 
 	/* Check if it is a valid fence, i.e., either current fence uid or newer */
 	uid_validity = cam_sync_check_uid_valid(param->sync_obj);
@@ -604,13 +735,12 @@ int cam_sync_signal(struct cam_sync_signal_param *param,
 
 	rc = cam_sync_signal_validate_util(sync_obj, param->status);
 	if (rc) {
-		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 		CAM_ERR(CAM_SYNC,
 			"Error: Failed to validate signal info for sync_obj = %s[%d] with status = %d rc = %d",
 			row->name, sync_obj, param->status, rc);
+		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 		return rc;
 	}
-
 
 	if (!atomic_dec_and_test(&row->ref_cnt)) {
 		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
@@ -619,49 +749,27 @@ int cam_sync_signal(struct cam_sync_signal_param *param,
 
 	row->state = param->status;
 
-	if (test_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &row->ext_fence_mask) ||
-		test_bit(CAM_GENERIC_FENCE_TYPE_SYNX_OBJ, &row->ext_fence_mask)) {
-		list_for_each_entry_safe(ext_fence_info, tmp, &row->ext_fences, list) {
-			if (ext_fence_info->dma_fence_info.is_valid) {
-				rc = cam_sync_signal_dma_fence_util(&ext_fence_info->dma_fence_info,
-					param->status);
-				if (rc) {
-					CAM_ERR(CAM_SYNC,
-						"Error: Failed to signal associated dma fencefd = %d for sync_obj = %s[%d]",
-						ext_fence_info->dma_fence_info.dma_fence_fd,
-						row->name, sync_obj);
-				}
-			}
-
-			if (ext_fence_info->synx_obj_info.is_valid) {
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
-				spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
-				rc = cam_sync_signal_synx_fence_util(&ext_fence_info->synx_obj_info,
-					row->state);
-				spin_lock_bh(&sync_dev->row_spinlocks[sync_obj]);
-				if (rc) {
-					CAM_ERR(CAM_SYNC,
-						"Error: Failed to signal associated synx obj = %d for sync_obj = %d",
-						ext_fence_info->synx_obj_info.synx_obj, sync_obj);
-				}
-#endif
-			}
-		}
+	list_for_each_entry_safe(child_info, child_tmp, &row->children_list, list) {
+		spin_lock_bh(&sync_dev->row_spinlocks[child_info->sync_id]);
+		child_row = sync_dev->sync_table + child_info->sync_id;
+		param->sync_obj = child_info->sync_id;
+		rc = cam_sync_signal_synx_dma_fence_util_locked(child_info->sync_id, param,
+			time_stamp);
+		if (rc)
+			CAM_ERR(CAM_SYNC,
+				"Error: Failed to signal child_sync %d in merged_primay_sync_obj = %s[%d]",
+				child_row->name, child_info->sync_id, sync_obj);
+		spin_unlock_bh(&sync_dev->row_spinlocks[child_info->sync_id]);
 	}
 
-	cam_sync_util_dispatch_signaled_cb(param, time_stamp);
+	param->sync_obj = sync_var;
+	rc = cam_sync_signal_synx_dma_fence_util_locked(sync_obj, param, time_stamp);
+	if (rc)
+		CAM_ERR(CAM_SYNC,
+			"Error: Failed to signal sync_obj = %s[%d]",
+			row->name, sync_obj);
 
-	/* copy parent list to local and release child lock */
-	INIT_LIST_HEAD(&parents_list);
-	list_splice_init(&row->parents_list, &parents_list);
-	spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 
-	if (list_empty(&parents_list))
-		goto signal_success_exit;
-
-	cam_sync_signal_parent_util(param, &parents_list, time_stamp);
-
-signal_success_exit:
 	return 0;
 }
 
@@ -1509,9 +1617,9 @@ free_mem:
 }
 
 static void cam_generic_fence_free_input_info_util(
-	struct cam_generic_fence_input_info **fence_input_info)
+	void **fence_input_info)
 {
-	struct cam_generic_fence_input_info *fence_input = *fence_input_info;
+	void *fence_input = *fence_input_info;
 
 	kfree(fence_input);
 	*fence_input_info = NULL;
@@ -1563,7 +1671,7 @@ out_copy:
 		rc = -EFAULT;
 	}
 
-	cam_generic_fence_free_input_info_util(&fence_input_info);
+	cam_generic_fence_free_input_info_util((void **)&fence_input_info);
 	return rc;
 }
 
@@ -1621,7 +1729,7 @@ static int cam_generic_fence_handle_dma_release(
 		rc = -EFAULT;
 	}
 
-	cam_generic_fence_free_input_info_util(&fence_input_info);
+	cam_generic_fence_free_input_info_util((void **)&fence_input_info);
 	return rc;
 }
 
@@ -1699,7 +1807,7 @@ out_copy:
 			fence_cmd_args->input_handle, fence_cmd_args->input_data_size);
 	}
 
-	cam_generic_fence_free_input_info_util(&fence_input_info);
+	cam_generic_fence_free_input_info_util((void **)&fence_input_info);
 	return rc;
 }
 
@@ -1930,6 +2038,194 @@ static int cam_generic_fence_config_parse_params(
 	return 0;
 }
 
+static int cam_generic_fence_handle_sync_synx_dma_create(
+	uint32_t sync_manager_idx, struct cam_generic_fence_config *fence_cfg,
+	uint32_t num_fences_requested)
+{
+	int rc, dma_fence_row_idx;
+	bool dma_fence_created;
+	unsigned long fence_sel_mask;
+	struct cam_dma_fence_release_params release_params;
+	struct cam_dma_fence_create_sync_obj_payload dma_sync_create;
+	bool synx_obj_created = false;
+	struct sync_synx_obj_info synx_obj_create;
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
+	int32_t fence_flag;
+	int32_t synx_obj_row_idx = 0;
+	struct cam_synx_obj_release_params synx_release_params;
+	struct dma_fence *dma_fence_ptr;
+#endif
+
+	/* Reset flag */
+	dma_fence_created = false;
+	synx_obj_created = false;
+
+	fence_sel_mask = fence_cfg->fence_sel_mask;
+	if (test_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &fence_sel_mask)) {
+		rc = cam_dma_fence_create_fd(&fence_cfg->dma_fence_fd,
+				&dma_fence_row_idx, fence_cfg->name);
+		if (rc) {
+			CAM_ERR(CAM_SYNC,
+					"Failed to create dma fence rc: %d num_fences:%u",
+					rc, num_fences_requested);
+			fence_cfg->reason_code = rc;
+			goto end;
+		}
+
+		dma_sync_create.dma_fence_row_idx = dma_fence_row_idx;
+		dma_sync_create.fd = fence_cfg->dma_fence_fd;
+		dma_sync_create.sync_created_with_dma = true;
+		dma_fence_created = true;
+	}
+
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
+	/* Create a synx object */
+	if (test_bit(CAM_GENERIC_FENCE_TYPE_SYNX_OBJ, &fence_sel_mask)) {
+		if (dma_fence_created) {
+			dma_fence_ptr = cam_dma_fence_get_fence_from_fd(
+					dma_sync_create.fd, &dma_fence_row_idx);
+			rc = cam_synx_obj_import_dma_fence(fence_cfg->name,
+					fence_cfg->params[0], dma_fence_ptr,
+					&fence_cfg->synx_obj, &synx_obj_row_idx);
+		} else {
+			cam_generic_fence_config_parse_params(fence_cfg,
+					CAM_GENERIC_FENCE_CONFIG_FLAG_PARAM_INDEX,
+					&fence_flag);
+			rc = cam_synx_obj_create(fence_cfg->name, NULL,
+					fence_flag, &fence_cfg->synx_obj,
+					&synx_obj_row_idx);
+		}
+
+		if (rc) {
+			CAM_ERR(CAM_SYNC,
+					"Failed to create/import synx obj rc: %d num_fences: %u",
+					rc, num_fences_requested);
+
+			/* Release dma fence */
+			if (dma_fence_created) {
+				release_params.use_row_idx = true;
+				release_params.u.dma_row_idx =
+					dma_fence_row_idx;
+
+				cam_dma_fence_release(&release_params);
+			}
+			/* Release synx obj */
+			if (synx_obj_created) {
+				synx_release_params.use_row_idx = true;
+				synx_release_params.u.synx_row_idx =
+					synx_obj_row_idx;
+
+				cam_synx_obj_release(&synx_release_params);
+			}
+			goto end;
+		}
+
+		synx_obj_create.sync_created_with_synx = true;
+		synx_obj_create.synx_obj = fence_cfg->synx_obj;
+		synx_obj_create.synx_obj_row_idx = synx_obj_row_idx;
+		synx_obj_created = true;
+	}
+#endif
+	rc = cam_sync_create_util(sync_manager_idx, &fence_cfg->sync_obj, fence_cfg->name,
+			(dma_fence_created ? &dma_sync_create : NULL),
+			(synx_obj_created ? &synx_obj_create : NULL), CAM_SYNC_TYPE_UMD);
+	if (rc) {
+		fence_cfg->reason_code = rc;
+
+		CAM_ERR(CAM_SYNC,
+				"Failed to create sync obj rc: %d num_fences: %u",
+				rc, num_fences_requested);
+		/* Release dma fence */
+		if (dma_fence_created) {
+			release_params.use_row_idx = true;
+			release_params.u.dma_row_idx = dma_fence_row_idx;
+
+			cam_dma_fence_release(&release_params);
+		}
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
+		/* Release synx obj */
+		if (synx_obj_created) {
+			synx_release_params.use_row_idx = true;
+			synx_release_params.u.synx_row_idx = synx_obj_row_idx;
+
+			cam_synx_obj_release(&synx_release_params);
+		}
+#endif
+		goto end;
+	}
+
+	/* Register dma fence cb */
+	if (test_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &fence_sel_mask)) {
+		rc = cam_dma_fence_register_cb(&fence_cfg->sync_obj,
+				&dma_fence_row_idx, cam_sync_dma_fence_cb);
+		if (rc) {
+			CAM_ERR(CAM_SYNC,
+					"Failed to register cb for dma fence fd: %d sync_obj: %d rc: %d",
+					fence_cfg->dma_fence_fd, fence_cfg->sync_obj,
+					rc);
+
+			fence_cfg->reason_code = rc;
+			/* Destroy sync obj */
+			cam_sync_deinit_object(sync_dev->sync_table,
+					fence_cfg->sync_obj);
+			/* Release dma fence */
+			if (dma_fence_created) {
+				release_params.use_row_idx = true;
+				release_params.u.dma_row_idx =
+					dma_fence_row_idx;
+
+				cam_dma_fence_release(&release_params);
+			}
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
+			/* Release synx obj */
+			if (synx_obj_created) {
+				synx_release_params.use_row_idx = true;
+				synx_release_params.u.synx_row_idx =
+					synx_obj_row_idx;
+
+				cam_synx_obj_release(&synx_release_params);
+			}
+#endif
+			goto end;
+		}
+	}
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
+	/* Register synx object callback */
+	if (test_bit(CAM_GENERIC_FENCE_TYPE_SYNX_OBJ, &fence_sel_mask)) {
+		rc = cam_synx_obj_register_cb(&fence_cfg->sync_obj,
+				synx_obj_row_idx, cam_sync_synx_obj_cb);
+		if (rc) {
+			CAM_ERR(CAM_SYNC,
+					"Failed to register cb for synx_obj: %d	sync_obj: %d rc: %d",
+					fence_cfg->synx_obj, fence_cfg->sync_obj, rc);
+
+			fence_cfg->reason_code = rc;
+			/* Destroy sync obj */
+			cam_sync_deinit_object(sync_dev->sync_table,
+					fence_cfg->sync_obj);
+			/* Release dma fence */
+			if (dma_fence_created) {
+				release_params.use_row_idx = true;
+				release_params.u.dma_row_idx =
+					dma_fence_row_idx;
+
+				cam_dma_fence_release(&release_params);
+			}
+			/* Release synx obj */
+			if (synx_obj_created) {
+				synx_release_params.use_row_idx = true;
+				synx_release_params.u.synx_row_idx =
+					synx_obj_row_idx;
+
+				cam_synx_obj_release(&synx_release_params);
+			}
+		}
+	}
+#endif
+
+end:
+	return rc;
+}
 static int cam_generic_fence_handle_synx_create(
 	struct cam_generic_fence_cmd_args *fence_cmd_args)
 {
@@ -1955,7 +2251,7 @@ static int cam_generic_fence_handle_synx_create(
 		cam_generic_fence_config_parse_params(fence_cfg,
 			CAM_GENERIC_FENCE_CONFIG_FLAG_PARAM_INDEX, &fence_flag);
 
-		rc = cam_synx_obj_create(fence_cfg->name,
+		rc = cam_synx_obj_create(fence_cfg->name, NULL,
 			fence_flag, &fence_cfg->synx_obj, &row_idx);
 		if (rc) {
 			CAM_ERR(CAM_SYNX,
@@ -1981,7 +2277,7 @@ out_copy:
 		rc = -EFAULT;
 	}
 
-	cam_generic_fence_free_input_info_util(&fence_input_info);
+	cam_generic_fence_free_input_info_util((void **)&fence_input_info);
 	return rc;
 }
 
@@ -2039,7 +2335,7 @@ static int cam_generic_fence_handle_synx_release(
 		rc = -EFAULT;
 	}
 
-	cam_generic_fence_free_input_info_util(&fence_input_info);
+	cam_generic_fence_free_input_info_util((void **)&fence_input_info);
 	return rc;
 }
 
@@ -2183,7 +2479,7 @@ out_copy:
 			fence_cmd_args->input_handle, fence_cmd_args->input_data_size);
 	}
 
-	cam_generic_fence_free_input_info_util(&fence_input_info);
+	cam_generic_fence_free_input_info_util((void **)&fence_input_info);
 	return rc;
 }
 
@@ -2276,21 +2572,9 @@ static int cam_generic_fence_process_synx_obj_cmd(
 static int cam_generic_fence_handle_sync_create(
 	uint32_t sync_manager_idx, struct cam_generic_fence_cmd_args *fence_cmd_args)
 {
-	int rc = 0, i, dma_fence_row_idx;
-	bool dma_fence_created;
-	unsigned long fence_sel_mask;
-	struct cam_dma_fence_release_params release_params;
-	struct cam_dma_fence_create_sync_obj_payload dma_sync_create;
+	int rc, i;
 	struct cam_generic_fence_input_info *fence_input_info = NULL;
 	struct cam_generic_fence_config *fence_cfg = NULL;
-	bool synx_obj_created;
-	struct sync_synx_obj_info synx_obj_create;
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
-	int32_t fence_flag;
-	int32_t synx_obj_row_idx;
-	struct cam_synx_obj_release_params synx_release_params;
-	struct dma_fence *dma_fence_ptr;
-#endif
 
 	rc = cam_generic_fence_alloc_validate_input_info_util(fence_cmd_args, &fence_input_info);
 	if (rc || !fence_input_info) {
@@ -2304,164 +2588,13 @@ static int cam_generic_fence_handle_sync_create(
 		fence_cfg = &fence_input_info->fence_cfg[i];
 		fence_input_info->num_fences_processed++;
 		fence_cfg->reason_code = 0;
-
-		/* Reset flag */
-		dma_fence_created = false;
-		synx_obj_created = false;
-
-		fence_sel_mask = fence_cfg->fence_sel_mask;
-		if (test_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &fence_sel_mask)) {
-			rc = cam_dma_fence_create_fd(&fence_cfg->dma_fence_fd,
-				&dma_fence_row_idx, fence_cfg->name);
-			if (rc) {
-				CAM_ERR(CAM_SYNC,
-				"Failed to create dma fence at index: %d rc: %d num_fences: %u",
-				i, rc, fence_input_info->num_fences_requested);
-				fence_cfg->reason_code = rc;
-				goto out_copy;
-			}
-
-			dma_sync_create.dma_fence_row_idx = dma_fence_row_idx;
-			dma_sync_create.fd = fence_cfg->dma_fence_fd;
-			dma_sync_create.sync_created_with_dma = true;
-			dma_fence_created = true;
-		}
-
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
-		/* Create a synx object */
-		if (test_bit(CAM_GENERIC_FENCE_TYPE_SYNX_OBJ, &fence_sel_mask)) {
-			if (dma_fence_created) {
-				dma_fence_ptr = cam_dma_fence_get_fence_from_fd(
-					dma_sync_create.fd, &dma_fence_row_idx);
-				rc = cam_synx_obj_import_dma_fence(fence_cfg->name,
-					fence_cfg->params[0], dma_fence_ptr,
-					&fence_cfg->synx_obj, &synx_obj_row_idx);
-			} else {
-				cam_generic_fence_config_parse_params(fence_cfg,
-					CAM_GENERIC_FENCE_CONFIG_FLAG_PARAM_INDEX, &fence_flag);
-				rc = cam_synx_obj_create(fence_cfg->name,
-					fence_flag, &fence_cfg->synx_obj,
-					&synx_obj_row_idx);
-			}
-
-			if (rc) {
-				CAM_ERR(CAM_SYNC,
-					"Failed to create/import synx obj at index: %d rc: %d num_fences: %u",
-					i, rc, fence_input_info->num_fences_requested);
-
-				/* Release dma fence */
-				if (dma_fence_created) {
-					release_params.use_row_idx = true;
-					release_params.u.dma_row_idx = dma_fence_row_idx;
-
-					cam_dma_fence_release(&release_params);
-				}
-				/* Release synx obj */
-				if (synx_obj_created) {
-					synx_release_params.use_row_idx = true;
-					synx_release_params.u.synx_row_idx = synx_obj_row_idx;
-
-					cam_synx_obj_release(&synx_release_params);
-				}
-				goto out_copy;
-			}
-
-			synx_obj_create.sync_created_with_synx = true;
-			synx_obj_create.synx_obj = fence_cfg->synx_obj;
-			synx_obj_create.synx_obj_row_idx = synx_obj_row_idx;
-			synx_obj_created = true;
-		}
-#endif
-		rc = cam_sync_create_util(sync_manager_idx, &fence_cfg->sync_obj, fence_cfg->name,
-			(dma_fence_created ? &dma_sync_create : NULL),
-			(synx_obj_created ? &synx_obj_create : NULL), CAM_SYNC_TYPE_UMD);
+		rc = cam_generic_fence_handle_sync_synx_dma_create(sync_manager_idx,
+			fence_cfg, fence_input_info->num_fences_requested);
 		if (rc) {
-			fence_cfg->reason_code = rc;
-
-			CAM_ERR(CAM_SYNC,
-				"Failed to create sync obj at index: %d rc: %d num_fences: %u",
-				i, rc, fence_input_info->num_fences_requested);
-			/* Release dma fence */
-			if (dma_fence_created) {
-				release_params.use_row_idx = true;
-				release_params.u.dma_row_idx = dma_fence_row_idx;
-
-				cam_dma_fence_release(&release_params);
-			}
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
-			/* Release synx obj */
-			if (synx_obj_created) {
-				synx_release_params.use_row_idx = true;
-				synx_release_params.u.synx_row_idx = synx_obj_row_idx;
-
-				cam_synx_obj_release(&synx_release_params);
-			}
-#endif
+			CAM_ERR(CAM_SYNC, "sync/synx/dma create failed at index:%d, rc: %d",
+				i, rc);
 			goto out_copy;
 		}
-
-		/* Register dma fence cb */
-		if (test_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &fence_sel_mask)) {
-			rc = cam_dma_fence_register_cb(&fence_cfg->sync_obj,
-				&dma_fence_row_idx, cam_sync_dma_fence_cb);
-			if (rc) {
-				CAM_ERR(CAM_SYNC,
-					"Failed to register cb for dma fence fd: %d sync_obj: %d rc: %d",
-					fence_cfg->dma_fence_fd, fence_cfg->sync_obj, rc);
-
-				fence_cfg->reason_code = rc;
-				/* Destroy sync obj */
-				cam_sync_deinit_object(sync_dev->sync_table, fence_cfg->sync_obj);
-				/* Release dma fence */
-				if (dma_fence_created) {
-					release_params.use_row_idx = true;
-					release_params.u.dma_row_idx = dma_fence_row_idx;
-
-					cam_dma_fence_release(&release_params);
-				}
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
-				/* Release synx obj */
-				if (synx_obj_created) {
-					synx_release_params.use_row_idx = true;
-					synx_release_params.u.synx_row_idx = synx_obj_row_idx;
-
-					cam_synx_obj_release(&synx_release_params);
-				}
-#endif
-				goto out_copy;
-			}
-		}
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
-		/* Register synx object callback */
-		if (test_bit(CAM_GENERIC_FENCE_TYPE_SYNX_OBJ, &fence_sel_mask)) {
-			rc = cam_synx_obj_register_cb(&fence_cfg->sync_obj,
-				synx_obj_row_idx, cam_sync_synx_obj_cb);
-			if (rc) {
-				CAM_ERR(CAM_SYNC,
-					"Failed to register cb for synx_obj: %d sync_obj: %d rc: %d",
-					fence_cfg->synx_obj, fence_cfg->sync_obj, rc);
-
-				fence_cfg->reason_code = rc;
-				/* Destroy sync obj */
-				cam_sync_deinit_object(sync_dev->sync_table, fence_cfg->sync_obj);
-				/* Release dma fence */
-				if (dma_fence_created) {
-					release_params.use_row_idx = true;
-					release_params.u.dma_row_idx = dma_fence_row_idx;
-
-					cam_dma_fence_release(&release_params);
-				}
-				/* Release synx obj */
-				if (synx_obj_created) {
-					synx_release_params.use_row_idx = true;
-					synx_release_params.u.synx_row_idx = synx_obj_row_idx;
-
-					cam_synx_obj_release(&synx_release_params);
-				}
-				goto out_copy;
-			}
-		}
-#endif
 
 		CAM_DBG(CAM_SYNC,
 			"Created sync_obj = %d[%s] with fence_sel_mask: 0x%x dma_fence_fd: %d num fences [requested: %u processed: %u]",
@@ -2479,7 +2612,7 @@ out_copy:
 			fence_cmd_args->input_handle, fence_cmd_args->input_data_size);
 	}
 
-	cam_generic_fence_free_input_info_util(&fence_input_info);
+	cam_generic_fence_free_input_info_util((void **)&fence_input_info);
 	return rc;
 }
 
@@ -2531,7 +2664,103 @@ static int cam_generic_fence_handle_sync_release(
 			fence_cmd_args->input_handle, fence_cmd_args->input_data_size);
 	}
 
-	cam_generic_fence_free_input_info_util(&fence_input_info);
+	cam_generic_fence_free_input_info_util((void **)&fence_input_info);
+	return rc;
+}
+
+static int __cam_sync_validate_hw_fence_client_entry(int32_t session_hdl,
+	struct cam_sync_hw_fence_client_entries *entry)
+{
+	int rc = 0;
+
+	if (entry->cookie != session_hdl) {
+		CAM_ERR(CAM_SYNC,
+				"Cookie [0x%x] mismatch for session_hdl: 0x%x",
+				entry->cookie, session_hdl);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	if (!entry->active) {
+		CAM_ERR(CAM_SYNC,
+				"Session with hdl: 0x%x is not active", session_hdl);
+		rc = -EINVAL;
+	}
+
+end:
+	return rc;
+}
+
+int __cam_sync_update_hw_fence_queue_pntr_util_locked(
+	struct cam_sync_hwfence_info *hwfence_info)
+{
+	int rc = 0;
+	int32_t wr_pnt_arr_idx = 0;
+	struct sync_table_row *row = NULL;
+
+	row = sync_dev->sync_table + hwfence_info->sync_object;
+
+	/* If the sync object is a merged parent with one to many */
+	if (row->is_merged_primary) {
+		rc =
+			cam_sync_merged_primary_update_hw_fence_queue(hwfence_info);
+		if (rc) {
+			CAM_ERR(CAM_SYNC,
+					"Failed to update hw fence queue for merged_primary_sync: 0x%x",
+					hwfence_info->sync_object);
+			goto end;
+		}
+	} else {
+		rc = cam_synx_update_hw_fence_queue_util(row, hwfence_info, &wr_pnt_arr_idx);
+		if (rc) {
+			CAM_ERR(CAM_SYNC,
+				"Failed to update hw fence queue for child_sync: 0x%x",
+				hwfence_info->sync_object);
+			goto end;
+		}
+		hwfence_info->num_hwfences = wr_pnt_arr_idx;
+	}
+end:
+	return rc;
+}
+
+int cam_sync_check_and_update_hw_fence_queue_pntrs(
+	struct cam_sync_hwfence_info *hwfence_info)
+{
+	int rc = 0, sync_object;
+	struct sync_table_row *row = NULL;
+
+	if (!hwfence_info)
+		return -EINVAL;
+
+	rc = cam_sync_check_valid(hwfence_info->sync_object);
+	if (rc)
+		goto end;
+
+	sync_object = (uint32_t)hwfence_info->sync_object & sync_uid_access.fenceIdMask;
+	row = sync_dev->sync_table + sync_object;
+
+	spin_lock(&sync_dev->row_spinlocks[sync_object]);
+	/*
+	 * If the sync object is an object, but is a HW fence and
+	 * If the sync object is a merged parent with one to many.
+	 */
+	if (test_bit(CAM_GENERIC_FENCE_TYPE_HW_FENCE, &row->ext_fence_mask)) {
+		hwfence_info->is_hwfence = true;
+		rc =
+			__cam_sync_update_hw_fence_queue_pntr_util_locked(hwfence_info);
+		if (rc) {
+			spin_unlock(&sync_dev->row_spinlocks[sync_object]);
+			goto end;
+		}
+	}
+	/* SW fence */
+	else
+		CAM_DBG(CAM_SYNC, "sync_object: %d is an object but is a SW fence", sync_object);
+
+	spin_unlock(&sync_dev->row_spinlocks[sync_object]);
+
+end:
 	return rc;
 }
 
@@ -2539,11 +2768,13 @@ static int cam_generic_fence_alloc_validate_one_to_many_util(
 	struct cam_generic_fence_cmd_args    *fence_cmd_args,
 	struct cam_generic_fence_one_to_many_input_info **fence_input_info)
 {
-	int rc = 0;
+	int rc = 0, i;
 	struct cam_generic_fence_one_to_many_input_info *fence_input = NULL;
 	uint32_t num_fences;
 	uint32_t expected_size;
-
+	uint8_t *payload = NULL;
+	struct cam_generic_fence_create_associated_array *associated_arr = NULL;
+	uint32_t associated_arr_totalfences = 0, associated_arrtotalsize = 0, current_size = 0;
 	*fence_input_info = NULL;
 
 	if (unlikely(fence_cmd_args->input_data_size == 0xffffffff)) {
@@ -2579,9 +2810,24 @@ static int cam_generic_fence_alloc_validate_one_to_many_util(
 	}
 
 	/* Validate sizes */
-	expected_size = sizeof(struct cam_generic_fence_one_to_many_input_info)
-		+
-		((num_fences - 1) * sizeof(struct cam_generic_fence_config));
+	payload = (uint8_t *)fence_input->payload;
+	associated_arr = (struct cam_generic_fence_create_associated_array *)payload;
+	for (i = 0; i < fence_input->num_fences_requested; i++) {
+		associated_arr = (struct cam_generic_fence_create_associated_array *)
+			((uint8_t *)associated_arr + current_size);
+		associated_arr_totalfences += associated_arr->num_fences_requested;
+		current_size = sizeof(struct cam_generic_fence_create_associated_array) +
+			(associated_arr->num_fences_requested *
+			sizeof(struct cam_generic_fence_config));
+	}
+
+	associated_arrtotalsize = (fence_input->num_fences_requested *
+		sizeof(struct cam_generic_fence_create_associated_array)) +
+		(associated_arr_totalfences * sizeof(struct cam_generic_fence_config));
+
+	expected_size = sizeof(struct cam_generic_fence_one_to_many_input_info) +
+		associated_arrtotalsize;
+
 	if ((uint32_t)expected_size != fence_cmd_args->input_data_size) {
 		CAM_ERR(CAM_SYNC, "Invalid input size expected: 0x%x actual: 0x%x for fences: %u",
 				expected_size, fence_cmd_args->input_data_size,
@@ -2608,14 +2854,172 @@ static void cam_generic_fence_free_one_to_many_util(
 	*fence_input_info = NULL;
 }
 
+static int cam_generic_fence_create_hw_fence(
+	uint32_t session_cookie, struct cam_generic_fence_config *fence_cfg,
+	int32_t sync_obj)
+{
+	int rc = -EINVAL, synx_obj_row_idx, dma_fence_row_idx;
+	unsigned long fence_sel_mask = 0;
+	struct sync_table_row *row = NULL;
+	bool is_valid = false;
+	struct sync_ext_fence_info *ext_fence_info;
+	void *native_fence = NULL;
+	uint32_t client_core = 0, col_idx = 0, client_entry_idx = 0, fence_flag = 0;
+	struct synx_session *session_hdl;
+	struct cam_sync_hw_fence_client_entries *client_entry;
+
+	is_valid = cam_sync_validate_and_get_hw_fence_client_info(session_cookie,
+				&client_core, &col_idx);
+	if (!is_valid)
+		goto end;
+
+	rc = cam_sync_get_ext_fence_payload(&ext_fence_info);
+	if (rc)
+		goto end;
+
+	fence_sel_mask = (unsigned long)fence_cfg->fence_sel_mask;
+	client_entry_idx = (client_core * CAM_SYNC_HW_FENCE_MAX_SUB_GRPS) + col_idx;
+
+	spin_lock(hw_fence_info.hw_fence_locks[client_entry_idx]);
+	client_entry = &hw_fence_info.hw_fence_tbl[client_entry_idx];
+	rc = __cam_sync_validate_hw_fence_client_entry(session_cookie,
+			client_entry);
+	if (rc) {
+		spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
+		goto free_fence_payload;
+	}
+	session_hdl = client_entry->session_hdl;
+	spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
+
+	cam_generic_fence_config_parse_params(fence_cfg,
+			CAM_GENERIC_FENCE_CONFIG_FLAG_PARAM_INDEX, &fence_flag);
+
+	rc = cam_synx_obj_create(fence_cfg->name, session_hdl,
+			fence_flag, &fence_cfg->synx_obj, &synx_obj_row_idx);
+	if (rc)
+		goto free_fence_payload;
+
+	ext_fence_info->synx_obj_info.synx_obj = fence_cfg->synx_obj;
+	ext_fence_info->synx_obj_info.synx_obj_row_idx = synx_obj_row_idx;
+	ext_fence_info->synx_obj_info.is_valid = true;
+
+	if (test_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &fence_sel_mask)) {
+		native_fence = cam_synx_obj_get_native_fence(session_hdl,
+				fence_cfg->synx_obj);
+		if (IS_ERR_OR_NULL(native_fence)) {
+			CAM_ERR(CAM_SYNC,
+					"Invalid native fence for synx: 0x%x",
+					fence_cfg->synx_obj);
+			rc =  PTR_ERR(native_fence);
+			goto end;
+		}
+
+		rc = cam_dma_fence_get_fd(fence_cfg->name, native_fence,
+				&fence_cfg->dma_fence_fd, &dma_fence_row_idx, true);
+		if (rc)
+			goto free_synx;
+
+		ext_fence_info->dma_fence_info.dma_fence_fd =
+			fence_cfg->dma_fence_fd;
+		ext_fence_info->dma_fence_info.dma_fence_row_idx =
+			dma_fence_row_idx;
+		ext_fence_info->dma_fence_info.is_valid = true;
+	}
+
+	spin_lock_bh(&sync_dev->row_spinlocks[sync_obj]);
+	row = sync_dev->sync_table + sync_obj;
+	set_bit(CAM_GENERIC_FENCE_TYPE_SYNX_OBJ, &row->ext_fence_mask);
+	if (test_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &fence_sel_mask))
+		set_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &row->ext_fence_mask);
+
+	list_add_tail(&ext_fence_info->list, &row->ext_fences);
+	set_bit(CAM_GENERIC_FENCE_TYPE_HW_FENCE, &row->ext_fence_mask);
+	row->hw_fence_client_idx = client_entry_idx;
+	spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
+	fence_cfg->reason_code = 0;
+	CAM_DBG(CAM_SYNC, "HW Fence created for session cookie: %u, sync obj: %u, synx_obj: %u",
+		session_cookie, sync_obj, fence_cfg->synx_obj);
+	return rc;
+
+free_synx: {
+		struct cam_synx_obj_release_params release_params;
+
+		release_params.use_row_idx = true;
+		release_params.u.synx_row_idx = synx_obj_row_idx;
+
+		cam_synx_obj_release(&release_params);
+		fence_cfg->synx_obj = -1;
+	}
+free_fence_payload:
+	cam_sync_put_ext_fence_payload(&ext_fence_info);
+end:
+	fence_cfg->reason_code = rc;
+	return rc;
+}
+
+static int cam_generic_fence_create_associated_fences_util(
+	uint32_t sync_manager_idx,
+	struct cam_generic_fence_create_associated_array *associated_array)
+{
+	int i, rc;
+	int32_t sync_obj = 0;
+	uint8_t *fence_cfg = NULL;
+	bool for_hw_fence = false;
+
+	fence_cfg = (uint8_t *)associated_array;
+	fence_cfg += offsetof(struct cam_generic_fence_create_associated_array,
+			fence_cfg);
+
+	for_hw_fence =
+		CAM_SYNC_IS_HW_FENCE_SESSION(associated_array->session_cookie);
+
+	if (for_hw_fence) {
+		rc = cam_sync_create_util(sync_manager_idx, &sync_obj,
+				associated_array->sync_obj_name, NULL, NULL, CAM_SYNC_TYPE_UMD);
+		if (rc)
+			goto end;
+	}
+
+	for (i = 0; i < associated_array->num_fences_requested; i++) {
+		associated_array->num_fences_processed++;
+		if (for_hw_fence) {
+			rc = cam_generic_fence_create_hw_fence(associated_array->session_cookie,
+				(struct cam_generic_fence_config *)fence_cfg, sync_obj);
+			if (rc)
+				goto sync_destroy;
+		} else {
+			/* For sw fence, creating fence same as generic_fence_handle_sync_create */
+			rc = cam_generic_fence_handle_sync_synx_dma_create(sync_manager_idx,
+					(struct cam_generic_fence_config *)fence_cfg,
+					associated_array->num_fences_requested);
+			if (rc) {
+				CAM_ERR(CAM_SYNC, "SW sync/synx/dma create failed, rc: %d", rc);
+				goto end;
+			}
+		}
+		fence_cfg += sizeof(struct cam_generic_fence_config);
+	}
+
+	if (for_hw_fence)
+		associated_array->sync_obj = sync_obj;
+	return rc;
+
+sync_destroy:
+	cam_sync_deinit_object(sync_dev->sync_table, sync_obj);
+end:
+	return rc;
+}
+
 static int cam_generic_fence_handle_one_to_many_create(
 	uint32_t sync_manager_idx, struct cam_generic_fence_cmd_args *fence_cmd_args)
 {
-	int rc, i;
-	size_t computed_size, input_size, next_elem = 0;
+	int rc, i, merged_primary;
+	struct sync_child_info *child_info;
+	size_t total_computed_size = 0, current_size = 0;
+	size_t fence_cfg_size, associated_arr_size;
+	struct sync_table_row *row = NULL;
 	uint8_t *payload = NULL;
-	struct cam_generic_fence_one_to_many_input_info *fence_input_info =
-		NULL;
+	struct cam_generic_fence_one_to_many_input_info *fence_input_info = NULL;
 	struct cam_generic_fence_create_associated_array *associated_arr = NULL;
 
 	rc = cam_generic_fence_alloc_validate_one_to_many_util(fence_cmd_args,
@@ -2627,21 +3031,66 @@ static int cam_generic_fence_handle_one_to_many_create(
 		return -EINVAL;
 	}
 
-	input_size = fence_cmd_args->input_data_size;
-	computed_size = sizeof(struct cam_generic_fence_one_to_many_input_info);
+	fence_cfg_size = sizeof(struct cam_generic_fence_config);
+	associated_arr_size = sizeof(struct cam_generic_fence_create_associated_array);
+	total_computed_size = sizeof(struct cam_generic_fence_one_to_many_input_info);
+
 	if (fence_input_info->flags & CAM_GENERIC_FENCE_CMD_CREATE_PRIMARY_SYNC) {
 		rc = cam_sync_create_util(sync_manager_idx, &fence_input_info->merged_primary_sync,
 					fence_input_info->merged_primary_name, NULL, NULL,
 					CAM_SYNC_TYPE_UMD);
 		if (rc)
 			goto end;
+
+		merged_primary = fence_input_info->merged_primary_sync;
+		spin_lock_bh(&sync_dev->row_spinlocks[merged_primary]);
+		row = sync_dev->sync_table + merged_primary;
+		row->is_merged_primary = true;
+		set_bit(CAM_GENERIC_FENCE_TYPE_HW_FENCE, &row->ext_fence_mask);
+		spin_unlock_bh(&sync_dev->row_spinlocks[merged_primary]);
 	}
 
 	payload = (uint8_t *)fence_input_info->payload;
+	associated_arr = (struct cam_generic_fence_create_associated_array *)payload;
 	for (i = 0; i < fence_input_info->num_fences_requested; i++) {
-		associated_arr = (struct
-				cam_generic_fence_create_associated_array *)(payload + next_elem);
+		total_computed_size += associated_arr_size;
 
+		if (unlikely(fence_cmd_args->input_data_size < total_computed_size)) {
+			rc = -EINVAL;
+			goto end;
+		}
+
+		associated_arr = (struct cam_generic_fence_create_associated_array *)
+			((uint8_t *)associated_arr + current_size);
+		total_computed_size += ((associated_arr->num_fences_requested) *
+			sizeof(struct cam_generic_fence_config));
+
+		if (unlikely(fence_cmd_args->input_data_size < total_computed_size)) {
+			rc = -EINVAL;
+			goto end;
+		}
+
+		rc = cam_generic_fence_create_associated_fences_util(sync_manager_idx,
+			associated_arr);
+		if (rc)
+			goto end;
+
+		if (merged_primary) {
+			spin_lock_bh(&sync_dev->row_spinlocks[merged_primary]);
+			child_info = kzalloc(sizeof(*child_info), GFP_ATOMIC);
+			if (!child_info) {
+				spin_unlock_bh(&sync_dev->row_spinlocks[merged_primary]);
+				rc = -ENOMEM;
+				goto end;
+			}
+			child_info->sync_id = associated_arr->sync_obj;
+			list_add_tail(&child_info->list, &row->children_list);
+			spin_unlock_bh(&sync_dev->row_spinlocks[merged_primary]);
+		}
+
+		current_size = associated_arr_size +
+			(associated_arr->num_fences_requested *
+			sizeof(struct cam_generic_fence_config));
 
 	}
 
@@ -2775,6 +3224,69 @@ static int cam_generic_fence_parser(
 	return rc;
 }
 
+void cam_sync_send_ssr_error_v4l2_event(uint32_t id, uint32_t event_cause)
+{
+	struct v4l2_event event;
+
+	if (sync_dev->version == CAM_SYNC_V4L_EVENT_V2) {
+		struct cam_sync_ev_header_v2 *ev_header = NULL;
+
+		event.id = id;
+		event.type = CAM_SYNC_V4L_EVENT_V2;
+
+		ev_header = CAM_SYNC_GET_HEADER_PTR_V2(event);
+		ev_header->version = sync_dev->version;
+		ev_header->evt_param[CAM_SYNC_EVENT_REASON_CODE_INDEX] =
+			event_cause;
+	} else {
+		struct cam_sync_ev_header *ev_header = NULL;
+
+		event.id = id;
+		event.type = CAM_SYNC_V4L_EVENT;
+
+		ev_header = CAM_SYNC_GET_HEADER_PTR(event);
+		ev_header->status = event_cause;
+	}
+
+	v4l2_event_queue(sync_dev->vdev, &event);
+	CAM_ERR(CAM_SYNC, "FATAL error: send v4l2 event for SocCP SSR, sync_dev version %d",
+			sync_dev->version);
+}
+
+static int cam_sync_soccp_ssr_notify(struct notifier_block *nb, unsigned long action,
+	void *data)
+{
+	struct qcom_ssr_notify_data *notify_data = data;
+
+	if (!notify_data) {
+		CAM_ERR(CAM_SYNC, "ssr notify data is NULL");
+		return NOTIFY_BAD;
+	}
+
+	switch (action) {
+	case QCOM_SSR_BEFORE_POWERUP:
+		CAM_INFO(CAM_SYNC, "received SocCP starting event");
+		break;
+	case QCOM_SSR_AFTER_POWERUP:
+		CAM_INFO(CAM_SYNC, "received SocCP running event");
+		break;
+	case QCOM_SSR_BEFORE_SHUTDOWN:
+		CAM_ERR(CAM_SYNC, "received SocCP %s event",
+			notify_data->crashed ? "crashed" : "stopping");
+		cam_sync_send_ssr_error_v4l2_event(CAM_SYNC_V4L_EVENT_ID_SOCCP_SSR_ERROR,
+				CAM_SYNC_COMMON_SOCCP_SSR_EVENT);
+		break;
+	case QCOM_SSR_AFTER_SHUTDOWN:
+		CAM_INFO(CAM_SYNC, "received SocCP offline event");
+		break;
+	default:
+		CAM_ERR(CAM_SYNC, "received unrecognized event %lu", action);
+		break;
+	}
+
+	return NOTIFY_OK;
+}
+
 #if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
 int cam_sync_initialize_hw_fence_session(
 	struct cam_sync_hwfence_session_initialize_params *init_params)
@@ -2785,6 +3297,7 @@ int cam_sync_initialize_hw_fence_session(
 	void *txq_wr_ptr;
 	struct cam_sync_hw_fence_client_entries *client_entry;
 	struct synx_session *synx_session = NULL;
+	void *notifier;
 
 	if (!sync_dev->hw_fencing_en)
 		return -EOPNOTSUPP;
@@ -2826,12 +3339,25 @@ int cam_sync_initialize_hw_fence_session(
 	init_params->session_cookie = client_entry->cookie;
 	spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
 
+	if (!sync_dev->ref_cnt) {
+		sync_dev->nb.notifier_call = cam_sync_soccp_ssr_notify;
+		notifier = qcom_register_ssr_notifier("soccp", &sync_dev->nb);
+		if (IS_ERR(notifier)) {
+			CAM_ERR(CAM_SYNC, "Failed to register for soccp ssr notifier: %d",
+				PTR_ERR(notifier));
+			return PTR_ERR(notifier);
+		}
+		sync_dev->notifier = notifier;
+	}
+	sync_dev->ref_cnt++;
+
 	return rc;
 
 deinitialize_session:
-	cam_synx_uninitialize_hw_fence_session(synx_session);
+	cam_sync_deinitialize_hw_fence_session(init_params->session_cookie);
 	return rc;
 }
+
 int cam_sync_deinitialize_hw_fence_session(int32_t session_hdl)
 {
 	int rc = 0;
@@ -2854,31 +3380,35 @@ int cam_sync_deinitialize_hw_fence_session(int32_t session_hdl)
 	client_entry_idx = (client_core * CAM_SYNC_HW_FENCE_MAX_SUB_GRPS) + col_idx;
 	spin_lock(hw_fence_info.hw_fence_locks[client_entry_idx]);
 	client_entry = &hw_fence_info.hw_fence_tbl[client_entry_idx];
-	if (client_entry->cookie != session_hdl) {
-		CAM_ERR(CAM_SYNC,
-			"Cookie [0x%x] mismatch for session_hdl: 0x%x client_core: %u col_idx: %u",
-			client_entry->cookie, session_hdl, client_core, col_idx);
-		spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
-		rc = -EINVAL;
-		goto end;
-	}
 
-	if (!client_entry->active) {
-		CAM_ERR(CAM_SYNC,
-			"Session with hdl: 0x%x for client_core: %u col_idx: %u not active",
-			session_hdl, client_core, col_idx);
+	rc = __cam_sync_validate_hw_fence_client_entry(session_hdl, client_entry);
+	if (rc) {
 		spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
-		rc = -EINVAL;
 		goto end;
 	}
 
 	synx_session = client_entry->session_hdl;
+
 	memset(client_entry, 0x0, sizeof(*client_entry));
 	spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
 
 	rc = cam_synx_uninitialize_hw_fence_session(synx_session);
-	if (rc)
+	if (rc) {
 		CAM_ERR(CAM_SYNC, "Synx session uninitialize failed rc: %d", rc);
+		goto end;
+	}
+
+	if (sync_dev->ref_cnt)
+		sync_dev->ref_cnt--;
+
+	if (!sync_dev->ref_cnt) {
+		rc = qcom_unregister_ssr_notifier(sync_dev->notifier, &sync_dev->nb);
+		if (rc)
+			CAM_ERR(CAM_SYNC, "error %d unregistering soccp ssr notifier", rc);
+
+		sync_dev->notifier = NULL;
+		memset(&sync_dev->nb, 0, sizeof(sync_dev->nb));
+	}
 end:
 	return rc;
 }

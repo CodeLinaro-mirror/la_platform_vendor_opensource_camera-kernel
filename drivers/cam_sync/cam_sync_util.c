@@ -104,6 +104,7 @@ int cam_sync_init_row(struct sync_table_row *table,
 	row->remaining = 0;
 	row->uid = 0;
 	row->sync_manager_idx = sync_manager_idx;
+	row->hw_fence_client_idx = -1;
 	atomic_set(&row->ref_cnt, 0);
 	INIT_LIST_HEAD(&row->callback_list);
 	INIT_LIST_HEAD(&row->user_payload_list);
@@ -222,6 +223,67 @@ clean_children_info:
 	return rc;
 }
 
+static int cam_sync_util_release_synx_dma(int32_t sync_obj)
+{
+	int rc = 0;
+	struct sync_table_row *row;
+	struct cam_dma_fence_release_params release_params;
+	struct cam_synx_obj_release_params synx_release_params;
+	struct sync_ext_fence_info *ext_fence_info, *tmp;
+
+	row = sync_dev->sync_table + sync_obj;
+
+	spin_lock_bh(&sync_dev->row_spinlocks[sync_obj]);
+	/* Decrement ref cnt for imported dma fence */
+	if (test_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &row->ext_fence_mask) ||
+		test_bit(CAM_GENERIC_FENCE_TYPE_SYNX_OBJ, &row->ext_fence_mask)) {
+
+		list_for_each_entry_safe(ext_fence_info, tmp, &row->ext_fences, list) {
+			if (ext_fence_info->dma_fence_info.is_valid) {
+				cam_dma_fence_get_put_ref(false,
+					ext_fence_info->dma_fence_info.dma_fence_row_idx);
+				release_params.use_row_idx = true;
+				release_params.u.dma_row_idx =
+					ext_fence_info->dma_fence_info.dma_fence_row_idx;
+				rc = cam_dma_fence_release(&release_params);
+				if (rc)
+					CAM_ERR(CAM_SYNC,
+						"Failed to destroy dma fence fd: %d rc: %d associated with sync: %d",
+						ext_fence_info->dma_fence_info.dma_fence_fd,
+						rc, sync_obj);
+			}
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
+			if (ext_fence_info->synx_obj_info.is_valid) {
+				synx_release_params.use_row_idx = true;
+				synx_release_params.u.synx_row_idx =
+					ext_fence_info->synx_obj_info.synx_obj_row_idx;
+				/* Release & obtain the row lock after synx release */
+				spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
+				rc = cam_synx_obj_release(&synx_release_params);
+				spin_lock_bh(&sync_dev->row_spinlocks[sync_obj]);
+				if (rc)
+					CAM_ERR(CAM_SYNC,
+						"Failed to destroy synx_obj: %d rc: %d associated with sync: %d",
+						ext_fence_info->synx_obj_info.synx_obj, rc,
+						sync_obj);
+			}
+#endif
+			cam_sync_put_ext_fence_payload(&ext_fence_info);
+		}
+	}
+
+	memset(row, 0, sizeof(*row));
+	clear_bit(sync_obj, sync_dev->bitmap);
+	INIT_LIST_HEAD(&row->callback_list);
+	INIT_LIST_HEAD(&row->parents_list);
+	INIT_LIST_HEAD(&row->children_list);
+	INIT_LIST_HEAD(&row->user_payload_list);
+	INIT_LIST_HEAD(&row->ext_fences);
+	spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
+
+	return rc;
+}
+
 int cam_sync_deinit_object(struct sync_table_row *table, uint32_t sync_var)
 {
 	struct sync_table_row      *row;
@@ -231,11 +293,6 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t sync_var)
 	struct sync_user_payload   *upayload_info, *temp_upayload;
 	struct sync_table_row      *child_row = NULL, *parent_row = NULL;
 	struct list_head            temp_child_list, temp_parent_list;
-	struct sync_ext_fence_info *ext_fence_info, *tmp;
-	struct cam_dma_fence_release_params release_params;
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
-	struct cam_synx_obj_release_params synx_release_params;
-#endif
 	uint32_t idx, sync_id;
 	uint16_t sync_uid;
 	int rc;
@@ -267,6 +324,24 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t sync_var)
 			row->name, row->sync_id);
 
 	row->state = CAM_SYNC_STATE_INVALID;
+
+	if (test_bit(CAM_GENERIC_FENCE_TYPE_HW_FENCE, &row->ext_fence_mask)) {
+		list_for_each_entry_safe(child_info, temp_child, &row->children_list, list) {
+			rc = cam_sync_util_release_synx_dma(child_info->sync_id);
+			if (rc)
+				CAM_ERR(CAM_SYNC,
+					"Failed to release synx/dma associated with child_sync_obj: %d parent_sync_obj: %d rc: %d",
+					child_info->sync_id, idx, rc);
+		}
+	}
+
+	list_for_each_entry_safe(parent_info, temp_parent, &row->parents_list, list) {
+		rc = cam_sync_util_release_synx_dma(parent_info->sync_id);
+		if (rc)
+			CAM_ERR(CAM_SYNC,
+				"Failed to release synx/dma associated with parent_sync_obj: %d child_sync_obj: %d rc: %d",
+				parent_info->sync_id, idx, rc);
+	}
 
 	/* Object's child and parent objects will be added into this list */
 	INIT_LIST_HEAD(&temp_child_list);
@@ -367,52 +442,13 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t sync_var)
 		kfree(sync_cb);
 	}
 
-	/* Decrement ref cnt for imported dma fence */
-
-	if (test_bit(CAM_GENERIC_FENCE_TYPE_DMA_FENCE, &row->ext_fence_mask) ||
-		test_bit(CAM_GENERIC_FENCE_TYPE_SYNX_OBJ, &row->ext_fence_mask)) {
-
-		list_for_each_entry_safe(ext_fence_info, tmp, &row->ext_fences, list) {
-			if (ext_fence_info->dma_fence_info.is_valid) {
-				cam_dma_fence_get_put_ref(false,
-					ext_fence_info->dma_fence_info.dma_fence_row_idx);
-				release_params.use_row_idx = true;
-				release_params.u.dma_row_idx =
-					ext_fence_info->dma_fence_info.dma_fence_row_idx;
-				rc = cam_dma_fence_release(&release_params);
-				if (rc)
-					CAM_ERR(CAM_SYNC,
-						"Failed to destroy dma fence fd: %d rc: %d associated with sync: %d",
-						ext_fence_info->dma_fence_info.dma_fence_fd,
-						rc, idx);
-			}
-
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
-			if (ext_fence_info->synx_obj_info.is_valid) {
-				synx_release_params.use_row_idx = true;
-				synx_release_params.u.synx_row_idx =
-					ext_fence_info->synx_obj_info.synx_obj_row_idx;
-				rc = cam_synx_obj_release(&synx_release_params);
-				if (rc)
-					CAM_ERR(CAM_SYNC,
-						"Failed to destroy synx_obj: %d rc: %d associated with sync: %d",
-						ext_fence_info->synx_obj_info.synx_obj, rc, idx);
-			}
-#endif
-			cam_sync_put_ext_fence_payload(&ext_fence_info);
-		}
-	}
-
-	memset(row, 0, sizeof(*row));
-	clear_bit(idx, sync_dev->bitmap);
-	INIT_LIST_HEAD(&row->callback_list);
-	INIT_LIST_HEAD(&row->parents_list);
-	INIT_LIST_HEAD(&row->children_list);
-	INIT_LIST_HEAD(&row->user_payload_list);
-	INIT_LIST_HEAD(&row->ext_fences);
 	spin_unlock_bh(&sync_dev->row_spinlocks[idx]);
+	rc = cam_sync_util_release_synx_dma(idx);
+	if (rc)
+		CAM_ERR(CAM_SYNC, "Failed to release synx/dma associated with sync_obj: %d rc: %d",
+			idx, rc);
 
-	return 0;
+	return rc;
 }
 
 int cam_sync_reinit_object(struct sync_table_row *table, uint32_t sync_var)
