@@ -10,6 +10,7 @@
 #include <linux/platform_device.h>
 
 #define CAM_IS_NULL_TO_STR(ptr) ((ptr) ? "Non-NULL" : "NULL")
+#define CAM_BOOL_TO_YESNO(val) ((val) ? "Y" : "N")
 
 /* Module IDs used for debug logging */
 #define CAM_CDM        (1 << 0)

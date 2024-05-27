@@ -21,6 +21,7 @@ project_configs = select({
     ":malabar": [
 	"CONFIG_SPECTRA_TFE=y",
 	"CONFIG_SPECTRA_OPE=y",
+	"CONFIG_INTERCONNECT_QCOM=y",
     ],
 })
 
