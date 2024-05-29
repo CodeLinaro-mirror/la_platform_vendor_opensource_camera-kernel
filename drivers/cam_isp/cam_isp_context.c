@@ -720,7 +720,12 @@ static int __cam_isp_ctx_notify_trigger_util(
 					ctx->ctx_id, ctx_isp->last_applied_req_id,
 					ctx_isp->req_info.last_bufdone_req_id);
 			ctx_isp->debug_frame_drop_cnt++;
-			CAM_INFO(CAM_ISP, "pending list empty, skipping ctx:%u", ctx->ctx_id);
+			if (ctx_isp->debug_frame_drop_cnt % 5 == 0) {
+				CAM_INFO(CAM_ISP,
+					"pending list empty, skipping ctx:%u drop num %d",
+					ctx->ctx_id,
+					ctx_isp->debug_frame_drop_cnt);
+			}
 			if (ctx_isp->rdi_only_context || ctx_isp->rdi_stats_context)
 				ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_SOF;
 			return -EINVAL;
