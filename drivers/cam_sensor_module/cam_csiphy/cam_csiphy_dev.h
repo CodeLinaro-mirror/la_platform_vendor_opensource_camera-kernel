@@ -383,6 +383,8 @@ struct csiphy_device {
 	uint16_t                       preamble_enable;
 	bool                           is_aggregator_rx;
 	bool                           is_phy_protect;
+	bool                           scm_mode;
+	uint32_t                       scm_ref_count;
 	uint32_t                       lanes_enabled;
 	uint32_t                       channel_type;
 };
