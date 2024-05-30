@@ -42,3 +42,11 @@ config SPECTRA_FD
         bool "enabling camera fd modele"
         help
           This is enabling camera FD module.
+
+config TZ_DCP_API_VER_2
+	bool "enable secure camera DCP V2 Api"
+	help
+	  This is enabling secure camera. To use and enable
+	  DCP version 2 api. This includes securemsm kernel
+	  header files required to support DCP Version 2 API.
+	  DCP Version 2 code only compile if this is enable.

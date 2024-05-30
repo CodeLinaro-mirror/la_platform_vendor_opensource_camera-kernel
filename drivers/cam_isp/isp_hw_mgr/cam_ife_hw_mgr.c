@@ -7064,7 +7064,58 @@ err:
 	return rc;
 }
 
-#ifdef CONFIG_SECURE_CAMERA_V3
+#if defined CONFIG_SECURE_CAMERA_V3 || defined CONFIG_TZ_DCP_API_VER_2
+static int cam_ife_mgr_get_mapped_port_idx(uint32_t hw_type, uint32_t res_id)
+{
+	if (hw_type == ITRUSTEDCAMERADRIVER_IFE) {
+		switch (res_id) {
+		case CAM_ISP_IFE_OUT_RES_RDI_0:
+			return IFE_RDI_0_OUT;
+		case CAM_ISP_IFE_OUT_RES_RDI_1:
+			return IFE_RDI_1_OUT;
+		case CAM_ISP_IFE_OUT_RES_RDI_2:
+			return IFE_RDI_2_OUT;
+		case CAM_ISP_IFE_OUT_RES_FULL:
+			return IFE_VIDEO_OUT;
+		case CAM_ISP_IFE_OUT_RES_FD:
+			return IFE_FD_OUT;
+		case CAM_ISP_IFE_OUT_RES_RAW_DUMP:
+			return IFE_PIXEL_RAW_DUMP_OUT;
+		case CAM_ISP_IFE_OUT_RES_PDAF:
+			return IFE_PDAF_OUT;
+		case CAM_ISP_IFE_OUT_RES_FULL_DISP:
+			return IFE_DISPLAY_FULL_OUT;
+		default:
+			CAM_INFO(CAM_ISP, "Invalid res id 0x%x", res_id);
+			break;
+		}
+	} else if (hw_type == ITRUSTEDCAMERADRIVER_IFE_LITE) {
+		switch (res_id) {
+		case CAM_ISP_IFE_OUT_RES_RDI_0:
+			return IFE_LITE_RDI_0_OUT;
+		case CAM_ISP_IFE_OUT_RES_RDI_1:
+			return IFE_LITE_RDI_1_OUT;
+		case CAM_ISP_IFE_OUT_RES_RDI_2:
+			return IFE_LITE_RDI_2_OUT;
+		case CAM_ISP_IFE_OUT_RES_RDI_3:
+			return IFE_LITE_RDI_3_OUT;
+		case CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW:
+			return IFE_LITE_GAMMA;
+		case CAM_ISP_IFE_LITE_OUT_RES_GAMMA_DS:
+			return IFE_LITE_GAMMA_MNDS_Y_CP_EN;
+		case CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW2:
+			return IFE_LITE_GAMMA_2;
+		case CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW1:
+			return IFE_LITE_GAMMA_1;
+		default:
+			CAM_INFO(CAM_ISP, "Invalid res id 0x%x", res_id);
+			break;
+		}
+	}
+
+	return -EINVAL;
+}
+
 static int cam_ife_mgr_get_phy_id(uint32_t res_id)
 {
 	int phy_id = -1;
@@ -7149,7 +7200,9 @@ static int cam_ife_hw_mgr_secure_phy_contexts(
 	}
 	return rc;
 }
+#endif
 
+#ifdef CONFIG_SECURE_CAMERA_V3
 static int cam_ife_hw_mgr_set_secure_port_info(
 	struct cam_ife_hw_mgr_ctx           *ife_ctx,
 	bool                                is_release,
@@ -7202,7 +7255,6 @@ static int cam_ife_hw_mgr_set_secure_port_info(
 		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].protect = CAM_SECURE_MODE_SECURE;
 		sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].protect = CAM_SECURE_MODE_NON_SECURE;
 	}
-
 
 	for (i = 0; i < max_ife_out_res; i++) {
 		if (ife_ctx->res_list_ife_out[i].res_id) {
@@ -7260,13 +7312,178 @@ end:
 
 	return rc;
 }
-#else
+#endif
+
+#ifdef CONFIG_TZ_DCP_API_VER_2
+
+static int cam_get_ife_hw_idx(int hw_idx)
+{
+	if (hw_idx < g_num_ife)
+		return hw_idx;
+	else if (hw_idx < g_num_ife + g_num_ife_lite)
+		return (hw_idx - g_num_ife);
+
+	CAM_ERR(CAM_ISP, "hw idx %d out-of-bounds", hw_idx);
+	return 0;
+}
+
 static int cam_ife_hw_mgr_set_secure_port_info(
 	struct cam_ife_hw_mgr_ctx           *ife_ctx,
 	bool                                is_release,
 	bool                                is_shutdown)
 {
-	return 0;
+	int port_idx, i, hw_id, hw_type, phy_id, ife_hw_type;
+	struct port_info sec_unsec_port_info[CAM_VFE_SECURE_NON_SECURE_PORT_MAX_IDX];
+	int rc = 0;
+
+	phy_id = cam_ife_mgr_get_phy_id(ife_ctx->res_list_ife_in.res_id);
+	hw_id = cam_get_ife_hw_idx(ife_ctx->left_hw_idx);
+	ife_hw_type = cam_convert_hw_idx_to_ife_hw_type(
+			ife_ctx->left_hw_idx, g_num_ife, g_num_ife_lite);
+	hw_type = cam_convert_hw_id_to_secure_cam_hw_type(ife_hw_type);
+
+	if (cam_ife_mgr_is_tpg(ife_ctx->res_list_ife_in.res_id)) {
+		CAM_INFO(CAM_ISP, "No security required for TPG usecase ctx %d",
+			ife_ctx->ctx_index);
+		return rc;
+	}
+	if (hw_type < 0 || phy_id < 0) {
+		CAM_ERR(CAM_ISP, "Invalid hw type %d or phy_id %d ife_ctx %d",
+			hw_type, phy_id, ife_ctx->ctx_index);
+		return -EINVAL;
+	}
+	if (ife_ctx->hw_mgr->phy_ref_cnt[phy_id] &&
+		!ife_ctx->hw_mgr->is_phy_secure[phy_id]) {
+		if (cam_ife_hw_mgr_is_secure_context(ife_ctx) && !is_release) {
+			ife_ctx->hw_mgr->is_phy_secure[phy_id] = true;
+			rc = cam_ife_hw_mgr_secure_phy_contexts(ife_ctx);
+			if (rc)
+				goto end;
+		} else {
+			goto end;
+		}
+	}
+	if (!ife_ctx->hw_mgr->phy_ref_cnt[phy_id] &&
+		!cam_ife_hw_mgr_is_secure_context(ife_ctx))
+		goto end;
+
+	ife_ctx->hw_mgr->is_phy_secure[phy_id] = TRUE;
+
+	if (is_shutdown)
+		goto end;
+	for (i = 0; i < CAM_VFE_SECURE_NON_SECURE_PORT_MAX_IDX; i++)
+		memset(&sec_unsec_port_info[i], 0, sizeof(sec_unsec_port_info[i]));
+
+	sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].hw_type = hw_type;
+	sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].phy_id  = phy_id;
+	sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].hw_id_mask = BIT(hw_id);
+	sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].hw_type = hw_type;
+	sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].phy_id  = phy_id;
+	sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].hw_id_mask = BIT(hw_id);
+	if (is_release) {
+		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].protect =
+			CAM_SECURE_MODE_NON_SECURE;
+		sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].protect =
+			CAM_SECURE_MODE_SECURE;
+	} else {
+		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].protect =
+			CAM_SECURE_MODE_SECURE;
+		sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].protect =
+			CAM_SECURE_MODE_NON_SECURE;
+	}
+
+
+	for (i = 0; i < max_ife_out_res; i++) {
+		if (ife_ctx->res_list_ife_out[i].res_id &&
+			(cam_ife_mgr_get_mapped_port_idx(hw_type,
+			ife_ctx->res_list_ife_out[i].res_id) >= 0)) {
+
+			if (ife_ctx->res_list_ife_out[i].is_secure) {
+				port_idx = sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports;
+				sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].port_id[port_idx] =
+					cam_ife_mgr_get_mapped_port_idx(hw_type,
+						ife_ctx->res_list_ife_out[i].res_id);
+				sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports++;
+			} else {
+				port_idx =
+					sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports;
+				sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].port_id[port_idx] =
+					cam_ife_mgr_get_mapped_port_idx(hw_type,
+						ife_ctx->res_list_ife_out[i].res_id);
+				sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports++;
+			}
+
+		CAM_DBG(CAM_ISP,
+			"ctx %d i %d: res_id 0x%x hw_type 0x%x protect %d phy_id %d port %x num %d release %d",
+			ife_ctx->ctx_index, i,
+			ife_ctx->res_list_ife_out[i].res_id,
+			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].hw_type,
+			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].protect,
+			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].phy_id,
+			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].port_id[port_idx],
+			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports, is_release);
+		CAM_DBG(CAM_ISP,
+			"ctx %d i %d: res_id 0x%x hw_type 0x%x protect %d phy_id %d port %x num %d release %d",
+			ife_ctx->ctx_index, i,
+			ife_ctx->res_list_ife_out[i].res_id,
+			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].hw_type,
+			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].protect,
+			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].phy_id,
+			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].port_id[port_idx],
+			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports, is_release);
+		}
+	}
+	/* During release no need to mark any port as non-secure */
+	if (is_release)
+		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports = 0;
+
+	CAM_INFO(CAM_ISP,
+		"hw_type 0x%x phy_id %d prot %d num_ports 0x%x prot %d num_ports %d release %d ctx %d",
+		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].hw_type,
+		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].phy_id,
+		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].protect,
+		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports,
+		sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].protect,
+		sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports,
+		is_release, ife_ctx->ctx_index);
+
+	if (!sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports)
+		CAM_INFO(CAM_ISP,
+			"ctx %d No port to mask as unsecure in secure usecase",
+			ife_ctx->ctx_index);
+	else
+		rc = cam_isp_notify_secure_unsecure_port(sec_unsec_port_info);
+end:
+	if (!is_release) {
+		if (cam_ife_hw_mgr_is_secure_context(ife_ctx))
+			ife_ctx->hw_mgr->sec_phy_ref_cnt[phy_id]++;
+
+		ife_ctx->hw_mgr->phy_ref_cnt[phy_id]++;
+
+		CAM_DBG(CAM_ISP,
+			"ctx %d phy ref cnt %d sec_phy_ref cnt %d is_phy_sec %d release %d",
+			ife_ctx->ctx_index,
+			ife_ctx->hw_mgr->phy_ref_cnt[phy_id],
+			ife_ctx->hw_mgr->sec_phy_ref_cnt[phy_id],
+			ife_ctx->hw_mgr->is_phy_secure[phy_id], is_release);
+	} else {
+		ife_ctx->hw_mgr->phy_ref_cnt[phy_id]--;
+
+		if (cam_ife_hw_mgr_is_secure_context(ife_ctx))
+			ife_ctx->hw_mgr->sec_phy_ref_cnt[phy_id]--;
+
+		if (!ife_ctx->hw_mgr->sec_phy_ref_cnt[phy_id])
+			ife_ctx->hw_mgr->is_phy_secure[phy_id] = FALSE;
+
+		CAM_DBG(CAM_ISP,
+			"ctx %d phy ref cnt %d sec_phy_ref cnt %d is_phy_sec %d release %d",
+			ife_ctx->ctx_index,
+			ife_ctx->hw_mgr->phy_ref_cnt[phy_id],
+			ife_ctx->hw_mgr->sec_phy_ref_cnt[phy_id],
+			ife_ctx->hw_mgr->is_phy_secure[phy_id], is_release);
+	}
+
+	return rc;
 }
 #endif
 
