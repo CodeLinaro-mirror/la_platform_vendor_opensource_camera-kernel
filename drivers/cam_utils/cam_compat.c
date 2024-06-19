@@ -21,6 +21,48 @@
 #include "cam_ois_dev.h"
 #include "cam_sensor_dev.h"
 
+int cam_smmu_fetch_csf_version(struct cam_csf_version *csf_version)
+{
+#ifdef CONFIG_SECURE_CAMERA_25
+	struct csf_version csf_ver;
+	int rc;
+
+	/* Fetch CSF version from SMMU proxy driver */
+	rc = smmu_proxy_get_csf_version(&csf_ver);
+	if (rc) {
+		CAM_ERR(CAM_SMMU,
+			"Failed to get CSF version from SMMU proxy: %d", rc);
+		return rc;
+	}
+
+	csf_version->arch_ver = csf_ver.arch_ver;
+	csf_version->max_ver = csf_ver.max_ver;
+	csf_version->min_ver = csf_ver.min_ver;
+#else
+	/* This defaults to the legacy version */
+	csf_version->arch_ver = 2;
+	csf_version->max_ver = 0;
+	csf_version->min_ver = 0;
+#endif
+	return 0;
+}
+
+unsigned long cam_update_dma_map_attributes(unsigned long attrs)
+{
+#ifdef CONFIG_SECURE_CAMERA_25
+	attrs |= DMA_ATTR_QTI_SMMU_PROXY_MAP;
+#endif
+	return attrs;
+}
+
+size_t cam_align_dma_buf_size(size_t len)
+{
+#ifdef CONFIG_SECURE_CAMERA_25
+	len = ALIGN(len, SMMU_PROXY_MEM_ALIGNMENT);
+#endif
+	return len;
+}
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 int cam_reserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length)
 {

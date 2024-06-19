@@ -54,9 +54,19 @@
 #include <linux/trusted_camera_driver.h>
 #endif
 
+#ifdef CONFIG_SECURE_CAMERA_25
+#include <smmu-proxy/linux/qti-smmu-proxy.h>
+#endif
+
+#if KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE
+#include <linux/qcom-dma-mapping.h>
+#endif
+
 #if KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE
 MODULE_IMPORT_NS(DMA_BUF);
 #endif
+
+#define IS_CSF25(x, y) ((((x) == 2) && ((y) == 5)) ? 1 : 0)
 
 struct cam_fw_alloc_info {
 	struct device *fw_dev;
@@ -127,5 +137,11 @@ int cam_flash_i2c_driver_remove(struct i2c_client *client);
 int cam_ois_i2c_driver_remove(struct i2c_client *client);
 int cam_sensor_i2c_driver_remove(struct i2c_client *client);
 #endif
+
+int cam_smmu_fetch_csf_version(struct cam_csf_version *csf_version);
+
+unsigned long cam_update_dma_map_attributes(unsigned long attr);
+
+size_t cam_align_dma_buf_size(size_t len);
 
 #endif /* _CAM_COMPAT_H_ */

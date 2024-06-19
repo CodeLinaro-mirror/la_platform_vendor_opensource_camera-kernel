@@ -11,6 +11,9 @@ ifeq ($(TARGET_BOARD_PLATFORM), niobe)
 	LOCAL_MODULE_DDK_BUILD := true
 endif
 
+# List of board platforms for which SMMU_PROXY_DLKM driver API should be enabled
+SMMU_PROXY_DLKM_BOARDS := niobe
+
 CAMERA_SRC_FILES := \
                     $(addprefix $(LOCAL_PATH)/, $(call all-named-files-under,*.h,drivers dt-bindings include))\
                     $(addprefix $(LOCAL_PATH)/, $(call all-named-files-under,*.mk,config))\

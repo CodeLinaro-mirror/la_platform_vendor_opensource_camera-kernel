@@ -266,6 +266,8 @@ int cam_mem_mgr_init(void)
 	cam_common_register_mini_dump_cb(cam_mem_mgr_mini_dump_cb,
 		"cam_mem");
 
+	cam_smmu_get_csf_version(&tbl.csf_version);
+
 	return 0;
 put_heaps:
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
@@ -691,11 +693,15 @@ static int cam_mem_util_get_dma_buf(size_t len,
 	}
 
 	if (cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) {
-		heap = tbl.secure_display_heap;
-
-		vmids[num_vmids] = VMID_CP_CAMERA;
-		perms[num_vmids] = PERM_READ | PERM_WRITE;
-		num_vmids++;
+		if (IS_CSF25(tbl.csf_version.arch_ver, tbl.csf_version.max_ver)) {
+			heap = tbl.system_heap;
+			len = cam_align_dma_buf_size(len);
+		} else {
+			heap = tbl.secure_display_heap;
+			vmids[num_vmids] = VMID_CP_CAMERA;
+			perms[num_vmids] = PERM_READ | PERM_WRITE;
+			num_vmids++;
+		}
 
 		if (cam_flags & CAM_MEM_FLAG_CDSP_OUTPUT) {
 			CAM_DBG(CAM_MEM, "Secure mode CDSP flags");
@@ -752,7 +758,8 @@ static int cam_mem_util_get_dma_buf(size_t len,
 	*i_ino = file_inode((*buf)->file)->i_ino;
 
 #if IS_REACHABLE(CONFIG_QCOM_MEM_BUF)
-	if ((cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) ||
+	if (((cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) &&
+		!IS_CSF25(tbl.csf_version.arch_ver, tbl.csf_version.max_ver)) ||
 		(cam_flags & CAM_MEM_FLAG_EVA_NOPIXEL)) {
 		struct mem_buf_lend_kernel_arg arg;
 		if (num_vmids >= CAM_MAX_VMIDS) {

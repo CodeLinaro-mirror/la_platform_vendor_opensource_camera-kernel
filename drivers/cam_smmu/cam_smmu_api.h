@@ -57,6 +57,22 @@ enum cam_smmu_subregion_id {
 };
 
 /**
+ * @brief          : Represents camera security framework version
+ *
+ * @param arch_ver : Captures the version of the high level secure
+ *                   camera architecture.
+ * @param max_ver  : Captures the version of the solution with in the
+ *                   high level architecture.
+ * @param min_ver  : Captures the version of the memory assignment
+ *                   mechanism with in the solution.
+ */
+struct cam_csf_version {
+	uint32_t              arch_ver;
+	uint32_t              max_ver;
+	uint32_t              min_ver;
+};
+
+/**
  * @brief          : cam_smmu_pf_info
  *
  * @param domain   : Iommu domain received in iommu page fault handler
@@ -501,5 +517,10 @@ int cam_smmu_map_phy_mem_in_fence_queue_region(int smmu_hdl, phys_addr_t phy_add
  */
 int cam_smmu_unmap_phy_mem_in_fence_queue_region(int smmu_hdl,
 	dma_addr_t paddr, size_t size);
+
+/**
+ * @brief : API to get CSF version in use that's received from SMMU proxy driver
+ */
+void cam_smmu_get_csf_version(struct cam_csf_version *csf_ver);
 
 #endif /* _CAM_SMMU_API_H_ */
