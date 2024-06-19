@@ -273,6 +273,7 @@ struct cam_vfe_bus_ver3_vfe_out_data {
 	void                            *priv;
 	uint32_t                         mid[CAM_VFE_BUS_VER3_MAX_MID_PER_PORT];
 	bool                             limiter_enabled;
+	bool                             primary_port_en;
 	uint32_t   stored_irq_masks[CAM_VFE_BUS_VER3_MAX_STORED_MASKS][CAM_VFE_BUS_VER3_IRQ_MAX];
 	bool                             is_isr_en;
 };
@@ -475,6 +476,7 @@ struct cam_vfe_bus_ver3_common_data {
 	bool                                        init_irq_subscribed;
 	bool                                        disable_mmu_prefetch;
 	bool                                        support_tunneling;
+	bool                                        buf_done_evt_control;
 	cam_hw_mgr_event_cb_func                    event_cb;
 	int                                         rup_irq_handle[
 		CAM_VFE_BUS_VER3_SRC_GRP_MAX];

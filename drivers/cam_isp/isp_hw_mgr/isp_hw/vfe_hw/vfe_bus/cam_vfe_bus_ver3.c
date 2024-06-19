@@ -2205,6 +2205,7 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 	struct cam_isp_resource_node          *vfe_out)
 {
 	int rc = 0, i;
+	struct cam_vfe_bus_ver3_priv *bus_priv = NULL;
 	struct cam_vfe_bus_ver3_vfe_out_data  *rsrc_data = NULL;
 	struct cam_vfe_bus_ver3_common_data   *common_data = NULL;
 	uint32_t source_group = 0;
@@ -2215,6 +2216,7 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 	}
 
 	rsrc_data = vfe_out->res_priv;
+	bus_priv = rsrc_data->bus_priv;
 	common_data = rsrc_data->common_data;
 	source_group = rsrc_data->source_group;
 
@@ -2239,8 +2241,10 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 	for (i = 0; i < rsrc_data->num_wm; i++)
 		rc = cam_vfe_bus_ver3_start_wm(&rsrc_data->wm_res[i]);
 
-	rc = cam_vfe_bus_ver3_start_comp_grp(rsrc_data,
-		rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_BUF_DONE_MASK]);
+	if ((!bus_priv->common_data.buf_done_evt_control) ||
+		(bus_priv->common_data.buf_done_evt_control && rsrc_data->primary_port_en))
+		rc = cam_vfe_bus_ver3_start_comp_grp(rsrc_data,
+			rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_BUF_DONE_MASK]);
 
 	if (rsrc_data->is_dual && !rsrc_data->is_master)
 		goto end;
@@ -2310,11 +2314,11 @@ end:
 }
 
 static int cam_vfe_bus_ver3_stop_vfe_out(
-	struct cam_isp_resource_node          *vfe_out)
+	struct cam_isp_resource_node *vfe_out)
 {
 	int rc = 0, i;
+	struct cam_vfe_bus_ver3_common_data   *common_data;
 	struct cam_vfe_bus_ver3_vfe_out_data  *rsrc_data = NULL;
-	struct cam_vfe_bus_ver3_common_data   *common_data = NULL;
 
 	if (!vfe_out) {
 		CAM_ERR(CAM_ISP, "Invalid input");
@@ -2332,7 +2336,7 @@ static int cam_vfe_bus_ver3_stop_vfe_out(
 		return rc;
 	}
 
-	rc = cam_vfe_bus_ver3_stop_comp_grp(rsrc_data->comp_grp);
+	cam_vfe_bus_ver3_stop_comp_grp(rsrc_data->comp_grp);
 
 	for (i = 0; i < rsrc_data->num_wm; i++)
 		rc = cam_vfe_bus_ver3_stop_wm(&rsrc_data->wm_res[i]);
@@ -2355,6 +2359,7 @@ static int cam_vfe_bus_ver3_stop_vfe_out(
 		cam_vfe_bus_ver3_unsubscribe_init_irq(rsrc_data->bus_priv);
 
 	vfe_out->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
+
 	return rc;
 }
 
@@ -2407,6 +2412,12 @@ static int cam_vfe_bus_ver3_stop_vfe_out_wrapper(
 		CAM_ERR(CAM_ISP, "Stop VFE:%d out_type:0x%X failed",
 			rsrc_data->common_data->core_index, rsrc_data->out_type);
 	}
+
+	if (!vfe_stop->is_internal_stop) {
+		rsrc_data->bus_priv->common_data.buf_done_evt_control = false;
+		rsrc_data->primary_port_en = false;
+	}
+
 	return rc;
 }
 
@@ -2519,8 +2530,10 @@ static int cam_vfe_bus_ver3_handle_vfe_out_done_bottom_half(
 	uint64_t                               comp_mask = 0;
 	uint32_t                               out_list[CAM_VFE_BUS_VER3_VFE_OUT_MAX];
 
-	rc = cam_vfe_bus_ver3_handle_comp_done_bottom_half(
-		rsrc_data, evt_payload_priv, &comp_mask);
+	//TO-DO this can be optimized for single callback per comp group?
+	rc = cam_vfe_bus_ver3_handle_comp_done_bottom_half(rsrc_data,
+		evt_payload_priv, &comp_mask);
+
 	CAM_DBG(CAM_ISP, "VFE:%d out_type:0x%X comp_mask: 0x%lx rc:%d",
 		rsrc_data->common_data->core_index, rsrc_data->out_type, comp_mask, rc);
 
@@ -4235,6 +4248,35 @@ end:
 	return rc;
 }
 
+static int cam_vfe_bus_ver3_update_primary_port_config(
+	struct cam_vfe_bus_ver3_priv *bus_priv, void *cmd_args)
+{
+	struct cam_isp_hw_get_cmd_update            *primary_port_config;
+	struct cam_vfe_bus_ver3_vfe_out_data        *vfe_out_data = NULL;
+
+	if (!cmd_args) {
+		CAM_ERR(CAM_ISP, "Invalid args");
+		return -EINVAL;
+	}
+
+	primary_port_config = cmd_args;
+	vfe_out_data = primary_port_config->res->res_priv;
+
+	if (!vfe_out_data) {
+		CAM_ERR(CAM_ISP, "Invalid args vfe_out_data[%pK]", vfe_out_data);
+		return -EINVAL;
+	}
+
+	bus_priv->common_data.buf_done_evt_control = true;
+	vfe_out_data->primary_port_en = true;
+
+	CAM_DBG(CAM_ISP, "Res: 0x%x selected as primary port on VFE: %u",
+		vfe_out_data->wm_res->res_id, vfe_out_data->common_data->hw_intf->hw_idx);
+
+	return 0;
+}
+
+
 static int cam_vfe_bus_ver3_update_res_wm(
 	struct cam_vfe_bus_ver3_priv           *ver3_bus_priv,
 	struct cam_vfe_hw_vfe_out_acquire_args *out_acq_args,
@@ -4945,7 +4987,10 @@ static int cam_vfe_bus_ver3_process_cmd(
 	case CAM_ISP_HW_CMD_SCRATCH_BUF_CFG:
 		rc = cam_vfe_bus_ver3_scratch_buf_cfg(priv, cmd_args);
 		break;
-
+	case CAM_ISP_HW_CMD_PRIMARY_PORT_CONFIG:
+		bus_priv = (struct cam_vfe_bus_ver3_priv  *)priv;
+		rc = cam_vfe_bus_ver3_update_primary_port_config(bus_priv, cmd_args);
+		break;
 	default:
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "Invalid camif process command:%d",
 			cmd_type);
@@ -5038,6 +5083,7 @@ int cam_vfe_bus_ver3_init(
 		ver3_hw_info->comp_cfg_needed;
 	bus_priv->common_data.init_irq_subscribed = false;
 	bus_priv->common_data.disable_mmu_prefetch = false;
+	bus_priv->common_data.buf_done_evt_control = false;
 	bus_priv->common_data.pack_align_shift =
 		ver3_hw_info->pack_align_shift;
 	bus_priv->common_data.max_bw_counter_limit =

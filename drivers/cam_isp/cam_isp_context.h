@@ -248,6 +248,9 @@ struct cam_isp_ctx_sensor_req_info {
  * @sof_timestamp_val:         Captured time stamp value at sof hw event
  * @boot_timestamp:            Boot time stamp for a given req_id
  * @applied_crop_req_id:       Indicates applied crop request for this request
+ * @primary_port_done_mask     Indicates the primary port buf dones that are
+ *                             expected for this request
+ * @buf_done_tracker           Indicates the ports that have received buf dones for this request
  *
  */
 struct cam_isp_ctx_req {
@@ -274,6 +277,8 @@ struct cam_isp_ctx_req {
 	uint64_t                              sof_timestamp_val;
 	uint64_t                              boot_timestamp;
 	uint64_t                              applied_crop_req_id;
+	uint64_t                              primary_port_done_mask;
+	uint64_t                              buf_done_tracker;
 };
 
 /**
@@ -414,6 +419,10 @@ struct cam_isp_context_ul_setting_data {
  * @settingbuf_res_id:         Resource ID of Setting ID buffer
  * @scratch_buf_kmdvaddr:      KMD VA of scratch buffer
  * @is_settingid_scratchcfg:   indicates that scratch buffer is programmed with valid settingID
+ * @num_primary_ports:         Number of primary port configurations
+ * @primary_port_info:         Primary port info array
+ * @primary_port_exp_mask:     Indicates the expected mask for all master ports to be done for
+ *                             this stream
  *
  */
 struct cam_isp_context {
@@ -506,6 +515,9 @@ struct cam_isp_context {
 	bool                                   is_settingid_scratchcfg;
 	struct cam_isp_context_ul_setting_data setting_data[MAX_SETTING_PACKETS];
 	struct cam_isp_ctx_ul_data             ul_data;
+	uint32_t                               num_primary_ports;
+	struct cam_isp_primary_port_info      *primary_port_info;
+	uint64_t                               primary_port_exp_mask;
 };
 
 /**
