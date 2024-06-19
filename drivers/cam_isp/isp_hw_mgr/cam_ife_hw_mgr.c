@@ -16916,6 +16916,44 @@ static int cam_ife_mgr_get_primary_port_info(
 	return 0;
 }
 
+static int cam_ife_mgr_set_fast_path_notifier(
+	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx,
+	struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
+{
+	int i, rc = 0;
+	struct cam_hw_intf *hw_if = NULL;
+	struct cam_isp_hw_fast_result_notifier_cfg notifier_cfg = {0};
+
+	/* Check for fastpath */
+	notifier_cfg.data = isp_hw_cmd_args->cmd_data;
+	notifier_cfg.handler_cb = isp_hw_cmd_args->u.fastpath_result_handler;
+
+	for (i = 0; i < hw_mgr_ctx->num_base; i++) {
+		if (hw_mgr_ctx->base[i].hw_type == CAM_ISP_HW_TYPE_VFE)
+			hw_if = g_ife_hw_mgr.ife_devices[hw_mgr_ctx->base[i].idx]->hw_intf;
+		else if (hw_mgr_ctx->base[i].hw_type == CAM_ISP_HW_TYPE_SFE)
+			hw_if = g_ife_hw_mgr.sfe_devices[hw_mgr_ctx->base[i].idx]->hw_intf;
+		else
+			continue;
+
+		if (!hw_if) {
+			CAM_ERR_RATE_LIMIT(CAM_ISP, "hw_intf is null");
+			return -EINVAL;
+		}
+
+		if (hw_if->hw_ops.process_cmd) {
+			rc = hw_if->hw_ops.process_cmd(hw_if->hw_priv,
+				CAM_ISP_HW_CMD_FAST_RESULT_NOTIFIER_CFG,
+				&notifier_cfg, sizeof(notifier_cfg));
+			if (rc)
+				goto end;
+		}
+	}
+
+end:
+	return rc;
+}
+
 static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 {
 	int rc = 0;
@@ -17052,6 +17090,9 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			break;
 		case CAM_ISP_HW_MGR_GET_PRIMARY_PORT_INFO:
 			rc = cam_ife_mgr_get_primary_port_info(ctx, isp_hw_cmd_args);
+			break;
+		case CAM_ISP_HW_MGR_FAST_RESULT_NOTIFIER_CFG:
+			rc = cam_ife_mgr_set_fast_path_notifier(ctx, isp_hw_cmd_args);
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "Invalid HW mgr command:0x%x",

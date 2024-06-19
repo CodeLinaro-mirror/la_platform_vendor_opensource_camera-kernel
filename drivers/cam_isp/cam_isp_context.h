@@ -247,6 +247,7 @@ struct cam_isp_ctx_sensor_req_info {
  * @primary_port_done_mask     Indicates the primary port buf dones that are
  *                             expected for this request
  * @buf_done_tracker           Indicates the ports that have received buf dones for this request
+ * @ul_fp_result_posted        Indicates if this request has already been serviced for fastpath
  *
  */
 struct cam_isp_ctx_req {
@@ -271,6 +272,7 @@ struct cam_isp_ctx_req {
 	uint64_t                              sensor_req_id;
 	uint64_t                              primary_port_done_mask;
 	uint64_t                              buf_done_tracker;
+	bool                                  ul_fp_result_posted;
 };
 
 /**
@@ -323,6 +325,35 @@ struct cam_isp_context_event_record {
 struct cam_isp_context_ul_setting_data {
 	bool is_setting_valid;
 	struct cam_isp_ctx_req req_isp;
+};
+
+/**
+ * struct cam_isp_context_ul_fp_results - Fastpath results
+ *
+ * @last_consumed_addr:       last consumed address
+ * @timestamp:                SOF qtimer timestamp
+ * @boot_timestamp:           SOF boot timestamp
+ */
+struct cam_isp_context_ul_fp_results {
+	uint32_t last_consumed_addr;
+	uint64_t timestamp;
+	uint64_t boot_timestamp;
+};
+
+/**
+ * struct cam_isp_context_ul_fp_handling_params - Fastpath parameters
+ *
+ * @fast_path_lock:           Spin lock to protect faspath parameters
+ *                            between ISR and user thread context
+ * @fast_path_buf_done:       Fastpath buf done completion variable
+ * @read_idx:				  Read index of the result queue
+ * @write_idx:				  Write index of the result queue
+ */
+struct cam_isp_context_ul_fp_handling_params {
+	spinlock_t        fast_path_lock;
+	struct completion fast_path_buf_done;
+	atomic_t          read_idx;
+	atomic_t          write_idx;
 };
 
 /**
@@ -410,6 +441,8 @@ struct cam_isp_context_ul_setting_data {
  * @primary_port_info:         Primary port info array
  * @primary_port_exp_mask:     Indicates the expected mask for all master ports to be done for
  *                             this stream
+ * @ul_fp_params:              Parameters to maintain the ul fastpath result queue
+ * @ul_fp_results:             Result queue associated with ul fastpath streams
  */
 struct cam_isp_context {
 	struct cam_context              *base;
@@ -499,6 +532,8 @@ struct cam_isp_context {
 	uint32_t                               num_primary_ports;
 	struct cam_isp_primary_port_info      *primary_port_info;
 	uint64_t                               primary_port_exp_mask;
+	struct cam_isp_context_ul_fp_handling_params ul_fp_params;
+	struct cam_isp_context_ul_fp_results *ul_fp_results;
 };
 
 /**

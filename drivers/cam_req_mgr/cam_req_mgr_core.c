@@ -4042,12 +4042,12 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd) {
 			CAM_ERR(CAM_CRM, "Link 0x%x is not in ready state", ul_packet->link_hdl);
 			return -EINVAL;
 		}
-		for (i = 0; i < ul_packet->number_devices; i++) {
-			for (j = 0; j < link->num_devs; j++) {
-				if (link->l_dev[j].dev_hdl == ul_packet->device_hdl[i] &&
-					link->l_dev[j].no_crm_ops->retreive) {
-					link->l_dev[j].no_crm_ops->retreive(ul_packet->device_hdl[i], ul_packet);
-				}
+
+		for (j = 0; j < link->num_devs; j++) {
+			if (link->l_dev[j].dev_hdl == ul_packet->device_hdl[i] &&
+				link->l_dev[j].no_crm_ops->retrieve) {
+				link->l_dev[j].no_crm_ops->retrieve(ul_packet->device_hdl[i],
+					ul_packet);
 			}
 		}
 	}
