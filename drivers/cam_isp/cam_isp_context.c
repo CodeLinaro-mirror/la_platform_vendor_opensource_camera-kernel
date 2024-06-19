@@ -2215,6 +2215,10 @@ static int __cam_isp_ctx_handle_fence_signaling_util(
 		req->request_id, req_isp->fence_map_out[map_entry_idx].resource_handle,
 		req_isp->fence_map_out[map_entry_idx].sync_id, ctx->ctx_id);
 
+	/* For virtual frame no fence to signal */
+	if (req_isp->fence_map_out[map_entry_idx].virtual_frame_enabled)
+		goto end;
+
 	ev_timestamp.sof_timestamp = ctx_isp->sof_timestamp_val;
 	ev_timestamp.boot_timestamp = ctx_isp->boot_timestamp;
 	kernel_buf_ptr = req_isp->fence_map_out[map_entry_idx].kernel_map_buf_addr[0];
@@ -2251,9 +2255,9 @@ static int __cam_isp_ctx_handle_fence_signaling_util(
 			fence_status, fence_cause);
 	}
 
+end:
 	/* Reset fence */
 	req_isp->fence_map_out[map_entry_idx].sync_id = -1;
-
 	return 0;
 }
 
@@ -2341,9 +2345,11 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 
 	for (i = 0; i < done->num_handles; i++) {
 		for (j = 0; j < req_isp->num_fence_map_out; j++) {
-			cmp_addr = cam_smmu_is_expanded_memory() ? CAM_36BIT_INTF_GET_IOVA_BASE(
+			cmp_addr = cam_smmu_is_expanded_memory() ?
+				CAM_36BIT_INTF_GET_IOVA_BASE(
 				req_isp->fence_map_out[j].image_buf_addr[0]) :
 				req_isp->fence_map_out[j].image_buf_addr[0];
+
 			if (verify_consumed_addr && (done->last_consumed_addr[i] != cmp_addr))
 				continue;
 

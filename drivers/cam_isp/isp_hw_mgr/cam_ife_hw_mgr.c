@@ -15548,6 +15548,118 @@ int cam_ife_hw_mgr_prepare_ul_io(void *hw_mgr_priv,
 	if (!ul_data->change_base.is_valid) {
 		cam_ife_hw_mgr_ul_setup_change_base(ul_data, (void *) ctx);
 	}
+
+	return rc;
+}
+
+static int cam_ife_hw_mgr_check_if_primary_port_has_buffer(
+	struct cam_ife_hw_mgr_ctx *ctx,
+	struct cam_kmd_buf_info *kmd_buf_info,
+	struct cam_hw_prepare_update_args *prepare)
+{
+	int i, j, rc = 0;
+	bool found;
+	uint32_t remain_size = 0, io_cfg_used_bytes = 0;
+	uint32_t *cpu_addr = NULL;
+	struct cam_isp_hw_mgr_res *hw_mgr_res;
+	struct cam_isp_resource_node *hw_res;
+	struct cam_isp_prepare_hw_update_data *prepare_hw_data;
+	struct cam_isp_hw_get_cmd_update update_buf = {0};
+	struct cam_isp_hw_get_wm_update wm_update = {0};
+
+	if (prepare->num_hw_update_entries + 1 >=
+		prepare->max_hw_update_entries) {
+		CAM_ERR(CAM_ISP, "Insufficient  HW entries :%d %d, ctx_idx: %u",
+			prepare->num_hw_update_entries,
+			prepare->max_hw_update_entries, ctx->ctx_index);
+		return -EINVAL;
+	}
+
+	prepare_hw_data = (struct cam_isp_prepare_hw_update_data *)prepare->priv;
+	wm_update.en_virtual_frame = true;
+
+	for (i = 0; i < ctx->num_primary_ports; i++) {
+		found = false;
+
+		for (j = 0; j < prepare->num_out_map_entries; j++) {
+			if (ctx->primary_port_info[i].res_id ==
+				prepare->out_map_entries[j].resource_handle) {
+				found = true;
+				prepare_hw_data->primary_port_entry_index = j;
+				break;
+			}
+		}
+
+		if (!found) {
+			struct cam_hw_fence_map_entry *map_entries;
+
+			if (prepare->num_out_map_entries >= prepare->max_out_map_entries) {
+				CAM_ERR(CAM_ISP,
+					"Out map entries maxed out ctx: %u", ctx->ctx_index);
+				rc = -EINVAL;
+				return rc;
+			}
+
+			hw_mgr_res = &ctx->res_list_ife_out[
+				ctx->primary_port_info[i].res_id & 0xFF];
+
+			/* Pick only left */
+			hw_res = hw_mgr_res->hw_res[0];
+			if ((kmd_buf_info->used_bytes + io_cfg_used_bytes) < kmd_buf_info->size) {
+				remain_size = kmd_buf_info->size -
+					(kmd_buf_info->used_bytes + io_cfg_used_bytes);
+			} else {
+				CAM_ERR(CAM_ISP,
+					"No free memory to add master virtual config req: %lld ctx: %u",
+					 prepare->packet->header.request_id, ctx->ctx_index);
+				rc = -ENOMEM;
+				return rc;
+			}
+
+			cpu_addr = kmd_buf_info->cpu_addr +
+				kmd_buf_info->used_bytes / 4 + io_cfg_used_bytes / 4;
+			update_buf.res = hw_res;
+			update_buf.cmd_type = CAM_ISP_HW_CMD_GET_BUF_UPDATE;
+			update_buf.cmd.cmd_buf_addr = cpu_addr;
+			update_buf.wm_update = &wm_update;
+			update_buf.cmd.size = remain_size;
+			update_buf.wm_update = &wm_update;
+
+			rc = hw_res->hw_intf->hw_ops.process_cmd(
+				hw_res->hw_intf->hw_priv,
+				CAM_ISP_HW_CMD_GET_BUF_UPDATE, &update_buf,
+				sizeof(struct cam_isp_hw_get_cmd_update));
+			if (rc) {
+				CAM_ERR(CAM_ISP,
+					"Failed to configure virtual frame for res: 0x%x rc: %d",
+					hw_res->res_id, rc);
+				return rc;
+			}
+
+			CAM_DBG(CAM_ISP,
+				"Virtual frame enabled for master_port: 0x%x in req: %lld on ctx: %u",
+				ctx->primary_port_info[i].res_id,
+				prepare->packet->header.request_id, ctx->ctx_index);
+
+			io_cfg_used_bytes += update_buf.cmd.used_bytes;
+			map_entries = &prepare->out_map_entries[prepare->num_out_map_entries];
+			map_entries->resource_handle = ctx->primary_port_info[i].res_id;
+			map_entries->virtual_frame_enabled = true;
+
+			/* Virtual frame configured for address 0x0 */
+			map_entries->image_buf_addr[0] = 0x0;
+			prepare_hw_data->primary_port_entry_index = j;
+
+			/* Zero is an invalid sync_id */
+			map_entries->sync_id = 0x0;
+			prepare->num_out_map_entries++;
+		}
+	}
+
+	if (io_cfg_used_bytes)
+		cam_ife_mgr_update_hw_entries_util(CAM_ISP_IOCFG_BL, io_cfg_used_bytes,
+			kmd_buf_info, prepare);
+
 	return rc;
 }
 
@@ -15762,6 +15874,17 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 					if (rc)
 						goto end;
 				}
+			}
+		}
+
+		/* Check if master ports have buffers for this request */
+		if (ctx->primary_port_cfg_done && fill_ife_fence &&
+			(ctx->base[i].hw_type == CAM_ISP_HW_TYPE_VFE)) {
+			if (prepare->num_out_map_entries) {
+				rc = cam_ife_hw_mgr_check_if_primary_port_has_buffer(ctx,
+					&kmd_buf, prepare);
+				if (rc)
+					goto end;
 			}
 		}
 
