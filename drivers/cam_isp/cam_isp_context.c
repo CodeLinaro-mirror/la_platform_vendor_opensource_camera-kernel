@@ -9060,7 +9060,7 @@ static void cam_isp_update_fastpath_result_queue(void *data,
 	uint32_t wr_idx;
 	struct cam_isp_context *isp_ctx;
 
-	if (!data || !value) {
+	if (!data) {
 		CAM_ERR(CAM_ISP, "Invalid params");
 		return;
 	}
@@ -9105,6 +9105,8 @@ static bool __cam_isp_ctx_ul_fastpath_match_for_primary_port(
 	struct cam_isp_ctx_req *req_isp = (struct cam_isp_ctx_req *)req->req_priv;
 
 	primary_port_idx = req_isp->hw_update_data.primary_port_entry_index;
+	if (req_isp->hw_update_data.virtual_frame_en && !last_consumed_addr)
+		return true;
 	if (primary_port_idx >= req_isp->num_fence_map_out)
 		return false;
 
@@ -9114,7 +9116,6 @@ static bool __cam_isp_ctx_ul_fastpath_match_for_primary_port(
 
 	if (cmp_addr == last_consumed_addr)
 		return true;
-
 	return false;
 }
 
@@ -10585,6 +10586,7 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 	struct cam_context               *cam_ctx = ctx_isp->base;
 	int                               setting_id, i, j, port_pattern_curr_idx, res_type;
 	struct cam_isp_ul_resource_update_entry *res_data;
+	bool buffer_found;
 
 	if (list_empty(&cam_ctx->free_req_list)) {
 		CAM_INFO(CAM_ISP, "free list empty, returning ctx:%u",
@@ -10617,6 +10619,7 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 	req_isp->intermediate_irq_mask.sof_irq_mask = 0;
 	req_isp->intermediate_irq_mask.reg_up_irq_mask = 0;
 	req_isp->intermediate_irq_mask.epoch_irq_mask = 0;
+	req_isp->ul_fp_result_posted = false;
 	memcpy(req_isp->cfg, setting_req_isp->cfg,
 		sizeof(struct cam_hw_update_entry) * setting_req_isp->num_cfg);
 	req_isp->num_fence_map_out        = 0;
@@ -10627,7 +10630,8 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 		if (!ctx_isp->ul_data.pattern_period[i].resource_type)
 			break;
 		res_type = ctx_isp->ul_data.pattern_period[i].resource_type;
-		port_pattern_curr_idx = ctx_isp->ul_data.curr_index_period;
+		port_pattern_curr_idx = ctx_isp->ul_data.curr_index_period %
+				ctx_isp->ul_data.pattern_period[i].period;
 		if (!(ctx_isp->ul_data.pattern_period[i].pattern & BIT(port_pattern_curr_idx)))
 			continue;
 		for (j = 0; j < MAX_IO_RESOURCES; j++) {
@@ -10646,8 +10650,27 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 			break;
 		}
 	}
+	ctx_isp->ul_data.curr_index_period++;
 
-	//TODO: Make call to check virtual frame buffer
+	for (i = 0; i < ctx_isp->num_primary_ports; i++) {
+		buffer_found = false;
+		for (j = 0; j < req_isp->num_fence_map_out; j++) {
+			if (ctx_isp->primary_port_info[i].res_id ==
+				req_isp->fence_map_out[j].resource_handle) {
+				buffer_found = true;
+				req_isp->hw_update_data.primary_port_entry_index = j;
+				break;
+			}
+		}
+
+		if (!buffer_found) {
+			memcpy(&req_isp->cfg[req_isp->num_cfg],
+				&ctx_isp->ul_data.primary_port_data.hw_update_entries,
+				sizeof(struct cam_hw_update_entry));
+			req_isp->num_cfg++;
+			req_isp->hw_update_data.virtual_frame_en = true;
+		}
+	}
 
 	memcpy(&req_isp->cfg[req_isp->num_cfg], ctx_isp->ul_data.rup_aup_cmd.rup_aup_cmd,
 		sizeof(struct cam_hw_update_entry) * ctx_isp->ul_data.rup_aup_cmd.num_rup_aup_cmd);

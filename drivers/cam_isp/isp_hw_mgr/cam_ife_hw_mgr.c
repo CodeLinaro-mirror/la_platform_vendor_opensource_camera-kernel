@@ -16087,7 +16087,8 @@ int cam_ife_hw_mgr_prepare_ul_io(void *hw_mgr_priv,
 				ctx->res_list_ife_out,
 				ctx->base[i].idx,
 				ctx->flags.per_port_en,
-				ctx->common.virtual_rdi_mapping_cb);
+				ctx->common.virtual_rdi_mapping_cb,
+				ctx->primary_port_info[0].res_id);
 			break;
 		}
 	}
