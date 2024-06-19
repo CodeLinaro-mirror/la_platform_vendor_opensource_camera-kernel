@@ -2195,6 +2195,121 @@ static int __cam_isp_ctx_handle_deferred_buf_done_in_bubble(
 	return rc;
 }
 
+static int __cam_isp_ctx_handle_fence_signaling_util(
+	bool signal_success, int32_t map_entry_idx,
+	struct cam_isp_context *ctx_isp, struct cam_ctx_request *req)
+{
+	int32_t kernel_buf_handle, rc;
+	struct cam_context *ctx = ctx_isp->base;
+	struct cam_isp_ctx_req *req_isp =
+		(struct cam_isp_ctx_req *)req->req_priv;
+	struct cam_sync_timestamp ev_timestamp = {0};
+	struct cam_sync_signal_param param = {0};
+	uint32_t *kernel_buf_ptr;
+	uint32_t fence_status = CAM_SYNC_STATE_SIGNALED_ERROR,
+		fence_cause = CAM_SYNC_ISP_EVENT_BUBBLE;
+
+	CAM_DBG(CAM_ISP,
+		"Sync with %s: req %lld res 0x%x fd 0x%x, ctx %u",
+		signal_success ? "Success" : "Failure",
+		req->request_id, req_isp->fence_map_out[map_entry_idx].resource_handle,
+		req_isp->fence_map_out[map_entry_idx].sync_id, ctx->ctx_id);
+
+	ev_timestamp.sof_timestamp = ctx_isp->sof_timestamp_val;
+	ev_timestamp.boot_timestamp = ctx_isp->boot_timestamp;
+	kernel_buf_ptr = req_isp->fence_map_out[map_entry_idx].kernel_map_buf_addr[0];
+	kernel_buf_handle = req_isp->fence_map_out[map_entry_idx].buf_handle[0];
+	if (kernel_buf_ptr != NULL  && ctx_isp->slave_metadata_en) {
+		ev_timestamp.slave_timestamp =
+			kernel_buf_ptr[CAM_ISP_SLAVE_TS_LSB_IDX];
+		ev_timestamp.slave_timestamp = (ev_timestamp.slave_timestamp |
+			((uint64_t)kernel_buf_ptr[CAM_ISP_SLAVE_TS_MSB_IDX] << 32));
+		ev_timestamp.tracker_id = *kernel_buf_ptr;
+		cam_mem_put_cpu_buf(kernel_buf_handle);
+	}
+
+	if (signal_success) {
+		fence_status = CAM_SYNC_STATE_SIGNALED_SUCCESS;
+		fence_cause = CAM_SYNC_COMMON_EVENT_SUCCESS;
+	}
+
+	param.sync_obj = req_isp->fence_map_out[map_entry_idx].sync_id;
+	param.status = fence_status;
+	param.event_cause = fence_cause;
+	if (!ctx_isp->independent_crm_en)
+		param.request_id = req->request_id;
+	else
+		param.request_id = req_isp->sensor_req_id;
+
+	rc = cam_sync_signal(&param, &ev_timestamp);
+	if (rc) {
+		CAM_ERR(CAM_ISP, "Sync = %u for req = %llu failed with rc = %d",
+			req_isp->fence_map_out[map_entry_idx].sync_id, req->request_id, rc);
+	} else if (req_isp->num_deferred_acks) {
+		/* Process deferred buf_done acks */
+		__cam_isp_handle_deferred_buf_done(ctx_isp, req, false,
+			fence_status, fence_cause);
+	}
+
+	/* Reset fence */
+	req_isp->fence_map_out[map_entry_idx].sync_id = -1;
+
+	return 0;
+}
+
+static int __cam_isp_ctx_handle_buf_done_for_remaining_ports(
+	bool defer_buf_done, uint32_t bubble_state,
+	struct cam_ctx_request *req,
+	struct cam_isp_context *ctx_isp)
+{
+	int j;
+	struct cam_context *ctx = ctx_isp->base;
+	struct cam_isp_ctx_req *req_isp =
+		(struct cam_isp_ctx_req *)req->req_priv;
+
+	for (j = 0; j < req_isp->num_fence_map_out; j++) {
+		/* Skip ports that have already been handled for this request */
+		if ((req_isp->buf_done_tracker) &
+			(BIT_ULL(req_isp->fence_map_out[j].resource_handle & 0xFF)))
+			continue;
+
+		if (defer_buf_done) {
+			uint32_t deferred_indx = req_isp->num_deferred_acks;
+
+			req_isp->deferred_fence_map_index[deferred_indx] = j;
+			req_isp->num_deferred_acks++;
+			CAM_DBG(CAM_ISP,
+				"ctx[%d] : Deferred buf done for %llu with bubble state %d recovery %d",
+				ctx->ctx_id, req->request_id, bubble_state,
+				req_isp->bubble_report);
+			CAM_DBG(CAM_ISP,
+				"ctx[%d] : Deferred info : num_acks=%d, fence_map_index=%d, resource_handle=0x%x, sync_id=%d",
+				ctx->ctx_id, req_isp->num_deferred_acks, j,
+				req_isp->fence_map_out[j].resource_handle,
+				req_isp->fence_map_out[j].sync_id);
+			continue;
+		} else if (!req_isp->bubble_detected) {
+			__cam_isp_ctx_handle_fence_signaling_util(true, j, ctx_isp, req);
+			req_isp->num_acked++;
+		} else if (!req_isp->bubble_report) {
+			__cam_isp_ctx_handle_fence_signaling_util(false, j, ctx_isp, req);
+			req_isp->num_acked++;
+		} else {
+			req_isp->num_acked++;
+			CAM_DBG(CAM_ISP,
+				"buf done with bubble state %d recovery %d",
+				bubble_state, req_isp->bubble_report);
+
+			if (req_isp->num_deferred_acks)
+				__cam_isp_handle_deferred_buf_done(ctx_isp, req, true,
+					CAM_SYNC_STATE_SIGNALED_ERROR,
+					CAM_SYNC_ISP_EVENT_BUBBLE);
+		}
+	}
+
+	return 0;
+}
+
 static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 	struct cam_isp_context *ctx_isp,
 	struct cam_ctx_request  *req,
@@ -2209,11 +2324,6 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 	struct cam_context *ctx = ctx_isp->base;
 	const char *handle_type;
 	uint32_t cmp_addr = 0;
-
-	struct cam_sync_timestamp  ev_timestamp;
-	struct cam_sync_signal_param param;
-	uint32_t *kernel_buf_ptr;
-	int32_t kernel_buf_handle;
 
 	trace_cam_buf_done("ISP", ctx, req);
 
@@ -2283,6 +2393,14 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 			}
 		}
 
+		req_isp->buf_done_tracker |=
+			BIT_ULL(req_isp->fence_map_out[j].resource_handle & 0xFF);
+
+		/* Check if master port is done */
+		if (ctx_isp->num_primary_ports)
+			req_isp->primary_port_done_mask &=
+				~BIT_ULL(req_isp->fence_map_out[j].resource_handle & 0xFF);
+
 		if (defer_buf_done) {
 			uint32_t deferred_indx = req_isp->num_deferred_acks;
 
@@ -2316,43 +2434,7 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 				req_isp->fence_map_out[j].sync_id,
 				ctx->ctx_id, ctx_isp->sof_timestamp_val, ctx_isp->boot_timestamp);
 
-			memset(&ev_timestamp, 0, sizeof(ev_timestamp));
-			ev_timestamp.sof_timestamp = ctx_isp->sof_timestamp_val;
-			ev_timestamp.boot_timestamp = ctx_isp->boot_timestamp;
-			kernel_buf_ptr = req_isp->fence_map_out[j].kernel_map_buf_addr[0];
-			kernel_buf_handle = req_isp->fence_map_out[j].buf_handle[0];
-
-			if (kernel_buf_ptr != NULL  &&
-				ctx_isp->slave_metadata_en) {
-				ev_timestamp.slave_timestamp =
-					kernel_buf_ptr[CAM_ISP_SLAVE_TS_LSB_IDX];
-				ev_timestamp.slave_timestamp = (ev_timestamp.slave_timestamp |
-					((uint64_t)kernel_buf_ptr[CAM_ISP_SLAVE_TS_MSB_IDX] << 32));
-				ev_timestamp.tracker_id = *kernel_buf_ptr;
-				cam_mem_put_cpu_buf(kernel_buf_handle);
-			}
-			memset(&param, 0, sizeof(param));
-			param.sync_obj = req_isp->fence_map_out[j].sync_id;
-			param.status = CAM_SYNC_STATE_SIGNALED_SUCCESS;
-			param.event_cause = CAM_SYNC_COMMON_EVENT_SUCCESS;
-			if (!ctx_isp->independent_crm_en)
-				param.request_id = req->request_id;
-			else
-				param.request_id = req_isp->sensor_req_id;
-			if (!ctx_isp->ul_path_en)
-				rc = cam_sync_signal(&param, &ev_timestamp);
-			if (rc) {
-				CAM_ERR(CAM_ISP, "Sync = %u for req = %llu failed with rc = %d",
-					 req_isp->fence_map_out[j].sync_id, req->request_id, rc);
-			} else if (req_isp->num_deferred_acks) {
-				/* Process deferred buf_done acks */
-				__cam_isp_handle_deferred_buf_done(ctx_isp,
-					req, false,
-					CAM_SYNC_STATE_SIGNALED_SUCCESS,
-					CAM_SYNC_COMMON_EVENT_SUCCESS);
-			}
-			/* Reset fence */
-			req_isp->fence_map_out[j].sync_id = -1;
+			__cam_isp_ctx_handle_fence_signaling_util(true, j, ctx_isp, req);
 		} else if (!req_isp->bubble_report) {
 			CAM_DBG(CAM_ISP,
 				"Sync with failure: req %lld res 0x%x fd 0x%x, ctx %u",
@@ -2360,44 +2442,7 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 				req_isp->fence_map_out[j].resource_handle,
 				req_isp->fence_map_out[j].sync_id,
 				ctx->ctx_id);
-
-			memset(&ev_timestamp, 0, sizeof(ev_timestamp));
-			ev_timestamp.sof_timestamp = ctx_isp->sof_timestamp_val;
-			ev_timestamp.boot_timestamp = ctx_isp->boot_timestamp;
-			kernel_buf_ptr = req_isp->fence_map_out[j].kernel_map_buf_addr[0];
-			kernel_buf_handle = req_isp->fence_map_out[j].buf_handle[0];
-
-			if (kernel_buf_ptr != NULL &&
-				ctx_isp->slave_metadata_en) {
-				ev_timestamp.slave_timestamp =
-					kernel_buf_ptr[CAM_ISP_SLAVE_TS_LSB_IDX];
-				ev_timestamp.slave_timestamp = (ev_timestamp.slave_timestamp |
-					((uint64_t)kernel_buf_ptr[CAM_ISP_SLAVE_TS_MSB_IDX] << 32));
-				ev_timestamp.tracker_id = *kernel_buf_ptr;
-				cam_mem_put_cpu_buf(kernel_buf_handle);
-			}
-			memset(&param, 0, sizeof(param));
-			param.sync_obj = req_isp->fence_map_out[j].sync_id;
-			param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
-			param.event_cause = CAM_SYNC_ISP_EVENT_BUBBLE;
-			if (!ctx_isp->independent_crm_en)
-				param.request_id = req->request_id;
-			else
-				param.request_id = req_isp->sensor_req_id;
-			if (!ctx_isp->ul_path_en)
-				rc = cam_sync_signal(&param, &ev_timestamp);
-			if (rc) {
-				CAM_ERR(CAM_ISP, "Sync = %u for req = %llu failed with rc = %d",
-					req_isp->fence_map_out[j].sync_id, req->request_id, rc);
-			} else if (req_isp->num_deferred_acks) {
-				/* Process deferred buf_done acks */
-				__cam_isp_handle_deferred_buf_done(ctx_isp, req,
-					false,
-					CAM_SYNC_STATE_SIGNALED_ERROR,
-					CAM_SYNC_ISP_EVENT_BUBBLE);
-			}
-			/* Reset fence */
-			req_isp->fence_map_out[j].sync_id = -1;
+			__cam_isp_ctx_handle_fence_signaling_util(true, j, ctx_isp, req);
 		} else {
 			/*
 			 * Ignore the buffer done if bubble detect is on
@@ -2443,6 +2488,15 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 			req->request_id, req_isp->num_acked,
 			req_isp->num_fence_map_out, ctx->ctx_id);
 	}
+
+	/*
+	 * Check if primary port scheme is enabled, and if all the primary ports are
+	 * done processing, signal the remaining ports in the request for
+	 * the given frame
+	 */
+	if (ctx_isp->num_primary_ports && !req_isp->primary_port_done_mask)
+		__cam_isp_ctx_handle_buf_done_for_remaining_ports(defer_buf_done,
+			bubble_state, req, ctx_isp);
 
 	if (req_isp->num_acked != req_isp->num_fence_map_out)
 		return rc;
@@ -7932,6 +7986,8 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 	req_isp->bubble_detected = false;
 	req_isp->cdm_reset_before_apply = false;
 	req_isp->hw_update_data.packet = packet;
+	req_isp->primary_port_done_mask = ctx_isp->primary_port_exp_mask;
+	req_isp->buf_done_tracker = 0x0;
 
 	for (i = 0; i < req_isp->num_fence_map_out; i++) {
 		rc = cam_sync_get_obj_ref(req_isp->fence_map_out[i].sync_id);
@@ -9075,6 +9131,51 @@ static inline void __cam_isp_context_reset_ctx_params(
 	ctx_isp->csid_rup_aup_mask = 0;
 }
 
+static int __cam_isp_ctx_query_primary_port_info(
+	struct cam_context  *ctx)
+{
+	int rc = 0, i;
+	struct cam_isp_context *isp_ctx = (struct cam_isp_context *)ctx->ctx_priv;
+	struct cam_hw_cmd_args hw_cmd_args;
+	struct cam_isp_hw_cmd_args isp_hw_cmd_args;
+
+	hw_cmd_args.ctxt_to_hw_map = ctx->ctxt_to_hw_map;
+	hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+	isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_GET_PRIMARY_PORT_INFO;
+	hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+
+	rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv, &hw_cmd_args);
+	if (rc) {
+		CAM_ERR(CAM_ISP,
+			"Getting master port info failed for ctx: %u link: 0x%x with rc: %d",
+			ctx->ctx_id, ctx->link_hdl, rc);
+		goto end;
+	}
+
+	if (isp_hw_cmd_args.u.primary_port_info.use_primary_port_config) {
+		isp_ctx->num_primary_ports = isp_hw_cmd_args.u.primary_port_info.num_ports;
+		isp_ctx->primary_port_info = (struct cam_isp_primary_port_info *)
+			isp_hw_cmd_args.u.primary_port_info.primary_port_cfg;
+		if (IS_ERR_OR_NULL(isp_ctx->primary_port_info)) {
+			CAM_ERR(CAM_ISP,
+				"Master port info invalid for ctx: %u link: 0x%x with rc: %d",
+				ctx->ctx_id, ctx->link_hdl, rc);
+			rc = -EINVAL;
+			goto end;
+		}
+
+		for (i = 0; i < isp_ctx->num_primary_ports; i++) {
+			isp_ctx->primary_port_exp_mask |=
+				BIT_ULL(isp_ctx->primary_port_info[i].res_id & 0xFF);
+			CAM_DBG(CAM_ISP, "Master port: 0x%x selected for ctx: %u link: 0x%x",
+				isp_ctx->primary_port_info[i].res_id, ctx->link_hdl);
+		}
+	}
+
+end:
+	return rc;
+}
+
 static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 	struct cam_start_stop_dev_cmd *cmd)
 {
@@ -9099,6 +9200,13 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 	start_isp.is_internal_start = false;
 	start_isp.is_trigger_type =
 		(ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) ? true : false;
+
+	/* Query for Fast path */
+	if (1) {
+		rc = __cam_isp_ctx_query_primary_port_info(ctx);
+		if (rc)
+			goto end;
+	}
 
 	if (ctx->state == CAM_CTX_FLUSHED)
 		start_isp.start_only = true;
@@ -9366,6 +9474,9 @@ static int __cam_isp_ctx_stop_dev_in_activated_unlock(
 	ctx_isp->sensor_req_info.prev_applied_req = 0;
 	ctx_isp->frame_drop_cnt = 0;
 	ctx_isp->csid_rup_aup_mask = 0;
+	ctx_isp->primary_port_info = NULL;
+	ctx_isp->primary_port_exp_mask = 0x0;
+	ctx_isp->num_primary_ports = 0;
 	atomic_set(&ctx_isp->process_bubble, 0);
 	atomic_set(&ctx_isp->internal_recovery_set, 0);
 	atomic_set(&ctx_isp->rxd_epoch, 0);

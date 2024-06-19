@@ -244,6 +244,9 @@ struct cam_isp_ctx_sensor_req_info {
  * @path_irq_mask              Bit is set if port is requested in request
  * @intermediate_irq_mask      Indicates which path irq is received at a new time for current req
  * @sensor_req_id              Indicates sensor request applied for this request
+ * @primary_port_done_mask     Indicates the primary port buf dones that are
+ *                             expected for this request
+ * @buf_done_tracker           Indicates the ports that have received buf dones for this request
  *
  */
 struct cam_isp_ctx_req {
@@ -266,6 +269,8 @@ struct cam_isp_ctx_req {
 	uint64_t                              path_irq_mask;
 	struct cam_isp_req_irq_mask           intermediate_irq_mask;
 	uint64_t                              sensor_req_id;
+	uint64_t                              primary_port_done_mask;
+	uint64_t                              buf_done_tracker;
 };
 
 /**
@@ -401,6 +406,10 @@ struct cam_isp_context_ul_setting_data {
  *                             for trigger case it is same as path_irq mask
  * @path_irq_mask:             mask created from requested ports, out param
  * @frame_drop_cnt             Count of continuous frame drops
+ * @num_primary_ports:         Number of primary port configurations
+ * @primary_port_info:         Primary port info array
+ * @primary_port_exp_mask:     Indicates the expected mask for all master ports to be done for
+ *                             this stream
  */
 struct cam_isp_context {
 	struct cam_context              *base;
@@ -487,6 +496,9 @@ struct cam_isp_context {
 	uint32_t                               frame_drop_cnt;
 	struct cam_isp_context_ul_setting_data setting_data[MAX_SETTING_PACKETS];
 	struct cam_isp_ctx_ul_data             ul_data;
+	uint32_t                               num_primary_ports;
+	struct cam_isp_primary_port_info      *primary_port_info;
+	uint64_t                               primary_port_exp_mask;
 };
 
 /**

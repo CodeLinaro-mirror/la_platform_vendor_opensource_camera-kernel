@@ -447,6 +447,7 @@ enum cam_isp_hw_mgr_command {
 	CAM_ISP_HW_MGR_WAIT_CONFIG_DONE,
 	CAM_ISP_HW_MGR_UPDATE_FRAMEDROP_RECOVERY_PROGRESS,
 	CAM_HW_MGR_CMD_CHECK_RUP_APPLIED_REQ,
+	CAM_ISP_HW_MGR_GET_PRIMARY_PORT_INFO,
 	CAM_ISP_HW_MGR_CMD_MAX,
 };
 
@@ -476,6 +477,9 @@ enum cam_isp_ctx_type {
  * @ptr:                   void pointer out param
  * @path_irq_mask:         mask created from requested ports, out param
  * @csid_rup_aup_mask:     mask created from acquired ports, out param
+ * @num_ports:             Number of primary ports, out param
+ * @primary_port_cfg:      Primary port config info
+ * @use_primary_port_cfg:  Stream is using primary ports for buf done handling
  * @dropped_ife_req:       dropped ife request id
  * @recovery_already_in_progress: Indiates if current ife is
  *                          process for frame drop recovery
@@ -508,6 +512,11 @@ struct cam_isp_hw_cmd_args {
 			uint64_t                path_irq_mask;
 			uint64_t                csid_rup_aup_mask;
 		} path_mask;
+		struct {
+			uint32_t                num_ports;
+			void                   *primary_port_cfg;
+			bool                    use_primary_port_config;
+		} primary_port_info;
 		uint64_t                      dropped_ife_req;
 		bool                          recovery_already_in_progress;
 		bool                          rup_for_applied_req;
@@ -556,6 +565,14 @@ struct cam_isp_start_args {
 struct cam_isp_lcr_rdi_cfg_args {
 	struct cam_isp_lcr_rdi_config *rdi_lcr_cfg;
 	bool                           is_init;
+};
+
+/** struct cam_isp_primary_port_info - Primary port config info
+ *
+ * @res_id : res_id of the primary/leading port
+ */
+struct cam_isp_primary_port_info {
+	uint32_t res_id;
 };
 
 /**

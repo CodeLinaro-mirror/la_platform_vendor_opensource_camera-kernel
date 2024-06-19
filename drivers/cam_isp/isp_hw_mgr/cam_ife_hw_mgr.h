@@ -242,7 +242,6 @@ struct cam_ife_virtual_rdi_mapping {
 	uint32_t   acquired_rdi[CAM_ISP_STREAM_CFG_MAX];
 };
 
-
 /**
  * struct cam_ife_hw_mgr_ctx - IFE HW manager Context object
  *
@@ -305,6 +304,9 @@ struct cam_ife_virtual_rdi_mapping {
  * @mapping_table:          mapping between virtual rdi and acquired rdi
  * @slave_status:           slave status indicating if it is in running state
  * @primary_rdi_out_res:    Indicates primary rdi resource
+ * @num_primary_ports:      Number of primary port configs
+ * @primary_port_info:      Primary port configs array
+ * @primary_port_cfg_done:  Primary port config exists for this stream
  */
 struct cam_ife_hw_mgr_ctx {
 	struct list_head                     list;
@@ -372,6 +374,9 @@ struct cam_ife_hw_mgr_ctx {
 	struct cam_ife_virtual_rdi_mapping   mapping_table;
 	bool                                 is_slave_down;
 	uint32_t                             primary_rdi_out_res;
+	uint32_t                             num_primary_ports;
+	struct cam_isp_primary_port_info    *primary_port_info;
+	bool                                 primary_port_cfg_done;
 };
 
 /**

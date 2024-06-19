@@ -218,6 +218,7 @@ enum cam_isp_hw_cmd_type {
 	CAM_ISP_HW_CMD_UPDATE_VFE_OUT_RES_IRQ_MASK,
 	CAM_ISP_HW_CMD_WAIT_LAST_STREAM_SOF,
 	CAM_ISP_HW_CMD_CHECK_RUP_FOR_APPLIED_REQ,
+	CAM_ISP_HW_CMD_PRIMARY_PORT_CONFIG,
 	CAM_ISP_HW_CMD_MAX,
 };
 
@@ -552,5 +553,4 @@ struct cam_isp_hw_init_config_update {
 	struct cam_isp_resource_node   *node_res;
 	struct cam_isp_init_config     *init_config;
 };
-
 #endif /* _CAM_ISP_HW_H_ */

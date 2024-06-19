@@ -8191,6 +8191,9 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	ife_ctx->hw_mgr = ife_hw_mgr;
 	ife_ctx->cdm_ops =  cam_cdm_publish_ops();
 	ife_ctx->num_processed = 0;
+	ife_ctx->num_primary_ports = 0;
+	ife_ctx->primary_port_cfg_done = false;
+	ife_ctx->primary_port_info =  NULL;
 
 	acquire_hw_info =
 		(struct cam_isp_acquire_hw_info *)acquire_args->acquire_info;
@@ -9870,6 +9873,12 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 
 	CAM_DBG(CAM_ISP, " Enter...ctx id:%d", ctx->ctx_index);
 	stop_isp = (struct cam_isp_stop_args    *)stop_args->args;
+
+	if (!stop_isp->is_internal_stop) {
+		ctx->primary_port_cfg_done = false;
+		kfree(ctx->primary_port_info);
+		ctx->primary_port_info = NULL;
+	}
 
 	/* Set the csid halt command */
 	if ((stop_isp->hw_stop_cmd == CAM_ISP_HW_STOP_AT_FRAME_BOUNDARY) ||
@@ -13436,6 +13445,108 @@ static int cam_isp_validate_scratch_buffer_blob(
 	return 0;
 }
 
+static int cam_isp_blob_ife_process_primary_port_configs(
+	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx,
+	struct cam_isp_primary_port_config *port_config)
+{
+	int i, rc, res_id;
+	unsigned long comp_grp_mask = 0;
+	struct cam_isp_hw_mgr_res *isp_out_res;
+	struct cam_isp_resource_node *isp_res;
+	struct cam_isp_primary_port_grp_info *grp_info = NULL;
+	struct cam_isp_hw_get_cmd_update cmd_update;
+
+	if (unlikely(hw_mgr_ctx->primary_port_cfg_done)) {
+		CAM_ERR(CAM_ISP,
+			"Primary port config blob already updated for ctx: %u",
+			hw_mgr_ctx->ctx_index);
+		return -EINVAL;
+	}
+
+	/* For UL Faspath a single primary port is expected for the complete frame */
+	if ((hw_mgr_ctx->flags.is_ul_path) && (!port_config->single_primary_for_all)) {
+		CAM_ERR(CAM_ISP,
+			"Single primary port expected for ul fastpath on ctx: %u",
+			hw_mgr_ctx->ctx_index);
+		return -EINVAL;
+	}
+
+	if (unlikely(port_config->num_ports == 0xffffffff)) {
+		CAM_ERR(CAM_ISP,
+			"Invalid number of ports for primary port blob num_ports: %u ctx: %u",
+			port_config->num_ports, hw_mgr_ctx->ctx_index);
+		return -EINVAL;
+	}
+
+	hw_mgr_ctx->primary_port_info = kcalloc(port_config->num_ports,
+		sizeof(struct cam_isp_primary_port_info), GFP_KERNEL);
+
+	if (!hw_mgr_ctx->primary_port_info)
+		return -ENOMEM;
+
+	for (i = 0; i < port_config->num_ports; i++) {
+		grp_info = &port_config->port_info[i];
+		res_id = grp_info->res_id & 0xFF;
+
+		if (test_and_set_bit(grp_info->comp_grp, &comp_grp_mask)) {
+			CAM_ERR(CAM_ISP, "Comp group: %u already configured with a resource",
+				grp_info->comp_grp);
+			goto err;
+		}
+
+		if (res_id >= max_ife_out_res) {
+			CAM_ERR(CAM_ISP, "Invalid resource ID: 0x%x max supported: %u",
+				grp_info->res_id, max_ife_out_res);
+			goto err;
+		}
+
+		isp_out_res = &hw_mgr_ctx->res_list_ife_out[res_id];
+		isp_res = isp_out_res->hw_res[0];
+		if (!isp_res) {
+			CAM_ERR(CAM_ISP,
+				"Left resource invalid for out resource: 0x%x", grp_info->res_id);
+			goto err;
+		}
+
+		if (isp_res->res_state != CAM_ISP_RESOURCE_STATE_RESERVED) {
+			CAM_ERR(CAM_ISP,
+				"Resource: 0x%x not in acquired state", grp_info->res_id);
+			goto err;
+		}
+
+		cmd_update.res = isp_res;
+		cmd_update.cmd_type = CAM_ISP_HW_CMD_PRIMARY_PORT_CONFIG;
+		rc = isp_res->hw_intf->hw_ops.process_cmd(
+			isp_res->hw_intf->hw_priv,
+			cmd_update.cmd_type, &cmd_update,
+			sizeof(struct cam_isp_hw_get_cmd_update));
+		if (rc) {
+			CAM_ERR(CAM_ISP,
+				"Primary port config failed for res_type :%d ctx: %u rc: %d",
+				grp_info->res_id, hw_mgr_ctx->ctx_index, rc);
+			goto err;
+		}
+
+		hw_mgr_ctx->primary_port_info[hw_mgr_ctx->num_primary_ports].res_id =
+			grp_info->res_id;
+		hw_mgr_ctx->num_primary_ports++;
+
+		if (port_config->single_primary_for_all)
+			break;
+	}
+
+	hw_mgr_ctx->primary_port_cfg_done = true;
+	return rc;
+
+err:
+	rc = -EINVAL;
+	kfree(hw_mgr_ctx->primary_port_info);
+	hw_mgr_ctx->primary_port_info = NULL;
+	hw_mgr_ctx->num_primary_ports = 0;
+
+	return rc;
+}
+
 static int cam_isp_packet_generic_blob_handler(void *user_data,
 	uint32_t blob_type, uint32_t blob_size, uint8_t *blob_data)
 {
@@ -14141,6 +14252,41 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 			CAM_ERR(CAM_ISP,
 				"hybrid sensor config failed rc %d",
 				rc);
+	}
+		break;
+	case CAM_ISP_GENERIC_BLOB_TYPE_PRIMARY_PORT_CONFIG: {
+		size_t expected_size = 0;
+		struct cam_isp_primary_port_config *port_config;
+		struct cam_isp_prepare_hw_update_data *prepare_hw_data;
+
+		prepare_hw_data = (struct cam_isp_prepare_hw_update_data *)prepare->priv;
+		port_config = (struct cam_isp_primary_port_config *)blob_data;
+		expected_size = sizeof(struct cam_isp_primary_port_config) +
+			((port_config->num_ports) * sizeof(struct cam_isp_primary_port_grp_info));
+
+		if (prepare_hw_data->packet_opcode_type != CAM_ISP_PACKET_INIT_DEV) {
+			CAM_ERR(CAM_ISP, "Master port config only supported for INIT packet");
+			return -EINVAL;
+		}
+
+		if ((blob_size < expected_size) || !port_config->num_ports) {
+			CAM_ERR(CAM_ISP,
+				"Invalid params for master port expected size: %zu actual size: %zu total_ports: %u",
+				expected_size, blob_size, port_config->num_ports);
+			return -EINVAL;
+		}
+
+		if (blob_info->base_info->split_id != CAM_ISP_HW_SPLIT_LEFT) {
+			CAM_ERR(CAM_ISP,
+				"Master port blob config supported only on primary IFE ctx: %u",
+				ife_mgr_ctx->ctx_index);
+			return -EINVAL;
+		}
+
+		rc = cam_isp_blob_ife_process_primary_port_configs(ife_mgr_ctx, port_config);
+		if (rc)
+			CAM_ERR(CAM_ISP, "Failed to process master port in ctx: %u",
+				ife_mgr_ctx->ctx_index);
 	}
 		break;
 	default:
@@ -16633,6 +16779,20 @@ static int cam_ife_mgr_update_path_mask(
 		return cam_ife_mgr_update_path_mask_streaming(ctx, isp_hw_cmd_args);
 }
 
+static int cam_ife_mgr_get_primary_port_info(
+	struct cam_ife_hw_mgr_ctx *ctx, struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
+{
+	isp_hw_cmd_args->u.primary_port_info.use_primary_port_config = false;
+
+	if (ctx->primary_port_cfg_done) {
+		isp_hw_cmd_args->u.primary_port_info.use_primary_port_config = true;
+		isp_hw_cmd_args->u.primary_port_info.num_ports = ctx->num_primary_ports;
+		isp_hw_cmd_args->u.primary_port_info.primary_port_cfg = ctx->primary_port_info;
+	}
+
+	return 0;
+}
+
 static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 {
 	int rc = 0;
@@ -16766,6 +16926,9 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			break;
 		case CAM_HW_MGR_CMD_CHECK_RUP_APPLIED_REQ:
 			rc = cam_ife_hw_mgr_check_rup_applied_req(ctx, isp_hw_cmd_args);
+			break;
+		case CAM_ISP_HW_MGR_GET_PRIMARY_PORT_INFO:
+			rc = cam_ife_mgr_get_primary_port_info(ctx, isp_hw_cmd_args);
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "Invalid HW mgr command:0x%x",
