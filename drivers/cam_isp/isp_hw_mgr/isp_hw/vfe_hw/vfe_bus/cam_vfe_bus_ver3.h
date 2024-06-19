@@ -322,6 +322,7 @@ struct cam_vfe_bus_ver3_vfe_out_hw_info {
  * @tunneling_overflow_shift: Mask shift for tunneling overflow irq
  * @image_addr_fifo_cnt_mask: Mask for image address fifo count
  * @support_tunneling:        Indicate if bus support tunneling feature
+ * @virtual_frame_en_shift:   Virtual frame enable shift
  * @fifo_depth:               Max fifo depth
  */
 struct cam_vfe_bus_ver3_hw_info {
@@ -348,6 +349,7 @@ struct cam_vfe_bus_ver3_hw_info {
 	uint32_t no_tunnelingId_shift;
 	uint32_t tunneling_overflow_shift;
 	uint32_t image_addr_fifo_cnt_mask;
+	uint32_t virtual_frame_en_shift;
 	bool support_tunneling;
 	uint32_t fifo_depth;
 };
@@ -485,6 +487,7 @@ struct cam_vfe_bus_ver3_common_data {
 	uint32_t                                    no_tunnelingId_shift;
 	uint32_t                                    tunneling_overflow_shift;
 	uint32_t                                    image_addr_fifo_cnt_mask;
+	uint32_t                                    virtual_frame_en_shift;
 	uint32_t                                    out_fifo_depth;
 };
 

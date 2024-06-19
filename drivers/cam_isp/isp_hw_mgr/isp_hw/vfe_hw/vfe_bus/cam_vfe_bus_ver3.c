@@ -1473,10 +1473,6 @@ static int cam_vfe_bus_ver3_start_wm(struct cam_isp_resource_node *wm_res)
 			rsrc_data->index);
 	}
 
-	/* Enable WM */
-	cam_io_w_mb(rsrc_data->en_cfg, common_data->mem_base +
-		rsrc_data->hw_regs->cfg);
-
 	/* Enable constraint error detection */
 	cam_io_w_mb(enable_debug_status_1,
 		common_data->mem_base +
@@ -3436,6 +3432,72 @@ static int cam_vfe_bus_ver3_config_wm(void *priv, void *cmd_args,
 	return 0;
 }
 
+static int cam_vfe_bus_ver3_update_wm_for_virtual_frame(
+	struct cam_isp_hw_get_cmd_update *update_buf,
+	struct cam_vfe_bus_ver3_vfe_out_data *vfe_out_data)
+{
+	int i, j, rc = 0;
+	uint32_t *reg_val_pair;
+	uint32_t num_regval_pairs = 0, en_cfg = 0, size;
+	struct cam_cdm_utils_ops *cdm_util_ops;
+	struct cam_vfe_bus_ver3_wm_resource_data *wm_data = NULL;
+
+	mutex_lock(&vfe_out_data->common_data->bus_mutex);
+	cdm_util_ops = vfe_out_data->cdm_util_ops;
+	reg_val_pair = &vfe_out_data->common_data->io_buf_update[0];
+
+	for (i = 0, j = 0; i < vfe_out_data->num_wm; i++) {
+		if (j >= (MAX_REG_VAL_PAIR_SIZE - MAX_BUF_UPDATE_REG_NUM * 2)) {
+			CAM_ERR(CAM_ISP, "reg_val_pair %d exceeds the array limit %zu",
+				j, MAX_REG_VAL_PAIR_SIZE);
+			rc = -ENOMEM;
+			goto end;
+		}
+
+		wm_data = vfe_out_data->wm_res[i].res_priv;
+		en_cfg = wm_data->en_cfg | BIT(vfe_out_data->common_data->virtual_frame_en_shift);
+
+		/*
+		 * Trigger a dummy entry into bus addr FIFO,
+		 * since virtual frame is enabled addr is dropped
+		 */
+		CAM_VFE_ADD_REG_VAL_PAIR(reg_val_pair, j,
+			wm_data->hw_regs->image_addr, 0x0);
+		CAM_VFE_ADD_REG_VAL_PAIR(reg_val_pair, j,
+			wm_data->hw_regs->cfg, en_cfg);
+	}
+
+	num_regval_pairs = j / 2;
+	if (num_regval_pairs) {
+		size = cdm_util_ops->cdm_required_size_reg_random(
+			num_regval_pairs);
+
+		/* cdm util returns dwords, need to convert to bytes */
+		if ((size * 4) > update_buf->cmd.size) {
+			CAM_ERR(CAM_ISP,
+				"Failed! Buf size:%d insufficient, expected size:%d",
+				update_buf->cmd.size, size);
+			rc = -ENOMEM;
+			goto end;
+		}
+
+		cdm_util_ops->cdm_write_regrandom(
+			update_buf->cmd.cmd_buf_addr,
+			num_regval_pairs, reg_val_pair);
+
+		/* cdm util returns dwords, need to convert to bytes */
+		update_buf->cmd.used_bytes = size * 4;
+	} else {
+		CAM_DBG(CAM_ISP, "No reg val pairs updated for out_type: %u num_wms: %u",
+			vfe_out_data->out_type, vfe_out_data->num_wm);
+		update_buf->cmd.used_bytes = 0;
+	}
+
+end:
+	mutex_unlock(&vfe_out_data->common_data->bus_mutex);
+	return rc;
+}
+
 static int cam_vfe_bus_ver3_update_wm(void *priv, void *cmd_args,
 	uint32_t arg_size)
 {
@@ -3463,6 +3525,10 @@ static int cam_vfe_bus_ver3_update_wm(void *priv, void *cmd_args,
 		CAM_ERR(CAM_ISP, "Invalid data");
 		return -EINVAL;
 	}
+
+	/* Virtual Frame Programming */
+	if (update_buf->wm_update->en_virtual_frame)
+		return cam_vfe_bus_ver3_update_wm_for_virtual_frame(update_buf, vfe_out_data);
 
 	cdm_util_ops = vfe_out_data->cdm_util_ops;
 	if ((update_buf->wm_update->num_buf != vfe_out_data->num_wm) &&
@@ -5077,6 +5143,8 @@ int cam_vfe_bus_ver3_init(
 		ver3_hw_info->no_tunnelingId_shift;
 	bus_priv->common_data.tunneling_overflow_shift =
 		ver3_hw_info->tunneling_overflow_shift;
+	bus_priv->common_data.virtual_frame_en_shift =
+		ver3_hw_info->virtual_frame_en_shift;
 	bus_priv->common_data.disable_ubwc_comp = false;
 	bus_priv->common_data.supported_irq      = ver3_hw_info->supported_irq;
 	bus_priv->common_data.comp_config_needed =

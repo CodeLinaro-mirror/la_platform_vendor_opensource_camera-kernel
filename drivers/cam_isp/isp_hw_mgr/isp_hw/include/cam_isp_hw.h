@@ -378,26 +378,28 @@ struct cam_isp_hw_cmd_buf_update {
  * @ image_buf_offset: image buffer address offset array
  * @ num_buf:          Number of buffers in the image_buf array
  * @ frame_header:     frame header iova
- * @ fh_enabled:       flag to indicate if this WM enables frame header
  * @ local_id:         local id for the wm
  * @ width:            width of scratch buffer
  * @ height:           height of scratch buffer
  * @ stride:           stride of scratch buffer
  * @ slice_height:     slice height of scratch buffer
  * @ io_cfg:           IO buffer config information sent from UMD
+ * @ fh_enabled:       flag to indicate if this WM enables frame header
+ * @ en_virtual_frame: Enable virtual frame
  */
 struct cam_isp_hw_get_wm_update {
 	dma_addr_t                     *image_buf;
 	uint32_t                        image_buf_offset[CAM_PACKET_MAX_PLANES];
 	uint32_t                        num_buf;
 	uint64_t                        frame_header;
-	bool                            fh_enabled;
 	uint32_t                        local_id;
 	uint32_t                        width;
 	uint32_t                        height;
 	uint32_t                        stride;
 	uint32_t                        slice_height;
 	struct cam_buf_io_cfg          *io_cfg;
+	bool                            fh_enabled;
+	bool                            en_virtual_frame;
 };
 
 /*
