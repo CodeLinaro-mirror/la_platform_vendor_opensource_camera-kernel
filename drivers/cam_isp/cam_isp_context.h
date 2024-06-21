@@ -247,6 +247,7 @@ struct cam_isp_ctx_sensor_req_info {
  * @sensor_req_id              Indicates sensor request applied for this request
  * @sof_timestamp_val:         Captured time stamp value at sof hw event
  * @boot_timestamp:            Boot time stamp for a given req_id
+ * @applied_crop_req_id:       Indicates applied crop request for this request
  *
  */
 struct cam_isp_ctx_req {
@@ -272,6 +273,7 @@ struct cam_isp_ctx_req {
 	uint64_t                              sensor_req_id;
 	uint64_t                              sof_timestamp_val;
 	uint64_t                              boot_timestamp;
+	uint64_t                              applied_crop_req_id;
 };
 
 /**

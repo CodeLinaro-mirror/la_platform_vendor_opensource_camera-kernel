@@ -1849,22 +1849,24 @@ static int __cam_isp_ctx_handle_buf_done_for_req_list(
 					param.request_id = buf_done_req_id;
 				else
 					param.request_id = req_isp->sensor_req_id;
+				param.applied_crop_req_id = req_isp->applied_crop_req_id;
 				rc = cam_sync_signal(&param, &ev_timestamp);
 			}
 			list_add_tail(&req->list, &ctx->free_req_list);
 			CAM_DBG(CAM_REQ,
-				"Move active request %lld to free list(cnt:%d) [flushed], ctx %u sensor_req:%lld",
+				"Move active request %lld to free list(cnt:%d) [flushed], ctx %u sensor_req:%lld applied_crop_req_id:%lld",
 				buf_done_req_id, ctx_isp->active_req_cnt,
-				ctx->ctx_id, req_isp->sensor_req_id);
+				ctx->ctx_id, req_isp->sensor_req_id, req_isp->applied_crop_req_id);
 			ctx_isp->last_bufdone_err_apply_req_id = 0;
 		} else {
 			list_add(&req->list, &ctx->pending_req_list);
 			CAM_DBG(CAM_REQ,
-				"Move active request %lld to pending list(cnt = %d) [bubble recovery], ctx %u sensor_req:%lld",
+				"Move active request %lld to pending list(cnt = %d) [bubble recovery], ctx %u sensor_req:%lld applied_crop_req_id:%lld",
 				req->request_id, ctx_isp->active_req_cnt,
-				ctx->ctx_id, req_isp->sensor_req_id);
+				ctx->ctx_id, req_isp->sensor_req_id, req_isp->applied_crop_req_id);
 		}
 		req_isp->sensor_req_id = 0;
+		req_isp->applied_crop_req_id = 0;
 	} else {
 		if (!ctx_isp->use_frame_header_ts) {
 			__cam_isp_ctx_send_sof_timestamp(ctx_isp,
@@ -1893,12 +1895,13 @@ static int __cam_isp_ctx_handle_buf_done_for_req_list(
 		}
 
 		CAM_DBG(CAM_REQ,
-			"Move active request %lld to free list(cnt = %d) [all fences done], ctx %u sensor_req:%lld",
+			"Move active request %lld to free list(cnt = %d) [all fences done], ctx %u sensor_req:%lld applied_crop_req_id:%lld",
 			buf_done_req_id, ctx_isp->active_req_cnt,
-			ctx->ctx_id, req_isp->sensor_req_id);
+			ctx->ctx_id, req_isp->sensor_req_id, req_isp->applied_crop_req_id);
 		ctx_isp->req_info.last_bufdone_req_id = req->request_id;
 		ctx_isp->last_bufdone_err_apply_req_id = 0;
 		req_isp->sensor_req_id = 0;
+		req_isp->applied_crop_req_id = 0;
 	}
 
 	if (atomic_read(&ctx_isp->internal_recovery_set) && !ctx_isp->active_req_cnt)
@@ -2013,6 +2016,7 @@ static int __cam_isp_ctx_handle_buf_done_for_request(
 				param.request_id = req->request_id;
 			else
 				param.request_id = req_isp->sensor_req_id;
+			param.applied_crop_req_id = req_isp->applied_crop_req_id;
 			rc = cam_sync_signal(&param, NULL);
 
 			if (rc)
@@ -2063,6 +2067,7 @@ static int __cam_isp_ctx_handle_buf_done_for_request(
 				param.request_id = req->request_id;
 			else
 				param.request_id = req_isp->sensor_req_id;
+			param.applied_crop_req_id = req_isp->applied_crop_req_id;
 			rc = cam_sync_signal(&param, &ev_timestamp);
 			if (rc)
 				CAM_ERR(CAM_ISP, "Sync failed with rc = %d",
@@ -2189,6 +2194,7 @@ static int __cam_isp_handle_deferred_buf_done(
 				param.request_id = req->request_id;
 			else
 				param.request_id = req_isp->sensor_req_id;
+			param.applied_crop_req_id = req_isp->applied_crop_req_id;
 			rc = cam_sync_signal(&param, &ev_timestamp);
 			if (rc) {
 				CAM_ERR(CAM_ISP,
@@ -2398,6 +2404,7 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 				param.request_id = req->request_id;
 			else
 				param.request_id = req_isp->sensor_req_id;
+			param.applied_crop_req_id = req_isp->applied_crop_req_id;
 			rc = cam_sync_signal(&param, &ev_timestamp);
 			if (rc) {
 				CAM_ERR(CAM_ISP, "Sync = %u for req = %llu failed with rc = %d",
@@ -2450,6 +2457,7 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 				param.request_id = req->request_id;
 			else
 				param.request_id = req_isp->sensor_req_id;
+			param.applied_crop_req_id = req_isp->applied_crop_req_id;
 			rc = cam_sync_signal(&param, &ev_timestamp);
 			if (rc) {
 				CAM_ERR(CAM_ISP, "Sync = %u for req = %llu failed with rc = %d",
@@ -2825,6 +2833,8 @@ static int __cam_isp_ctx_apply_req_offline(
 	cfg.num_hw_update_entries = req_isp->num_cfg;
 	cfg.priv  = &req_isp->hw_update_data;
 	cfg.init_packet = 0;
+	cfg.applied_crop_req_id = 0;
+	req_isp->applied_crop_req_id = 0;
 
 	/*
 	 * Offline mode may receive the SOF and REG_UPD earlier than
@@ -2860,9 +2870,10 @@ static int __cam_isp_ctx_apply_req_offline(
 
 	} else {
 		atomic_set(&ctx_isp->apply_in_progress, 0);
-		CAM_DBG(CAM_ISP, "New substate state %d, applied req %lld",
+		req_isp->applied_crop_req_id = cfg.applied_crop_req_id;
+		CAM_DBG(CAM_ISP, "New substate state %d, applied req %lld applied crop req %lld",
 			CAM_ISP_CTX_ACTIVATED_APPLIED,
-			ctx_isp->last_applied_req_id);
+			ctx_isp->last_applied_req_id, cfg.applied_crop_req_id);
 
 		__cam_isp_ctx_update_state_monitor_array(ctx_isp,
 			CAM_ISP_STATE_CHANGE_TRIGGER_APPLIED,
@@ -4017,6 +4028,7 @@ static int __cam_isp_ctx_handle_error(struct cam_isp_context *ctx_isp,
 						param.request_id = req->request_id;
 					else
 						param.request_id = req_isp->sensor_req_id;
+					param.applied_crop_req_id = req_isp->applied_crop_req_id;
 					rc = cam_sync_signal(&param, NULL);
 					fence_map_out->sync_id = -1;
 				}
@@ -4056,8 +4068,11 @@ static int __cam_isp_ctx_handle_error(struct cam_isp_context *ctx_isp,
 						param.request_id = req->request_id;
 					else
 						param.request_id = req_isp->sensor_req_id;
-					CAM_DBG(CAM_ISP, "ife req: %lld sensor req: %lld",
-						req->request_id, req_isp->sensor_req_id);
+					param.applied_crop_req_id = req_isp->applied_crop_req_id;
+					CAM_DBG(CAM_ISP,
+						"ife req: %lld sensor req: %lld applied crop req: %lld",
+						req->request_id, req_isp->sensor_req_id,
+						req_isp->applied_crop_req_id);
 					rc = cam_sync_signal(&param, NULL);
 					fence_map_out->sync_id = -1;
 				}
@@ -4127,6 +4142,7 @@ end:
 					param.request_id = req->request_id;
 				else
 					param.request_id = req_isp->sensor_req_id;
+				param.applied_crop_req_id = req_isp->applied_crop_req_id;
 				rc = cam_sync_signal(&param, NULL);
 			}
 			req_isp->fence_map_out[i].sync_id = -1;
@@ -4811,6 +4827,9 @@ static int cam_isp_ctx_reapply_iq_config(struct cam_context *ctx, struct cam_ctx
 	cfg.num_hw_update_entries = req_isp->num_cfg;
 	cfg.priv  = &req_isp->hw_update_data;
 	cfg.init_packet = 0;
+	cfg.applied_crop_req_id = 0;
+	req_isp->applied_crop_req_id = 0;
+
 	if (reapply_type == CAM_CONFIG_REAPPLY_NONE) {
 		cfg.reapply_type = req_isp->reapply_type;
 		cfg.wait_for_request_apply = false;
@@ -4854,6 +4873,7 @@ static int cam_isp_ctx_reapply_iq_config(struct cam_context *ctx, struct cam_ctx
 			CAM_DBG(CAM_REQ, "full request %lld config success ctx %u",
 				req->request_id, ctx->ctx_id);
 		}
+		req_isp->applied_crop_req_id = cfg.applied_crop_req_id;
 	} else if (rc == -EALREADY) {
 		list_del_init(&req->list);
 		list_add(&req->list, &ctx->free_req_list);
@@ -4913,6 +4933,7 @@ static int __cam_isp_ctx_apply_dropped_req_in_bubble_state(
 				param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 				param.event_cause = event_cause;
 				param.request_id = req_isp->sensor_req_id;
+				param.applied_crop_req_id = req_isp->applied_crop_req_id;
 				cam_sync_signal(&param, NULL);
 			}
 		}
@@ -4963,6 +4984,7 @@ apply_wait:
 					param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 					param.event_cause = event_cause;
 					param.request_id = req_isp->sensor_req_id;
+					param.applied_crop_req_id = req_isp->applied_crop_req_id;
 					cam_sync_signal(&param, NULL);
 				}
 			}
@@ -5068,6 +5090,7 @@ apply_pending:
 					param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 					param.event_cause = event_cause;
 					param.request_id = req_isp->sensor_req_id;
+					param.applied_crop_req_id = req_isp->applied_crop_req_id;
 					cam_sync_signal(&param, NULL);
 				}
 			}
@@ -5189,6 +5212,7 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 	}
 	req_isp->bubble_report = apply->report_if_bubble;
 	req_isp->sensor_req_id = 0;
+	req_isp->applied_crop_req_id = 0;
 
 	cfg.ctxt_to_hw_map = ctx_isp->hw_ctx;
 	cfg.request_id = req->request_id;
@@ -5201,6 +5225,7 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 	cfg.wait_for_request_apply = apply->wait_for_request_apply;
 	req_isp->boot_timestamp = 0;
 	req_isp->sof_timestamp_val = 0;
+	cfg.applied_crop_req_id = 0;
 
 	atomic_set(&ctx_isp->apply_in_progress, 1);
 
@@ -5217,6 +5242,7 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 				"ctx %d req %llu CDM callback not happen but received buf done",
 				ctx->ctx_id, req->request_id);
 		}
+		req_isp->applied_crop_req_id = cfg.applied_crop_req_id;
 		list_del_init(&req->list);
 		list_add_tail(&req->list, &ctx->wait_req_list);
 		ctx_isp->waitlist_req_cnt++;
@@ -5234,6 +5260,7 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 		mutex_lock(&ctx_isp->isp_mutex);
 		req_isp->bubble_detected = true;
 		req_isp->cdm_reset_before_apply = false;
+		req_isp->applied_crop_req_id = cfg.applied_crop_req_id;
 		atomic_set(&ctx_isp->process_bubble, 1);
 		list_del_init(&req->list);
 		list_add(&req->list, &ctx->active_req_list);
@@ -5641,6 +5668,7 @@ static int __cam_isp_ctx_flush_req(struct cam_context *ctx,
 				param.status = CAM_SYNC_STATE_SIGNALED_CANCEL;
 				param.event_cause = CAM_SYNC_ISP_EVENT_FLUSH;
 				param.request_id = req_isp->sensor_req_id;
+				param.applied_crop_req_id = req_isp->applied_crop_req_id;
 				rc = cam_sync_signal(&param, NULL);
 				if (rc) {
 					tmp = req_isp->fence_map_out[i].sync_id;
@@ -6999,6 +7027,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_state(
 					param.request_id = req->request_id;
 				else
 					param.request_id = req_isp->sensor_req_id;
+				param.applied_crop_req_id = req_isp->applied_crop_req_id;
 				cam_sync_signal(&param, NULL);
 			}
 		list_add_tail(&req->list, &ctx->free_req_list);
@@ -9118,6 +9147,7 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 	start_isp.hw_config.init_packet = 1;
 	start_isp.hw_config.reapply_type = CAM_CONFIG_REAPPLY_NONE;
 	start_isp.hw_config.cdm_reset_before_apply = false;
+	start_isp.hw_config.applied_crop_req_id = 0;
 	start_isp.is_internal_start = false;
 	start_isp.is_trigger_type =
 		(ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) ? true : false;
@@ -9159,6 +9189,8 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 	start_isp.hw_config.hw_update_entries = req_isp->cfg;
 	start_isp.hw_config.num_hw_update_entries = req_isp->num_cfg;
 	start_isp.hw_config.priv  = &req_isp->hw_update_data;
+
+	req_isp->applied_crop_req_id = 0;
 
 	ctx_isp->last_applied_req_id = req->request_id;
 
@@ -9234,6 +9266,9 @@ do_hw_start:
 		list_add(&req->list, &ctx->pending_req_list);
 		goto end;
 	}
+
+	if (ctx_isp->acquire_type != CAM_ISP_ACQUIRE_TYPE_VIRTUAL)
+		req_isp->applied_crop_req_id = start_isp.hw_config.applied_crop_req_id;
 
 	CAM_DBG(CAM_ISP, "start device success ctx %u", ctx->ctx_id);
 
@@ -9325,6 +9360,7 @@ static int __cam_isp_ctx_stop_dev_in_activated_unlock(
 					param.request_id = req->request_id;
 				else
 					param.request_id = req_isp->sensor_req_id;
+				param.applied_crop_req_id = req_isp->applied_crop_req_id;
 				cam_sync_signal(&param, NULL);
 			}
 		list_add_tail(&req->list, &ctx->free_req_list);
@@ -9347,6 +9383,7 @@ static int __cam_isp_ctx_stop_dev_in_activated_unlock(
 					param.request_id = req->request_id;
 				else
 					param.request_id = req_isp->sensor_req_id;
+				param.applied_crop_req_id = req_isp->applied_crop_req_id;
 				cam_sync_signal(&param, NULL);
 			}
 		list_add_tail(&req->list, &ctx->free_req_list);
@@ -9370,6 +9407,7 @@ static int __cam_isp_ctx_stop_dev_in_activated_unlock(
 					param.request_id = req->request_id;
 				else
 					param.request_id = req_isp->sensor_req_id;
+				param.applied_crop_req_id = req_isp->applied_crop_req_id;
 				cam_sync_signal(&param, NULL);
 			}
 		list_add_tail(&req->list, &ctx->free_req_list);
@@ -9632,6 +9670,10 @@ static int __cam_isp_ctx_reset_and_recover(
 	start_isp.hw_config.hw_update_entries = req_isp->cfg;
 	start_isp.hw_config.num_hw_update_entries = req_isp->num_cfg;
 	start_isp.hw_config.priv  = &req_isp->hw_update_data;
+	start_isp.hw_config.applied_crop_req_id = 0;
+
+	req_isp->applied_crop_req_id = 0;
+
 	if (ctx_isp->frame_drop) {
 		start_isp.hw_config.init_packet = 0;
 		start_isp.hw_config.reapply_type = CAM_CONFIG_REAPPLY_RUP;
@@ -9659,6 +9701,8 @@ static int __cam_isp_ctx_reset_and_recover(
 		goto end;
 	}
 
+	req_isp->applied_crop_req_id = start_isp.hw_config.applied_crop_req_id;
+
 	/* IQ applied for this request, on next trigger skip IQ cfg */
 	if (ctx_isp->frame_drop) {
 		for (i = 0; i < req_isp->num_fence_map_out; i++) {
@@ -9668,6 +9712,7 @@ static int __cam_isp_ctx_reset_and_recover(
 				param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 				param.event_cause = CAM_SYNC_ISP_EVENT_FRAME_DROP;
 				param.request_id = req_isp->sensor_req_id;
+				param.applied_crop_req_id = req_isp->applied_crop_req_id;
 				cam_sync_signal(&param, NULL);
 			}
 		}
