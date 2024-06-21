@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_SYNC_H__
@@ -19,6 +19,7 @@
 #define CAM_SYNC_V4L_EVENT_V2                    (V4L2_EVENT_PRIVATE_START + 1)
 #define CAM_SYNC_V4L_EVENT_V3                    (V4L2_EVENT_PRIVATE_START + 2)
 #define CAM_SYNC_V4L_EVENT_V4                    (V4L2_EVENT_PRIVATE_START + 3)
+#define CAM_SYNC_V4L_EVENT_V5                    (V4L2_EVENT_PRIVATE_START + 4)
 
 /* Specific event ids to get notified in user space */
 #define CAM_SYNC_V4L_EVENT_ID_CB_TRIG            0
@@ -53,6 +54,9 @@
 
 #define CAM_SYNC_GET_PAYLOAD_PTR_V4(ev, type)       \
 	((type *)((char *)ev.u.data + sizeof(struct cam_sync_ev_header_v4)))
+
+#define CAM_SYNC_GET_HEADER_PTR_V5(ev)              \
+	((struct cam_sync_ev_header_v5 *)ev.u.data)
 
 #define CAM_SYNC_STATE_INVALID                   0
 #define CAM_SYNC_STATE_ACTIVE                    1
@@ -252,6 +256,45 @@ struct cam_sync_ev_header_v4 {
 	__u8    version;
 	__s16   reserved;
 	struct cam_sync_event_info evt_param;
+};
+
+/**
+ * struct cam_sync_event_info_v2 - Event param data
+ *
+ * @event_cause              : Sync success/failure event cause types
+ * @tracker_id               : Tracker_id
+ * @sof_timestamp            : Captured time stamp value at sof hw event
+ * @boot_timestamp           : Boot time stamp for a given req_id
+ * @slave_timestamp          : Slave(Helios) timestamp
+ * @sensor_req_id            : Sensor req_id applied on current frame
+ * @applied_crop_req_id      : Crop req_id applied on current frame
+ * @reserved                 : Reserved for future additions
+ */
+struct cam_sync_event_info_v2 {
+	__u32         event_cause;
+	__u32         tracker_id;
+	__u64         sof_timestamp;
+	__u64         boot_timestamp;
+	__u64         slave_timestamp;
+	__u64         sensor_req_id;
+	__u64         applied_crop_req_id;
+	__u64         reserved;
+};
+
+/**
+ * struct cam_sync_ev_header_v5 - Event header for sync event notification
+ *
+ * @sync_obj:    Sync object
+ * @status:      Status of the object
+ * @version:     sync driver version
+ * @evt_param:   event parameter
+ */
+struct cam_sync_ev_header_v5 {
+	__s32   sync_obj;
+	__s8    status;
+	__u8    version;
+	__s16   reserved;
+	struct cam_sync_event_info_v2 evt_param;
 };
 
 /**

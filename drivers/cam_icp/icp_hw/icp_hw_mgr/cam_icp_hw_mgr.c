@@ -5017,7 +5017,8 @@ static int cam_icp_mgr_process_io_cfg(struct cam_icp_hw_mgr *hw_mgr,
 
 	if (prepare_args->num_in_map_entries > 1) {
 		rc = cam_sync_merge(&sync_in_obj[0],
-			prepare_args->num_in_map_entries, &merged_sync_in_obj);
+			prepare_args->num_in_map_entries, &merged_sync_in_obj,
+			CAM_SYNC_TYPE_KMD);
 		if (rc) {
 			prepare_args->num_out_map_entries = 0;
 			prepare_args->num_in_map_entries = 0;

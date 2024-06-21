@@ -16,14 +16,23 @@ int cam_sync_util_send_exit_poll_event(void *fh)
 
 	memset(&event, 0, sizeof(struct v4l2_event));
 
-	if (sync_dev->version == CAM_SYNC_V4L_EVENT_V2)
+	switch (sync_dev->version) {
+	case CAM_SYNC_V4L_EVENT_V2:
 		event.type = CAM_SYNC_V4L_EVENT_V2;
-	else if (sync_dev->version == CAM_SYNC_V4L_EVENT_V3)
+		break;
+	case CAM_SYNC_V4L_EVENT_V3:
 		event.type = CAM_SYNC_V4L_EVENT_V3;
-	else if (sync_dev->version == CAM_SYNC_V4L_EVENT_V4)
+		break;
+	case CAM_SYNC_V4L_EVENT_V4:
 		event.type = CAM_SYNC_V4L_EVENT_V4;
-	else
+		break;
+	case CAM_SYNC_V4L_EVENT_V5:
+		event.type = CAM_SYNC_V4L_EVENT_V5;
+		break;
+	default:
 		event.type = CAM_SYNC_V4L_EVENT;
+		break;
+	}
 
 	event.id = CAM_SYNC_V4L_EVENT_ID_EXIT;
 
@@ -64,7 +73,8 @@ int cam_sync_init_row(struct sync_table_row *table,
 int cam_sync_init_group_object(struct sync_table_row *table,
 	uint32_t sync_var,
 	uint32_t *sync_objs,
-	uint32_t num_objs)
+	uint32_t num_objs,
+	uint32_t type)
 {
 	int i, rc = 0;
 	struct sync_child_info *child_info;
@@ -76,7 +86,7 @@ int cam_sync_init_group_object(struct sync_table_row *table,
 	idx = sync_var & sync_uid_access.fenceIdMask;
 	row = table + idx;
 	sync_manager_idx = row->sync_manager_idx;
-	cam_sync_init_row(table, idx, "merged_fence", CAM_SYNC_TYPE_GROUP, sync_manager_idx);
+	cam_sync_init_row(table, idx, "merged_fence", type, sync_manager_idx);
 
 	/*
 	 * While traversing for children, parent's row list is updated with
@@ -96,7 +106,7 @@ int cam_sync_init_group_object(struct sync_table_row *table,
 			continue;
 		}
 		/* validate child */
-		if ((child_row->type == CAM_SYNC_TYPE_GROUP) ||
+		if ((!list_empty(&child_row->children_list)) ||
 			(child_row->state == CAM_SYNC_STATE_INVALID)) {
 			spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 			CAM_ERR(CAM_SYNC,
@@ -538,6 +548,19 @@ void cam_sync_util_dispatch_signaled_cb(struct cam_sync_signal_param *param,
 		 kfree(payload_info);
 	}
 
+	/* Send the event without payload in version 5*/
+	if ((sync_dev->version == CAM_SYNC_V4L_EVENT_V5) &&
+		(signalable_row->type == CAM_SYNC_TYPE_UMD)) {
+		cam_sync_util_send_v4l2_event(
+			CAM_SYNC_V4L_EVENT_ID_CB_TRIG,
+			param->sync_obj,
+			param->status,
+			param->request_id,
+			NULL,
+			0,
+			param->event_cause, time_stamp, param->fh);
+	}
+
 	/*
 	 * This needs to be done because we want to unblock anyone
 	 * who might be blocked and waiting on this sync object
@@ -633,6 +656,35 @@ void cam_sync_util_send_v4l2_event(uint32_t id,
 			sync_dev->version, ev_header->sync_obj, ev_header->status,
 			ev_header->evt_param.event_cause, ev_header->evt_param.request_id,
 			ev_header->evt_param.tracker_id, ev_header->evt_param.sof_timestamp);
+	} else if (sync_dev->version == CAM_SYNC_V4L_EVENT_V5) {
+		struct cam_sync_ev_header_v5 *ev_header = NULL;
+
+		event.id = id;
+		event.type = CAM_SYNC_V4L_EVENT_V5;
+
+		ev_header = CAM_SYNC_GET_HEADER_PTR_V5(event);
+		ev_header->sync_obj = sync_obj;
+		ev_header->status = status;
+		ev_header->version = sync_dev->version;
+		ev_header->evt_param.event_cause =
+			event_cause;
+
+		if (time_stamp) {
+			ev_header->evt_param.tracker_id =
+				time_stamp->tracker_id;
+			ev_header->evt_param.sof_timestamp =
+				time_stamp->sof_timestamp;
+			ev_header->evt_param.boot_timestamp =
+				time_stamp->boot_timestamp;
+			ev_header->evt_param.slave_timestamp =
+				time_stamp->slave_timestamp;
+		}
+		ev_header->evt_param.sensor_req_id = req_id;
+		CAM_DBG(CAM_SYNC,
+			"send v4l2 event version %d sync_obj %d status %d, event_cause %d req_id %lld tracker_id %d sof_timestamp %lld ",
+			sync_dev->version, ev_header->sync_obj, ev_header->status,
+			ev_header->evt_param.event_cause, ev_header->evt_param.sensor_req_id,
+			ev_header->evt_param.tracker_id, ev_header->evt_param.sof_timestamp);
 	} else {
 		struct cam_sync_ev_header *ev_header = NULL;
 
@@ -645,7 +697,9 @@ void cam_sync_util_send_v4l2_event(uint32_t id,
 		payload_data = CAM_SYNC_GET_PAYLOAD_PTR(event, __u64);
 	}
 
-	memcpy(payload_data, payload, len);
+	if (sync_dev->version != CAM_SYNC_V4L_EVENT_V5)
+		memcpy(payload_data, payload, len);
+
 	v4l2_event_queue_fh(fh, &event);
 	CAM_DBG(CAM_SYNC, "send v4l2 event version %d for sync_obj :%d",
 		sync_dev->version,
