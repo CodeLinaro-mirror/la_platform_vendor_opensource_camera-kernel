@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/iopoll.h>
@@ -3946,6 +3946,7 @@ static int cam_ife_csid_ver3_enable_csi2(struct cam_ife_csid_ver3_hw *csid_hw)
 	/*Configure Rx cfg1*/
 	val = 1 << csi2_reg->misr_enable_shift_val;
 	val |= 1 << csi2_reg->ecc_correction_shift_en;
+	val |= 1 << csi2_reg->hot_plug_en;
 	val |= (rx_cfg->epd_supported << csi2_reg->epd_mode_shift_en);
 	if (rx_cfg->dynamic_sensor_switch_en)
 		val |= 1 << csi2_reg->dyn_sensor_switch_shift_en;
