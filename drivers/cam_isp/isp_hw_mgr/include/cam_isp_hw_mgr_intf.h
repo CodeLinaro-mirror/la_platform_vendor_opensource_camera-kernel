@@ -265,6 +265,8 @@ struct cam_isp_bw_clk_config_info {
  * @virtual_rdi_mapping_cb:  virtual rdi mapping cb function for
  *                           respective sensor via ife_ctx
  * @per_port_enable:         Indicates if perport feature is enabled or not
+ * @crop_update_entry:       Crop update info entry
+ * @is_crop_update_valid:    Indicate if the crop info is valid
  *
  */
 struct cam_isp_prepare_hw_update_data {
@@ -283,6 +285,8 @@ struct cam_isp_prepare_hw_update_data {
 	cam_hw_get_virtual_rdi_mapping_cb_func virtual_rdi_mapping_cb;
 	bool                                  per_port_enable;
 	bool                                  mup_en;
+	struct cam_hw_update_entry            crop_update_entry;
+	bool                                  is_crop_update_valid;
 };
 
 

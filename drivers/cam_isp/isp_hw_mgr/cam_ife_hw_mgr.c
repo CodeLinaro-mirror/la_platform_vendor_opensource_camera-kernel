@@ -8196,6 +8196,8 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	ife_ctx->hw_mgr = ife_hw_mgr;
 	ife_ctx->cdm_ops =  cam_cdm_publish_ops();
 	ife_ctx->num_processed = 0;
+	ife_ctx->latest_crop_update_req = 0;
+	ife_ctx->crop_update_entry.len = 0;
 
 	acquire_hw_info =
 		(struct cam_isp_acquire_hw_info *)acquire_args->acquire_info;
@@ -9249,7 +9251,7 @@ static int cam_isp_blob_bw_update(
 static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 					void *config_hw_args)
 {
-	int rc = -1, i, skip = 0;
+	int rc = -1, i;
 	struct cam_hw_config_args *cfg;
 	struct cam_hw_update_entry *cmd;
 	struct cam_cdm_bl_request *cdm_cmd;
@@ -9401,33 +9403,54 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 		cdm_cmd->gen_irq_arb = false;
 		cdm_cmd->irq_cb_intr_ctx = cfg->wait_for_request_apply;
 		cdm_cmd->gen_irq_bl_done = is_genirq_required;
+		cdm_cmd->cmd_arrary_count  = 0;
 
 		for (i = 0 ; i < cfg->num_hw_update_entries; i++) {
 			cmd = (cfg->hw_update_entries + i);
 
-			if ((cfg->reapply_type == CAM_CONFIG_REAPPLY_IO) &&
-				(cmd->flags == CAM_ISP_IQ_BL)) {
-				skip++;
-				continue;
+			/* Add to the second entry since the first one is change base cmd */
+			if ((ctx->latest_crop_update_req >= cfg->request_id) &&
+				(cdm_cmd->cmd_arrary_count == 1) &&
+				(ctx->crop_update_entry.len > 0)) {
+				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].bl_addr.mem_handle =
+					ctx->crop_update_entry.handle;
+				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset =
+					ctx->crop_update_entry.offset;
+				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].len =
+					ctx->crop_update_entry.len;
+				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].arbitrate = false;
+				CAM_DBG(CAM_ISP,
+					"ctx id:%u updated req#%llu's crop info for request id: %llu, mem_handle:0x%x, len:%d offset:%d",
+					ctx->ctx_index, ctx->latest_crop_update_req, cfg->request_id,
+					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].len,
+					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset);
+				cdm_cmd->cmd_arrary_count++;
 			}
 
-			if ((cfg->reapply_type == CAM_CONFIG_REAPPLY_IQ) &&
-				(cmd->flags == CAM_ISP_IOCFG_BL)) {
-				skip++;
-				continue;
+			if ((cdm_cmd->cmd_arrary_count + 1) >= CAM_ISP_CTX_CFG_MAX) {
+				CAM_ERR(CAM_ISP,
+					"The cmd array count is greater than max cfg count, request:%llu ctx:%u",
+					cfg->request_id, ctx->ctx_index);
+				return -ENOMEM;
 			}
+
+			if ((cfg->reapply_type == CAM_CONFIG_REAPPLY_IO) &&
+				(cmd->flags == CAM_ISP_IQ_BL))
+				continue;
+
+			if ((cfg->reapply_type == CAM_CONFIG_REAPPLY_IQ) &&
+				(cmd->flags == CAM_ISP_IOCFG_BL))
+				continue;
 
 			if ((cfg->reapply_type == CAM_CONFIG_REAPPLY_IQ_NORUP) &&
 				((cmd->flags == CAM_ISP_RUP_BL) ||
 				 (cmd->flags == CAM_ISP_IOCFG_BL))) {
-				skip++;
 				continue;
 			}
 
 			if ((cfg->reapply_type == CAM_CONFIG_REAPPLY_RUP) &&
 				((cmd->flags == CAM_ISP_IQ_BL) ||
 				 (cmd->flags == CAM_ISP_IOCFG_BL))) {
-				skip++;
 				continue;
 			}
 
@@ -9436,12 +9459,13 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 				CAM_ERR(CAM_ISP, "Unexpected BL type %d",
 					cmd->flags);
 
-			cdm_cmd->cmd[i - skip].bl_addr.mem_handle = cmd->handle;
-			cdm_cmd->cmd[i - skip].offset = cmd->offset;
-			cdm_cmd->cmd[i - skip].len = cmd->len;
-			cdm_cmd->cmd[i - skip].arbitrate = false;
+			cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].bl_addr.mem_handle = cmd->handle;
+			cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset = cmd->offset;
+			cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].len = cmd->len;
+			cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].arbitrate = false;
+
+			cdm_cmd->cmd_arrary_count++;
 		}
-		cdm_cmd->cmd_arrary_count = cfg->num_hw_update_entries - skip;
 
 		if (cam_presil_mode_enabled()) {
 			CAM_INFO(CAM_ISP, "Sending relevant buffers for request:%llu to presil",
@@ -15373,6 +15397,17 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 		(!prepare_hw_data->frame_header_res_id)) {
 		CAM_ERR(CAM_ISP, "Failed to configure frame header");
 		goto end;
+	}
+
+	if (prepare_hw_data->is_crop_update_valid) {
+		ctx->latest_crop_update_req =
+			prepare->packet->header.request_id;
+		memcpy(&ctx->crop_update_entry, &prepare_hw_data->crop_update_entry,
+			sizeof(struct cam_hw_update_entry));
+		prepare_hw_data->is_crop_update_valid = false;
+
+		CAM_DBG(CAM_ISP, "req: %lld update the crop info ctx_idx: %u",
+			ctx->latest_crop_update_req, ctx->ctx_index);
 	}
 
 	/*
