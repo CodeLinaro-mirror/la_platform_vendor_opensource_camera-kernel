@@ -16,7 +16,8 @@
 #define MIN_PD 1
 #define DEFAULT_PD 2
 #define MAX_PD 3
-#define WITH_NO_CRM_MASK  0x1
+#define WITH_NO_CRM_MASK BIT(0)
+#define FAST_PATH_MASK BIT(1)
 
 
 static int cam_sensor_update_req_mgr(
@@ -1071,6 +1072,9 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			s_ctrl->bridge_intf.enable_crm = 0;
 			bridge_params.no_crm_ops  = &s_ctrl->bridge_intf.no_crm_ops;
 			bridge_params.no_crm_priv = s_ctrl;
+		}
+
+		if (sensor_acq_dev.info_handle & FAST_PATH_MASK) {
 			s_ctrl->is_setting_id_valid = 1;
 		}
 
@@ -1617,6 +1621,44 @@ int cam_sensor_no_crm_add_req(
 	return rc;
 }
 
+static int cam_sensor_apply_settings_fast_path(
+	struct cam_sensor_ctrl_t *s_ctrl,
+	struct cam_req_mgr_no_crm_apply_request *notify)
+{
+	int rc                                = 0;
+	struct i2c_settings_array *i2c_set    = NULL;
+	int64_t setting_id                    = 0;
+	int offset                            = 0;
+	enum cam_sensor_packet_opcodes opcode;
+
+	if (!s_ctrl || !notify) {
+		CAM_ERR(CAM_SENSOR, "Invalid params");
+		return -EINVAL;
+	}
+
+	setting_id  = notify->setting_id;
+	offset      = setting_id % MAX_PER_FRAME_ARRAY;
+	opcode      = CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE;
+	i2c_set     = s_ctrl->i2c_data.per_frame;
+
+	if (i2c_set[offset].setting_id == setting_id) {
+		rc = cam_sensor_apply_settings(
+				s_ctrl,
+				setting_id,
+				opcode);
+		if (!rc) {
+			CAM_DBG(CAM_SENSOR, "slot [%d] apply[%llu]",
+					s_ctrl->soc_info.index,
+					setting_id);
+		} else {
+			CAM_ERR(CAM_SENSOR, "slot [%d] failed to apply setting %d",
+					s_ctrl->soc_info.index,
+					setting_id);
+		}
+	}
+	return rc;
+}
+
 static int cam_sensor_apply_settings_no_crm(
 	struct cam_sensor_ctrl_t *s_ctrl,
 	struct cam_req_mgr_no_crm_apply_request *notify)
@@ -1634,92 +1676,67 @@ static int cam_sensor_apply_settings_no_crm(
 		return -EINVAL;
 	}
 
-	if (!s_ctrl->is_setting_id_valid) {
-		isp_req_id    = notify->anchor_req_id;
-		sensor_pd     = s_ctrl->pipeline_delay;
-		isp_pd        = s_ctrl->anchor_pd;
-		sensor_req_id = isp_req_id + (sensor_pd - isp_pd);
-		opcode        = CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE;
-		i2c_set       = s_ctrl->i2c_data.per_frame;
+	isp_req_id    = notify->anchor_req_id;
+	sensor_pd     = s_ctrl->pipeline_delay;
+	isp_pd        = s_ctrl->anchor_pd;
+	sensor_req_id = isp_req_id + (sensor_pd - isp_pd);
+	opcode        = CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE;
+	i2c_set       = s_ctrl->i2c_data.per_frame;
 
-		CAM_DBG(CAM_SENSOR, "slot[%d] isp[%llu] sensor[%llu] sensor_pd[%d]",
-			s_ctrl->soc_info.index, isp_req_id, sensor_req_id, sensor_pd);
+	CAM_DBG(CAM_SENSOR, "slot[%d] isp[%llu] sensor[%llu] sensor_pd[%d]",
+		s_ctrl->soc_info.index, isp_req_id, sensor_req_id, sensor_pd);
 
-			/* detected a skip */
-			if ((sensor_req_id - s_ctrl->last_applied_req) > 1) {
-				uint64_t new_req_id = 0;
+		/* detected a skip */
+	if ((sensor_req_id - s_ctrl->last_applied_req) > 1) {
+		uint64_t new_req_id = 0;
 
-				new_req_id = cam_sensor_find_latest_req(
-								s_ctrl,
-								sensor_req_id,
-								s_ctrl->last_applied_req);
-			if (new_req_id > 0) {
-				rc = cam_sensor_apply_settings(
-						s_ctrl,
-						new_req_id,
-						opcode);
-				if (!rc) {
-					s_ctrl->last_applied_req = new_req_id;
-					notify->last_apply_req = new_req_id;
-					CAM_ERR(CAM_SENSOR,
-						"slot[%d] skiped apply[%llu]",
-						s_ctrl->soc_info.index,
-						s_ctrl->last_applied_req);
-				}
-			} else {
-				CAM_INFO(CAM_SENSOR,
+		new_req_id = cam_sensor_find_latest_req(
+					s_ctrl,
+					sensor_req_id,
+					s_ctrl->last_applied_req);
+		if (new_req_id > 0) {
+			rc = cam_sensor_apply_settings(
+					s_ctrl,
+					new_req_id,
+					opcode);
+			if (!rc) {
+				s_ctrl->last_applied_req = new_req_id;
+				notify->last_apply_req = new_req_id;
+				CAM_ERR(CAM_SENSOR,
+					"slot[%d] skiped apply[%llu]",
+					s_ctrl->soc_info.index,
+					s_ctrl->last_applied_req);
+			}
+		} else {
+			CAM_INFO(CAM_SENSOR,
+					"slot[%d] RequestId[%d] not in queue ",
+					s_ctrl->soc_info.index,
+					sensor_req_id);
+		}
+	} else {
+		/* This is a no skip case */
+		int offset = sensor_req_id % MAX_PER_FRAME_ARRAY;
+		struct i2c_settings_array *i2c_set = s_ctrl->i2c_data.per_frame;
+
+		if (i2c_set[offset].request_id != sensor_req_id) {
+			CAM_DBG(CAM_SENSOR,
 						"slot[%d] RequestId[%d] not in queue ",
 						s_ctrl->soc_info.index,
 						sensor_req_id);
-			}
 		} else {
-			/* This is a no skip case */
-			int offset = sensor_req_id % MAX_PER_FRAME_ARRAY;
-			struct i2c_settings_array *i2c_set = s_ctrl->i2c_data.per_frame;
-
-			if (i2c_set[offset].request_id != sensor_req_id) {
-				CAM_DBG(CAM_SENSOR,
-							"slot[%d] RequestId[%d] not in queue ",
-							s_ctrl->soc_info.index,
-							sensor_req_id);
-			} else {
-				rc = cam_sensor_apply_settings(s_ctrl,
-							sensor_req_id,
-							opcode);
-				if (!rc) {
-					s_ctrl->last_applied_req = sensor_req_id;
-					notify->last_apply_req = sensor_req_id;
-					CAM_DBG(CAM_SENSOR, "slot[%d] apply[%llu]",
-									s_ctrl->soc_info.index,
-									s_ctrl->last_applied_req);
-				}
-			}
-		}
-	}
-	else {
-		/* This is UL Path */
-		int64_t  setting_id  = notify->setting_id;
-		int      offset      = setting_id % MAX_PER_FRAME_ARRAY;
-
-		opcode        = CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE;
-		i2c_set       = s_ctrl->i2c_data.per_frame;
-
-		if (i2c_set[offset].setting_id == setting_id) {
-			rc = cam_sensor_apply_settings(
-					s_ctrl,
-					setting_id,
-					opcode);
+			rc = cam_sensor_apply_settings(s_ctrl,
+						sensor_req_id,
+						opcode);
 			if (!rc) {
-				CAM_DBG(CAM_SENSOR, "slot [%d] apply[%llu]",
-						s_ctrl->soc_info.index,
-						setting_id);
-			} else {
-				CAM_ERR(CAM_SENSOR, "slot [%d] failed to apply setting %d",
-						s_ctrl->soc_info.index,
-						setting_id);
+				s_ctrl->last_applied_req = sensor_req_id;
+				notify->last_apply_req = sensor_req_id;
+				CAM_DBG(CAM_SENSOR, "slot[%d] apply[%llu]",
+								s_ctrl->soc_info.index,
+								s_ctrl->last_applied_req);
 			}
 		}
 	}
+
 	return rc;
 }
 
@@ -1810,7 +1827,11 @@ int cam_sensor_no_crm_apply_req(
 	}
 
 	mutex_lock(&(s_ctrl->cam_sensor_mutex));
-	rc = cam_sensor_apply_settings_no_crm(s_ctrl, apply);
+	if (!s_ctrl->is_setting_id_valid) {
+		rc = cam_sensor_apply_settings_no_crm(s_ctrl, apply);
+	} else {
+		rc = cam_sensor_apply_settings_fast_path(s_ctrl, apply);
+	}
 	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
 	return rc;
 }
