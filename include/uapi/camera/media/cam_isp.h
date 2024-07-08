@@ -136,6 +136,8 @@
 #define CAM_ISP_GENERIC_BLOB_TYPE_SFE_SCRATCH_BUF_CFG       26
 #define CAM_ISP_GENERIC_BLOB_TYPE_SFE_EXP_ORDER_CFG         27
 #define CAM_ISP_GENERIC_BLOB_TYPE_HYBRID_SENSOR_CFG         28
+#define CAM_ISP_GENERIC_BLOB_TYPE_SETTINGID_STREAM_CFG      29
+#define CAM_ISP_GENERIC_BLOB_TYPE_CHECK_SETTING_ID          30
 
 #define CAM_ISP_VC_DT_CFG    4
 
@@ -1293,6 +1295,35 @@ struct cam_isp_sensor_group_config {
 	__u32                             version;
 	__u32                             num_grp_cfg;
 	struct cam_isp_stream_grp_config  stream_grp_cfg[CAM_ISP_STREAM_GROUP_CFG_MAX];
+};
+
+/**
+ * struct cam_isp_setting_id_stream_info - Setting ID stream
+ *                    Information
+ *
+ * @version:          Struct version
+ * @res_id:           Resource ID of setting ID buffer
+ * @offset:           Offset of setting ID in buffer
+ * @setting_size:     Size of setting variable ie: 32bit, 64 bit
+ */
+struct cam_isp_setting_id_stream_info {
+	__u32 version;
+	__u32 res_id;
+	__u32 offset;
+	__u32 setting_size;
+};
+
+/**
+ * struct cam_isp_setting_id_info - Setting Id information for frame
+ *
+ * @version:          Struct version
+ * @reserved:         reserved field for alignment
+ * @setting_id:       setting id for the frame
+ */
+struct cam_isp_setting_id_info {
+	__u32 version;
+	__u32 reserved;
+	__u64 setting_id;
 };
 
 #define CAM_VIRT_ISP_VC_DT_CFG                            10
