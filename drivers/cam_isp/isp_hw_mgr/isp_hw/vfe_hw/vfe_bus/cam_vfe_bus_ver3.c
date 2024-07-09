@@ -2061,6 +2061,7 @@ static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
 	rsrc_data->priv = acq_args->priv;
 	rsrc_data->bus_priv = ver3_bus_priv;
 	rsrc_data->limiter_enabled = false;
+	rsrc_data->is_isr_en = true;
 	comp_acq_args.composite_mask = (1ULL << vfe_out_res_id);
 
 	/* for some hw versions, buf done is not received from vfe but
@@ -2193,7 +2194,7 @@ static int cam_vfe_bus_ver3_release_vfe_out(void *bus_priv, void *release_args,
 	rsrc_data->cdm_util_ops = NULL;
 
 	rsrc_data->secure_mode = CAM_SECURE_MODE_NON_SECURE;
-
+	rsrc_data->is_isr_en = true;
 	if (vfe_out->res_state == CAM_ISP_RESOURCE_STATE_RESERVED)
 		vfe_out->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 
@@ -2249,22 +2250,24 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 		goto end;
 	}
 
-	vfe_out->irq_handle = cam_irq_controller_subscribe_irq(
-		common_data->buf_done_controller,
-		CAM_IRQ_PRIORITY_1,
-		rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_BUF_DONE_MASK],
-		vfe_out,
-		vfe_out->top_half_handler,
-		vfe_out->bottom_half_handler,
-		vfe_out->worker_info,
-		&worker_bh_api,
-		CAM_IRQ_EVT_GROUP_0);
+	if (rsrc_data->is_isr_en) {
+		vfe_out->irq_handle = cam_irq_controller_subscribe_irq(
+			common_data->buf_done_controller,
+			CAM_IRQ_PRIORITY_1,
+			rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_BUF_DONE_MASK],
+			vfe_out,
+			vfe_out->top_half_handler,
+			vfe_out->bottom_half_handler,
+			vfe_out->worker_info,
+			&worker_bh_api,
+			CAM_IRQ_EVT_GROUP_0);
 
-	if (vfe_out->irq_handle < 1) {
-		CAM_ERR(CAM_ISP, "Subscribe IRQ failed for VFE out_res %d",
-			vfe_out->res_id);
-		vfe_out->irq_handle = 0;
-		return -EFAULT;
+		if (vfe_out->irq_handle < 1) {
+			CAM_ERR(CAM_ISP, "Subscribe IRQ failed for VFE:%d out_res %d",
+				rsrc_data->common_data->core_index, vfe_out->res_id);
+			vfe_out->irq_handle = 0;
+			return -EFAULT;
+		}
 	}
 
 	if ((common_data->is_lite || source_group > CAM_VFE_BUS_VER3_SRC_GRP_0)
@@ -2620,6 +2623,7 @@ static int cam_vfe_bus_ver3_init_vfe_out_resource(uint32_t  index,
 	rsrc_data->max_height   =
 		ver3_hw_info->vfe_out_hw_info[index].max_height;
 	rsrc_data->secure_mode  = CAM_SECURE_MODE_NON_SECURE;
+	rsrc_data->is_isr_en = true;
 	rsrc_data->num_wm       = ver3_hw_info->vfe_out_hw_info[index].num_wm;
 
 	rsrc_data->wm_res = kzalloc((sizeof(struct cam_isp_resource_node) *
@@ -4869,6 +4873,39 @@ static int cam_vfe_bus_ver3_process_cmd(
 		*max_num_out_res = bus_priv->num_out;
 		break;
 	}
+	case CAM_ISP_HW_CMD_DISABLE_IRQ_PER_RES: {
+		struct cam_vfe_bus_ver3_vfe_out_data      *rsrc_data = NULL;
+		struct cam_isp_resource_node              *rsrc_node = NULL;
+		enum cam_vfe_bus_ver3_vfe_out_type  vfe_out_res_id = CAM_VFE_BUS_VER3_VFE_OUT_MAX;
+		uint32_t  outmap_index = CAM_VFE_BUS_VER3_VFE_OUT_MAX;
+		uint32_t *stream_res_id;
+
+		bus_priv = (struct cam_vfe_bus_ver3_priv  *) priv;
+		stream_res_id = (uint32_t *) cmd_args;
+
+		vfe_out_res_id = cam_vfe_bus_ver3_get_out_res_id_and_index(bus_priv,
+			*stream_res_id, &outmap_index);
+
+		if ((vfe_out_res_id >= CAM_VFE_BUS_VER3_VFE_OUT_MAX) ||
+			(outmap_index >= bus_priv->num_out)) {
+			CAM_WARN_RATE_LIMIT(CAM_ISP,
+				"target does not support req res id :0x%x outtype:%d index:%d",
+				*stream_res_id,
+				vfe_out_res_id, outmap_index);
+			return -EINVAL;
+		}
+
+		rsrc_node = &bus_priv->vfe_out[outmap_index];
+		rsrc_data = rsrc_node->res_priv;
+		if (!rsrc_data) {
+			CAM_ERR(CAM_ISP, "VFE: %u, out data is null, res_id: %d",
+					bus_priv->common_data.core_index, vfe_out_res_id);
+			return -EINVAL;
+		}
+		rsrc_data->is_isr_en = false;
+		CAM_DBG(CAM_ISP, "IRQ disabled for out res: %u", vfe_out_res_id);
+	}
+		break;
 	default:
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "Invalid camif process command:%d",
 			cmd_type);

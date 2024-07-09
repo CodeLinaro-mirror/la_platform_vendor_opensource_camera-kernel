@@ -797,7 +797,8 @@ int cam_isp_add_io_buffers(
 	enum cam_isp_hw_type                     hw_type,
 	struct cam_isp_frame_header_info        *frame_header_info,
 	struct cam_isp_check_io_cfg_for_scratch *scratch_check_cfg,
-	bool                                     need_cpu_addr)
+	bool                                     need_cpu_addr,
+	struct cam_isp_foveation_info           *foveation_info)
 {
 	int                                 rc = 0;
 	dma_addr_t                          io_addr[CAM_PACKET_MAX_PLANES];
@@ -1065,6 +1066,20 @@ int cam_isp_add_io_buffers(
 					out_map_entries->kernel_map_buf_addr[plane_id] = NULL;
 				}
 
+				if (foveation_info->foveation_en &&
+					(res->res_id == foveation_info->settingbuffer_res_id)) {
+					rc = cam_mem_get_cpu_buf(io_cfg[i].mem_handle[plane_id],
+						&prepare_hw_data->settingbuffer_kmdvaddr, &len);
+					if (rc) {
+						CAM_ERR(CAM_ISP,
+							"Getting KMD addr for settingId buffer failed, mem_hdl=0x%x, wm res id:%d",
+							io_cfg[i].mem_handle[plane_id],
+							foveation_info->settingbuffer_res_id);
+						return -EINVAL;
+					}
+					prepare_hw_data->settingbuffer_kmdvaddr +=
+						foveation_info->settingbuffer_offset;
+				}
 			}
 			if (!plane_id) {
 				CAM_ERR(CAM_ISP, "No valid planes for res%d",
@@ -1085,6 +1100,7 @@ int cam_isp_add_io_buffers(
 				rc = -ENOMEM;
 				return rc;
 			}
+
 			update_buf.res = res;
 			update_buf.cmd_type = CAM_ISP_HW_CMD_GET_BUF_UPDATE;
 			update_buf.cmd.cmd_buf_addr = kmd_buf_info->cpu_addr +

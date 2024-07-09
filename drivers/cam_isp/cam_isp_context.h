@@ -404,6 +404,10 @@ struct cam_isp_context_event_record {
  *                             for trigger case it is same as path_irq mask
  * @path_irq_mask:             mask created from requested ports, out param
  * @frame_drop_cnt             Count of continuous frame drops
+ * @setting_size:              Size of setting variable ie: 32bit, 64 bit
+ * @is_foveation_en:           flag to indicate if sensor foveation is enabled
+ * @settingbuf_res_id:         Resource ID of Setting ID buffer
+ *
  */
 struct cam_isp_context {
 	struct cam_context              *base;
@@ -487,6 +491,9 @@ struct cam_isp_context {
 	uint64_t                               csid_rup_aup_mask;
 	uint64_t                               path_irq_mask;
 	uint32_t                               frame_drop_cnt;
+	uint32_t                               settingbuf_res_id;
+	uint32_t                               setting_size;
+	bool                                   is_foveation_enable;
 };
 
 /**

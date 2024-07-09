@@ -308,6 +308,10 @@ struct cam_ife_virtual_rdi_mapping {
  * @primary_rdi_out_res:    Indicates primary rdi resource
  * @crop_update_entry:      Crop update info entry
  * @latest_crop_update_req: Latest request id updated which update the crop info
+ * @settingbuf_res_id:      Resource ID of setting ID buffer
+ * @settingbuf_offset:      Offset of setting ID in res buffer
+ * @setting_size:           Size of setting variable ie: 32bit, 64 bit
+ * @settingid_check:        flag to indicate if settingid based check is enabled
  */
 struct cam_ife_hw_mgr_ctx {
 	struct list_head                     list;
@@ -377,6 +381,10 @@ struct cam_ife_hw_mgr_ctx {
 	uint32_t                             primary_rdi_out_res;
 	struct cam_hw_update_entry           crop_update_entry;
 	uint64_t                             latest_crop_update_req;
+	uint32_t                             settingbuf_res_id;
+	uint32_t                             settingbuf_offset;
+	uint32_t                             setting_size;
+	bool                                 settingid_check;
 };
 
 /**

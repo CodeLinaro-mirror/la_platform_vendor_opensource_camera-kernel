@@ -8503,6 +8503,7 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	ife_ctx->ctx_type = CAM_IFE_CTX_TYPE_NONE;
 	ife_ctx->num_acq_vfe_out = 0;
 	ife_ctx->num_acq_sfe_out = 0;
+	ife_ctx->settingid_check = false;
 
 	ife_ctx->common.cb_priv = acquire_args->context_data;
 	ife_ctx->common.mini_dump_cb = acquire_args->mini_dump_cb;
@@ -13599,6 +13600,59 @@ static int cam_isp_blob_ife_rdi_lcr_config(
 	return rc;
 }
 
+static int cam_isp_blob_settingid_stream_config(
+	struct cam_ife_hw_mgr_ctx              *ctx,
+	struct cam_isp_setting_id_stream_info  *stream_info)
+{
+	struct cam_isp_hw_mgr_res       *hw_mgr_res;
+	struct cam_hw_intf              *hw_intf;
+	uint32_t                         out_port_res_type, res_id_out;
+	uint32_t                         i, rc;
+
+	ctx->settingbuf_res_id = stream_info->res_id;
+	ctx->settingbuf_offset = stream_info->offset;
+	ctx->setting_size = stream_info->setting_size;
+	ctx->settingid_check = true;
+
+	if (ctx->flags.per_port_en) {
+		out_port_res_type = cam_ife_hw_mgr_get_virtual_mapping_out_port(ctx,
+			stream_info->res_id, true);
+		res_id_out = out_port_res_type & 0xFF;
+	} else {
+		res_id_out = stream_info->res_id & 0xFF;
+	}
+
+	if (res_id_out >= max_ife_out_res) {
+		CAM_ERR(CAM_ISP, "Invalid out resource id :%x, ctx: %u",
+			stream_info->res_id, ctx->ctx_index);
+		return -EINVAL;
+	}
+
+	hw_mgr_res = &ctx->res_list_ife_out[res_id_out];
+
+	for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
+		if (!hw_mgr_res->hw_res[i])
+			continue;
+
+		if (hw_mgr_res->hw_res[i]->res_state != CAM_ISP_RESOURCE_STATE_RESERVED) {
+			CAM_ERR(CAM_ISP,
+				"Resource with Setting ID is not acquired!, res state: %u, ctx: %u",
+				hw_mgr_res->hw_res[i]->res_state, ctx->ctx_index);
+			return -EINVAL;
+		}
+
+		hw_intf = hw_mgr_res->hw_res[i]->hw_intf;
+		if (hw_intf->hw_ops.process_cmd) {
+			rc = hw_intf->hw_ops.process_cmd(
+				hw_intf->hw_priv,
+				CAM_ISP_HW_CMD_DISABLE_IRQ_PER_RES,
+				(void *)&stream_info->res_id,
+				sizeof(uint32_t));
+		}
+	}
+	return 0;
+}
+
 static int cam_isp_blob_ife_hybrid_sensor_config(
 	struct cam_ife_hw_mgr_ctx         *ctx,
 	struct cam_ife_hybrid_sensor_data *sdata)
@@ -14498,6 +14552,69 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 			CAM_ERR(CAM_ISP,
 				"hybrid sensor config failed rc %d",
 				rc);
+	}
+		break;
+	case CAM_ISP_GENERIC_BLOB_TYPE_SETTINGID_STREAM_CFG: {
+		struct cam_isp_setting_id_stream_info *stream_info;
+		struct cam_isp_prepare_hw_update_data *prepare_hw_data;
+
+		prepare_hw_data = (struct cam_isp_prepare_hw_update_data *)
+			prepare->priv;
+
+		if (prepare_hw_data->packet_opcode_type != CAM_ISP_PACKET_INIT_DEV) {
+			CAM_ERR(CAM_ISP,
+				"Setting ID stream config blob not supported for packet type: %u req: %llu",
+				prepare_hw_data->packet_opcode_type,
+				prepare->packet->header.request_id);
+			return -EINVAL;
+		}
+
+		if (blob_size < sizeof(struct cam_isp_setting_id_stream_info)) {
+			CAM_ERR(CAM_ISP, "Invalid stream_info blob size : %u expected : %d",
+				blob_size,
+				sizeof(struct cam_isp_setting_id_stream_info));
+			return -EINVAL;
+		}
+
+		stream_info = (struct cam_isp_setting_id_stream_info *)blob_data;
+
+		if (stream_info->offset % 4) {
+			CAM_ERR(CAM_ISP, "Offset is not a multiple of 4");
+			return -EINVAL;
+		}
+
+		rc = cam_isp_blob_settingid_stream_config(ife_mgr_ctx, stream_info);
+		if (rc)
+			CAM_ERR(CAM_ISP,
+				"Setting ID stream config failed rc: %d, ctx: %u",
+				rc, ife_mgr_ctx->ctx_index);
+
+		CAM_DBG(CAM_ISP,
+			"Sensor metadata res: %u, offset: %u, setting_size: %u, foveation_en: %u, ctx: %u",
+			ife_mgr_ctx->settingbuf_res_id, ife_mgr_ctx->settingbuf_offset,
+			ife_mgr_ctx->setting_size, ife_mgr_ctx->settingid_check,
+			ife_mgr_ctx->ctx_index);
+	}
+		break;
+	case CAM_ISP_GENERIC_BLOB_TYPE_CHECK_SETTING_ID: {
+		struct cam_isp_setting_id_info *setting_id_info;
+		struct cam_isp_prepare_hw_update_data *prepare_hw_data;
+
+		prepare_hw_data = (struct cam_isp_prepare_hw_update_data *)
+			prepare->priv;
+
+		if (blob_size < sizeof(struct cam_isp_setting_id_info)) {
+			CAM_ERR(CAM_ISP, "Invalid blob size: %u expected: %d",
+			blob_size,
+			sizeof(struct cam_isp_setting_id_info));
+			return -EINVAL;
+		}
+
+		setting_id_info = (struct cam_isp_setting_id_info *)blob_data;
+		prepare_hw_data->setting_id = setting_id_info->setting_id;
+		CAM_DBG(CAM_ISP,
+			"Setting ID: %u, ctx: %u",
+			prepare_hw_data->setting_id, ife_mgr_ctx->ctx_index);
 	}
 		break;
 	default:
@@ -15514,6 +15631,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 	bool                                     frame_header_enable = false;
 	struct cam_isp_prepare_hw_update_data   *prepare_hw_data;
 	struct cam_isp_frame_header_info         frame_header_info;
+	struct cam_isp_foveation_info            sensor_foveation_info = {0};
 	struct list_head                        *res_list_ife_rd_tmp = NULL;
 	struct cam_isp_cmd_buf_count             cmd_buf_count = {0};
 	struct cam_isp_check_io_cfg_for_scratch  check_for_scratch = {0};
@@ -15616,6 +15734,12 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 			goto end;
 		}
 
+		if (ctx->settingid_check) {
+			sensor_foveation_info.settingbuffer_res_id = ctx->settingbuf_res_id;
+			sensor_foveation_info.settingbuffer_offset = ctx->settingbuf_offset;
+			sensor_foveation_info.foveation_en = true;
+		}
+
 		/* get IO buffers */
 		if (ctx->base[i].hw_type == CAM_ISP_HW_TYPE_VFE ||
 				ctx->base[i].hw_type == CAM_ISP_HW_TYPE_VIFE)
@@ -15630,7 +15754,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 				fill_ife_fence,
 				CAM_ISP_HW_TYPE_VFE, &frame_header_info,
 				&check_for_scratch,
-				ctx->flags.slave_metadata_en);
+				ctx->flags.slave_metadata_en, &sensor_foveation_info);
 		else if (ctx->base[i].hw_type == CAM_ISP_HW_TYPE_SFE)
 			rc = cam_isp_add_io_buffers(
 				hw_mgr->mgr_common.img_iommu_hdl,
@@ -15643,7 +15767,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 				fill_sfe_fence,
 				CAM_ISP_HW_TYPE_SFE, &frame_header_info,
 				&check_for_scratch,
-				ctx->flags.slave_metadata_en);
+				ctx->flags.slave_metadata_en, &sensor_foveation_info);
 		if (rc) {
 			CAM_ERR(CAM_ISP,
 				"Failed in io buffers, i=%d, rc=%d hw_type=%s",
@@ -16931,6 +17055,11 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			break;
 		case CAM_HW_MGR_CMD_GET_CSID_CID_INFO:
 			rc = cam_ife_hw_mgr_get_csid_cid_info(ctx, isp_hw_cmd_args);
+			break;
+		case CAM_ISP_HW_MGR_GET_FOVEATION_INFO:
+			isp_hw_cmd_args->u.fov_info.foveation_en = ctx->settingid_check;
+			isp_hw_cmd_args->u.fov_info.setting_size = ctx->setting_size;
+			isp_hw_cmd_args->u.fov_info.settingbuf_res_id = ctx->settingbuf_res_id;
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "Invalid HW mgr command:0x%x",
