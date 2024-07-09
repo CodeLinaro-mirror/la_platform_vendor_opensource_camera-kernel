@@ -5607,7 +5607,7 @@ static int __cam_isp_ctx_flush_req(struct cam_context *ctx,
 	list_for_each_entry_safe(req, req_temp, &flush_list, list) {
 		req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 		for (i = 0; i < req_isp->num_fence_map_out; i++) {
-			if (req_isp->fence_map_out[i].sync_id != -1) {
+			if (req_isp->fence_map_out[i].sync_id != -1 && !ctx_isp->ul_path_en) {
 				CAM_DBG(CAM_ISP, "Flush req 0x%llx, fence %d ctx:%u",
 					req->request_id,
 					req_isp->fence_map_out[i].sync_id, ctx->ctx_id);
@@ -5623,7 +5623,8 @@ static int __cam_isp_ctx_flush_req(struct cam_context *ctx,
 						"signal fence %d failed ctx:%u", tmp, ctx->ctx_id);
 				}
 				req_isp->fence_map_out[i].sync_id = -1;
-			}
+			} else
+				req_isp->fence_map_out[i].sync_id = -1;
 		}
 		req_isp->reapply_type = CAM_CONFIG_REAPPLY_NONE;
 		req_isp->cdm_reset_before_apply = false;
@@ -8252,8 +8253,6 @@ done:
 					rc, ctx->ctx_id);
 		}
 	}
-
-	cam_isp_ctx_ul_fastpath_retrieve_results(ctx, NULL, NULL);
 
 end:
 	return rc;
