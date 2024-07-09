@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-mapping.h>
@@ -326,7 +327,49 @@ static int inline cam_subdev_list_cmp(struct cam_subdev *entry_1, struct cam_sub
 		return 0;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+#if (LINUX_VERSION_CODE) >= (KERNEL_VERSION(5, 18, 0))
+void cam_smmu_util_iommu_custom(struct device *dev,
+	dma_addr_t discard_start, size_t discard_length)
+{
+	return;
+}
+
+int cam_req_mgr_ordered_list_cmp(void *priv,
+	const struct list_head *head_1, const struct list_head *head_2)
+{
+	return cam_subdev_list_cmp(list_entry(head_1, struct cam_subdev, list),
+		list_entry(head_2, struct cam_subdev, list));
+}
+
+int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
+{
+    struct iosys_map mapping;
+
+	int error_code = dma_buf_vmap(dmabuf, &mapping);
+
+	if (error_code) {
+		*vaddr = 0;
+    } else {
+        *vaddr = (mapping.is_iomem) ?
+            (uintptr_t)mapping.vaddr_iomem :
+            (uintptr_t)mapping.vaddr;
+        CAM_DBG(CAM_MEM,
+                "dmabuf=%p, *vaddr=%p, is_iomem=%d, vaddr_iomem=%p,vaddr=%p",
+                dmabuf, *vaddr, mapping.is_iomem, mapping.vaddr_iomem,
+                mapping.vaddr);
+    }
+
+	return error_code;
+}
+
+void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
+{
+	struct iosys_map mapping = IOSYS_MAP_INIT_VADDR(vaddr);
+
+	dma_buf_vunmap(dmabuf, &mapping);
+}
+
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
 void cam_smmu_util_iommu_custom(struct device *dev,
 	dma_addr_t discard_start, size_t discard_length)
 {
@@ -361,13 +404,6 @@ void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
 	dma_buf_vunmap(dmabuf, &mapping);
 }
 
-int cam_get_ddr_type(void)
-{
-	/* We assume all chipsets running kernel version 5.15+
-	 * to be using only DDR5 based memory.
-	 */
-	return DDR_TYPE_LPDDR5;
-}
 #else
 void cam_smmu_util_iommu_custom(struct device *dev,
 	dma_addr_t discard_start, size_t discard_length)
@@ -405,10 +441,5 @@ int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
 {
 	dma_buf_vunmap(dmabuf, vaddr);
-}
-
-int cam_get_ddr_type(void)
-{
-	return of_fdt_get_ddrtype();
 }
 #endif
