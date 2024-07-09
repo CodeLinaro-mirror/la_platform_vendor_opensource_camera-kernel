@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_SENSOR_DEV_H_
@@ -130,4 +131,8 @@ int cam_sensor_driver_init(void);
  */
 void cam_sensor_driver_exit(void);
 
+/**
+ * @brief : API to remove SENSOR I2C component
+ */
+void cam_sensor_i2c_driver_remove(struct i2c_client *client);
 #endif /* _CAM_SENSOR_DEV_H_ */

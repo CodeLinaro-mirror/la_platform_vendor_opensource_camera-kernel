@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -9,6 +10,7 @@
 #include "cam_flash_core.h"
 #include "cam_common_util.h"
 #include "camera_main.h"
+#include "cam_compat.h"
 
 static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 		void *arg, struct cam_flash_private_soc *soc_private)
@@ -744,11 +746,9 @@ static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
 	return rc;
 }
 
-static int32_t cam_flash_i2c_driver_remove(struct i2c_client *client)
+void cam_flash_i2c_driver_remove(struct i2c_client *client)
 {
 	component_del(&client->dev, &cam_flash_i2c_component_ops);
-
-	return 0;
 }
 
 MODULE_DEVICE_TABLE(of, cam_flash_dt_match);
@@ -778,7 +778,7 @@ static const struct i2c_device_id i2c_id[] = {
 struct i2c_driver cam_flash_i2c_driver = {
 	.id_table = i2c_id,
 	.probe  = cam_flash_i2c_driver_probe,
-	.remove = cam_flash_i2c_driver_remove,
+	.remove = cam_flash_i2c_driver_remove_wrapper,
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = FLASH_DRIVER_I2C,
