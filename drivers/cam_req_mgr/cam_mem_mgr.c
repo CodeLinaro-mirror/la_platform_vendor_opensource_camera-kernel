@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -482,11 +482,14 @@ static int cam_mem_mgr_get_dma_heaps(void)
 		tbl.system_uncached_heap = NULL;
 		goto put_heaps;
 	}
-
+ #if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+	tbl.secure_display_heap = dma_heap_find("system-secure");
+ #else
 	tbl.secure_display_heap = dma_heap_find("qcom,display");
+ #endif
 	if (IS_ERR_OR_NULL(tbl.secure_display_heap)) {
 		rc = PTR_ERR(tbl.secure_display_heap);
-		CAM_ERR(CAM_MEM, "qcom,display heap not found, rc=%d",
+		CAM_ERR(CAM_MEM, "qcom,display or system-secure heap not found, rc=%d",
 			rc);
 		tbl.secure_display_heap = NULL;
 		goto put_heaps;
