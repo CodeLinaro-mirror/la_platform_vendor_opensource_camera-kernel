@@ -217,6 +217,11 @@ static int cam_icp_subdev_close_internal(struct v4l2_subdev *sd,
 		goto end;
 	}
 
+	if(icp_dev->open_cnt != 0){
+		CAM_ERR(CAM_ICP, "icp_dev.open_cnt %d",icp_dev->open_cnt);
+		icp_dev->open_cnt = 0;
+	}
+
 	rc = cam_node_shutdown(node);
 	if (rc < 0) {
 		CAM_ERR(CAM_ICP, "device[%s] HW close failed",
