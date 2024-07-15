@@ -3617,7 +3617,7 @@ static int __cam_isp_ctx_epoch_in_applied(struct cam_isp_context *ctx_isp,
 	__cam_isp_ctx_send_sof_timestamp(ctx_isp, request_id,
 		sof_event_status);
 
-	if ((request_id > 0) && (sof_event_status == CAM_REQ_MGR_SOF_EVENT_SUCCESS)) {
+	if (request_id > 0) {
 		req_isp->sof_timestamp_val = ctx_isp->sof_timestamp_val;
 		req_isp->boot_timestamp = ctx_isp->boot_timestamp;
 		CAM_DBG(CAM_ISP,
@@ -3822,6 +3822,15 @@ static int __cam_isp_ctx_epoch_in_bubble_applied(
 	ctx_isp->active_req_cnt++;
 	CAM_DBG(CAM_ISP, "move request %lld to active list(cnt = %d) ctx %u",
 		req->request_id, ctx_isp->active_req_cnt);
+
+	if (req->request_id > 0) {
+		req_isp->sof_timestamp_val = ctx_isp->sof_timestamp_val;
+		req_isp->boot_timestamp = ctx_isp->boot_timestamp;
+		CAM_DBG(CAM_ISP,
+			"ctx:%u request id:%lld frame number:%lld SOF time stamp:0x%llx boot time stamp:0x%llx",
+			ctx->ctx_id, req->request_id, ctx_isp->frame_id,
+			ctx_isp->sof_timestamp_val, ctx_isp->boot_timestamp);
+	}
 
 	if (!req_isp->bubble_report) {
 		if (req->request_id > ctx_isp->reported_req_id) {
@@ -6873,6 +6882,15 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_applied(
 	CAM_DBG(CAM_ISP, "move request %lld to active list(cnt = %d) ctx:%d",
 			req->request_id, ctx_isp->active_req_cnt, ctx->ctx_id);
 
+	if (req->request_id > 0) {
+		req_isp->sof_timestamp_val = ctx_isp->sof_timestamp_val;
+		req_isp->boot_timestamp = ctx_isp->boot_timestamp;
+		CAM_DBG(CAM_ISP,
+			"ctx:%u request id:%lld frame number:%lld SOF time stamp:0x%llx boot time stamp:0x%llx",
+			ctx->ctx_id, req->request_id, ctx_isp->frame_id,
+			ctx_isp->sof_timestamp_val, ctx_isp->boot_timestamp);
+	}
+
 	if (!req_isp->bubble_report) {
 		if (req->request_id > ctx_isp->reported_req_id) {
 			request_id = req->request_id;
@@ -7221,8 +7239,19 @@ apply:
 		__cam_isp_ctx_notify_trigger_util(CAM_TRIGGER_POINT_SOF, ctx_isp, req->request_id,
 			rup_event_data->res_id, rup_event_data->timestamp);
 
-		req = list_first_entry(&ctx->active_req_list, struct cam_ctx_request, list);
-		req_isp = (struct cam_isp_ctx_req *) req->req_priv;
+		/*
+		 * Get the req again from active_req_list in case
+		 * the active req cnt is 2.
+		 */
+		list_for_each_entry(req, &ctx->active_req_list, list) {
+			req_isp = (struct cam_isp_ctx_req *) req->req_priv;
+			if (req->request_id > ctx_isp->reported_req_id) {
+				CAM_DBG(CAM_ISP,
+					"ctx %d reported_req_id %lld update to %lld",
+					ctx->ctx_id, ctx_isp->reported_req_id, req->request_id);
+				break;
+			}
+		}
 		__cam_isp_ctx_send_sof_timestamp(ctx_isp, req->request_id,
 			CAM_REQ_MGR_SOF_EVENT_SUCCESS);
 
