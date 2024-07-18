@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_COMPAT_H_
@@ -47,6 +47,13 @@
 #include <soc/qcom/trusted_camera_driver.h>
 #endif
 
+#ifdef CONFIG_TZ_DCP_API_VER_2
+#include <linux/smci_clientenv.h>
+#include <smci/interface/smci_opener.h>
+#include <linux/ctrusted_camera_driver.h>
+#include <linux/trusted_camera_driver.h>
+#endif
+
 #if KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE
 MODULE_IMPORT_NS(DMA_BUF);
 #endif
@@ -73,10 +80,21 @@ int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr);
 void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr);
 void cam_smmu_util_iommu_custom(struct device *dev,
 	dma_addr_t discard_start, size_t discard_length);
-#ifdef CONFIG_SECURE_CAMERA_V3
+
+#if defined CONFIG_SECURE_CAMERA_V3 || defined CONFIG_TZ_DCP_API_VER_2
 int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info);
+#endif
+
+#ifdef CONFIG_SECURE_CAMERA_V3
 int32_t cam_convert_hw_id_to_secure_hw_type(uint32_t hw_id);
 #endif
+
+#ifdef CONFIG_TZ_DCP_API_VER_2
+int cam_convert_hw_idx_to_ife_hw_type(int hw_idx,
+	uint32_t num_ife, uint32_t num_ife_lite);
+int32_t cam_convert_hw_id_to_secure_cam_hw_type(uint32_t hw_id);
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
 int cam_req_mgr_ordered_list_cmp(void *priv,
 	const struct list_head *head_1, const struct list_head *head_2);

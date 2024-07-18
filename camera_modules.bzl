@@ -11,6 +11,8 @@ def _define_module(target, variant):
     if target == "niobe":
         deps.extend([
 		"//vendor/qcom/opensource/dsp-kernel:{}_frpc-adsprpc".format(tv),
+		"//vendor/qcom/opensource/securemsm-kernel:smcinvoke_kernel_headers",
+		"//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
         ])
     ddk_module(
         name = "{}_camera".format(tv),

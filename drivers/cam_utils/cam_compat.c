@@ -87,7 +87,7 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 {
 	int rc = 0;
 
-#ifdef CONFIG_SECURE_CAMERA_V3
+#if defined CONFIG_SECURE_CAMERA_V3 || defined CONFIG_TZ_DCP_API_VER_2
 	if (!is_shutdown) {
 		struct smci_object client_env, sc_object;
 		struct tc_driver_sensor_info params = {0};
@@ -114,7 +114,7 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 		params.phy_lane_sel_mask = csiphy_dev->csiphy_info[offset].csiphy_cpas_cp_reg_mask;
 		params.protect = protect ? 1 : 0;
 
-		CAM_DBG(CAM_UTIL, "phy_sel_m: %d protect: %d",
+		CAM_DBG(CAM_UTIL, "phy_sel_m: %lld protect: %d",
 					params.phy_lane_sel_mask,
 					params.protect);
 
@@ -162,7 +162,8 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 
 	return rc;
 }
-#ifdef CONFIG_SECURE_CAMERA_V3
+
+#if defined CONFIG_SECURE_CAMERA_V3 || defined CONFIG_TZ_DCP_API_VER_2
 int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info)
 {
 	int rc = 0;
@@ -180,7 +181,7 @@ int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info)
 		goto release_client;
 	}
 
-	rc = trusted_camera_driver_dynamic_configure_ports(sc_object, sec_unsec_port_info, 2);
+	rc = trusted_camera_driver_dynamic_configure_ports_v2(sc_object, sec_unsec_port_info, 2);
 	if (rc) {
 		CAM_ERR(CAM_ISP,
 			"trusted_camera_driver_dynamic_configure_ports failed, rc: %d", rc);
@@ -203,7 +204,9 @@ release_client:
 
 	return rc;
 }
+#endif
 
+#ifdef CONFIG_SECURE_CAMERA_V3
 int32_t cam_convert_hw_id_to_secure_hw_type(uint32_t hw_id)
 {
 	uint32_t hw_type = -1;
@@ -247,6 +250,44 @@ int32_t cam_convert_hw_id_to_secure_hw_type(uint32_t hw_id)
 		break;
 	case CAM_ISP_IFE9_LITE_HW:
 		hw_type = ITRUSTEDCAMERADRIVER_IFE_LITE_9;
+		break;
+	default:
+		CAM_ERR(CAM_ISP, "Invalid hw_id 0x%x", hw_id);
+		break;
+	}
+	return hw_type;
+}
+#endif
+
+#ifdef CONFIG_TZ_DCP_API_VER_2
+int cam_convert_hw_idx_to_ife_hw_type(int hw_idx,
+	uint32_t num_ife, uint32_t num_ife_lite)
+{
+	if (hw_idx < num_ife)
+		return ITRUSTEDCAMERADRIVER_IFE;
+	else if (hw_idx < num_ife + num_ife_lite)
+		return ITRUSTEDCAMERADRIVER_IFE_LITE;
+
+	CAM_ERR(CAM_ISP, "hw idx %d out-of-bounds", hw_idx);
+	return -EINVAL;
+}
+
+int32_t cam_convert_hw_id_to_secure_cam_hw_type(uint32_t hw_id)
+{
+	uint32_t hw_type = -1;
+
+	switch (hw_id) {
+	case 0:
+		hw_type = ITRUSTEDCAMERADRIVER_IFE;
+		break;
+	case 1:
+		hw_type = ITRUSTEDCAMERADRIVER_IFE_LITE;
+		break;
+	case 2:
+		hw_type = ITRUSTEDCAMERADRIVER_IPE;
+		break;
+	case 3:
+		hw_type = ITRUSTEDCAMERADRIVER_TFE;
 		break;
 	default:
 		CAM_ERR(CAM_ISP, "Invalid hw_id 0x%x", hw_id);

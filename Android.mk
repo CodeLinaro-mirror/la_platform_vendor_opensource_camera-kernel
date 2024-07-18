@@ -5,6 +5,8 @@ LOCAL_PATH := $(call my-dir)
 # Path to DLKM make scripts
 DLKM_DIR := $(TOP)/device/qcom/common/dlkm
 
+SMCINVOKE_DLKM_BOARDS := niobe
+
 ifeq ($(TARGET_BOARD_PLATFORM), niobe)
 	LOCAL_MODULE_DDK_BUILD := true
 endif
