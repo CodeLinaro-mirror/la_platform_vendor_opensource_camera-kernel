@@ -11,6 +11,7 @@
 #include "cam_irq_controller.h"
 #include "cam_vfe_bus.h"
 #include "cam_vfe_hw_intf.h"
+#include "cam_ife_hw_mgr.h"
 
 #define CAM_VFE_BUS_VER3_MAX_SUB_GRPS        6
 #define CAM_VFE_BUS_VER3_PERF_COUNT          8
@@ -276,6 +277,10 @@ struct cam_vfe_bus_ver3_vfe_out_data {
 	bool                             primary_port_en;
 	uint32_t   stored_irq_masks[CAM_VFE_BUS_VER3_MAX_STORED_MASKS][CAM_VFE_BUS_VER3_IRQ_MAX];
 	bool                             is_isr_en;
+	struct {
+		void *data;
+		cam_isp_ctx_update_fastpath_result handler_cb;
+	} fastpath_notifier;
 };
 
 /*
