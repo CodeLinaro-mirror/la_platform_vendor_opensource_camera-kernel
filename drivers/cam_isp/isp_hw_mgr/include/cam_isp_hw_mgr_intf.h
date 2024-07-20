@@ -600,11 +600,13 @@ struct cam_isp_primary_port_info {
  *
  * @brief:              Structure to pass fastpath result notifier
  *
+ * @res:                ISP resource node
  * @data:               Priv data expected by the notifier
  * @handler_cb:         Fastpath notifier handler
  *
  */
 struct cam_isp_hw_fast_result_notifier_cfg {
+	struct cam_isp_resource_node *res;
 	void *data;
 	cam_isp_ctx_update_fastpath_result handler_cb;
 };

@@ -1900,12 +1900,12 @@ static void cam_ife_hw_mgr_print_acquire_info(
 	CAM_CONVERT_TIMESTAMP_FORMAT(hw_mgr_ctx->ts, hrs, min, sec, ms);
 
 	CAM_INFO(CAM_ISP,
-		"%llu:%llu:%llu.%llu Acquired %s with [%u pix] [%u pd] [%u rdi] ports for ctx:%u per_port_enabled :%d sensor:%d",
+		"%llu:%llu:%llu.%llu Acquired %s with [%u pix] [%u pd] [%u rdi] ports for ctx:%u per_port_enabled :%d sensor:%d ul: %d",
 		hrs, min, sec, ms,
 		log_info,
 		num_pix_port, num_pd_port, num_rdi_port,
 		hw_mgr_ctx->ctx_index, hw_mgr_ctx->flags.per_port_en,
-		hw_mgr_ctx->sensor_id);
+		hw_mgr_ctx->sensor_id, hw_mgr_ctx->flags.is_ul_path);
 
 	return;
 
@@ -13484,6 +13484,11 @@ static int cam_isp_blob_ife_process_primary_port_configs(
 	if (!hw_mgr_ctx->primary_port_info)
 		return -ENOMEM;
 
+	CAM_DBG(CAM_ISP,
+		"Num_ports: %u in ctx: %u single_primary: %s",
+		port_config->num_ports, hw_mgr_ctx->ctx_index,
+		CAM_BOOL_TO_YESNO(port_config->single_primary_for_all));
+
 	for (i = 0; i < port_config->num_ports; i++) {
 		grp_info = &port_config->port_info[i];
 		res_id = grp_info->res_id & 0xFF;
@@ -13492,6 +13497,21 @@ static int cam_isp_blob_ife_process_primary_port_configs(
 			CAM_ERR(CAM_ISP, "Comp group: %u already configured with a resource",
 				grp_info->comp_grp);
 			goto err;
+		}
+
+		if (cam_ife_hw_mgr_is_virtual_rdi_res(grp_info->res_id) &&
+			hw_mgr_ctx->flags.per_port_en) {
+			int32_t out_port;
+
+			out_port = cam_ife_hw_mgr_get_virtual_mapping_out_port(hw_mgr_ctx,
+				grp_info->res_id, true);
+			if (out_port < 0) {
+				CAM_ERR(CAM_ISP,
+					"ctx_idx:%d Failed vrdi mapping out_res:%d",
+					hw_mgr_ctx->ctx_index, grp_info->res_id);
+				goto err;
+			}
+			res_id = out_port & 0xFF;
 		}
 
 		if (res_id >= max_ife_out_res) {
@@ -13505,12 +13525,6 @@ static int cam_isp_blob_ife_process_primary_port_configs(
 		if (!isp_res) {
 			CAM_ERR(CAM_ISP,
 				"Left resource invalid for out resource: 0x%x", grp_info->res_id);
-			goto err;
-		}
-
-		if (isp_res->res_state != CAM_ISP_RESOURCE_STATE_RESERVED) {
-			CAM_ERR(CAM_ISP,
-				"Resource: 0x%x not in acquired state", grp_info->res_id);
 			goto err;
 		}
 
@@ -13530,6 +13544,8 @@ static int cam_isp_blob_ife_process_primary_port_configs(
 		hw_mgr_ctx->primary_port_info[hw_mgr_ctx->num_primary_ports].res_id =
 			grp_info->res_id;
 		hw_mgr_ctx->num_primary_ports++;
+		CAM_DBG(CAM_ISP, "Primary port: 0x%x configured in ctx: %u",
+			grp_info->res_id, hw_mgr_ctx->ctx_index);
 
 		if (port_config->single_primary_for_all)
 			break;
@@ -16921,35 +16937,56 @@ static int cam_ife_mgr_set_fast_path_notifier(
 	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx,
 	struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
 {
-	int i, rc = 0;
-	struct cam_hw_intf *hw_if = NULL;
+	int rc = 0, out_port, res_id;
 	struct cam_isp_hw_fast_result_notifier_cfg notifier_cfg = {0};
+	struct cam_isp_hw_mgr_res *isp_out_res;
+	struct cam_isp_resource_node *isp_res;
 
 	/* Check for fastpath */
+	if (!hw_mgr_ctx->flags.is_ul_path)
+		return -EAGAIN;
+
 	notifier_cfg.data = isp_hw_cmd_args->cmd_data;
 	notifier_cfg.handler_cb = isp_hw_cmd_args->u.fastpath_result_handler;
 
-	for (i = 0; i < hw_mgr_ctx->num_base; i++) {
-		if (hw_mgr_ctx->base[i].hw_type == CAM_ISP_HW_TYPE_VFE)
-			hw_if = g_ife_hw_mgr.ife_devices[hw_mgr_ctx->base[i].idx]->hw_intf;
-		else if (hw_mgr_ctx->base[i].hw_type == CAM_ISP_HW_TYPE_SFE)
-			hw_if = g_ife_hw_mgr.sfe_devices[hw_mgr_ctx->base[i].idx]->hw_intf;
-		else
-			continue;
+	out_port = hw_mgr_ctx->primary_port_info[0].res_id;
+	res_id = out_port & 0xFF;
 
-		if (!hw_if) {
-			CAM_ERR_RATE_LIMIT(CAM_ISP, "hw_intf is null");
-			return -EINVAL;
-		}
+	if (cam_ife_hw_mgr_is_virtual_rdi_res(out_port) && hw_mgr_ctx->flags.per_port_en) {
+		int out_port_temp;
 
-		if (hw_if->hw_ops.process_cmd) {
-			rc = hw_if->hw_ops.process_cmd(hw_if->hw_priv,
-				CAM_ISP_HW_CMD_FAST_RESULT_NOTIFIER_CFG,
-				&notifier_cfg, sizeof(notifier_cfg));
-			if (rc)
-				goto end;
+		out_port_temp = cam_ife_hw_mgr_get_virtual_mapping_out_port(hw_mgr_ctx,
+			out_port, true);
+		if (out_port_temp < 0) {
+			CAM_ERR(CAM_ISP,
+				"ctx_idx:%d Failed vrdi mapping out_res:%d",
+				hw_mgr_ctx->ctx_index, res_id);
+			goto end;
 		}
+		res_id = out_port_temp & 0xFF;
 	}
+
+	if (res_id >= max_ife_out_res) {
+		CAM_ERR(CAM_ISP, "Invalid resource ID: 0x%x max supported: %u",
+			out_port, max_ife_out_res);
+		goto end;
+	}
+
+	isp_out_res = &hw_mgr_ctx->res_list_ife_out[res_id];
+	isp_res = isp_out_res->hw_res[0];
+	if (!isp_res) {
+		CAM_ERR(CAM_ISP,
+			"Left resource invalid for out resource: 0x%x", out_port);
+			goto end;
+	}
+
+	notifier_cfg.res = isp_res;
+	rc = isp_res->hw_intf->hw_ops.process_cmd(
+		isp_res->hw_intf->hw_priv,
+		CAM_ISP_HW_CMD_FAST_RESULT_NOTIFIER_CFG,
+		&notifier_cfg, sizeof(notifier_cfg));
+	if (rc)
+		goto end;
 
 end:
 	return rc;
