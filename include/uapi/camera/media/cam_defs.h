@@ -71,11 +71,17 @@
 #define MAX_SETTING_PACKETS                16
 #define MAX_IO_RESOURCES                   16
 
-#define BATCH_PACKET_TYPE_SETUP            0
-#define BATCH_PACKET_TYPE_UPDATE           1
-#define BATCH_PACKET_TYPE_UPDATE_RETREIVE           2
-#define BATCH_PACKET_TYPE_RETREIVE           3
+#define BATCH_PACKET_TYPE_SETUP_IOBUF               0
+#define BATCH_PACKET_TYPE_SETTING_UPDATE            1
+#define BATCH_PACKET_TYPE_SETTING_UPDATE_RETREIVE   2
+#define BATCH_PACKET_TYPE_RETREIVE                  3
 
+#define BUFFER_STATE_FREE         0
+#define BUFFER_STATE_INUSE        1
+
+#define BATCH_PACKET_RESULT_SUCCESS       0
+#define BATCH_PACKET_RESULT_BUFFER_ERROR  1
+#define BATCH_PACKET_RESULT_DEVICE_ERROR  2
 
 /**
  * enum flush_type_t - Identifies the various flush types
@@ -533,6 +539,32 @@ struct packet_info {
 };
 
 /**
+ * struct producer_queue - Structure for packet info in Ultra lite path
+ *
+ * @resource_type:             resource type
+ * @stream_hdl   :             buffer handle
+ * @offset       :             offset in buffer
+ */
+struct producer_queue {
+	__u32 resource_type;
+	__s32 stream_hdl;
+	__u32 offset;
+};
+
+/**
+ * struct resource_info - Structure for packet info in Ultra lite path
+ *
+ * @resource_type:            resource type
+ * @num_hdls     :            number of buffer handles
+ * @buf_hdl      :            Buffers registered for resource
+ */
+struct resource_info {
+	__u32 resource_type;
+	__u32 num_hdls;
+	__s32 buf_hdl[MAX_IO_PACKETS];
+};
+
+/**
  * struct port_pattern_period - Structure for packet pattern and period in Ultra lite path
  *
  * @resource_type:              resource type
@@ -562,16 +594,16 @@ struct setting_pattern_period {
  *
  * @num_buffer:                   Number of buffers
  * @setting_id:                   setting id
- * @status:                       result status
- * @sof_timestamp:                Captured time stamp value at sof hw event
- * @boot_timestamp:               Boot time stamp for a given req_id
+ * @status:                       result status for all handles
+ * @sof_timestamp:                Captured time stamp value at sof hw event for primary port
+ * @boot_timestamp:               Boot time stamp for a given req_id for primary port
  * @buffer_hdl:                   Handle of buffer
  */
 struct response_buffer {
 	__u32 num_buffer;
 	__u32 setting_id;
-	__u32 status;
-	__u32 reserve;
+	__u64 reserve;
+	__u32 status[MAX_IO_RESOURCES];
 	__u64 sof_timestamp;
 	__u64 boot_timestamp;
 	__s32 buffer_hdl[MAX_IO_RESOURCES];
@@ -580,24 +612,32 @@ struct response_buffer {
 /**
  * struct ul_cam_packet - Structure for Ultra lite path packet
  *
- * @batch_packet_type:                             Packet type. ie: SETUP or UPDATE
- * @link_hdl:                                      Link handle
- * @number_devices:                                number of devices
- * @num_setting_packets:                           number of setting packets per device
- * @update_port_patern_period:                     Flag to show if port pattern is updated
- * @bubble_handling:                               Type of bubble handling, (SETUP packet only)
- * @is_setting_sticky:                             Flag to show if settings are sticky
- * @num_responses:                                 Number of results
- * @device_type:                                   typeOfDevices
- * @device_hdl:                                    Device handles
- * @num_io_packets:                                num of IO packets per device
- * @io_packet:                                     IO packets per device (SETUP packet Only)
- * @setting_packets:                               Setting packets per device
- * @port_enable_pattern_period:                    port enable pattern period per device
- * @setting_pattern_period:                        setting pattern period per device
- * @rsp:                                           Responses
+ * @version                                  Version detail of ul_cam_packet
+ * @batch_packet_type:                       Packet type. ie: SETUP_IOBUF, SETTING_UPDATE,
+ *                                           SETTING_UPDATE_RETREIVE or RETREIVE
+ * @link_hdl:                                Link handle
+ * @number_devices:                          number of devices applicable for packet
+ * @num_setting_packets:                     number of setting packets containig cmd per device
+ * @update_port_patern_period:               Flag to show if port pattern is updated
+ * @bubble_handling:                         Type of bubble handling, (SETUP packet only)
+ * @is_setting_sticky:                       Flag to show if settings are sticky
+ * @num_responses:                           Number of results
+ * @device_type:                             type of Devices
+ * @device_hdl:                              Device handles
+ * @num_io_packets:                          num of IO packets per device (SETUP packet Only)
+ * @num_res:                                 number of IO resources (Output)
+ * @num_produce_q:                           count of producer queues (Setup packet only)
+ * @res_info:                                information of resource registered(output)
+ * @producer_q:                              producer_q data
+ * @io_packet:                               IO packets per device (SETUP packet Only)
+ * @setting_packets:                         Setting packets per device
+ * @port_enable_pattern_period:              port enable pattern period per device
+ * @setting_pattern_period:                  setting pattern period per device
+ * @rsp:                                     Responses
+
  */
 struct  ul_cam_packet {
+	__u32                         version;
 	__u32                         batch_packet_type;
 	__s32                         link_hdl;
 	__u32                         number_devices;
@@ -609,6 +649,11 @@ struct  ul_cam_packet {
 	__u32                         device_type[UL_MAX_DEVICES];
 	__s32                         device_hdl[UL_MAX_DEVICES];
 	__u32                         num_io_packets[UL_MAX_DEVICES];
+	__u32                         num_res;
+	__u32                         num_produce_q;
+	__u32                         reserved;
+	struct resource_info          res_info[MAX_IO_RESOURCES];
+	struct producer_queue         producer_q[MAX_IO_RESOURCES];
 	struct packet_info            io_packet[UL_MAX_DEVICES][MAX_IO_PACKETS];
 	struct packet_info            setting_packets[UL_MAX_DEVICES][MAX_SETTING_PACKETS];
 	struct port_pattern_period    port_enable_pattern_period[UL_MAX_DEVICES][MAX_IO_RESOURCES];
@@ -874,7 +919,7 @@ struct cam_ubwc_config_v2 {
 	__u32   api_version;
 	__u32   num_ports;
 	struct cam_ubwc_plane_cfg_v2
-	   ubwc_plane_cfg[1][CAM_PACKET_MAX_PLANES - 1];
+		ubwc_plane_cfg[1][CAM_PACKET_MAX_PLANES - 1];
 };
 
 /**

@@ -9120,11 +9120,11 @@ static void __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 		if (req_isp->hw_update_data.virtual_frame_en &&
 			i == req_isp->hw_update_data.primary_port_entry_index)
 			continue;
+		response_buffers[idx].status[num_out] = 0x0;
 		response_buffers[idx].buffer_hdl[num_out++] =
 			req_isp->fence_map_out[i].buf_handle[0];
 	}
 
-	response_buffers[idx].status = 0x0;
 	response_buffers[idx].sof_timestamp = timestamp;
 	response_buffers[idx].boot_timestamp = boot_timestamp;
 	response_buffers[idx].num_buffer = num_out;
