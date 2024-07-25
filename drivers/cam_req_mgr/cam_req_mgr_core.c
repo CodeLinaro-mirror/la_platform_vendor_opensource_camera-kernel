@@ -3957,7 +3957,7 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd) {
 		CAM_ERR(CAM_CRM, "Link 0x%x is not in ready state", ul_packet->link_hdl);
 		return -EINVAL;
 	}
-	if (ul_packet->batch_packet_type == BATCH_PACKET_TYPE_SETUP) {
+	if (ul_packet->batch_packet_type == BATCH_PACKET_TYPE_SETUP_IOBUF) {
 		if (link->ul_state != CAM_CRM_UL_LINK_STATE_INIT){
 			CAM_ERR(CAM_CRM, "Link 0x%x is not in init state", ul_packet->link_hdl);
 			return -EINVAL;
@@ -4009,8 +4009,8 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd) {
 			}
 			link->ul_state = CAM_CRM_UL_LINK_STATE_READY;
 		}
-	}else if (ul_packet->batch_packet_type == BATCH_PACKET_TYPE_UPDATE ||
-		ul_packet->batch_packet_type == BATCH_PACKET_TYPE_UPDATE_RETREIVE) {
+	}else if (ul_packet->batch_packet_type == BATCH_PACKET_TYPE_SETTING_UPDATE ||
+		ul_packet->batch_packet_type == BATCH_PACKET_TYPE_SETTING_UPDATE_RETREIVE) {
 		if (link->ul_state != CAM_CRM_UL_LINK_STATE_READY){
 			CAM_ERR(CAM_CRM, "Link 0x%x is not in ready state", ul_packet->link_hdl);
 			return -EINVAL;
@@ -4049,7 +4049,7 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd) {
 		link->is_setting_sticky = ul_packet->is_setting_sticky;
 		link->is_setting_period_valid = true;
 	}
-	if (ul_packet->batch_packet_type == BATCH_PACKET_TYPE_UPDATE_RETREIVE ||
+	if (ul_packet->batch_packet_type == BATCH_PACKET_TYPE_SETTING_UPDATE_RETREIVE ||
 		ul_packet->batch_packet_type == BATCH_PACKET_TYPE_RETREIVE) {
 		if (link->ul_state != CAM_CRM_UL_LINK_STATE_READY){
 			CAM_ERR(CAM_CRM, "Link 0x%x is not in ready state", ul_packet->link_hdl);
