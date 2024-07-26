@@ -56,24 +56,24 @@ static struct cam_camnoc_irq_err
 	},
 	{
 		.irq_type = CAM_CAMNOC_HW_IRQ_IFE_UBWC_ENCODE_ERROR,
-		.enable = true,
+		.enable = false,
 		.sbm_port = 0x20, /* SBM_FAULTINSTATUS0_LOW_PORT5_MASK */
 		.err_enable = {
 			.access_type = CAM_REG_TYPE_READ_WRITE,
-			.enable = true,
+			.enable = false,
 			.offset = 0x67A0, /* CAM_NOC_RT_2_NIU_ENCERREN_LOW */
 			.value = 0xF,
 		},
 		.err_status = {
 			.access_type = CAM_REG_TYPE_READ,
-			.enable = true,
+			.enable = false,
 			.offset = 0x6790, /* CAM_NOC_RT_2_NIU_ENCERRSTATUS_LOW */
 		},
 		.err_clear = {
 			.access_type = CAM_REG_TYPE_WRITE,
-			.enable = true,
+			.enable = false,
 			.offset = 0x6798, /* CAM_NOC_RT_2_NIU_ENCERRCLR_LOW */
-			.value = 0X1,
+			.value = 0x1,
 		},
 	},
 	{
@@ -95,27 +95,27 @@ static struct cam_camnoc_irq_err
 			.access_type = CAM_REG_TYPE_WRITE,
 			.enable = true,
 			.offset = 0x5F18, /* CAM_NOC_NRT_1_NIU_DECERRCLR_LOW */
-			.value = 0X1,
+			.value = 0x1,
 		},
 	},
 	{
 		.irq_type = CAM_CAMNOC_HW_IRQ_IPE_UBWC_ENCODE_ERROR,
-		.enable = true,
+		.enable = false,
 		.sbm_port = 0x10, /* SBM_FAULTINSTATUS0_LOW_PORT4_MASK */
 		.err_enable = {
 			.access_type = CAM_REG_TYPE_READ_WRITE,
-			.enable = true,
+			.enable = false,
 			.offset = 0x61A0, /* CAM_NOC_NRT_2_NIU_ENCERREN_LOW */
-			.value = 0XF,
+			.value = 0xF,
 		},
 		.err_status = {
 			.access_type = CAM_REG_TYPE_READ,
-			.enable = true,
+			.enable = false,
 			.offset = 0x6190, /* CAM_NOC_NRT_2_NIU_ENCERRSTATUS_LOW */
 		},
 		.err_clear = {
 			.access_type = CAM_REG_TYPE_WRITE,
-			.enable = true,
+			.enable = false,
 			.offset = 0x6198, /* CAM_NOC_NRT_2_NIU_ENCERRCLR_LOW */
 			.value = 0x1,
 		},
