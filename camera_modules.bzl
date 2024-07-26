@@ -8,7 +8,7 @@ def _define_module(target, variant):
         ":camera_headers",
         "//msm-kernel:all_headers",
     ]
-    if target == "neo":
+    if target == "neo-la":
         deps.extend([
         ])
     ddk_module(
