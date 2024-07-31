@@ -8464,6 +8464,43 @@ static int cam_ife_mgr_acquire_get_unified_structure(
 	return 0;
 }
 
+static int cam_isp_alloc_mem_for_scratchbuf(void *hw_mgr_priv, struct cam_ife_hw_mgr_ctx *ctx)
+{
+	struct cam_ife_hw_mgr  *hw_mgr;
+	struct cam_mem_mgr_request_desc alloc_cmd;
+	struct cam_mem_mgr_memory_desc alloc_out;
+	int rc = -EINVAL;
+
+	memset(&alloc_cmd, 0, sizeof(alloc_cmd));
+	memset(&alloc_out, 0, sizeof(alloc_out));
+
+	hw_mgr = (struct cam_ife_hw_mgr *)hw_mgr_priv;
+	alloc_cmd.size = SZ_16M;
+	alloc_cmd.align = 0;
+	alloc_cmd.smmu_hdl = hw_mgr->mgr_common.img_iommu_hdl;
+	alloc_cmd.flags = CAM_MEM_FLAG_HW_READ_WRITE;
+
+	rc = cam_mem_mgr_request_mem(&alloc_cmd, &alloc_out);
+	if (rc) {
+		CAM_ERR(CAM_ISP,
+			"Failed to allocate scratch buffer for sensor foveation ctx: %u, rc: %u",
+			ctx->ctx_index, rc);
+		return rc;
+	}
+
+	ctx->scratch_buf_info.handle = alloc_out.mem_handle;
+	ctx->scratch_buf_info.iova = alloc_out.iova;
+	ctx->scratch_buf_info.kmdvaddr = alloc_out.kva;
+	ctx->scratch_buf_info.size = alloc_out.len;
+
+	CAM_DBG(CAM_ISP,
+		"Scratch buffer allocated,ctx:  %u, hdl : 0x%x, iova: %pK, kva: %pK, len: %u",
+		ctx->ctx_index, alloc_out.mem_handle, alloc_out.iova, alloc_out.kva,
+		alloc_out.len);
+
+	return rc;
+}
+
 /* entry function: acquire_hw */
 static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 {
@@ -11504,6 +11541,24 @@ static int cam_ife_hw_mgr_free_hw_ctx(
 	return 0;
 }
 
+static int cam_isp_release_mem_for_scratchbuf(void *hw_mgr_priv,
+	struct cam_ife_hw_mgr_ctx *ife_ctx)
+{
+	struct cam_ife_hw_mgr *hw_mgr;
+	struct cam_mem_mgr_memory_desc release_cmd;
+	int rc = -EINVAL;
+
+	hw_mgr = (struct cam_ife_hw_mgr *)hw_mgr_priv;
+	release_cmd.mem_handle = ife_ctx->scratch_buf_info.handle;
+	rc = cam_mem_mgr_release_mem(&release_cmd);
+	if (rc)
+		CAM_ERR(CAM_CDM,
+			"Failed to release scratch buffer for hw ctx: %u, rc %d",
+			ife_ctx->ctx_index, rc);
+
+	return rc;
+}
+
 static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 					void *release_hw_args)
 {
@@ -11613,6 +11668,8 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 	}
 
 	cam_ife_mgr_free_cdm_cmd(&ctx->cdm_cmd);
+	if (ctx->settingid_check)
+		cam_isp_release_mem_for_scratchbuf(hw_mgr_priv, ctx);
 
 	CAM_GET_TIMESTAMP(ctx->ts);
 	CAM_CONVERT_TIMESTAMP_FORMAT(ctx->ts, hrs, min, sec, ms);
@@ -15896,7 +15953,8 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 				sizeof(struct cam_cmd_buf_desc) *
 				prepare_hw_data->num_reg_dump_buf);
 		}
-
+		if (ctx->settingid_check)
+			cam_isp_alloc_mem_for_scratchbuf(hw_mgr_priv, ctx);
 		goto end;
 	} else {
 		prepare_hw_data->num_reg_dump_buf = prepare->num_reg_dump_buf;
@@ -16918,6 +16976,78 @@ static int cam_ife_hw_mgr_get_csid_cid_info(
 	return rc;
 }
 
+static int cam_ife_hw_mgr_scratch_buf_cfg(
+	struct cam_ife_hw_mgr  *hw_mgr,
+	struct cam_hw_cmd_args *hw_cmd_args)
+{
+	struct cam_ife_hw_mgr_ctx           *ctx;
+	struct cam_isp_hw_mgr_res           *hw_mgr_res;
+	struct cam_isp_resource_node        *res;
+	struct cam_hw_intf                  *hw_intf;
+	struct cam_vfe_scratch_buf_cfg_args  scratch_buf_cfg;
+	int rc = 0, i;
+	uint32_t path_res_id;
+	bool is_aup_updated = false;
+
+	ctx = (struct cam_ife_hw_mgr_ctx *)hw_cmd_args->ctxt_to_hw_map;
+	hw_mgr_res = &ctx->res_list_ife_out[ctx->settingbuf_res_id & 0xFF];
+
+	/* Configure scratch buffer for setting buffer res ID */
+	scratch_buf_cfg.iova = ctx->scratch_buf_info.iova;
+	scratch_buf_cfg.res_id = ctx->settingbuf_res_id;
+
+	for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
+		if (!hw_mgr_res->hw_res[i])
+			continue;
+
+		hw_intf = hw_mgr_res->hw_res[i]->hw_intf;
+		if (hw_intf->hw_ops.process_cmd) {
+			rc = hw_intf->hw_ops.process_cmd(
+				hw_intf->hw_priv,
+				CAM_ISP_HW_CMD_SCRATCH_BUF_CFG,
+				(void *)&scratch_buf_cfg,
+				sizeof(struct cam_vfe_scratch_buf_cfg_args));
+			if (rc)
+				CAM_ERR(CAM_ISP, "Scratch buffer programming failed, ctx: %u",
+					ctx->ctx_index);
+		}
+	}
+
+	/* Configure AUP */
+	path_res_id = cam_ife_hw_mgr_get_ife_csid_rdi_res_type(ctx->settingbuf_res_id);
+	list_for_each_entry(hw_mgr_res, &ctx->res_list_ife_csid, list) {
+		if (hw_mgr_res->res_type == CAM_ISP_RESOURCE_UNINT)
+			continue;
+
+		for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
+			if (!hw_mgr_res->hw_res[i] || (hw_mgr_res->hw_res[i]->res_state !=
+					CAM_ISP_RESOURCE_STATE_STREAMING))
+				continue;
+
+			res = hw_mgr_res->hw_res[i];
+
+			if ((res->res_type == CAM_ISP_RESOURCE_PIX_PATH) &&
+				(res->res_id == path_res_id)) {
+
+				hw_intf = res->hw_intf;
+				rc = hw_intf->hw_ops.process_cmd(
+					hw_intf->hw_priv,
+					CAM_ISP_HW_CMD_CSID_UPDATE_AUP,
+					(void *)&res->res_id,
+					sizeof(uint32_t));
+				if (rc)
+					CAM_ERR(CAM_ISP, "AUP Update failed, ctx: %u",
+						ctx->ctx_index);
+				is_aup_updated = true;
+				break;
+			}
+		}
+		if (is_aup_updated)
+			break;
+	}
+	return rc;
+}
+
 static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 {
 	int rc = 0;
@@ -17060,6 +17190,11 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			isp_hw_cmd_args->u.fov_info.foveation_en = ctx->settingid_check;
 			isp_hw_cmd_args->u.fov_info.setting_size = ctx->setting_size;
 			isp_hw_cmd_args->u.fov_info.settingbuf_res_id = ctx->settingbuf_res_id;
+			isp_hw_cmd_args->u.fov_info.scratch_buf_kva =
+				ctx->scratch_buf_info.kmdvaddr;
+			break;
+		case CAM_ISP_HW_MGR_UPDATE_SCRATCH_BUF_CFG:
+			rc = cam_ife_hw_mgr_scratch_buf_cfg(hw_mgr, hw_cmd_args);
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "Invalid HW mgr command:0x%x",

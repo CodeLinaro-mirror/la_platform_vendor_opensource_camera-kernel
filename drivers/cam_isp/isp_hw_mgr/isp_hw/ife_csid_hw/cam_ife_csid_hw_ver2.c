@@ -5951,6 +5951,37 @@ static int cam_ife_csid_init_config_update(
 	return 0;
 }
 
+static int cam_ife_csid_ver2_update_aup(struct cam_ife_csid_ver2_hw *csid_hw,
+	void *cmd_args)
+{
+	struct cam_ife_csid_ver2_reg_info      *csid_reg;
+	struct cam_hw_soc_info                 *soc_info;
+	const struct cam_ife_csid_ver2_path_reg_info *path_reg;
+	uint32_t                               rup_aup_mask = 0, path_res_id;
+
+	if (!cmd_args) {
+		CAM_ERR(CAM_ISP, "CSID: %u,Invalid params", csid_hw->hw_intf->hw_idx);
+		return  -EINVAL;
+	}
+
+	soc_info = &csid_hw->hw_info->soc_info;
+	csid_reg = (struct cam_ife_csid_ver2_reg_info *)
+			csid_hw->core_info->csid_reg;
+	path_res_id = *(uint32_t *)cmd_args;
+
+	path_reg = csid_reg->path_reg[path_res_id];
+
+	rup_aup_mask = path_reg->rup_aup_mask;
+
+	cam_io_w_mb(rup_aup_mask,
+		soc_info->reg_map[CAM_IFE_CSID_CLC_MEM_BASE_ID].mem_base +
+		csid_reg->cmn_reg->rup_aup_cmd_addr);
+
+	CAM_DBG(CAM_ISP, "CSID:%u RUP_AUP_MUP: 0x%x", csid_hw->hw_intf->hw_idx, rup_aup_mask);
+
+	return 0;
+}
+
 static int cam_ife_csid_ver2_get_csid_cid_info(struct cam_ife_csid_ver2_hw *csid_hw,
 	void *cmd_args)
 {
@@ -6108,6 +6139,9 @@ static int cam_ife_csid_ver2_process_cmd(void *hw_priv,
 		break;
 	case CAM_ISP_HW_CMD_GET_CSID_CID_INFO:
 		rc = cam_ife_csid_ver2_get_csid_cid_info(csid_hw, cmd_args);
+		break;
+	case CAM_ISP_HW_CMD_CSID_UPDATE_AUP:
+		rc = cam_ife_csid_ver2_update_aup(csid_hw, cmd_args);
 		break;
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d unsupported cmd:%d",

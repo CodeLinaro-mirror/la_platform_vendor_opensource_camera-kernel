@@ -249,6 +249,17 @@ struct cam_vfe_resource_update {
 };
 
 /**
+ * struct cam_vfe_scratch_buf_cfg_args
+ * @iova:                         scratch buffer iova address
+ * @res_id:                       Res ID for scratch buffer
+ *
+ */
+struct cam_vfe_scratch_buf_cfg_args {
+	uint32_t iova;
+	uint32_t res_id;
+};
+
+/**
  * struct cam_vfe_resource_data_fifo_count
  * @out_port_res_type:            out port resource type
  * @rup_for_applied_req:          Indicates if Rup received for proper applied req

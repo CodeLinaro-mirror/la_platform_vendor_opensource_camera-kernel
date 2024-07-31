@@ -4742,6 +4742,42 @@ end:
 	return 0;
 }
 
+static int cam_vfe_bus_ver3_scratch_buf_cfg(void *priv, void *cmd_args)
+{
+	struct cam_vfe_bus_ver3_priv             *bus_priv = NULL;
+	struct cam_vfe_scratch_buf_cfg_args      *scratch_buf = NULL;
+	struct cam_vfe_bus_ver3_vfe_out_data     *rsrc_data = NULL;
+	struct cam_isp_resource_node             *rsrc_node = NULL;
+	struct cam_vfe_bus_ver3_wm_resource_data *wm_data;
+	enum cam_vfe_bus_ver3_vfe_out_type  vfe_out_res_id = CAM_VFE_BUS_VER3_VFE_OUT_MAX;
+	uint32_t  outmap_index = CAM_VFE_BUS_VER3_VFE_OUT_MAX;
+	int rc = 0, i;
+
+	bus_priv = (struct cam_vfe_bus_ver3_priv *) priv;
+	scratch_buf = (struct cam_vfe_scratch_buf_cfg_args *) cmd_args;
+
+	vfe_out_res_id = cam_vfe_bus_ver3_get_out_res_id_and_index(bus_priv,
+		scratch_buf->res_id, &outmap_index);
+	rsrc_node = &bus_priv->vfe_out[outmap_index];
+	rsrc_data = rsrc_node->res_priv;
+
+	if (!rsrc_data) {
+		CAM_ERR(CAM_ISP, "VFE:%u out data is null, res_id: %d",
+			bus_priv->common_data.core_index, vfe_out_res_id);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < rsrc_data->num_wm; i++) {
+		wm_data = rsrc_data->wm_res[i].res_priv;
+
+		cam_io_w_mb(scratch_buf->iova, wm_data->common_data->mem_base +
+			wm_data->hw_regs->image_addr);
+		CAM_DBG(CAM_ISP, "VFE:%u, Configured scratch buffer for WM:%d image address 0x%X",
+			bus_priv->common_data.core_index, wm_data->index, scratch_buf->iova);
+	}
+	return rc;
+}
+
 static int __cam_vfe_bus_ver3_process_cmd(void *priv,
 	uint32_t cmd_type, void *cmd_args, uint32_t arg_size)
 {
@@ -4906,6 +4942,10 @@ static int cam_vfe_bus_ver3_process_cmd(
 		CAM_DBG(CAM_ISP, "IRQ disabled for out res: %u", vfe_out_res_id);
 	}
 		break;
+	case CAM_ISP_HW_CMD_SCRATCH_BUF_CFG:
+		rc = cam_vfe_bus_ver3_scratch_buf_cfg(priv, cmd_args);
+		break;
+
 	default:
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "Invalid camif process command:%d",
 			cmd_type);

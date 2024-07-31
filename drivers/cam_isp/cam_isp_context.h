@@ -407,6 +407,8 @@ struct cam_isp_context_event_record {
  * @setting_size:              Size of setting variable ie: 32bit, 64 bit
  * @is_foveation_en:           flag to indicate if sensor foveation is enabled
  * @settingbuf_res_id:         Resource ID of Setting ID buffer
+ * @scratch_buf_kmdvaddr:      KMD VA of scratch buffer
+ * @is_settingid_scratchcfg:   indicates that scratch buffer is programmed with valid settingID
  *
  */
 struct cam_isp_context {
@@ -494,6 +496,8 @@ struct cam_isp_context {
 	uint32_t                               settingbuf_res_id;
 	uint32_t                               setting_size;
 	bool                                   is_foveation_enable;
+	uintptr_t                              scratch_buf_kmdvaddr;
+	bool                                   is_settingid_scratchcfg;
 };
 
 /**

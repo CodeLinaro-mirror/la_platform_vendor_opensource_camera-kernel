@@ -422,6 +422,7 @@ enum cam_isp_hw_mgr_command {
 	CAM_HW_MGR_CMD_CHECK_RUP_APPLIED_REQ,
 	CAM_HW_MGR_CMD_GET_CSID_CID_INFO,
 	CAM_ISP_HW_MGR_GET_FOVEATION_INFO,
+	CAM_ISP_HW_MGR_UPDATE_SCRATCH_BUF_CFG,
 	CAM_ISP_HW_MGR_CMD_MAX,
 };
 
@@ -458,6 +459,7 @@ enum cam_isp_ctx_type {
  * @setting_size:          Size of setting variable ie: 32bit, 64 bit
  * @foveation_en:          Flag to indicate if foveation is enabled
  * @settingbuf_res_id:     Resource ID of setting ID buffer
+ * @scratch_buf_kva:       KMD VA of scratch buffer
  */
 struct cam_isp_hw_cmd_args {
 	uint32_t                          cmd_type;
@@ -493,6 +495,7 @@ struct cam_isp_hw_cmd_args {
 			uint32_t                      setting_size;
 			bool                          foveation_en;
 			uint32_t                      settingbuf_res_id;
+			uintptr_t                     scratch_buf_kva;
 		} fov_info;
 	} u;
 };
