@@ -612,10 +612,12 @@ static int __cam_isp_ctx_no_crm_apply_trigger_util(void *priv, void *data)
 				ctx->link_hdl, ctx_isp->is_sensorlite,
 				sof_notify->ife_applied_req_id);
 
-			if (ctx_isp->ul_path_en)
-				sensor_setting_id =
-					cam_req_mgr_get_setting_id(ctx->link_hdl,
-					ctx_isp->sensor_pd);
+			if (ctx_isp->ul_path_en) {
+				sensor_setting_id = cam_req_mgr_get_setting_id(ctx->link_hdl);
+				ctx_isp->ul_data.sensor_applied_setting_id = sensor_setting_id;
+				cam_req_mgr_increase_setting_idx(ctx->link_hdl);
+			}
+
 			if (!ctx_isp->mcu_enable)
 				cam_isp_no_crm_apply_req_notify(ctx_isp, req_id,
 					CAM_TRIGGER_POINT_SOF, res_id, sof_ts,
@@ -752,12 +754,18 @@ static int __cam_isp_ctx_notify_trigger_util(
 			sof_notify.sensor_applied_req_id = 0;
 			/* Do not apply ife request just notify sensor to apply request */
 
-			if (ctx_isp->ul_path_en)
-				sensor_setting_id = cam_req_mgr_get_setting_id(ctx->link_hdl, 1);
+			if (ctx_isp->ul_path_en) {
+				sensor_setting_id = cam_req_mgr_get_setting_id(ctx->link_hdl);
+				if (sensor_setting_id < 0)
+					return -EINVAL;
+				ctx_isp->ul_data.sensor_applied_setting_id = sensor_setting_id;
+				cam_req_mgr_increase_setting_idx(ctx->link_hdl);
+			}
 			if (!ctx_isp->mcu_enable)
 				cam_isp_no_crm_apply_req_notify(ctx_isp, request_id, trigger_type,
 					res_id, sof_irq_ts, &sof_notify.sensor_applied_req_id,
 					sensor_setting_id);
+
 
 			ctx_isp->sensor_pd_handled = true;
 
@@ -9084,7 +9092,7 @@ static void cam_isp_update_fastpath_result_queue(void *data,
 }
 
 static void __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
-	int32_t *result_idx, uint64_t timestamp, uint64_t boot_timestamp,
+	int32_t *result_idx, uint64_t timestamp, uint64_t boot_timestamp, uint64_t request_id,
 	struct cam_isp_context *isp_ctx, struct cam_isp_ctx_req *req_isp,
 	struct response_buffer *response_buffers)
 {
@@ -9092,7 +9100,7 @@ static void __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 	struct cam_context *ctx;
 
 	ctx = (struct cam_context *)isp_ctx->base;
-	response_buffers[idx].setting_id = 0x0;
+	response_buffers[idx].setting_id = request_id;
 	for (i = 0; i < req_isp->num_fence_map_out; i++) {
 		response_buffers[idx].buffer_hdl[num_out++] =
 			req_isp->fence_map_out[i].buf_handle[0];
@@ -9160,7 +9168,7 @@ static int __cam_isp_ctx_ul_fastpath_retrieve_result_util(
 				if (found_match) {
 					req_isp->ul_fp_result_posted = true;
 					__cam_isp_ctx_ul_fastpath_populate_buf_hdls(result_idx,
-						timestamp, boot_timestamp, isp_ctx,
+						timestamp, boot_timestamp, req->request_id, isp_ctx,
 						req_isp, response_buffers);
 					CAM_WARN(CAM_ISP,
 						"Match for last_consumed: 0x%x found in request: %llu [wait list] in ctx: %u on link: 0x%x",
@@ -9189,7 +9197,7 @@ static int __cam_isp_ctx_ul_fastpath_retrieve_result_util(
 				if (found_match) {
 					req_isp->ul_fp_result_posted = true;
 					__cam_isp_ctx_ul_fastpath_populate_buf_hdls(result_idx,
-						timestamp, boot_timestamp,
+						timestamp, boot_timestamp, req->request_id,
 						isp_ctx, req_isp, response_buffers);
 					CAM_WARN(CAM_ISP,
 						"Match for last_consumed: 0x%x found in request: %llu [pending list] in ctx: %u on link: 0x%x",
@@ -9215,7 +9223,8 @@ static int __cam_isp_ctx_ul_fastpath_retrieve_result_util(
 
 		if (found_match) {
 			__cam_isp_ctx_ul_fastpath_populate_buf_hdls(result_idx,
-				timestamp, boot_timestamp, isp_ctx, req_isp, response_buffers);
+				timestamp, boot_timestamp, req->request_id, isp_ctx,
+				req_isp, response_buffers);
 			isp_ctx->active_req_cnt--;
 			__cam_isp_ctx_handle_req_reset_util(isp_ctx, req);
 			rc = 0;
@@ -10606,12 +10615,8 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 		return -1;
 	}
 	req = list_first_entry(&cam_ctx->free_req_list, struct cam_ctx_request, list);
-	setting_id = cam_req_mgr_get_setting_id(cam_ctx->link_hdl, 1);
-	if (setting_id == -1 ||
-		!ctx_isp->setting_data[setting_id % MAX_SETTING_PACKETS].is_setting_valid) {
-		CAM_ERR(CAM_ISP, "Setting id not setup yet ctx: %u", cam_ctx->ctx_id);
-		return -EINVAL;
-	}
+
+	setting_id = ctx_isp->ul_data.sensor_applied_setting_id;
 	req->request_id = setting_id;
 	req->status = 1;
 

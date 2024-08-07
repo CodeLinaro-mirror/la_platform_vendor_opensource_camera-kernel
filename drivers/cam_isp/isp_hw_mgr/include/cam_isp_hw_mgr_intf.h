@@ -188,13 +188,14 @@ struct cam_isp_ul_primary_port_update_entry {
  * sturct cam_isp_ctx_ul_data
  */
 struct cam_isp_ctx_ul_data {
-	struct port_pattern_period pattern_period[MAX_IO_RESOURCES];
-	uint64_t curr_index_period;
-	struct cam_kmd_buf_info    kmd_buf;
+	struct port_pattern_period                  pattern_period[MAX_IO_RESOURCES];
+	struct cam_kmd_buf_info                     kmd_buf;
 	struct cam_isp_ul_resource_update_entry     resource_data[MAX_IO_RESOURCES];
 	struct cam_isp_ul_primary_port_update_entry primary_port_data;
-	struct cam_isp_ul_change_base_cmd   change_base;
-	struct cam_isp_ul_rup_aup_cmd         rup_aup_cmd;
+	struct cam_isp_ul_change_base_cmd           change_base;
+	struct cam_isp_ul_rup_aup_cmd               rup_aup_cmd;
+	uint64_t                                    sensor_applied_setting_id;
+	uint64_t                                    curr_index_period;
 };
 
 /**
