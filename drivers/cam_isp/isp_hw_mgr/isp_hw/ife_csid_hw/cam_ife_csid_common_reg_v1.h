@@ -1501,6 +1501,7 @@ static struct cam_ife_csid_ver2_common_reg_info
 	.format_measure_width_shift_val          = 0x0,
 	.format_measure_max_hbi_shift            = 16,
 	.format_measure_min_hbi_mask             = 0xFFF,
+	.format_measure_live_cnt_shift_val       = 0x5,
 	.top_buf_done_irq_mask                   = 0x8,
 	.decode_format_payload_only              = 0xF,
 	.timestamp_enabled_in_cfg0               = true,
