@@ -3995,6 +3995,13 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd)
 			for (j = 0; j < link->num_devs; j++) {
 				if (link->l_dev[j].dev_hdl != ul_packet->device_hdl[i])
 					continue;
+				if (!link->l_dev[j].no_crm_ops) {
+					CAM_INFO(CAM_ISP,
+						"noCRM ops not applicable for dev_hdl 0x%x %s",
+						link->l_dev[j].dev_hdl,
+						link->l_dev[j].dev_info.name);
+					continue;
+				}
 				if (!link->l_dev[j].no_crm_ops->setup &&
 					ul_packet->num_io_packets[i]) {
 					CAM_ERR(CAM_CRM,
@@ -4055,6 +4062,13 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd)
 			for (j = 0; j < link->num_devs; j++) {
 				if (link->l_dev[j].dev_hdl != ul_packet->device_hdl[i])
 					continue;
+				if (!link->l_dev[j].no_crm_ops) {
+					CAM_INFO(CAM_ISP,
+						"noCRM ops not applicable for dev_hdl 0x%x %s",
+						link->l_dev[j].dev_hdl,
+						link->l_dev[j].dev_info.name);
+					continue;
+				}
 				if (!link->l_dev[j].no_crm_ops->add_req) {
 					CAM_ERR(CAM_CRM,
 						"add req not supported for dev_hdl 0x%x type %d %s",
