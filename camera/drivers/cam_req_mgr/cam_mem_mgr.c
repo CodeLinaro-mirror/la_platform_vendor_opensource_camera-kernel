@@ -746,10 +746,10 @@ static int cam_mem_mgr_get_dma_heaps(void)
 	tbl.ubwc_p_heap = NULL;
 	tbl.ubwc_p_movable_heap = NULL;
 
-	tbl.system_heap = dma_heap_find("qcom,system");
+	tbl.system_heap = dma_heap_find("system");
 	if (IS_ERR_OR_NULL(tbl.system_heap)) {
 		rc = PTR_ERR(tbl.system_heap);
-		CAM_ERR(CAM_MEM, "qcom system heap not found, rc=%d", rc);
+		CAM_ERR(CAM_MEM, "System heap not found, rc=%d", rc);
 		tbl.system_heap = NULL;
 		goto put_heaps;
 	}
