@@ -427,7 +427,8 @@ static int cam_vfe_bus_ver3_get_comp_vfe_out_res_id_list(
 }
 
 static enum cam_vfe_bus_ver3_packer_format
-	cam_vfe_bus_ver3_get_packer_fmt(uint32_t out_fmt, int wm_index)
+	cam_vfe_bus_ver3_get_packer_fmt(uint32_t out_fmt, int wm_index,
+	enum cam_vfe_bus_plane_type             plane)
 {
 	enum cam_vfe_bus_ver3_packer_format packer_fmt = PACKER_FMT_VER3_MAX;
 
@@ -456,7 +457,7 @@ static enum cam_vfe_bus_ver3_packer_format
 		packer_fmt = PACKER_FMT_VER3_MIPI20;
 		break;
 	case CAM_FORMAT_NV21:
-		if ((wm_index == 1) || (wm_index == 3) || (wm_index == 5) || (wm_index == 9))
+		if (plane == PLANE_C)
 			packer_fmt = PACKER_FMT_VER3_PLAIN_8_LSB_MSB_10_ODD_EVEN;
 		else
 			packer_fmt = PACKER_FMT_VER3_PLAIN_8_LSB_MSB_10; 
@@ -1095,9 +1096,54 @@ static int cam_vfe_bus_ver3_res_update_config_wm(
 		(vfe_out_res_id == CAM_VFE_BUS_VER3_VFE_OUT_DS16) ||
 		(vfe_out_res_id == CAM_VFE_BUS_VER3_VFE_OUT_DS4_DISP) ||
 		(vfe_out_res_id == CAM_VFE_BUS_VER3_VFE_OUT_DS16_DISP)) {
+		switch (rsrc_data->format) {
+		case CAM_FORMAT_NV21:
+		case CAM_FORMAT_NV12:
+			switch (plane) {
+			case PLANE_C:
+				rsrc_data->height /= 2;
+				break;
+			case PLANE_Y:
+				break;
+			default:
+				CAM_ERR(CAM_ISP, "Invalid plane %d", plane);
+				return -EINVAL;
+			}
+			break;
+		case CAM_FORMAT_TP10:
+			switch (plane) {
+			case PLANE_C:
+				rsrc_data->height /= 2;
+				break;
+			case PLANE_Y:
+				break;
+			default:
+				CAM_ERR(CAM_ISP, "Invalid plane %d", plane);
+				return -EINVAL;
+			}
+			break;
+		case CAM_FORMAT_PLAIN16_10:
+			switch (plane) {
+			case PLANE_C:
+				rsrc_data->height /= 2;
+				break;
+			case PLANE_Y:
+				break;
+			default:
+				CAM_ERR(CAM_ISP, "Invalid plane %d", plane);
+				return -EINVAL;
+			}
+			break;
+		case CAM_FORMAT_PD10:
+			rsrc_data->height = rsrc_data->height / 2;
+			rsrc_data->width  = rsrc_data->width / 2;
+			break;
+		default:
+			CAM_ERR(CAM_ISP, "Invalid format %d out_type:%d",
+				rsrc_data->format, vfe_out_res_id);
+			return -EINVAL;
+		}
 
-		rsrc_data->height = rsrc_data->height / 2;
-		rsrc_data->width  = rsrc_data->width / 2;
 		rsrc_data->en_cfg = 0x1;
 
 	} else if (vfe_out_res_id == CAM_VFE_BUS_VER3_VFE_OUT_AWB_BFW) {
@@ -1291,7 +1337,7 @@ static int cam_vfe_bus_ver3_acquire_wm(
 	rsrc_data->format = out_acq_args->out_port_info->format;
 	rsrc_data->use_wm_pack = out_acq_args->use_wm_pack;
 	rsrc_data->pack_fmt = cam_vfe_bus_ver3_get_packer_fmt(rsrc_data->format,
-		wm_idx);
+		wm_idx, plane);
 
 	rsrc_data->width = out_acq_args->out_port_info->width;
 	rsrc_data->height = out_acq_args->out_port_info->height;
@@ -4214,7 +4260,7 @@ static int cam_vfe_bus_ver3_update_res_wm(
 	rsrc_data->format = out_acq_args->out_port_info->format;
 	rsrc_data->use_wm_pack = out_acq_args->use_wm_pack;
 	rsrc_data->pack_fmt = cam_vfe_bus_ver3_get_packer_fmt(rsrc_data->format,
-		wm_idx);
+		wm_idx, plane);
 
 	rsrc_data->width = out_acq_args->out_port_info->width;
 	rsrc_data->height = out_acq_args->out_port_info->height;
