@@ -671,11 +671,14 @@ static int cam_vfe_top_ver4_print_overflow_debug_info(
 	if (bus_overflow_status)
 		CAM_INFO_RATE_LIMIT(CAM_ISP, "VFE[%d] Bus overflow status: 0x%x",
 			soc_info->index, bus_overflow_status);
-	while (bus_overflow_status) {
-		if (bus_overflow_status & 0x1)
+
+	tmp = bus_overflow_status;
+
+	while (tmp) {
+		if (tmp & 0x1)
 			CAM_ERR_RATE_LIMIT(CAM_ISP, "VFE[%d] Bus Overflow %s",
 				soc_info->index, common_data->hw_info->wr_client_desc[i].desc);
-		bus_overflow_status = bus_overflow_status >> 1;
+		tmp = tmp >> 1;
 		i++;
 	}
 
