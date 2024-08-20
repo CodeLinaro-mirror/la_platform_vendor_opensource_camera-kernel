@@ -2020,7 +2020,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe690_bus_hw_info = {
 	.comp_done_mask = {
 		BIT(0), BIT(1), BIT(2), BIT(3),
 		BIT(4), BIT(5), BIT(6), BIT(7),
-		BIT(8), BIT(9), BIT(10), BIT(11),
+		BIT(13), BIT(14), BIT(15),
 	},
 	.top_irq_shift         = 0,
 	.max_out_res           = CAM_ISP_IFE_OUT_RES_BASE + 45,
