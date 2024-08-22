@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #if !defined(_CAM_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
@@ -218,6 +218,31 @@ TRACE_EVENT(cam_buf_done,
 	TP_printk(
 		"%5s: BufDone ctx=%p request=%llu link_hdl=0x%x",
 			__get_str(ctx_type), __entry->ctx, __entry->request, __entry->link_hdl
+	)
+);
+
+TRACE_EVENT(cam_isp_buf_done,
+	TP_PROTO(const char *ctx_type, uint32_t ctx_id, uint64_t req_id, int32_t link_hdl,
+		uint32_t resource_hdl),
+	TP_ARGS(ctx_type, ctx_id, req_id, link_hdl, resource_hdl),
+	TP_STRUCT__entry(
+		__string(ctx_type, ctx_type)
+		__field(uint32_t, ctx_id)
+		__field(uint64_t, req_id)
+		__field(int32_t, link_hdl)
+		__field(uint32_t, resource_hdl)
+	),
+	TP_fast_assign(
+		__assign_str(ctx_type, ctx_type);
+		__entry->ctx_id = ctx_id;
+		__entry->req_id = req_id;
+		__entry->link_hdl = link_hdl;
+		__entry->resource_hdl = resource_hdl;
+	),
+	TP_printk(
+		"%5s: BufDone ctx_id=%u req_id=%llu link_hdl=0x%x res:0x%x",
+			__get_str(ctx_type), __entry->ctx_id, __entry->req_id, __entry->link_hdl,
+			__entry->resource_hdl
 	)
 );
 
