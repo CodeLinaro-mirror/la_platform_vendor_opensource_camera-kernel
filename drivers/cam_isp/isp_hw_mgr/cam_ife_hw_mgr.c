@@ -10105,8 +10105,10 @@ static int cam_ife_hw_mgr_res_stream_on_off_grp_cfg(
 	if (is_start_hw) {
 		struct cam_isp_start_args  *start_isp = hw_args;
 
-		if (!grp_cfg->stream_on_cnt ||
-			start_isp->start_only) {
+		if (grp_cfg->stream_cfg[j].is_streamon)
+			rc = 0;
+
+		if (!grp_cfg->stream_on_cnt) {
 			rc = cam_ife_mgr_start_hw_res_stream_grp(i,
 				start_isp->is_internal_start,
 				start_isp->frame_drop);
@@ -10122,7 +10124,7 @@ static int cam_ife_hw_mgr_res_stream_on_off_grp_cfg(
 			cam_ife_mgr_update_irq_mask_affected_ctx_stream_grp(
 				ctx, i, true,
 				start_isp->is_internal_start);
-		} else {
+		} else if (!grp_cfg->stream_cfg[j].is_streamon) {
 			rc = cam_ife_mgr_enable_irq(ctx,
 				start_isp->is_internal_start);
 			if (rc) {
