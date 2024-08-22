@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -1932,8 +1932,18 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 			link->last_sof_trigger_jiffies) <
 			MINIMUM_WORKQUEUE_SCHED_TIME_IN_MS)
 			link->wq_congestion = true;
-		else
+		else {
+#ifdef CAMERA_BUILD_FOR_AUTO
+			/*
+			 * Since per frame settings is not getting used, there is no necessity
+			 * of error recovery mechanism incase per frame setting fails to apply
+			 * Hence make WQ congestion as true so that recovery is not triggered.
+			 */
+			link->wq_congestion = true;
+#else
 			link->wq_congestion = false;
+#endif
+		}
 	}
 
 	if (slot->status != CRM_SLOT_STATUS_REQ_READY) {
