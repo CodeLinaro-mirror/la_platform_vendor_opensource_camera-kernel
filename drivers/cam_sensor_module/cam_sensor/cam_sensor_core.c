@@ -893,6 +893,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 				CAM_SENSOR_PACKET_OPCODE_SENSOR_POWERON_REG);
 			if (rc < 0) {
 				CAM_ERR(CAM_SENSOR, "PowerOn REG_WR failed");
+				cam_sensor_power_down(s_ctrl);
 				goto free_power_settings;
 			}
 			if (!strcmp(HDMI_SENSOR_NAME,s_ctrl->io_master_info.client->name))
