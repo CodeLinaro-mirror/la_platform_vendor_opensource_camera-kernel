@@ -9102,6 +9102,9 @@ static void __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 	ctx = (struct cam_context *)isp_ctx->base;
 	response_buffers[idx].setting_id = request_id;
 	for (i = 0; i < req_isp->num_fence_map_out; i++) {
+		if (req_isp->hw_update_data.virtual_frame_en &&
+			i == req_isp->hw_update_data.primary_port_entry_index)
+			continue;
 		response_buffers[idx].buffer_hdl[num_out++] =
 			req_isp->fence_map_out[i].buf_handle[0];
 	}
@@ -9127,8 +9130,6 @@ static bool __cam_isp_ctx_ul_fastpath_match_for_primary_port(
 	struct cam_isp_ctx_req *req_isp = (struct cam_isp_ctx_req *)req->req_priv;
 
 	primary_port_idx = req_isp->hw_update_data.primary_port_entry_index;
-	if (req_isp->hw_update_data.virtual_frame_en && !last_consumed_addr)
-		return true;
 	if (primary_port_idx >= req_isp->num_fence_map_out)
 		return false;
 
@@ -10696,10 +10697,21 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 		}
 
 		if (!buffer_found) {
+			for (j = 0; j < MAX_IO_RESOURCES; j++) {
+				if (res_data[j].resource_type ==
+					ctx_isp->primary_port_info[i].res_id)
+					break;
+			}
 			memcpy(&req_isp->cfg[req_isp->num_cfg],
-				&ctx_isp->ul_data.primary_port_data.hw_update_entries,
+				&res_data[j].hw_update_entries[res_data[j].curr_buf_index],
 				sizeof(struct cam_hw_update_entry));
+			memcpy(&req_isp->fence_map_out[req_isp->num_fence_map_out],
+				&res_data[j].out_map_entries[res_data[j].curr_buf_index],
+				sizeof(struct cam_hw_fence_map_entry));
+			req_isp->hw_update_data.primary_port_entry_index =
+				req_isp->num_fence_map_out;
 			req_isp->num_cfg++;
+			req_isp->num_fence_map_out++;
 			req_isp->hw_update_data.virtual_frame_en = true;
 		}
 	}
