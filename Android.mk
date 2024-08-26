@@ -5,6 +5,7 @@ LOCAL_PATH := $(call my-dir)
 # Path to DLKM make scripts
 DLKM_DIR := $(TOP)/device/qcom/common/dlkm
 
+CAMERA_KERNEL_ROOT := $(LOCAL_PATH)
 # Kbuild options
 KBUILD_OPTIONS := CAMERA_KERNEL_ROOT=$(TOP)/vendor/qcom/opensource/ais-kernel/$(LOCAL_PATH)
 KBUILD_OPTIONS += KERNEL_ROOT=$(TOP)/kernel/msm-$(TARGET_KERNEL_VERSION)/
