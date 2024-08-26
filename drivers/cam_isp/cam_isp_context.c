@@ -589,7 +589,6 @@ static int __cam_isp_ctx_no_crm_apply_trigger_util(void *priv, void *data)
 		ctx->ctx_id);
 	mutex_lock(&ctx_isp->no_crm_mutex);
 	rc = __cam_isp_ctx_no_crm_apply(ctx_isp, true, &req_id, res_id, sof_ts);
-	trace_cam_log_event("Apply", "ISP applied req", req_id, ctx->ctx_id);
 	mutex_unlock(&ctx_isp->no_crm_mutex);
 
 	if (sof_notify && !rc && req_id &&
@@ -1934,6 +1933,7 @@ static int __cam_isp_ctx_handle_buf_done_for_request(
 	struct cam_sync_signal_param param;
 	uint32_t *kernel_buf_ptr;
 	int32_t kernel_buf_handle;
+	trace_cam_buf_done("ISP", ctx, req);
 
 	req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 
@@ -2002,9 +2002,6 @@ static int __cam_isp_ctx_handle_buf_done_for_request(
 		}
 
 		if (!req_isp->bubble_detected) {
-			trace_cam_isp_buf_done("ISP: Buf done with sync success", ctx->ctx_id,
-				req->request_id, ctx->link_hdl,
-				req_isp->fence_map_out[j].resource_handle);
 			CAM_DBG(CAM_ISP,
 				"Sync with success: req %lld res 0x%x fd 0x%x, ctx %u",
 				req->request_id,
@@ -2026,9 +2023,6 @@ static int __cam_isp_ctx_handle_buf_done_for_request(
 				CAM_DBG(CAM_ISP, "Sync failed with rc = %d",
 					 rc);
 		} else if (!req_isp->bubble_report) {
-			trace_cam_isp_buf_done("ISP: Buf done with Sync failure due to bubble",
-				ctx->ctx_id, req->request_id, ctx->link_hdl,
-				req_isp->fence_map_out[j].resource_handle);
 			CAM_DBG(CAM_ISP,
 				"Sync with failure: req %lld res 0x%x fd 0x%x, ctx %u",
 				req->request_id,
@@ -2278,6 +2272,7 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 	uint32_t *kernel_buf_ptr;
 	int32_t kernel_buf_handle;
 
+	trace_cam_buf_done("ISP", ctx, req);
 
 	req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 
@@ -2371,9 +2366,6 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 				req_isp->fence_map_out[j].sync_id);
 			continue;
 		} else if (!req_isp->bubble_detected) {
-			trace_cam_isp_buf_done("ISP: Buf done with sync success", ctx->ctx_id,
-				req->request_id, ctx->link_hdl,
-				req_isp->fence_map_out[j].resource_handle);
 			CAM_DBG(CAM_ISP,
 				"Sync with success: req %lld res 0x%x fd 0x%x, ctx %u",
 				req->request_id,
@@ -2427,9 +2419,6 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 			/* Reset fence */
 			req_isp->fence_map_out[j].sync_id = -1;
 		} else if (!req_isp->bubble_report) {
-			trace_cam_isp_buf_done("ISP: Buf done with Sync failure due to bubble",
-				ctx->ctx_id, req->request_id, ctx->link_hdl,
-				req_isp->fence_map_out[j].resource_handle);
 			CAM_DBG(CAM_ISP,
 				"Sync with failure: req %lld res 0x%x fd 0x%x, ctx %u",
 				req->request_id,
@@ -3171,8 +3160,6 @@ static int __cam_isp_ctx_reg_upd_in_applied_state(
 		ctx_isp->waitlist_req_cnt--;
 		ctx_isp->active_req_cnt++;
 		request_id = req->request_id;
-		trace_cam_log_event("Reg Update", "Rcvd Reg update for req",
-			req->request_id, ctx->ctx_id);
 		CAM_DBG(CAM_REQ,
 			"move request %lld to active list(cnt = %d), ctx %u",
 			req->request_id, ctx_isp->active_req_cnt, ctx->ctx_id);
@@ -3553,8 +3540,6 @@ static int __cam_isp_ctx_epoch_in_applied(struct cam_isp_context *ctx_isp,
 		CAM_INFO(CAM_ISP,
 			"frame drop recovery triggered with frame_drop_cnt :%d dropped_req :%lld ctx:%d",
 			(ctx_isp->frame_drop_cnt + 1), req->request_id, ctx->ctx_id);
-		trace_cam_log_event("Bubble", "Rcvd epoch in applied state", req->request_id,
-			ctx->ctx_id);
 		rc = __cam_isp_ctx_frame_drop_recovery(ctx_isp, req);
 		if (rc)
 			CAM_ERR(CAM_ISP, "frame drop recovery failed ctx:%d frame_drop_cnt:%d",
@@ -3585,8 +3570,6 @@ static int __cam_isp_ctx_epoch_in_applied(struct cam_isp_context *ctx_isp,
 		req_isp->bubble_report = 0;
 		CAM_DBG(CAM_ISP, "Skip bubble recovery for req %lld ctx %u",
 			req->request_id, ctx->ctx_id);
-		trace_cam_log_event("Bubble", "Rcvd epoch in applied state", req->request_id,
-			ctx->ctx_id);
 
 		if (ctx_isp->active_req_cnt <= 1)
 			__cam_isp_ctx_notify_trigger_util(CAM_TRIGGER_POINT_SOF, ctx_isp,
