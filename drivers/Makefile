@@ -11,6 +11,7 @@ endif
 
 ccflags-y += -I$(srctree)/techpack/camera/include/uapi/camera
 ccflags-y += -I$(srctree)
+ccflags-y += -I$(srctree)/drivers/misc
 
 camera-y := \
 	cam_req_mgr/cam_req_mgr_core.o \

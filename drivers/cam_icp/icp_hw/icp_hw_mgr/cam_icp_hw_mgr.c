@@ -46,6 +46,8 @@
 #include "cam_cpas_api.h"
 #include "cam_common_util.h"
 
+#include "qseecom_kernel.h"
+
 #define ICP_WORKQ_TASK_CMD_TYPE 1
 #define ICP_WORKQ_TASK_MSG_TYPE 2
 
@@ -53,6 +55,82 @@
 	((dev_type == CAM_ICP_RES_TYPE_BPS) ? ICP_CLK_HW_BPS : ICP_CLK_HW_IPE)
 
 #define ICP_DEVICE_IDLE_TIMEOUT 400
+
+#define SECCAM_MAX_CAMERAS (2)
+#define SECCAM_MAX_NUM_OF_PLANES (4)
+#define MAX_CERT_SIZE (2048)
+#define QSEECOM_SBUFF_SIZE 0x1000
+
+/* Command IDs are allocated in the range of seccam 1.0 */
+
+enum seccam_cmd_id_t {
+	SCE_CMD_INIT = 2001,
+	SCE_CMD_SET_LICENSE = 2002,
+	SCE_CMD_SET_SENSORS = 2003,
+	SCE_CMD_PROCESS_FRAME = 2004,
+	SCE_CMD_SIGN_ENCRYPT_BUF = 2006,
+	SCE_CMD_SHUTDOWN = 2005,
+	SCE_CMD_REGISTER_BUF = 2007,
+	SCE_CMD_PREPARE_BUF = 2008,
+	SCE_CMD_NOTIFY_CURRENT_BUF = 2009,
+	SCE_CMD_END,
+};
+
+struct seccam_frame_info_t {
+	int32_t cam_id;
+	int64_t frame_number;
+	int64_t time_stamp;
+};
+
+struct seccam_plane_info_t {
+	uint32_t offset;
+	uint32_t row_stride;
+	uint32_t pixel_stride;
+};
+
+struct sec_app_if_plane_req_data_t {
+	uint32_t num_of_in_planes;
+	struct seccam_plane_info_t in_planes[SECCAM_MAX_NUM_OF_PLANES];
+	uint32_t num_of_out_planes;
+	struct seccam_plane_info_t out_planes[SECCAM_MAX_NUM_OF_PLANES];
+};
+
+struct seccam_cmd_req_t {
+	enum seccam_cmd_id_t cmd_id;
+	uint32_t num_sensors;                   // number of protected sensors
+	uint64_t buf;
+	uint32_t buf_size;
+	struct seccam_frame_info_t frame_info;  // Frame info
+	uint32_t cert_size;                     // cert size
+	uint8_t cert[MAX_CERT_SIZE];            // cert payload offset
+
+	struct sec_app_if_plane_req_data_t plane_data[SECCAM_MAX_CAMERAS];
+
+	/*
+	 * Fields added to support encode feature
+	 * Downscaled frames need copy to non secure bufer for
+	 * object detection algo processing in snpi.
+	 */
+	uint64_t buf_ns;
+	// non secure buffer size
+	uint32_t buf_ns_size;
+	// Full frame/Dowwnscaled frame/Raw Frame/Encoded Bitstream buffer
+	uint32_t buf_type;
+};
+
+struct seccam_cmd_rsp_t {
+	uint32_t ret;
+};
+
+struct cam_hal_buffer_fd {
+	int32_t portindex;
+	int32_t bufferfd;
+};
+
+static struct qseecom_handle *teehandle;                   // QSEE app handle
+static int hw_ref_count;                                   // HW resources count
+static const char defaultTa[] = "seccamenc";               // QSEE app name
+static bool cam_secure_mode = CAM_SECURE_MODE_NON_SECURE;  // Camera running mode, secure or non-secure
 
 static const struct hfi_ops hfi_a5_ops = {
 	.irq_raise = cam_a5_irq_raise,
@@ -1903,7 +1981,7 @@ static int cam_icp_hw_mgr_create_debugfs_entry(void)
 
 	dbgfileptr = debugfs_create_dir("camera_icp", NULL);
 	if (!dbgfileptr) {
-		CAM_ERR(CAM_ICP,"DebugFS could not create directory!");
+		CAM_ERR(CAM_ICP, "DebugFS could not create directory!");
 		rc = -ENOENT;
 		goto end;
 	}
@@ -2079,6 +2157,9 @@ static int cam_icp_mgr_handle_frame_process(uint32_t *msg_ptr, int flag)
 	struct cam_hw_done_event_data buf_data;
 	uint32_t clk_type;
 	uint32_t event_id;
+	struct seccam_cmd_req_t *cmdRequest  = NULL;
+	struct seccam_cmd_rsp_t *cmdResponse = NULL;
+	int rc = 0;
 
 	ioconfig_ack = (struct hfi_msg_ipebps_async_ack *)msg_ptr;
 	request_id = ioconfig_ack->user_data2;
@@ -2144,6 +2225,35 @@ static int cam_icp_mgr_handle_frame_process(uint32_t *msg_ptr, int flag)
 	}
 
 	buf_data.request_id = hfi_frame_process->request_id[idx];
+
+	if (event_id == CAM_CTX_EVT_ID_SUCCESS && cam_secure_mode == CAM_SECURE_MODE_SECURE) {
+		for (i = 0; i < hfi_frame_process->hal_buffer_fd[idx].num_of_buffer && (i < CAM_MAX_HAL_BUFFER_FD); i++) {
+			if ((teehandle != NULL) && (hfi_frame_process->hal_buffer_fd[idx].bufferfd[i] > 0)) {
+
+				cmdRequest                          = (struct seccam_cmd_req_t *)teehandle->sbuf;
+				cmdResponse                         = (struct seccam_cmd_rsp_t *)(teehandle->sbuf +
+									QSEECOM_ALIGN(sizeof(struct seccam_cmd_req_t)));
+
+				cmdRequest->cmd_id                  = SCE_CMD_NOTIFY_CURRENT_BUF;
+				cmdRequest->buf_size                = (4095U + 4095U) & (~4095U);
+				cmdRequest->frame_info.frame_number = request_id - 1;
+				cmdRequest->buf                     = hfi_frame_process->hal_buffer_fd[idx].bufferfd[i];
+
+				CAM_DBG(CAM_ICP,
+					"QSEE call for req_id =%lld fd = %d",
+					request_id, hfi_frame_process->hal_buffer_fd[idx].bufferfd[i]);
+				rc =  qseecom_send_command(
+					teehandle, cmdRequest, QSEECOM_ALIGN(sizeof(struct seccam_cmd_req_t)),
+					cmdResponse, QSEECOM_ALIGN(sizeof(struct seccam_cmd_rsp_t)));
+
+				if (rc < 0)
+					CAM_ERR(CAM_ICP, "qseecom cmd failed with err = %d", rc);
+
+				hfi_frame_process->hal_buffer_fd[idx].bufferfd[i] = -1;
+			}
+		}
+		hfi_frame_process->hal_buffer_fd[idx].num_of_buffer = 0;
+	}
 	ctx_data->ctxt_event_cb(ctx_data->context_priv, event_id, &buf_data);
 	hfi_frame_process->request_id[idx] = 0;
 	if (ctx_data->hfi_frame_process.in_resource[idx] > 0) {
@@ -4467,6 +4577,8 @@ static int cam_icp_packet_generic_blob_handler(void *user_data,
 	struct cam_cmd_mem_regions *cmd_mem_regions;
 	struct icp_cmd_generic_blob *blob;
 	struct cam_icp_hw_ctx_data *ctx_data;
+	struct cam_hal_buffer_fd *halBufferfd;
+	struct cam_icp_hal_buffer_fd *per_req_hal_buffer_fd;
 	uint32_t index;
 	size_t io_buf_size, clk_update_size;
 	int rc = 0;
@@ -4651,6 +4763,19 @@ static int cam_icp_packet_generic_blob_handler(void *user_data,
 			rc = cam_icp_process_stream_settings(ctx_data,
 				cmd_mem_regions, false);
 		}
+		break;
+
+	case CAM_ICP_CMD_GENERIC_BLOB_SECURE_FD:
+		per_req_hal_buffer_fd = (struct cam_icp_hal_buffer_fd *)&ctx_data->hfi_frame_process.hal_buffer_fd[index];
+		CAM_DBG(CAM_ICP,
+			"num_of_buffer = %d",
+			per_req_hal_buffer_fd->num_of_buffer);
+		per_req_hal_buffer_fd->num_of_buffer++;
+		halBufferfd = ((struct cam_hal_buffer_fd *)blob_data);
+		per_req_hal_buffer_fd->bufferfd[halBufferfd->portindex] = halBufferfd->bufferfd;
+		CAM_DBG(CAM_ICP,
+			"Req id = %lld, index = %d, portindex = %d fd = %d",
+			ctx_data->hfi_frame_process.request_id[index], index, halBufferfd->portindex, per_req_hal_buffer_fd->bufferfd[halBufferfd->portindex]);
 		break;
 
 	default:
@@ -5384,6 +5509,14 @@ static int cam_icp_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 		return -EINVAL;
 	}
 
+	CAM_DBG(CAM_ICP, "hw_ref_count at release: %d", hw_ref_count);
+	hw_ref_count--;
+
+	if (teehandle != NULL && cam_secure_mode == CAM_SECURE_MODE_SECURE && hw_ref_count == 0) {
+		rc = qseecom_shutdown_app(&teehandle);
+		CAM_DBG(CAM_ICP, "Status of QSEE App shutdown call: %d", rc);
+	}
+
 	CAM_DBG(CAM_ICP, "Enter recovery set %d",
 		atomic_read(&hw_mgr->recovery));
 	ctx_data = release_hw->ctxt_to_hw_map;
@@ -5655,6 +5788,19 @@ static int cam_icp_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	dev_type = icp_dev_acquire_info->dev_type;
 	icp_dev_acquire_info->dev_type =
 		cam_icp_unify_dev_type(dev_type);
+
+	if (icp_dev_acquire_info->secure_mode == CAM_SECURE_MODE_SECURE)
+		cam_secure_mode = CAM_SECURE_MODE_SECURE;
+
+	if (teehandle == NULL && cam_secure_mode == CAM_SECURE_MODE_SECURE) {
+		rc = qseecom_start_app(&teehandle, (char *)defaultTa, QSEECOM_SBUFF_SIZE);
+		CAM_DBG(CAM_ICP,
+			"Status of QSEE App load call: %d",
+			rc);
+	}
+
+	hw_ref_count++;
+	CAM_DBG(CAM_ICP, "hw_ref_count at acquire: %d", hw_ref_count);
 
 	CAM_DBG(CAM_ICP, "acquire io buf handle %d",
 		icp_dev_acquire_info->io_config_cmd_handle);

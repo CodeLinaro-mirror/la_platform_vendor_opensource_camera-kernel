@@ -77,6 +77,7 @@
 #define CAM_ICP_CMD_GENERIC_BLOB_FW_MEM_MAP     0x3
 #define CAM_ICP_CMD_GENERIC_BLOB_FW_MEM_UNMAP   0x4
 #define CAM_ICP_CMD_GENERIC_BLOB_CLK_V2         0x5
+#define CAM_ICP_CMD_GENERIC_BLOB_SECURE_FD      0x6
 
 /**
  * struct cam_icp_clk_bw_request_v2

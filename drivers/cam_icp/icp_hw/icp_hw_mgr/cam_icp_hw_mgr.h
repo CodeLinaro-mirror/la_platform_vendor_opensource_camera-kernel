@@ -27,6 +27,7 @@
 
 #define CAM_MAX_OUT_RES         6
 #define CAM_MAX_IN_RES          8
+#define CAM_MAX_HAL_BUFFER_FD   2
 
 #define ICP_WORKQ_NUM_TASK      100
 #define ICP_WORKQ_TASK_CMD_TYPE 1
@@ -165,6 +166,16 @@ struct cam_icp_clk_bw_req_internal_v2 {
 };
 
 /**
+ * struct cam_icp_hal_buffer_fd
+ * @bufferfd: Stores HAL buffer Fd's
+ * @num_of_buffer: No. of HAL buffers
+ */
+struct cam_icp_hal_buffer_fd {
+	int32_t bufferfd[CAM_MAX_HAL_BUFFER_FD];
+	uint32_t num_of_buffer;
+};
+
+/**
  * struct hfi_frame_process_info
  * @hfi_frame_cmd: Frame process command info
  * @bitmap: Bitmap for hfi_frame_cmd
@@ -194,6 +205,7 @@ struct hfi_frame_process_info {
 	struct cam_icp_clk_bw_req_internal_v2 clk_info_v2[CAM_FRAME_CMD_MAX];
 	struct icp_frame_info frame_info[CAM_FRAME_CMD_MAX];
 	ktime_t submit_timestamp[CAM_FRAME_CMD_MAX];
+	struct cam_icp_hal_buffer_fd hal_buffer_fd[CAM_FRAME_CMD_MAX];
 };
 
 /**
