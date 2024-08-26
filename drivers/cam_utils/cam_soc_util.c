@@ -1618,7 +1618,7 @@ free_gpio_conf:
 static int cam_soc_util_request_gpio_table(
 	struct cam_hw_soc_info *soc_info, bool gpio_en)
 {
-	int rc = 0, i = 0;
+	int rc = 0, i = 0, j = 0;
 	uint8_t size = 0;
 	struct cam_soc_gpio_data *gpio_conf =
 			soc_info->gpio_data;
@@ -1650,17 +1650,23 @@ static int cam_soc_util_request_gpio_table(
 			rc = gpio_request_one(gpio_tbl[i].gpio,
 				gpio_tbl[i].flags, gpio_tbl[i].label);
 			if (rc) {
-				/*
-				 * After GPIO request fails, contine to
-				 * apply new gpios, outout a error message
-				 * for driver bringup debug
-				 */
 				CAM_ERR(CAM_UTIL, "gpio %d:%s request fails",
 					gpio_tbl[i].gpio, gpio_tbl[i].label);
+				if (i) {
+					/*
+					 * if any gpio_request fails, free the
+					 * previous successful gpio entries and
+					 * return failure to caller.
+					 */
+					for (j = 0; j < i; j++)
+						gpio_free(gpio_tbl[j].gpio);
+				}
+				break;
 			}
 		}
 	} else {
-		gpio_free_array(gpio_tbl, size);
+		for (i = 0; i < size; i++)
+			gpio_free(gpio_tbl[i].gpio);
 	}
 
 	return rc;
