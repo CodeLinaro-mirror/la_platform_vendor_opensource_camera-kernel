@@ -552,11 +552,11 @@ int cam_ife_csid_cid_reserve(struct cam_ife_csid_cid_data *cid_data,
 	cid_data[i].cid_cnt++;
 	*cid_value = i;
 
-	for (j = 0; j < cid_data->num_vc_dt; j++) {
+	for (j = 0; j < cid_data[i].num_vc_dt; j++) {
 		CAM_DBG(CAM_ISP,
 			"CSID[%d] cid_value:%d cid_cnt:%d num_vc_dt:%d vc:%d dt:%d per_port_acquire:%d",
-			hw_idx, *cid_value, cid_data[i].cid_cnt, cid_data->num_vc_dt,
-			cid_data->vc_dt[j].vc, cid_data->vc_dt[j].dt,
+			hw_idx, *cid_value, cid_data[i].cid_cnt, cid_data[i].num_vc_dt,
+			cid_data[i].vc_dt[j].vc, cid_data[i].vc_dt[j].dt,
 			reserve->per_port_acquire);
 	}
 
