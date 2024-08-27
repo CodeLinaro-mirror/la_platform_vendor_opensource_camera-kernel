@@ -55,12 +55,12 @@ int cam_sync_init_row(struct sync_table_row *table,
 	INIT_LIST_HEAD(&row->children_list);
 	row->type = type;
 	row->sync_id = idx;
+	init_completion(&row->signaled);
 	row->state = CAM_SYNC_STATE_ACTIVE;
 	row->remaining = 0;
 	row->uid = 0;
 	row->sync_manager_idx = sync_manager_idx;
 	atomic_set(&row->ref_cnt, 0);
-	init_completion(&row->signaled);
 	INIT_LIST_HEAD(&row->callback_list);
 	INIT_LIST_HEAD(&row->user_payload_list);
 	CAM_DBG(CAM_SYNC,
