@@ -158,6 +158,12 @@ static int cam_tfe_mgr_handle_reg_dump(struct cam_tfe_hw_mgr_ctx *ctx,
 		return rc;
 	}
 
+	if (!ctx->init_done) {
+		CAM_WARN(CAM_ISP, "regdump can't possible as HW not initialized, ctx_idx: %u",
+				ctx->ctx_index);
+		return 0;
+	}
+
 	if (!atomic_read(&ctx->cdm_done))
 		CAM_WARN_RATE_LIMIT(CAM_ISP,
 			"Reg dump values might be from more than one request");
@@ -199,7 +205,7 @@ static int cam_tfe_mgr_get_hw_caps_internal(void *hw_mgr_priv,
 	for (i = 0; i < CAM_TFE_CSID_HW_NUM_MAX; i++) {
 		if (!hw_mgr->csid_devices[i])
 			break;
-		if (query_isp->num_dev < i)
+		if (i >= query_isp->num_dev)
 			return -EINVAL;
 
 		query_isp->dev_caps[i].hw_type = CAM_ISP_TFE_HW_TFE;
@@ -295,7 +301,8 @@ static int cam_tfe_mgr_get_hw_caps_v2(void *hw_mgr_priv,
 		return -EINVAL;
 	}
 
-	if (!tmp_query_isp_v2.num_dev) {
+	if (!tmp_query_isp_v2.num_dev ||
+			tmp_query_isp_v2.num_dev > CAM_TFE_CSID_HW_NUM_MAX) {
 		CAM_ERR(CAM_ISP, "Invalid Num of dev is %d query cap version %d",
 			tmp_query_isp_v2.num_dev, tmp_query_isp_v2.version);
 		rc = -EINVAL;
@@ -2442,6 +2449,10 @@ static int cam_tfe_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	if (is_shdr_en && !is_shdr_master)
 		tfe_ctx->is_shdr_slave = true;
 
+	CAM_INFO(CAM_ISP, "ctx %d TFE index %d is_dual=%d is_shdr=%d shdr_master=%d",
+		tfe_ctx->ctx_index, tfe_ctx->base[0].idx, tfe_ctx->is_dual,
+		is_shdr_en, is_shdr_master);
+
 	for (i = 0; i < acquire_hw_info->num_inputs; i++) {
 		cam_tfe_hw_mgr_preprocess_port(tfe_ctx, &in_port[i], &num_pix_port_per_in,
 			&num_rdi_port_per_in, &num_pd_port_per_in, &pdaf_enable, &lcr_enable);
@@ -3501,8 +3512,6 @@ static int cam_tfe_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 		cam_tfe_mgr_csid_change_halt_mode(ctx,
 			CAM_TFE_CSID_HALT_MODE_INTERNAL);
 
-	CAM_DBG(CAM_ISP, "Stopping master CSID idx %d", master_base_idx);
-
 	/* Stop the master CSID path first */
 	cam_tfe_mgr_csid_stop_hw(ctx, &ctx->res_list_tfe_csid,
 		master_base_idx, csid_halt_type);
@@ -3648,7 +3657,7 @@ static int cam_tfe_mgr_restart_hw(void *start_hw_args)
 
 	CAM_DBG(CAM_ISP, "START CSID HW ... in ctx id:%d", ctx->ctx_index);
 	/* Start the TFE CSID HW devices */
-	list_for_each_entry(hw_mgr_res, &ctx->res_list_tfe_csid, list) {
+	list_for_each_entry_reverse(hw_mgr_res, &ctx->res_list_tfe_csid, list) {
 		rc = cam_tfe_hw_mgr_start_hw_res(hw_mgr_res, ctx);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Can not start TFE CSID (%d)",
@@ -3853,7 +3862,7 @@ start_only:
 	CAM_DBG(CAM_ISP, "START CSID HW ... in ctx id:%d",
 		ctx->ctx_index);
 	/* Start the TFE CSID HW devices */
-	list_for_each_entry(hw_mgr_res, &ctx->res_list_tfe_csid, list) {
+	list_for_each_entry_reverse(hw_mgr_res, &ctx->res_list_tfe_csid, list) {
 		rc = cam_tfe_hw_mgr_start_hw_res(hw_mgr_res, ctx);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Can not start TFE CSID (%d)",
