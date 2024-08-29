@@ -64,6 +64,8 @@
 
 #include "cam_generated_h"
 
+#include "cam_hdmi_bdg_uxe_dev.h"
+
 char camera_banner[] = "Camera-Banner: (" CAMERA_COMPILE_BY "@"
 	CAMERA_COMPILE_HOST ") (" CAMERA_COMPILE_TIME ")";
 
@@ -123,6 +125,7 @@ static const struct camera_submodule_component camera_sensor[] = {
 	{&cam_flash_init_module, &cam_flash_exit_module},
 	{&hdmi_bdg_irq_handler_init, &hdmi_bdg_irq_handler_exit},
 	{&dp_bdg_irq_handler_init, &dp_bdg_irq_handler_exit},
+	{&cam_hdmi_bdg_uxe_init_module, &cam_hdmi_bdg_uxe_exit_module},
 #endif
 };
 
