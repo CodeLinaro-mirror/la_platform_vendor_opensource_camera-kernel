@@ -28,7 +28,7 @@ struct cam_irq_bh_api worker_bh_api = {
 		mutex_unlock(&(worker)->mutex_lock); \
 }
 
-#ifdef CONFIG_KTHREAD_WORKER
+#ifdef CONFIG_CAM_KTHREAD_WORKER
 #define WORK struct kthread_work
 static struct cam_kthread_info g_cam_kthread_info;
 #else
@@ -130,7 +130,7 @@ void cam_req_mgr_process_worker(WORK *w)
 }
 
 
-#ifdef CONFIG_KTHREAD_WORKER
+#ifdef CONFIG_CAM_KTHREAD_WORKER
 int cam_req_mgr_kthread_set_thread_prop(struct cam_kthread_data *kthread_data)
 {
 	struct sched_attr sched_attr = {0};
@@ -299,7 +299,7 @@ inline int cam_req_mgr_worker_create(char *name, int32_t num_tasks,
 	int32_t i, rc;
 	struct crm_worker_task  *task;
 	struct cam_req_mgr_core_worker *crm_worker = NULL;
-#ifdef CONFIG_KTHREAD_WORKER
+#ifdef CONFIG_CAM_KTHREAD_WORKER
 	struct cam_kthread_data *kthread_data;
 #endif
 
@@ -345,7 +345,7 @@ inline int cam_req_mgr_worker_create(char *name, int32_t num_tasks,
 			cam_req_mgr_worker_put_task(task);
 		}
 		*worker = crm_worker;
-#ifdef CONFIG_KTHREAD_WORKER
+#ifdef CONFIG_CAM_KTHREAD_WORKER
 		kthread_data = vzalloc(sizeof(struct cam_kthread_data));
 		kthread_data->kthread_worker = crm_worker->job;
 		if (!g_cam_kthread_info.is_list_initalized) {
@@ -506,7 +506,7 @@ inline void cam_req_mgr_worker_resume(struct cam_req_mgr_core_worker *worker)
 
 inline int cam_req_mgr_set_thread_prop(struct cam_req_mgr_thread_prop_control *thread_prop)
 {
-#ifdef CONFIG_KTHREAD_WORKER
+#ifdef CONFIG_CAM_KTHREAD_WORKER
 	struct cam_kthread_data *kthread_data;
 	int rc = 0;
 

@@ -58,3 +58,12 @@ config SECURE_CAMERA_25
 	  feature that allows the usage of non contiguous
 	  buffers for the secure camera images by
 	  lending the buffers to a trusted virtual machine.
+
+config CAM_KTHREAD_WORKER
+	bool "Enable kthread APIs in camera"
+	help
+	  This is enabling kernel thread modules to use
+	  kthread APIs in camera.
+	  When this flag is set, we support
+	  kthread for camera kernel worker threads.
+
