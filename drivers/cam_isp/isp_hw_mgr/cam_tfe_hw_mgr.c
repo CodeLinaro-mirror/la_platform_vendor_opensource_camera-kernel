@@ -2442,10 +2442,6 @@ static int cam_tfe_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	if (is_shdr_en && !is_shdr_master)
 		tfe_ctx->is_shdr_slave = true;
 
-	CAM_INFO(CAM_ISP, "ctx %d TFE index %d is_dual=%d is_shdr=%d shdr_master=%d",
-		tfe_ctx->ctx_index, tfe_ctx->base[0].idx, tfe_ctx->is_dual,
-		is_shdr_en, is_shdr_master);
-
 	for (i = 0; i < acquire_hw_info->num_inputs; i++) {
 		cam_tfe_hw_mgr_preprocess_port(tfe_ctx, &in_port[i], &num_pix_port_per_in,
 			&num_rdi_port_per_in, &num_pd_port_per_in, &pdaf_enable, &lcr_enable);
@@ -2455,6 +2451,7 @@ static int cam_tfe_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	}
 
 	total_ports = total_pix_port + total_rdi_port + total_pd_port;
+	acquire_args->total_ports_acq = total_ports;
 	tfe_ctx->res_list_tfe_out = kcalloc(total_ports,
 		sizeof(struct cam_isp_hw_mgr_res), GFP_KERNEL);
 	if (!tfe_ctx->res_list_tfe_out) {
@@ -2650,7 +2647,9 @@ static int cam_tfe_mgr_acquire_dev(void *hw_mgr_priv, void *acquire_hw_args)
 	uint32_t                           pdad_enable         = 0;
 	uint32_t                           total_pix_port = 0;
 	uint32_t                           total_rdi_port = 0;
+	uint32_t                           total_pd_port = 0;
 	uint32_t                           in_port_length = 0;
+	uint32_t                           total_ports = 0;
 
 	CAM_DBG(CAM_ISP, "Enter...");
 
@@ -2775,6 +2774,7 @@ static int cam_tfe_mgr_acquire_dev(void *hw_mgr_priv, void *acquire_hw_args)
 				&pdad_enable);
 			total_pix_port += num_pix_port_per_in;
 			total_rdi_port += num_rdi_port_per_in;
+			total_pd_port += num_pd_port_per_in;
 
 			kfree(in_port);
 			in_port = NULL;
@@ -2790,6 +2790,9 @@ static int cam_tfe_mgr_acquire_dev(void *hw_mgr_priv, void *acquire_hw_args)
 			goto free_res;
 		}
 	}
+
+	total_ports = total_pix_port + total_rdi_port + total_pd_port;
+	acquire_args->total_ports_acq = total_ports;
 
 	/* Check whether context has only RDI resource */
 	if (!total_pix_port) {
@@ -3497,6 +3500,8 @@ static int cam_tfe_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 	if (csid_halt_type == CAM_TFE_CSID_HALT_IMMEDIATELY)
 		cam_tfe_mgr_csid_change_halt_mode(ctx,
 			CAM_TFE_CSID_HALT_MODE_INTERNAL);
+
+	CAM_DBG(CAM_ISP, "Stopping master CSID idx %d", master_base_idx);
 
 	/* Stop the master CSID path first */
 	cam_tfe_mgr_csid_stop_hw(ctx, &ctx->res_list_tfe_csid,
