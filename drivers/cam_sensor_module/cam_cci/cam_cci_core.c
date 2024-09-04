@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1607,15 +1607,30 @@ static int32_t cam_cci_i2c_write(struct v4l2_subdev *sd,
 	int32_t rc = 0;
 	struct cci_device *cci_dev;
 	enum cci_i2c_master_t master;
+	enum i2c_freq_mode i2c_freq_mode;
 
 	cci_dev = v4l2_get_subdevdata(sd);
-
+	if (!cci_dev || !c_ctrl) {
+                CAM_ERR(CAM_CCI, "failed: invalid params %pK %pK",
+                        cci_dev, c_ctrl);
+                rc = -EINVAL;
+                return rc;
+        }
 	if (cci_dev->cci_state != CCI_STATE_ENABLED) {
 		CAM_ERR(CAM_CCI, "invalid cci state %d",
 			cci_dev->cci_state);
 		return -EINVAL;
 	}
 	master = c_ctrl->cci_info->cci_i2c_master;
+	if (master >= MASTER_MAX || master < 0) {
+                CAM_ERR(CAM_CCI, "Invalid I2C master addr");
+                return -EINVAL;
+        }
+	i2c_freq_mode = c_ctrl->cci_info->i2c_freq_mode;
+	if ((i2c_freq_mode >= I2C_MAX_MODES) || (i2c_freq_mode < 0)) {
+		CAM_ERR(CAM_CCI, "invalid i2c_freq_mode = %d", i2c_freq_mode);
+		return -EINVAL;
+        }
 	CAM_DBG(CAM_CCI, "set param sid 0x%x retries %d id_map %d",
 		c_ctrl->cci_info->sid, c_ctrl->cci_info->retries,
 		c_ctrl->cci_info->id_map);
