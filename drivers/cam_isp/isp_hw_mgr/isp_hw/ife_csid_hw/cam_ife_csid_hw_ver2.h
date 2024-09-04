@@ -535,6 +535,22 @@ struct cam_ife_csid_token_info {
 };
 
 /*
+ * struct cam_ife_csid_trigger_cam_data: place holder for trigger cam data
+ *
+ * @primary_vc:                Primary VC, VC of primary RDI in RDI only context
+ *                             otherwise VC of IPP path
+ * @active_res_mask:           Active path or resource mask
+ * @is_trigger_type:           Indicates if it is a trigger mode or not.
+ *
+ */
+
+struct cam_ife_csid_trigger_cam_data {
+	uint32_t                 primary_vc;
+	uint32_t                 active_res_mask;
+	bool                     is_trigger_type;
+};
+
+/*
  * struct cam_ife_csid_ver2_hw: place holder for csid hw
  *
  * @path_res:                 array of path resources
@@ -572,7 +588,8 @@ struct cam_ife_csid_token_info {
  * @init_global_reset_cnt:    Count of global reset called during init
  * @rup_aup_mask:             rup aup mask enabled for particular HW
  * @per_port_group_index:     Group index if per port is enabled
- *
+ * @primary_vc:               Indicates Primary vc
+ * @active_res_mask:          Indicates active mask of res
  */
 struct cam_ife_csid_ver2_hw {
 	struct cam_isp_resource_node           path_res
@@ -615,6 +632,7 @@ struct cam_ife_csid_ver2_hw {
 	atomic_t                               init_global_reset_cnt;
 	uint32_t                               rup_aup_mask;
 	int                                    per_port_group_index;
+	struct cam_ife_csid_trigger_cam_data   trigger_cam_data;
 };
 
 /*

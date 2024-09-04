@@ -354,6 +354,8 @@ struct cam_csid_hw_stop_args {
  * @is_per_port_start:  Indicates if start Hw is called on real start call or
  *                      on per port enabled start call.
  * @is_frame_drop:      Start triggered internally during frame drop recovery
+ * @is_trigger_mode:    Indicates if the start hw is called for trigger more or
+ *                      streaming mode.
  */
 struct cam_csid_hw_start_args {
 	struct cam_isp_resource_node            **node_res;
@@ -361,6 +363,7 @@ struct cam_csid_hw_start_args {
 	bool                                      is_internal_start;
 	bool                                      is_per_port_start;
 	bool                                      is_frame_drop;
+	bool                                      is_trigger_mode;
 };
 
 /**
@@ -550,6 +553,10 @@ struct cam_ife_csid_discard_init_frame_args {
 struct cam_ife_csid_get_csid_cid_info_args {
 	void * data;
 	struct cam_isp_resource_node     *res;
+};
+
+struct cam_ife_csid_get_all_path_vc_mask {
+	uint32_t enabled_path_vc;
 };
 
 #endif /* _CAM_CSID_HW_INTF_H_ */
