@@ -267,7 +267,8 @@ struct cam_isp_bw_clk_config_info {
  * @per_port_enable:         Indicates if perport feature is enabled or not
  * @crop_update_entry:       Crop update info entry
  * @is_crop_update_valid:    Indicate if the crop info is valid
- *
+ * @setting_id:              Per request setting ID received from UMD
+ * @settingbuffer_kmdvaddr:  Setting buffer cpu address
  */
 struct cam_isp_prepare_hw_update_data {
 	void                                 *isp_mgr_ctx;
@@ -287,6 +288,8 @@ struct cam_isp_prepare_hw_update_data {
 	bool                                  mup_en;
 	struct cam_hw_update_entry            crop_update_entry;
 	bool                                  is_crop_update_valid;
+	uint64_t                              setting_id;
+	uintptr_t                             settingbuffer_kmdvaddr;
 };
 
 
@@ -418,6 +421,7 @@ enum cam_isp_hw_mgr_command {
 	CAM_ISP_HW_MGR_UPDATE_FRAMEDROP_RECOVERY_PROGRESS,
 	CAM_HW_MGR_CMD_CHECK_RUP_APPLIED_REQ,
 	CAM_HW_MGR_CMD_GET_CSID_CID_INFO,
+	CAM_ISP_HW_MGR_GET_FOVEATION_INFO,
 	CAM_ISP_HW_MGR_CMD_MAX,
 };
 
@@ -451,6 +455,9 @@ enum cam_isp_ctx_type {
  * @recovery_already_in_progress: Indiates if current ife is
  *                          process for frame drop recovery
  * @rup_for_applied_req:   Check if rup is received for proper applied req
+ * @setting_size:          Size of setting variable ie: 32bit, 64 bit
+ * @foveation_en:          Flag to indicate if foveation is enabled
+ * @settingbuf_res_id:     Resource ID of setting ID buffer
  */
 struct cam_isp_hw_cmd_args {
 	uint32_t                          cmd_type;
@@ -482,6 +489,11 @@ struct cam_isp_hw_cmd_args {
 		uint64_t                      dropped_ife_req;
 		bool                          recovery_already_in_progress;
 		bool                          rup_for_applied_req;
+		struct {
+			uint32_t                      setting_size;
+			bool                          foveation_en;
+			uint32_t                      settingbuf_res_id;
+		} fov_info;
 	} u;
 };
 

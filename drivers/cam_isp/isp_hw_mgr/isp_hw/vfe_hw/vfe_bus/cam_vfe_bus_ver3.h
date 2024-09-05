@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 
@@ -274,6 +274,7 @@ struct cam_vfe_bus_ver3_vfe_out_data {
 	uint32_t                         mid[CAM_VFE_BUS_VER3_MAX_MID_PER_PORT];
 	bool                             limiter_enabled;
 	uint32_t   stored_irq_masks[CAM_VFE_BUS_VER3_MAX_STORED_MASKS][CAM_VFE_BUS_VER3_IRQ_MAX];
+	bool                             is_isr_en;
 };
 
 /*

@@ -1917,6 +1917,40 @@ static int __cam_isp_ctx_handle_buf_done_for_req_list(
 	return rc;
 }
 
+static int __cam_isp_ctx_signal_dummy_fences(
+	struct cam_isp_context *ctx_isp,
+	struct cam_isp_ctx_req *req_isp)
+{
+	int rc = -EINVAL, i;
+	struct cam_sync_signal_param param = {0};
+	struct cam_sync_timestamp ev_timestamp = {0};
+
+	param.status = CAM_SYNC_STATE_SIGNALED_SUCCESS;
+	param.event_cause = CAM_SYNC_COMMON_EVENT_SUCCESS;
+	ev_timestamp.sof_timestamp = ctx_isp->sof_timestamp_val;
+	ev_timestamp.boot_timestamp = ctx_isp->boot_timestamp;
+
+	for (i = 0; i < req_isp->num_fence_map_out; i++) {
+		if (req_isp->fence_map_out[i].resource_handle == ctx_isp->settingbuf_res_id) {
+			param.sync_obj = req_isp->fence_map_out[i].sync_id;
+			rc = cam_sync_signal(&param, &ev_timestamp);
+			if (rc)
+				CAM_ERR(CAM_ISP, "Sync failed with rc = %d",
+					rc);
+			break;
+		}
+	}
+	if (i == req_isp->num_fence_map_out) {
+		CAM_ERR(CAM_ISP,
+			"Setting buffer res_id: %u not found in resource handle, ctx: %u, req: %u",
+			ctx_isp->settingbuf_res_id, ctx_isp->base->ctx_id,
+			req_isp->base->request_id);
+		rc = -EINVAL;
+	}
+
+	return rc;
+}
+
 static int __cam_isp_ctx_handle_buf_done_for_request(
 	struct cam_isp_context *ctx_isp,
 	struct cam_ctx_request  *req,
@@ -2112,10 +2146,15 @@ static int __cam_isp_ctx_handle_buf_done_for_request(
 		WARN_ON(req_isp->num_acked > req_isp->num_fence_map_out);
 	}
 
-	if (req_isp->num_acked != req_isp->num_fence_map_out)
+	if (req_isp->num_acked == req_isp->num_fence_map_out)
+		rc = __cam_isp_ctx_handle_buf_done_for_req_list(ctx_isp, req);
+	else if ((ctx_isp->is_foveation_enable) && (req_isp->num_acked ==
+			req_isp->num_fence_map_out - 1)) {
+		rc = __cam_isp_ctx_signal_dummy_fences(ctx_isp, req_isp);
+		rc = __cam_isp_ctx_handle_buf_done_for_req_list(ctx_isp, req);
+	} else
 		return rc;
 
-	rc = __cam_isp_ctx_handle_buf_done_for_req_list(ctx_isp, req);
 	return rc;
 }
 
@@ -2248,6 +2287,12 @@ static int __cam_isp_ctx_handle_deferred_buf_done_in_bubble(
 
 	if (req_isp->num_acked == req_isp->num_fence_map_out)
 		rc = __cam_isp_ctx_handle_buf_done_for_req_list(ctx_isp, req);
+	else if ((ctx_isp->is_foveation_enable) && (req_isp->num_acked ==
+			req_isp->num_fence_map_out - 1)) {
+		rc = __cam_isp_ctx_signal_dummy_fences(ctx_isp, req_isp);
+		rc = __cam_isp_ctx_handle_buf_done_for_req_list(ctx_isp, req);
+	} else
+		return rc;
 
 	return rc;
 }
@@ -2517,10 +2562,15 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 			req_isp->num_fence_map_out, ctx->ctx_id);
 	}
 
-	if (req_isp->num_acked != req_isp->num_fence_map_out)
+	if (req_isp->num_acked == req_isp->num_fence_map_out)
+		rc = __cam_isp_ctx_handle_buf_done_for_req_list(ctx_isp, req);
+	else if ((ctx_isp->is_foveation_enable) && (req_isp->num_acked ==
+			req_isp->num_fence_map_out - 1)) {
+		rc = __cam_isp_ctx_signal_dummy_fences(ctx_isp, req_isp);
+		rc = __cam_isp_ctx_handle_buf_done_for_req_list(ctx_isp, req);
+	} else
 		return rc;
 
-	rc = __cam_isp_ctx_handle_buf_done_for_req_list(ctx_isp, req);
 	return rc;
 }
 
@@ -8139,6 +8189,25 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 			if (rc)
 				CAM_ERR(CAM_ISP, "Enqueue INIT pkt failed ctx:%u", ctx->ctx_id);
 			ctx_isp->init_received = true;
+
+			/* Query foveation info */
+			hw_cmd_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
+			hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+			isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_GET_FOVEATION_INFO;
+			isp_hw_cmd_args.cmd_data = NULL;
+			hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+
+			rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
+				&hw_cmd_args);
+			if (rc) {
+				CAM_ERR(CAM_ISP,
+					"ctx:%d Getting sensor foveation info for req:%d failed",
+					ctx->ctx_id, packet->header.request_id);
+				goto put_ref;
+			}
+			ctx_isp->is_foveation_enable = isp_hw_cmd_args.u.fov_info.foveation_en;
+			ctx_isp->setting_size = isp_hw_cmd_args.u.fov_info.setting_size;
+			ctx_isp->settingbuf_res_id = isp_hw_cmd_args.u.fov_info.settingbuf_res_id;
 		} else {
 			rc = -EINVAL;
 			CAM_ERR(CAM_ISP, "Receivied INIT pkt in wrong state:%d ctx:%u",
@@ -9939,14 +10008,18 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 		bool check_applied_state, int *applied_req, int res_id, uint64_t sof_ts)
 {
 	int rc = 0;
-	struct cam_ctx_request           *req;
-	struct cam_isp_ctx_req           *req_isp;
+	struct cam_ctx_request           *req, *active_req = NULL, *pending_req = NULL;
+	struct cam_ctx_request           *req_temp = NULL;
+	struct cam_isp_ctx_req           *req_isp, *active_req_isp, *pending_req_isp;
 	struct cam_context               *cam_ctx = ctx_isp->base;
 	struct cam_ctx_ops               *ctx_ops = NULL;
 	struct cam_req_mgr_apply_request apply_req;
+	struct list_head                  temp_req_list;
 	uint64_t prev_ts, curr_ts = 0, boot_ts;
+	uint64_t sensor_setting_id = 0, isp_setting_id;
 
 	CAM_DBG(CAM_ISP, "enter no crm apply ctx:%u", cam_ctx->ctx_id);
+	INIT_LIST_HEAD(&temp_req_list);
 	mutex_lock(&ctx_isp->isp_mutex);
 	if (list_empty(&cam_ctx->pending_req_list)) {
 		CAM_INFO(CAM_ISP, "pending list empty, returning ctx:%u",
@@ -9960,6 +10033,62 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 		goto end;
 
 	req_isp = (struct cam_isp_ctx_req *) req->req_priv;
+
+	mutex_lock(&ctx_isp->isp_mutex);
+	if (ctx_isp->is_foveation_enable && !list_empty(&cam_ctx->active_req_list)) {
+		active_req = list_first_entry(&cam_ctx->active_req_list,
+			struct cam_ctx_request, list);
+
+		active_req_isp = (struct cam_isp_ctx_req *)active_req->req_priv;
+		if (ctx_isp->setting_size == 8)
+			sensor_setting_id =
+				*(uint32_t *)active_req_isp->hw_update_data.settingbuffer_kmdvaddr;
+		else if (ctx_isp->setting_size == 32)
+			sensor_setting_id =
+				*(uint32_t *)active_req_isp->hw_update_data.settingbuffer_kmdvaddr;
+		else if (ctx_isp->setting_size == 64)
+			sensor_setting_id =
+				*(uint64_t *)active_req_isp->hw_update_data.settingbuffer_kmdvaddr;
+		else
+			CAM_ERR(CAM_ISP,
+				"Invalid setting size, req: %u, ctx: %u",
+				req->request_id, cam_ctx->ctx_id);
+
+		isp_setting_id = req_isp->hw_update_data.setting_id;
+
+		if (sensor_setting_id < isp_setting_id) {
+			CAM_INFO(CAM_ISP,
+				"Skip apply req: %d cam_ctx: %u link: 0x%x, mismatched sensor_setting_id: %u, isp_setting_id : %u",
+				req->request_id, cam_ctx->ctx_id, cam_ctx->link_hdl,
+				sensor_setting_id, isp_setting_id);
+			CAM_DBG(CAM_ISP, "exit no crm apply ctx:%d", cam_ctx->ctx_id);
+			return 0;
+		} else if (sensor_setting_id > isp_setting_id) {
+			CAM_WARN(CAM_ISP,
+				"Mismatched sensor_setting_id: %u, isp_setting_id : %u, req %lld ctx %d res %d",
+				sensor_setting_id, isp_setting_id, req->request_id,
+				cam_ctx->ctx_id, res_id);
+			list_del_init(&req->list);
+			list_add_tail(&req->list, &temp_req_list);
+
+			/* Check if new setting is available */
+			list_for_each_entry_safe(pending_req, req_temp,
+				&cam_ctx->pending_req_list, list) {
+				pending_req_isp = (struct cam_isp_ctx_req *) pending_req->req_priv;
+				if (pending_req_isp->hw_update_data.setting_id !=
+					sensor_setting_id) {
+					list_del_init(&pending_req->list);
+					list_add_tail(&pending_req->list, &temp_req_list);
+				} else {
+					CAM_DBG(CAM_ISP, "New setting found in req: %u",
+						pending_req->request_id);
+					req = pending_req;
+					break;
+				}
+			}
+		}
+	}
+	mutex_unlock(&ctx_isp->isp_mutex);
 
 	/* Timestamp matching is required only for trigger camera in no-crm mode*/
 	if ((ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) &&
@@ -10036,6 +10165,18 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 			*applied_req = apply_req.request_id;
 			ctx_isp->additional_timeout =
 				cam_req_mgr_link_get_additional_timeout(ctx_isp->base->link_hdl);
+		}
+
+		/* Signal error for older requests and move them to free req list */
+		if (!list_empty(&temp_req_list)) {
+			list_for_each_entry_safe(req, req_temp, &temp_req_list, list) {
+				req_isp = (struct cam_isp_ctx_req *) req->req_priv;
+				__cam_isp_ctx_send_req_error(ctx_isp, req_isp);
+				mutex_lock(&ctx_isp->isp_mutex);
+				list_del_init(&req->list);
+				list_add_tail(&req->list, &cam_ctx->free_req_list);
+				mutex_unlock(&ctx_isp->isp_mutex);
+			}
 		}
 		crm_timer_reset(ctx_isp->independent_crm_sof_timer);
 	}
