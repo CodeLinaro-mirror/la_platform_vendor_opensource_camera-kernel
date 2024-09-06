@@ -50,6 +50,19 @@ struct cam_ife_hw_mgr_debug {
 };
 
 /**
+ * struct cam_cmd_buf_desc_addr_len
+ *
+ * brief:                       structure to store cpu addr and size of
+ *                              reg dump descriptors
+ * @cpu_addr:                   cpu addr of buffer
+ * @size:                       size of the buffer
+ */
+
+struct cam_cmd_buf_desc_addr_len {
+	uintptr_t cpu_addr;
+	size_t    buf_size;
+};
+/**
  * struct cam_vfe_hw_mgr_ctx - IFE HW manager Context object
  *
  * @list:                   used by the ctx list.
@@ -146,6 +159,8 @@ struct cam_ife_hw_mgr_ctx {
 	struct cam_cmd_buf_desc         reg_dump_buf_desc[
 						CAM_REG_DUMP_MAX_BUF_ENTRIES];
 	uint32_t                        num_reg_dump_buf;
+	struct cam_cmd_buf_desc_addr_len           reg_dump_cmd_buf_addr_len[
+						CAM_REG_DUMP_MAX_BUF_ENTRIES];
 	uint64_t                        applied_req_id;
 	uint64_t                        last_dump_flush_req_id;
 	uint64_t                        last_dump_err_req_id;

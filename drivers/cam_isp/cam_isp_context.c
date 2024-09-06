@@ -3457,7 +3457,7 @@ static int __cam_isp_ctx_dump_req_info(
 	size_t                  buf_len,
 	size_t                 *offset)
 {
-	int                                 i, rc;
+	int                                 i;
 	uint8_t                            *dst;
 	int32_t                            *addr, *start;
 	uint32_t                            min_len;
@@ -3505,9 +3505,7 @@ static int __cam_isp_ctx_dump_req_info(
 	}
 	hdr->size = hdr->word_size * (addr - start);
 	*offset += hdr->size + sizeof(struct cam_isp_context_dump_header);
-	rc = cam_isp_ctx_dump_req(req_isp, cpu_addr, buf_len,
-		offset, true);
-	return rc;
+	return 0;
 }
 
 static int __cam_isp_ctx_dump_in_top_state(
@@ -3631,6 +3629,9 @@ hw_dump:
 		goto end;
 	}
 	spin_unlock_bh(&ctx->lock);
+
+	rc = cam_isp_ctx_dump_req(req_isp, cpu_addr, buf_len,
+		&dump_info->offset, true);
 
 	if (ctx->hw_mgr_intf->hw_dump) {
 		dump_args.offset = dump_info->offset;
