@@ -13928,7 +13928,6 @@ static int cam_isp_blob_ife_process_primary_port_configs(
 	struct cam_isp_primary_port_config *port_config)
 {
 	int i, rc = 0, res_id;
-	unsigned long comp_grp_mask = 0;
 	struct cam_isp_hw_mgr_res *isp_out_res;
 	struct cam_isp_resource_node *isp_res;
 	struct cam_isp_primary_port_grp_info *grp_info = NULL;
@@ -13970,12 +13969,6 @@ static int cam_isp_blob_ife_process_primary_port_configs(
 	for (i = 0; i < port_config->num_ports; i++) {
 		grp_info = &port_config->port_info[i];
 		res_id = grp_info->res_id & 0xFF;
-
-		if (test_and_set_bit(grp_info->comp_grp, &comp_grp_mask)) {
-			CAM_ERR(CAM_ISP, "Comp group: %u already configured with a resource",
-				grp_info->comp_grp);
-			goto err;
-		}
 
 		if (cam_ife_hw_mgr_is_virtual_rdi_res(grp_info->res_id) &&
 			hw_mgr_ctx->flags.per_port_en) {
