@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -14,6 +14,7 @@
 #include "cam_cx_ipeak.h"
 #include "cam_mem_mgr.h"
 #include "cam_presil_hw_access.h"
+#include "cam_compat.h"
 
 #define CAM_TO_MASK(bitn)          (1 << (int)(bitn))
 #define CAM_IS_BIT_SET(mask, bit)  ((mask) & CAM_TO_MASK(bit))
@@ -823,12 +824,12 @@ int cam_soc_util_irq_enable(struct cam_hw_soc_info *soc_info)
 		return -EINVAL;
 	}
 
-	if (!soc_info->irq_line) {
+	if (soc_info->irq_num < 0) {
 		CAM_ERR(CAM_UTIL, "No IRQ line available");
 		return -ENODEV;
 	}
 
-	enable_irq(soc_info->irq_line->start);
+	enable_irq(soc_info->irq_num);
 
 	return 0;
 }
@@ -840,12 +841,12 @@ int cam_soc_util_irq_disable(struct cam_hw_soc_info *soc_info)
 		return -EINVAL;
 	}
 
-	if (!soc_info->irq_line) {
+	if (soc_info->irq_num < 0) {
 		CAM_ERR(CAM_UTIL, "No IRQ line available");
 		return -ENODEV;
 	}
 
-	disable_irq(soc_info->irq_line->start);
+	disable_irq(soc_info->irq_num);
 
 	return 0;
 }
@@ -2066,11 +2067,9 @@ int cam_soc_util_get_dt_properties(struct cam_hw_soc_info *soc_info)
 			soc_info->dev_name);
 		rc = 0;
 	} else {
-		soc_info->irq_line =
-			platform_get_resource_byname(soc_info->pdev,
-			IORESOURCE_IRQ, soc_info->irq_name);
-		if (!soc_info->irq_line) {
-			CAM_ERR(CAM_UTIL, "no irq resource");
+		rc = cam_compat_util_get_irq(soc_info);
+		if (rc < 0) {
+			CAM_ERR(CAM_UTIL, "get irq resource failed: %d", rc);
 #ifndef CONFIG_CAM_PRESIL
 			rc = -ENODEV;
 			return rc;
@@ -2655,10 +2654,10 @@ int cam_soc_util_request_platform_resource(
 			goto put_regulator;
 	}
 
-	if (soc_info->irq_line) {
+	if (soc_info->irq_num > 0) {
 
 		rc = cam_soc_util_request_irq(soc_info->dev,
-			soc_info->irq_line->start,
+			soc_info->irq_num,
 			handler, IRQF_TRIGGER_RISING,
 			soc_info->irq_name, irq_data,
 			soc_info->mem_block[0]->start);
@@ -2760,10 +2759,10 @@ put_clk:
 		}
 	}
 
-	if (soc_info->irq_line) {
-		disable_irq(soc_info->irq_line->start);
+	if (soc_info->irq_num > 0) {
+		disable_irq(soc_info->irq_num);
 		devm_free_irq(soc_info->dev,
-			soc_info->irq_line->start, irq_data);
+			soc_info->irq_num, irq_data);
 	}
 
 put_regulator:
@@ -2829,7 +2828,7 @@ int cam_soc_util_release_platform_resource(struct cam_hw_soc_info *soc_info)
 		soc_info->reg_map[i].size = 0;
 	}
 
-	if (soc_info->irq_line) {
+	if (soc_info->irq_num > 0) {
 		if (cam_presil_mode_enabled()) {
 			if (cam_soc_util_is_presil_address_space(soc_info->mem_block[0]->start)) {
 				b_ret = cam_presil_unsubscribe_device_irq(
@@ -2839,9 +2838,9 @@ int cam_soc_util_release_platform_resource(struct cam_hw_soc_info *soc_info)
 			}
 		}
 
-		disable_irq(soc_info->irq_line->start);
+		disable_irq(soc_info->irq_num);
 		devm_free_irq(soc_info->dev,
-			soc_info->irq_line->start, soc_info->irq_data);
+			soc_info->irq_num, soc_info->irq_data);
 	}
 
 	cam_soc_util_release_pinctrl(soc_info);

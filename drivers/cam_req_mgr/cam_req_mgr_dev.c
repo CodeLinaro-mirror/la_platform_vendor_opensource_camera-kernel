@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -9,8 +10,10 @@
 #include <linux/highmem.h>
 #include <linux/types.h>
 #include <linux/rwsem.h>
-
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 #include <mm/slab.h>
+#endif
 
 #include <media/v4l2-fh.h>
 #include <media/v4l2-device.h>
@@ -859,8 +862,7 @@ static int cam_req_mgr_component_master_bind(struct device *dev)
 			CAM_ERR(CAM_CRM,
 				"Failed to create kmem_cache for crm_timer");
 		else
-			CAM_DBG(CAM_CRM, "Name : %s",
-				g_cam_req_mgr_timer_cachep->name);
+			CAM_DBG(CAM_CRM, "Name : cam_req_mgr_timer");
 	}
 
 	CAM_DBG(CAM_CRM, "All probes done, binding slave components");
