@@ -243,6 +243,22 @@ struct cam_ife_virtual_rdi_mapping {
 	uint32_t   acquired_rdi[CAM_ISP_STREAM_CFG_MAX];
 };
 
+/*
+ * struct cam_isp_scratch_buf_mem:
+ *
+ * @Brief:                   Scratch buf mem info for sensor foveation
+ *
+ * @kmdvaddr:                KMD virtual address of scratch buffer
+ * @iova:                    IOVA address of scratch buffer
+ * @size:                    Size of scratch buffer
+ * @handle:                  Mem handle of scratch buffer
+ */
+struct cam_isp_scratch_buf_mem {
+	uintptr_t       kmdvaddr;
+	uint32_t        iova;
+	size_t          size;
+	int32_t         handle;
+};
 
 /**
  * struct cam_ife_hw_mgr_ctx - IFE HW manager Context object
@@ -312,6 +328,7 @@ struct cam_ife_virtual_rdi_mapping {
  * @settingbuf_offset:      Offset of setting ID in res buffer
  * @setting_size:           Size of setting variable ie: 32bit, 64 bit
  * @settingid_check:        flag to indicate if settingid based check is enabled
+ * @scratch_buf_info       holds scratch buffer info for foveation usecase
  */
 struct cam_ife_hw_mgr_ctx {
 	struct list_head                     list;
@@ -385,6 +402,7 @@ struct cam_ife_hw_mgr_ctx {
 	uint32_t                             settingbuf_offset;
 	uint32_t                             setting_size;
 	bool                                 settingid_check;
+	struct cam_isp_scratch_buf_mem       scratch_buf_info;
 };
 
 /**
