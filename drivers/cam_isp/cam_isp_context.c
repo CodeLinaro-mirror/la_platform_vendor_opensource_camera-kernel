@@ -8394,7 +8394,7 @@ static int __cam_isp_ctx_allocate_mem_hw_entries(
 		}
 	}
 
-	for (i = 0; i < MAX_SETTING_PACKETS; i++) {
+	for (i = 0; i < MAX_SETTING_PACKETS && param->op_flags & CAM_IFE_CTX_UL_PATH; i++) {
 		ctx_isp->setting_data[i].req_isp.cfg  = ctx->hw_update_entry[i + CAM_ISP_CTX_REQ_MAX];
 		ctx_isp->setting_data[i].req_isp.fence_map_out = ctx->out_map_entries[i + CAM_ISP_CTX_REQ_MAX];
 	}
@@ -10292,9 +10292,11 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 	struct cam_ctx_request           *req;
 	struct cam_isp_ctx_req           *req_isp, *setting_req_isp;
 	struct cam_context               *cam_ctx = ctx_isp->base;
-	int                               setting_id, i, j, port_pattern_curr_idx, res_type;
+	int                               setting_id, i, j, k, port_pattern_curr_idx, res_type;
+	bool                              free_buffer_found;
 	struct cam_isp_ul_resource_update_entry *res_data;
 	bool buffer_found;
+	uint8_t *producer_queue;
 
 	if (list_empty(&cam_ctx->free_req_list)) {
 		CAM_INFO(CAM_ISP, "free list empty, returning ctx:%u",
@@ -10336,22 +10338,42 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 		if (!(ctx_isp->ul_data.pattern_period[i].pattern & BIT(port_pattern_curr_idx)))
 			continue;
 		for (j = 0; j < MAX_IO_RESOURCES; j++) {
-			if (res_type != res_data[i].resource_type)
+			if (res_type != res_data[j].resource_type)
 				continue;
+			k = res_data[j].curr_buf_index;
+			if (res_data[j].is_producer_q_valid) {
+				producer_queue = (uint8_t *)res_data[j].producer_q_kmdvaddr;
+				free_buffer_found = false;
+				do {
+					if (!producer_queue[k]) {
+						free_buffer_found = true;
+						break;
+					}
+					k = (k + 1) % res_data[j].buf_count;
+				} while (k != res_data[j].curr_buf_index);
+				if (!free_buffer_found) {
+					CAM_ERR(CAM_ISP, "Free buffer not found for res 0x%x", res_type);
+					req_isp->reapply_type = CAM_CONFIG_REAPPLY_NONE;
+					req_isp->cdm_reset_before_apply = false;
+					req_isp->num_acked = 0;
+					req_isp->num_deferred_acks = 0;
+					req_isp->path_irq_mask = 0;
+					req_isp->sensor_req_id = 0;
+					return -1;
+				}
+			}
 			memcpy(&req_isp->cfg[req_isp->num_cfg],
-				&res_data[i].hw_update_entries[res_data[i].curr_buf_index],
+				&res_data[j].hw_update_entries[k],
 				sizeof(struct cam_hw_update_entry));
 			memcpy(&req_isp->fence_map_out[req_isp->num_fence_map_out],
-				&res_data[i].out_map_entries[res_data[i].curr_buf_index],
+				&res_data[j].out_map_entries[k],
 				sizeof(struct cam_hw_fence_map_entry));
 			req_isp->num_cfg++;
 			req_isp->num_fence_map_out++;
-			res_data[i].curr_buf_index = (res_data[i].curr_buf_index + 1) %
-				res_data[i].buf_count;
+			res_data[j].curr_buf_index = k;
 			break;
 		}
 	}
-	ctx_isp->ul_data.curr_index_period++;
 
 	for (i = 0; i < ctx_isp->num_primary_ports; i++) {
 		buffer_found = false;
@@ -10369,11 +10391,34 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 				if (res_data[j].resource_type == ctx_isp->primary_port_info[i].res_id)
 					break;
 			}
+
+			k = (res_data[j].curr_buf_index + 1) % res_data[j].buf_count;
+			if (res_data[j].is_producer_q_valid) {
+				producer_queue = (uint8_t *)res_data[j].producer_q_kmdvaddr;
+				free_buffer_found = false;
+				while (k != res_data[j].curr_buf_index) {
+					if (!producer_queue[k]) {
+						free_buffer_found = true;
+						break;
+					}
+					k = (k + 1) % res_data[j].buf_count;
+				};
+				if (!free_buffer_found) {
+					CAM_ERR(CAM_ISP, "Free buffer not found for res 0x%x", res_type);
+					req_isp->reapply_type = CAM_CONFIG_REAPPLY_NONE;
+					req_isp->cdm_reset_before_apply = false;
+					req_isp->num_acked = 0;
+					req_isp->num_deferred_acks = 0;
+					req_isp->path_irq_mask = 0;
+					req_isp->sensor_req_id = 0;
+					return -1;
+				}
+			}
 			memcpy(&req_isp->cfg[req_isp->num_cfg],
-				&res_data[j].hw_update_entries[res_data[j].curr_buf_index],
+				&res_data[j].hw_update_entries[k],
 				sizeof(struct cam_hw_update_entry));
 			memcpy(&req_isp->fence_map_out[req_isp->num_fence_map_out],
-				&res_data[j].out_map_entries[res_data[j].curr_buf_index],
+				&res_data[j].out_map_entries[k],
 				sizeof(struct cam_hw_fence_map_entry));
 			req_isp->hw_update_data.primary_port_entry_index = req_isp->num_fence_map_out;
 			req_isp->num_cfg++;
@@ -10381,6 +10426,26 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 			req_isp->hw_update_data.virtual_frame_en = true;
 		}
 	}
+
+	for (i = 0; i < MAX_IO_RESOURCES; i++) {
+		if (!ctx_isp->ul_data.pattern_period[i].resource_type)
+			break;
+		res_type = ctx_isp->ul_data.pattern_period[i].resource_type;
+		port_pattern_curr_idx = ctx_isp->ul_data.curr_index_period % ctx_isp->ul_data.pattern_period[i].period;
+		if (!(ctx_isp->ul_data.pattern_period[i].pattern & BIT(port_pattern_curr_idx)))
+			continue;
+		for (j = 0; j < MAX_IO_RESOURCES; j++) {
+			if (res_type != res_data[j].resource_type)
+				continue;
+			if (res_data[j].is_producer_q_valid) {
+				producer_queue = (uint8_t *)res_data[j].producer_q_kmdvaddr;
+				producer_queue[res_data[j].curr_buf_index]  = 1;
+			}
+			res_data[j].curr_buf_index = (res_data[j].curr_buf_index + 1) % res_data[j].buf_count;
+			break;
+		}
+	}
+	ctx_isp->ul_data.curr_index_period++;
 
 	memcpy(&req_isp->cfg[req_isp->num_cfg], ctx_isp->ul_data.rup_aup_cmd.rup_aup_cmd,
 		sizeof(struct cam_hw_update_entry) * ctx_isp->ul_data.rup_aup_cmd.num_rup_aup_cmd);
@@ -10992,13 +11057,17 @@ int cam_isp_no_crm_handshake_device(struct cam_req_mgr_no_crm_handshake_data *ha
 }
 
 int cam_isp_no_crm_setup_ul(int32_t dev_hdl, struct cam_packet *packet,
-	struct port_pattern_period *port_enable_pattern_period) {
-	int rc = 0;
+	struct port_pattern_period *port_enable_pattern_period, uint32_t *num_res,
+	struct resource_info *res_info, struct producer_queue *producer_q, uint32_t num_producer_q) {
+	int rc = 0, i, j;
+	size_t len;
+	bool match_found;
 	struct cam_hw_prepare_update_args  cfg = {0};
 	struct cam_context                 *ctx = (struct cam_context *) cam_get_device_priv(dev_hdl);
 	struct cam_isp_context             *ctx_isp =
 		(struct cam_isp_context *) ctx->ctx_priv;
 	struct cam_isp_prepare_hw_update_data hw_update_data;
+	struct cam_isp_ul_resource_update_entry *res_data;
 
 
 	cfg.packet = packet;
@@ -11019,6 +11088,41 @@ int cam_isp_no_crm_setup_ul(int32_t dev_hdl, struct cam_packet *packet,
 	if (port_enable_pattern_period)
 		memcpy(&ctx_isp->ul_data.pattern_period, port_enable_pattern_period,
 			sizeof(port_enable_pattern_period) * MAX_IO_RESOURCES);
+
+	*num_res = 0;
+	res_data = ctx_isp->ul_data.resource_data;
+	for (i = 0; i < MAX_IO_RESOURCES; i++) {
+		if (!res_data[i].resource_type)
+			break;
+		res_info[*num_res].resource_type = res_data[i].resource_type;
+		res_info[*num_res].num_hdls      = res_data[i].buf_count;
+		for (j = 0; j < res_info[*num_res].num_hdls; j++)
+			res_info[*num_res].buf_hdl[j] = res_data[i].out_map_entries[j].buf_handle[0];
+		*num_res+=1;
+		match_found = false;
+		for(j = 0; j < num_producer_q; j++) {
+			if (res_data[i].resource_type == producer_q[j].resource_type) {
+				match_found = true;
+				break;
+			}
+		}
+		if (!match_found) {
+			CAM_INFO(CAM_ISP, "Producer queue info not found for res 0x%x",
+				res_data[i].resource_type);
+			res_data[i].is_producer_q_valid = false;
+			continue;
+		}
+		res_data[i].producer_q_hdl      = producer_q[j].stream_hdl;
+		rc = cam_mem_get_cpu_buf(producer_q[j].stream_hdl,
+						&res_data[i].producer_q_kmdvaddr, &len);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "Failed to get KMD addr for 0x%x res 0x%x",
+				producer_q[j].stream_hdl, res_data[i].resource_type);
+			return -EINVAL;
+		}
+		res_data[i].producer_q_kmdvaddr += producer_q[j].offset;
+		res_data[i].is_producer_q_valid = true;
+	}
 
 	ctx_isp->ul_data.curr_index_period  = 0;
 	return rc;

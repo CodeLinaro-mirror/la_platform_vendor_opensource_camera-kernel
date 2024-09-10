@@ -3984,7 +3984,8 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd) {
 								CAM_ERR(CAM_CRM, "Unable to fetch packet");
 								return -EINVAL;
 							}
-							link->l_dev[j].no_crm_ops->setup(ul_packet->device_hdl[i], packet, port_enable_pattern_period);
+							link->l_dev[j].no_crm_ops->setup(ul_packet->device_hdl[i], packet, port_enable_pattern_period, &ul_packet->num_res,
+								ul_packet->res_info, ul_packet->producer_q, ul_packet->num_produce_q);
 							port_enable_pattern_period = NULL;
 						}
 					}
