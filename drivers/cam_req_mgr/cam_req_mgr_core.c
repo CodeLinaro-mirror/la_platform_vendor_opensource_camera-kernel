@@ -4025,8 +4025,10 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd)
 						return -EINVAL;
 					}
 					link->l_dev[j].no_crm_ops->setup(
-					ul_packet->device_hdl[i], packet,
-					port_enable_pattern_period);
+						ul_packet->device_hdl[i], packet,
+						port_enable_pattern_period, &ul_packet->num_res,
+						ul_packet->res_info, ul_packet->producer_q,
+						ul_packet->num_produce_q);
 					port_enable_pattern_period = NULL;
 				}
 				for (k = 0; k < ul_packet->num_setting_packets; k++) {
