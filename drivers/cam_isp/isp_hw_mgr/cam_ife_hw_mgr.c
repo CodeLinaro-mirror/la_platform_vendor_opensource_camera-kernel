@@ -891,7 +891,7 @@ static void cam_ife_mgr_handle_sensor_grp_cfg_update_fail(
 	for (i = sensor_grp_stream_idx; i >= 0; i--) {
 		stream_grp_cfg = &sensor_grp_config->stream_grp_cfg[i];
 		for (j = 0; j < stream_grp_cfg->stream_cfg_cnt; j++) {
-			if (cam_ife_hw_mgr_check_sensor_id(stream_grp_cfg->stream_cfg[i].sensor_id,
+			if (cam_ife_hw_mgr_check_sensor_id(stream_grp_cfg->stream_cfg[j].sensor_id,
 				&grp_idx))
 				cam_ife_mgr_clear_sensor_stream_cfg_grp(grp_idx);
 		}
@@ -9865,8 +9865,10 @@ static int cam_ife_hw_mgr_res_stream_on_off_grp_cfg(
 	if (is_start_hw) {
 		struct cam_isp_start_args  *start_isp = hw_args;
 
-		if (!grp_cfg->stream_on_cnt ||
-			start_isp->start_only) {
+		if (grp_cfg->stream_cfg[j].is_streamon)
+			rc = 0;
+
+		if (!grp_cfg->stream_on_cnt) {
 			rc = cam_ife_mgr_start_hw_res_stream_grp(i,
 				start_isp->is_internal_start,
 				start_isp->frame_drop);
@@ -9882,7 +9884,7 @@ static int cam_ife_hw_mgr_res_stream_on_off_grp_cfg(
 			cam_ife_mgr_update_irq_mask_affected_ctx_stream_grp(
 				ctx, i, true,
 				start_isp->is_internal_start);
-		} else {
+		} else if (!grp_cfg->stream_cfg[j].is_streamon) {
 			rc = cam_ife_mgr_enable_irq(ctx,
 				start_isp->is_internal_start);
 			if (rc) {
