@@ -15,6 +15,7 @@
 #include "cam_req_mgr_dev.h"
 #include "cam_hdmi_bdg_core.h"
 #include "cam_dp_bdg_core.h"
+#include "cam_hdmi_bdg_uxe_core.h"
 
 #define CAM_SENSOR_PIPELINE_DELAY_MASK        0xFF
 #define CAM_SENSOR_MODESWITCH_DELAY_SHIFT     8
@@ -1072,6 +1073,63 @@ int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
 	if (s_ctrl->hw_no_ops)
 		return rc;
 
+	if (slave_info->sensor_id == LT6911UXE_SENSOR_ID) {
+		struct cam_sensor_i2c_reg_setting m_i2cWriteSettings;
+		struct cam_sensor_i2c_reg_array m_i2cWriteRegArray;
+		uint32_t l_chipid = 0;
+
+		// Initialize
+		m_i2cWriteRegArray.reg_addr = 0;
+		m_i2cWriteRegArray.reg_data = 0;
+		m_i2cWriteRegArray.delay = 0;
+		m_i2cWriteRegArray.data_mask = 0;
+
+		m_i2cWriteSettings.reg_setting = &m_i2cWriteRegArray;
+		m_i2cWriteSettings.size = 1;
+		m_i2cWriteSettings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
+		m_i2cWriteSettings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
+		m_i2cWriteSettings.delay = 0;
+
+		CAM_INFO(CAM_SENSOR, "lt6911uxe >> unlocked and set bank to 0xe1");
+		m_i2cWriteRegArray.reg_addr = 0xff;
+		m_i2cWriteRegArray.reg_data = 0xe0;
+		rc = camera_io_dev_write(&(s_ctrl->io_master_info),
+			&m_i2cWriteSettings);
+		m_i2cWriteRegArray.reg_addr = 0xee;
+		m_i2cWriteRegArray.reg_data = 0x01;
+		rc = camera_io_dev_write(&(s_ctrl->io_master_info),
+			&m_i2cWriteSettings);
+		m_i2cWriteRegArray.reg_addr = 0xff;
+		m_i2cWriteRegArray.reg_data = 0xe1;
+		rc = camera_io_dev_write(&(s_ctrl->io_master_info),
+			&m_i2cWriteSettings);
+		rc = camera_io_dev_read(
+			&(s_ctrl->io_master_info),
+			slave_info->sensor_id_reg_addr,
+			&chipid, s_ctrl->sensor_probe_addr_type,
+			s_ctrl->sensor_probe_data_type, true);
+
+		CAM_INFO(CAM_SENSOR, "read id: 0x%x expected id 0x%x:",
+			chipid, slave_info->sensor_id);
+		l_chipid = cam_sensor_id_by_mask(s_ctrl, chipid);
+		if (l_chipid != slave_info->sensor_id) {
+			CAM_INFO(CAM_SENSOR, "read id: 0x%x expected id 0x%x:",
+				chipid, slave_info->sensor_id);
+			return -ENODEV;
+		}
+
+		CAM_INFO(CAM_SENSOR, "lt6911uxe >> locked bank");
+		m_i2cWriteRegArray.reg_addr = 0xff;
+		m_i2cWriteRegArray.reg_data = 0xe0;
+		camera_io_dev_write(&(s_ctrl->io_master_info),
+			&m_i2cWriteSettings);
+		m_i2cWriteRegArray.reg_addr = 0xee;
+		m_i2cWriteRegArray.reg_data = 0x00;
+		camera_io_dev_write(&(s_ctrl->io_master_info),
+			&m_i2cWriteSettings);
+		return rc;
+	}
+
 	rc = camera_io_dev_read(
 		&(s_ctrl->io_master_info),
 		slave_info->sensor_id_reg_addr,
@@ -1274,6 +1332,13 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 				!strcmp(s_ctrl->sensor_name, DP_SENSOR_NAME)) {
 				s_ctrl->is_always_on = 1;
 			}
+		}
+
+		if (s_ctrl->sensordata->slave_info.sensor_id == LT6911UXE_SENSOR_ID) {
+			cam_hdmi_bdg_uxe_set_cam_ctrl(s_ctrl);
+			s_ctrl->is_always_on = 1;
+		} else {
+			s_ctrl->is_always_on = 0;
 		}
 
 		if (0 == s_ctrl->is_always_on) {
