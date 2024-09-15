@@ -262,6 +262,8 @@ int32_t cam_sensor_handle_poll(
 		cond_wait->reg_data;
 	i2c_list->i2c_settings.reg_setting->delay =
 		cond_wait->timeout;
+	i2c_list->i2c_settings.reg_setting->data_mask =
+		cond_wait->data_mask;
 
 	(*cmd_buf) += sizeof(struct cam_cmd_conditional_wait) /
 		sizeof(uint32_t);
