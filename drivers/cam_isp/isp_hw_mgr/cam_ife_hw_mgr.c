@@ -13927,7 +13927,7 @@ static int cam_isp_blob_ife_process_primary_port_configs(
 	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx,
 	struct cam_isp_primary_port_config *port_config)
 {
-	int i, rc, res_id;
+	int i, rc = 0, res_id;
 	unsigned long comp_grp_mask = 0;
 	struct cam_isp_hw_mgr_res *isp_out_res;
 	struct cam_isp_resource_node *isp_res;
@@ -15730,6 +15730,8 @@ int cam_ife_hw_mgr_ul_setup_change_base(struct cam_isp_ctx_ul_data *ul_data,
 			res_list = &ctx->res_list_ife_src;
 		else if (ctx->base[i].hw_type == CAM_ISP_HW_TYPE_CSID)
 			res_list = &ctx->res_list_ife_csid;
+		else
+			continue;
 		list_for_each_entry(hw_mgr_res, res_list, list) {
 			if (hw_mgr_res->res_type == CAM_ISP_RESOURCE_UNINT)
 				continue;

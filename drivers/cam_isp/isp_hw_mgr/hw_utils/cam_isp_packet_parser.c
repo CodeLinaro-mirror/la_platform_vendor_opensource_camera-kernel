@@ -1354,8 +1354,9 @@ int cam_isp_add_io_buffers(
 					prepare_hw_data->settingbuffer_kmdvaddr +=
 						foveation_info->settingbuffer_offset;
 				}
-				out_map_entries->buf_handle[plane_id] =
-					io_cfg[i].mem_handle[plane_id];
+				if (out_map_entries)
+					out_map_entries->buf_handle[plane_id] =
+						io_cfg[i].mem_handle[plane_id];
 			}
 			if (!plane_id) {
 				CAM_ERR(CAM_ISP, "No valid planes for res%d",
