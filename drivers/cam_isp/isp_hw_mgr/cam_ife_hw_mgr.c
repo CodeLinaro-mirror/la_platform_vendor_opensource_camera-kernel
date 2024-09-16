@@ -9832,8 +9832,7 @@ static int cam_ife_hw_mgr_res_stream_on_off_grp_cfg(
 	void                      *hw_args,
 	enum cam_ife_csid_halt_cmd csid_halt_type,
 	bool                       is_start_hw,
-	bool                      *per_port_feature_enable,
-	bool                      *skip_hw_deinit)
+	bool                      *per_port_feature_enable)
 {
 	int i, j = 0;
 	int rc = -EINVAL;
@@ -9900,7 +9899,6 @@ static int cam_ife_hw_mgr_res_stream_on_off_grp_cfg(
 		}
 	} else {
 		struct cam_isp_stop_args   *stop_isp = hw_args;
-		*skip_hw_deinit = true;
 
 		if (!grp_cfg->stream_cfg[j].is_streamon)
 			rc = 0;
@@ -9922,10 +9920,7 @@ static int cam_ife_hw_mgr_res_stream_on_off_grp_cfg(
 			if (grp_cfg->stream_on_cnt > 0)
 				grp_cfg->stream_on_cnt--;
 		}
-
 		if (grp_cfg->stream_on_cnt == 0) {
-			if (!stop_isp->stop_only)
-				*skip_hw_deinit = false;
 			cam_ife_mgr_stop_hw_res_stream_grp(ctx, i,
 				csid_halt_type, stop_isp->is_internal_stop);
 		}
@@ -9946,7 +9941,7 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 	struct cam_ife_hw_mgr_ctx        *ctx;
 	enum cam_ife_csid_halt_cmd        csid_halt_type;
 	uint32_t                          i, master_base_idx = 0;
-	bool                              skip_hw_deinit = false, per_port_feature_enable = false;
+	bool                              per_port_feature_enable = false;
 	unsigned long                     rem_jiffies = 0;
 	struct cam_req_mgr_core_worker    *worker_info;
 
@@ -9988,8 +9983,7 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 	if (ctx->flags.per_port_en && !ctx->flags.is_dual) {
 		rc = cam_ife_hw_mgr_res_stream_on_off_grp_cfg(ctx,
 				stop_isp, csid_halt_type, false,
-				&per_port_feature_enable,
-				&skip_hw_deinit);
+				&per_port_feature_enable);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "failed to stop Hw for ctx:%d sensor:%d",
 				ctx->ctx_index, ctx->sensor_id);
@@ -10102,8 +10096,7 @@ reset_scratch_buffers:
 	}
 	ctx->sfe_info.skip_scratch_cfg_streamon = false;
 
-	if (!skip_hw_deinit)
-		cam_ife_mgr_pause_hw(ctx);
+	cam_ife_mgr_pause_hw(ctx);
 
 	rem_jiffies = cam_common_wait_for_completion_timeout(
 		&ctx->config_done_complete,
@@ -10133,8 +10126,7 @@ reset_scratch_buffers:
 	if (cam_cdm_stream_off(ctx->cdm_handle))
 		CAM_ERR(CAM_ISP, "CDM stream off failed %d", ctx->cdm_handle);
 
-	if (!skip_hw_deinit)
-		cam_ife_hw_mgr_deinit_hw(ctx);
+	cam_ife_hw_mgr_deinit_hw(ctx);
 
 	CAM_DBG(CAM_ISP,
 		"Stop success for ctx id:%d rc :%d", ctx->ctx_index, rc);
@@ -10918,7 +10910,7 @@ start_only:
 
 	if (ctx->flags.per_port_en && !ctx->flags.is_dual) {
 		rc = cam_ife_hw_mgr_res_stream_on_off_grp_cfg(ctx,
-				start_isp, 0, true, &per_port_feature_enable, NULL);
+				start_isp, 0, true, &per_port_feature_enable);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "failed to start Hw for ctx:%d sensor:%d",
 				ctx->ctx_index, ctx->sensor_id);
@@ -11276,7 +11268,6 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 	uint32_t                          i, j;
 	uint64_t                          ms, sec, min, hrs;
 	struct cam_req_mgr_core_worker    *worker_info;
-	bool                              skip_deinit_hw = false;
 	bool                              per_port_feature_enable = false;
 
 	if (!hw_mgr_priv || !release_hw_args) {
@@ -11306,11 +11297,9 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 				if (ctx->sensor_id ==
 					g_ife_sns_grp_cfg.grp_cfg[i]->stream_cfg[j].sensor_id) {
 					mutex_lock(&g_ife_sns_grp_cfg.grp_cfg[i]->lock);
-					skip_deinit_hw = true;
 					if (g_ife_sns_grp_cfg.grp_cfg[i]->stream_on_cnt ==
 						0) {
 						rc = cam_ife_hw_mgr_release_hw_for_ctx(ctx, i);
-						skip_deinit_hw = false;
 						g_ife_sns_grp_cfg.grp_cfg[i]->hw_ctx_cnt--;
 					}
 					cam_ife_hw_mgr_free_hw_ctx(ctx);
@@ -11324,7 +11313,7 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 		}
 	}
 
-	if (ctx->flags.init_done && !skip_deinit_hw)
+	if (ctx->flags.init_done)
 		cam_ife_hw_mgr_deinit_hw(ctx);
 
 	/* we should called the stop hw before this already */
