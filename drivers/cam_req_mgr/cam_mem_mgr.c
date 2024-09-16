@@ -1336,6 +1336,7 @@ int cam_mem_mgr_map(struct cam_mem_mgr_map_cmd *cmd)
 		CAM_MEM_MGR_SET_SECURE_HDL(tbl.bufq[idx].buf_handle, true);
 
 	if (!tbl.bufq[idx].kmdvaddr && cmd->flags & CAM_MEM_FLAG_KMD_ACCESS) {
+		kref_init(&tbl.bufq[idx].krefcount);
 		rc = cam_mem_util_map_cpu_va(dmabuf, &kvaddr, &klen);
 		if (rc) {
 			tbl.bufq[idx].kmdvaddr = 0;
@@ -1356,8 +1357,6 @@ int cam_mem_mgr_map(struct cam_mem_mgr_map_cmd *cmd)
 	tbl.bufq[idx].is_internal = is_internal;
 
 	if (!is_exist) {
-		if (cmd->flags & CAM_MEM_FLAG_KMD_ACCESS)
-			kref_init(&tbl.bufq[idx].krefcount);
 		kref_init(&tbl.bufq[idx].urefcount);
 	} else {
 		kref_get(&tbl.bufq[idx].urefcount);

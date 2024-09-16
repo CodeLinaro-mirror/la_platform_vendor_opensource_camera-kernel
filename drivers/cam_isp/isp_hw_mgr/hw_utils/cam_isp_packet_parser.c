@@ -1351,6 +1351,8 @@ int cam_isp_add_io_buffers(
 							foveation_info->settingbuffer_res_id);
 						return -EINVAL;
 					}
+					out_map_entries->buf_handle[plane_id] =
+						io_cfg[i].mem_handle[plane_id];
 					prepare_hw_data->settingbuffer_kmdvaddr +=
 						foveation_info->settingbuffer_offset;
 				}
