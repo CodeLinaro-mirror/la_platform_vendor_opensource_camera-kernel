@@ -178,14 +178,21 @@ struct cam_isp_ul_rup_aup_cmd {
 	struct cam_hw_update_entry    rup_aup_cmd[4];
 };
 
+struct cam_isp_ul_primary_port_update_entry {
+	int                            resource_type;
+	struct cam_hw_update_entry     hw_update_entries;
+	bool                           is_valid;
+};
+
 /**
  * sturct cam_isp_ctx_ul_data
  */
 struct cam_isp_ctx_ul_data {
 	struct port_pattern_period pattern_period[MAX_IO_RESOURCES];
-	int curr_index_period;
+	uint64_t curr_index_period;
 	struct cam_kmd_buf_info    kmd_buf;
 	struct cam_isp_ul_resource_update_entry     resource_data[MAX_IO_RESOURCES];
+	struct cam_isp_ul_primary_port_update_entry primary_port_data;
 	struct cam_isp_ul_change_base_cmd   change_base;
 	struct cam_isp_ul_rup_aup_cmd         rup_aup_cmd;
 };
@@ -309,6 +316,7 @@ struct cam_isp_bw_clk_config_info {
  * @is_crop_update_valid:      Indicate if the crop info is valid
  * @setting_id:                Per request setting ID received from UMD
  * @settingbuffer_kmdvaddr:    Setting buffer cpu address
+ * @virtual_frame_en:          Indicates if virtual frame is enabled
  *
  */
 struct cam_isp_prepare_hw_update_data {
@@ -335,6 +343,7 @@ struct cam_isp_prepare_hw_update_data {
 	struct cam_isp_ctx_ul_data           *ul_data;
 	bool                                  is_ul_setup;
 	bool                                  is_ul_update;
+	bool                                  virtual_frame_en;
 };
 
 
