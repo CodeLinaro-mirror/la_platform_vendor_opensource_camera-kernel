@@ -331,6 +331,9 @@ struct cam_isp_scratch_buf_mem {
  * @setting_size:           Size of setting variable ie: 32bit, 64 bit
  * @settingid_check:        flag to indicate if settingid based check is enabled
  * @scratch_buf_info       holds scratch buffer info for foveation usecase
+ * @num_primary_ports:      Number of primary port configs
+ * @primary_port_info:      Primary port configs array
+ * @primary_port_cfg_done:  Primary port config exists for this stream
  */
 struct cam_ife_hw_mgr_ctx {
 	struct list_head                     list;
@@ -405,6 +408,9 @@ struct cam_ife_hw_mgr_ctx {
 	uint32_t                             setting_size;
 	bool                                 settingid_check;
 	struct cam_isp_scratch_buf_mem       scratch_buf_info;
+	uint32_t                             num_primary_ports;
+	struct cam_isp_primary_port_info    *primary_port_info;
+	bool                                 primary_port_cfg_done;
 };
 
 /**

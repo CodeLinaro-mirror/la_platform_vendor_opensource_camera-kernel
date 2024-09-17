@@ -223,6 +223,7 @@ enum cam_isp_hw_cmd_type {
 	CAM_ISP_HW_CMD_DISABLE_IRQ_PER_RES,
 	CAM_ISP_HW_CMD_SCRATCH_BUF_CFG,
 	CAM_ISP_HW_CMD_CSID_UPDATE_AUP,
+	CAM_ISP_HW_CMD_PRIMARY_PORT_CONFIG,
 	CAM_ISP_HW_CMD_MAX,
 };
 
@@ -557,5 +558,4 @@ struct cam_isp_hw_init_config_update {
 	struct cam_isp_resource_node   *node_res;
 	struct cam_isp_init_config     *init_config;
 };
-
 #endif /* _CAM_ISP_HW_H_ */
