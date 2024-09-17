@@ -66,6 +66,10 @@
 typedef int (*cam_hw_get_virtual_rdi_mapping_cb_func)(void *context,
 	uint32_t out_port, bool is_virtual_rdi);
 
+/* Update result info for fastpath */
+typedef void (*cam_isp_ctx_update_fastpath_result)(void *data,
+	uint32_t value);
+
 /**
  *  enum cam_isp_hw_event_type - Collection of the ISP hardware events
  */
@@ -465,6 +469,7 @@ enum cam_isp_hw_mgr_command {
 	CAM_ISP_HW_MGR_GET_FOVEATION_INFO,
 	CAM_ISP_HW_MGR_UPDATE_SCRATCH_BUF_CFG,
 	CAM_ISP_HW_MGR_GET_PRIMARY_PORT_INFO,
+	CAM_ISP_HW_MGR_FAST_RESULT_NOTIFIER_CFG,
 	CAM_ISP_HW_MGR_CMD_MAX,
 };
 
@@ -498,6 +503,7 @@ enum cam_isp_ctx_type {
  * @primary_port_cfg:      Primary port config info
  * @use_primary_port_cfg:  Stream is using primary ports for buf done handling
  * @dropped_ife_req:       dropped ife request id
+ * @fastpath_result_handler: Fastpath result handler
  * @recovery_already_in_progress: Indiates if current ife is
  *                          process for frame drop recovery
  * @rup_for_applied_req:   Check if rup is received for proper applied req
@@ -539,6 +545,7 @@ struct cam_isp_hw_cmd_args {
 			bool                    use_primary_port_config;
 		} primary_port_info;
 		uint64_t                      dropped_ife_req;
+		cam_isp_ctx_update_fastpath_result fastpath_result_handler;
 		bool                          recovery_already_in_progress;
 		bool                          rup_for_applied_req;
 		struct {
@@ -628,6 +635,20 @@ struct cam_isp_get_csid_cid_info {
 	uint32_t  num_vc_dt;
 	struct cam_isp_vc_dt_cid vc_dt_cid[CAM_ISP_HW_MAX_CSID_CID];
 	uint32_t  csid_hw_no;
+};
+
+/**
+ * struct cam_isp_hw_fast_result_notifier_cfg:
+ *
+ * @brief:              Structure to pass fastpath result notifier
+ *
+ * @data:               Priv data expected by the notifier
+ * @handler_cb:         Fastpath notifier handler
+ *
+ */
+struct cam_isp_hw_fast_result_notifier_cfg {
+	void *data;
+	cam_isp_ctx_update_fastpath_result handler_cb;
 };
 
 /**

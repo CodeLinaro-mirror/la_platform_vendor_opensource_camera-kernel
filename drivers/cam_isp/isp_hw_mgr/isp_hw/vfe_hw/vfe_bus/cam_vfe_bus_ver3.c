@@ -81,6 +81,10 @@ struct cam_vfe_bus_ver3_priv {
 	void                               *worker_info;
 	uint32_t                            max_out_res;
 	uint32_t                            num_cons_err;
+	struct {
+		void                           *data;
+		cam_isp_ctx_update_fastpath_result handler_cb;
+	} fastpath_notifier;
 	struct cam_vfe_constraint_error_info      *constraint_error_list;
 };
 
@@ -1835,7 +1839,6 @@ skip_comp_cfg:
 		bus_irq_reg_mask[CAM_VFE_BUS_VER3_IRQ_REG0]);
 
 	comp_grp->res_state = CAM_ISP_RESOURCE_STATE_STREAMING;
-
 	return rc;
 }
 
@@ -2197,6 +2200,41 @@ static int cam_vfe_bus_ver3_release_vfe_out(void *bus_priv, void *release_args,
 	return 0;
 }
 
+static int cam_vfe_bus_ver3_handle_vfe_out_done_faster_th(
+	uint32_t evt_id, struct cam_irq_th_payload *th_payload)
+{
+	uint32_t last_consumed;
+	struct cam_isp_resource_node *vfe_out = NULL;
+	struct cam_vfe_bus_ver3_vfe_out_data *rsrc_data = NULL;
+	struct cam_vfe_bus_ver3_wm_resource_data *wm_rsrc_data;
+	struct cam_vfe_bus_ver3_priv *bus_priv;
+	struct cam_isp_resource_node *comp_grp;
+	struct cam_vfe_bus_ver3_comp_grp_data *comp_data;
+
+	vfe_out = th_payload->handler_priv;
+	if (!vfe_out) {
+		CAM_ERR_RATE_LIMIT(CAM_ISP, "Not a valid resource");
+		return -ENODEV;
+	}
+
+	rsrc_data = vfe_out->res_priv;
+	comp_grp = rsrc_data->comp_grp;
+	comp_data = comp_grp->res_priv;
+	wm_rsrc_data = rsrc_data->wm_res[PLANE_Y].res_priv;
+	bus_priv = rsrc_data->bus_priv;
+	last_consumed =  cam_io_r(wm_rsrc_data->common_data->mem_base +
+		wm_rsrc_data->hw_regs->addr_status_0);
+
+	bus_priv->fastpath_notifier.handler_cb(bus_priv->fastpath_notifier.data,
+		 last_consumed);
+
+	CAM_DBG(CAM_ISP, "VFE:%d comp_grp:%d done with last_consumed: 0x%x",
+		rsrc_data->common_data->core_index, comp_data->comp_grp_type,
+		last_consumed);
+
+	return 0;
+}
+
 static int cam_vfe_bus_ver3_start_vfe_out(
 	struct cam_isp_resource_node          *vfe_out)
 {
@@ -2205,6 +2243,8 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 	struct cam_vfe_bus_ver3_vfe_out_data  *rsrc_data = NULL;
 	struct cam_vfe_bus_ver3_common_data   *common_data = NULL;
 	uint32_t source_group = 0;
+	CAM_IRQ_HANDLER_TOP_HALF th = NULL;
+	CAM_IRQ_HANDLER_BOTTOM_HALF bh = NULL;
 
 	if (!vfe_out) {
 		CAM_ERR(CAM_ISP, "Invalid input");
@@ -2250,14 +2290,22 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 		goto end;
 	}
 
+	if (bus_priv->common_data.buf_done_evt_control &&
+		bus_priv->fastpath_notifier.handler_cb) {
+		th = cam_vfe_bus_ver3_handle_vfe_out_done_faster_th;
+	} else {
+		th = vfe_out->top_half_handler;
+		bh = vfe_out->bottom_half_handler;
+	}
+
 	if (rsrc_data->is_isr_en) {
 		vfe_out->irq_handle = cam_irq_controller_subscribe_irq(
 			common_data->buf_done_controller,
 			CAM_IRQ_PRIORITY_1,
 			rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_BUF_DONE_MASK],
 			vfe_out,
-			vfe_out->top_half_handler,
-			vfe_out->bottom_half_handler,
+			th,
+			bh,
 			vfe_out->worker_info,
 			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
@@ -2412,6 +2460,8 @@ static int cam_vfe_bus_ver3_stop_vfe_out_wrapper(
 	if (!vfe_stop->is_internal_stop) {
 		rsrc_data->bus_priv->common_data.buf_done_evt_control = false;
 		rsrc_data->primary_port_en = false;
+		rsrc_data->bus_priv->fastpath_notifier.data = NULL;
+		rsrc_data->bus_priv->fastpath_notifier.handler_cb = NULL;
 	}
 
 	return rc;
@@ -5056,6 +5106,18 @@ static int cam_vfe_bus_ver3_process_cmd(
 	case CAM_ISP_HW_CMD_PRIMARY_PORT_CONFIG:
 		bus_priv = (struct cam_vfe_bus_ver3_priv  *)priv;
 		rc = cam_vfe_bus_ver3_update_primary_port_config(bus_priv, cmd_args);
+		break;
+	case CAM_ISP_HW_CMD_FAST_RESULT_NOTIFIER_CFG: {
+		struct cam_isp_hw_fast_result_notifier_cfg *notifier_cfg;
+
+		bus_priv = (struct cam_vfe_bus_ver3_priv  *) priv;
+		notifier_cfg = (struct cam_isp_hw_fast_result_notifier_cfg *)cmd_args;
+		if (notifier_cfg->data && notifier_cfg->handler_cb) {
+			bus_priv->fastpath_notifier.data = notifier_cfg->data;
+			bus_priv->fastpath_notifier.handler_cb = notifier_cfg->handler_cb;
+			rc = 0;
+		}
+	}
 		break;
 	default:
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "Invalid camif process command:%d",

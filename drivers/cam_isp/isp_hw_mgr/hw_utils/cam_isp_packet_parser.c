@@ -1285,6 +1285,10 @@ int cam_isp_add_io_buffers(
 					io_addr[plane_id]+size);
 
 				if (!is_buf_secure && need_cpu_addr && out_map_entries) {
+					/*
+					 * Put is invoked if a valid kernel_map_buf_addr is
+					 * populated
+					 */
 					rc = cam_mem_get_cpu_buf(io_cfg[i].mem_handle[plane_id],
 						(uintptr_t *)&
 						out_map_entries->kernel_map_buf_addr[plane_id],
@@ -1294,15 +1298,9 @@ int cam_isp_add_io_buffers(
 							"split %d plane_id %d get cpu buf failed, mem_hdl=0x%x, wm res id:%d",
 							j, plane_id,
 							io_cfg[i].mem_handle[plane_id],res->res_id);
-					/*
-					 * We are storing buffer handles for this just to put
-					 * the buffers at the time of buf done.
-					 */
-					out_map_entries->buf_handle[plane_id] = io_cfg[i].mem_handle[plane_id];
 				} else if (out_map_entries) {
 					out_map_entries->kernel_map_buf_addr[plane_id] = NULL;
 				}
-
 				if (foveation_info->foveation_en &&
 					(res->res_id == foveation_info->settingbuffer_res_id)) {
 					rc = cam_mem_get_cpu_buf(io_cfg[i].mem_handle[plane_id],
@@ -1317,6 +1315,8 @@ int cam_isp_add_io_buffers(
 					prepare_hw_data->settingbuffer_kmdvaddr +=
 						foveation_info->settingbuffer_offset;
 				}
+				out_map_entries->buf_handle[plane_id] =
+					io_cfg[i].mem_handle[plane_id];
 			}
 			if (!plane_id) {
 				CAM_ERR(CAM_ISP, "No valid planes for res%d",
