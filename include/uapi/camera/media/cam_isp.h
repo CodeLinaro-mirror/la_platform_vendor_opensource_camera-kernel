@@ -138,6 +138,7 @@
 #define CAM_ISP_GENERIC_BLOB_TYPE_HYBRID_SENSOR_CFG         28
 #define CAM_ISP_GENERIC_BLOB_TYPE_SETTINGID_STREAM_CFG      29
 #define CAM_ISP_GENERIC_BLOB_TYPE_CHECK_SETTING_ID          30
+#define CAM_ISP_GENERIC_BLOB_TYPE_PRIMARY_PORT_CONFIG       31
 
 #define CAM_ISP_VC_DT_CFG    4
 
@@ -1360,6 +1361,38 @@ struct cam_ife_hybrid_sensor_data {
 		__u32 dt;
 	}vcdt[CAM_VIRT_ISP_VC_DT_CFG];
 };
+
+/**
+ * struct cam_isp_primary_port_grp_info - Client info to be considered primary
+ *
+ * @res_id                   : Output port resource ID
+ * @comp_grp                 : Composite group if known
+ */
+struct cam_isp_primary_port_grp_info {
+	__u32                                   res_id;
+	__u32                                   comp_grp;
+};
+
+/**
+ * struct cam_isp_primary_port_config - Determine which client to listen to
+ *                                      for buffer done interrupt, could be
+ *                                      within a comp group/across comp groups
+ *
+ * @version                  : Struct version
+ * @reserved                 : Reserved for padding
+ * @single_primary_for_all   : Use one port as final buffer done for all groups
+ * @num_ports                : Number of output ports, if single_primary_for_all is set
+ *                             num_ports is expected to be 1
+ * @port_info                : Port info array to obtain primary port resource IDs
+ */
+struct cam_isp_primary_port_config {
+	__u32                                   version;
+	__u32                                   reserved;
+	__u32                                   single_primary_for_all;
+	__u32                                   num_ports;
+	struct cam_isp_primary_port_grp_info    port_info[];
+};
+
 
 #define CAM_ISP_ACQUIRE_COMMON_VER0         0x1000
 
