@@ -78,6 +78,13 @@ static int cam_cci_init_master(struct cci_device *cci_dev,
 					= max_queue_0_size;
 		cci_dev->cci_i2c_queue_info[master][QUEUE_1].max_queue_size
 					= max_queue_1_size;
+		cci_dev->cci_i2c_queue_info[master][QUEUE_0].queue_status
+			= QUEUE_STATE_FREE;
+		cci_dev->cci_i2c_queue_info[master][QUEUE_1].queue_status
+			= QUEUE_STATE_FREE;
+		for (i = 0; i < CONTEXT_ID_MAX; i++) {
+			cci_dev->is_contextid_acquire[i] = false;
+		}
 
 		CAM_DBG(CAM_CCI, "CCI%d_I2C_M%d:: Q0: %d Q1: %d",
 			cci_dev->soc_info.index, master,
@@ -123,7 +130,6 @@ int cam_cci_init(struct v4l2_subdev *sd,
 	master = c_ctrl->cci_info->cci_i2c_master;
 	soc_info = &cci_dev->soc_info;
 	base = soc_info->reg_map[0].mem_base;
-
 	if (!soc_info || !base) {
 		CAM_ERR(CAM_CCI,
 			"CCI%d_I2C_M%d failed: invalid params soc_info:%pK, base:%pK",
@@ -191,6 +197,13 @@ int cam_cci_init(struct v4l2_subdev *sd,
 	cci_dev->payload_size = MSM_CCI_WRITE_DATA_PAYLOAD_SIZE_11;
 	cci_dev->support_seq_write = 1;
 
+	cci_dev->cci_gpio_queue_info[GPIOQUEUE_0].queue_status
+		= QUEUE_STATE_FREE;
+	cci_dev->cci_gpio_queue_info[GPIOQUEUE_1].queue_status
+		= QUEUE_STATE_FREE;
+	cci_dev->cci_gpio_queue_info[GPIOQUEUE_2].queue_status
+		= QUEUE_STATE_FREE;
+
 	rc = cam_cci_init_master(cci_dev, master);
 	if (rc) {
 		CAM_ERR(CAM_CCI, "CCI%d_I2C_M%d Failed to init, rc: %d",
@@ -200,6 +213,8 @@ int cam_cci_init(struct v4l2_subdev *sd,
 
 	for (i = 0; i < MASTER_MAX; i++)
 		cci_dev->i2c_freq_mode[i] = I2C_MAX_MODES;
+	for (i = 0; i < CONTEXT_ID_MAX; i++)
+		INIT_LIST_HEAD(&(cci_dev->trigger_ctx_array[i]));
 
 	cam_io_w_mb(CCI_IRQ_MASK_0_RMSK, base + CCI_IRQ_MASK_0_ADDR);
 	cam_io_w_mb(CCI_IRQ_MASK_0_RMSK, base + CCI_IRQ_CLEAR_0_ADDR);
@@ -261,6 +276,20 @@ static void cam_cci_init_cci_params(struct cci_device *new_cci_dev)
 			spin_lock_init(
 				&new_cci_dev->cci_master_info[i].lock_q[j]);
 		}
+	}
+	new_cci_dev->cci_gpio_info.status = 0;
+	new_cci_dev->cci_gpio_info.is_initilized = false;
+	mutex_init(&new_cci_dev->cci_gpio_info.mutex);
+
+	for (j = 0; j < NUM_GPIO_QUEUES; j++) {
+		mutex_init(&new_cci_dev->cci_gpio_info.mutex_q[j]);
+		init_completion(
+			&new_cci_dev->cci_gpio_info.reset_complete[j]);
+		init_completion(
+			&new_cci_dev->cci_gpio_info.report_q[j]);
+
+		spin_lock_init(
+			&new_cci_dev->cci_gpio_info.lock_q[j]);
 	}
 	spin_lock_init(&new_cci_dev->lock_status);
 }
@@ -397,6 +426,7 @@ int cam_cci_parse_dt_info(struct platform_device *pdev,
 	}
 
 	new_cci_dev->ref_count = 0;
+	new_cci_dev->num_active_trigger_sensor = 0;
 
 	rc = cam_soc_util_request_platform_resource(soc_info,
 		cam_cci_irq, new_cci_dev);
@@ -443,6 +473,7 @@ int cam_cci_soc_release(struct cci_device *cci_dev,
 		CAM_DBG(CAM_CCI,
 			"CCI%d_I2C_M%d All submodules are released", cci_dev->soc_info.index, master);
 	}
+	cci_dev->cci_gpio_info.is_initilized = false;
 
 	if (--cci_dev->ref_count) {
 		CAM_DBG(CAM_CCI, "CCI%d_M%d Submodule release: Ref_count: %d",

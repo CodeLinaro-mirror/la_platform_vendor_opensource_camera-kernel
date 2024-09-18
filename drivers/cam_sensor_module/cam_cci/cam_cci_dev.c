@@ -138,6 +138,7 @@ irqreturn_t cam_cci_irq(int irq_num, void *data)
 
 	if (irq_status0 & CCI_IRQ_STATUS_0_RST_DONE_ACK_BMSK) {
 		struct cam_cci_master_info *cci_master_info;
+		struct cam_cci_gpio_info *cci_gpio_info;
 		if (cci_dev->cci_master_info[MASTER_0].reset_pending == true) {
 			cci_master_info = &cci_dev->cci_master_info[MASTER_0];
 			cci_dev->cci_master_info[MASTER_0].reset_pending =
@@ -157,6 +158,27 @@ irqreturn_t cam_cci_irq(int irq_num, void *data)
 
 			complete_all(&cci_master_info->rd_done);
 			complete_all(&cci_master_info->th_complete);
+		}
+		if (cci_dev->cci_gpio_info.reset_pending[GPIOQUEUE_0] == true) {
+			cci_gpio_info = &cci_dev->cci_gpio_info;
+			cci_dev->cci_gpio_info.reset_pending[GPIOQUEUE_0] =
+				false;
+			if (!cci_gpio_info->status)
+				complete(&cci_gpio_info->reset_complete[GPIOQUEUE_0]);
+		}
+		if (cci_dev->cci_gpio_info.reset_pending[GPIOQUEUE_1] == true) {
+			cci_gpio_info = &cci_dev->cci_gpio_info;
+			cci_dev->cci_gpio_info.reset_pending[GPIOQUEUE_1] =
+				false;
+			if (!cci_gpio_info->status)
+				complete(&cci_gpio_info->reset_complete[GPIOQUEUE_1]);
+		}
+		if (cci_dev->cci_gpio_info.reset_pending[GPIOQUEUE_2] == true) {
+			cci_gpio_info = &cci_dev->cci_gpio_info;
+			cci_dev->cci_gpio_info.reset_pending[GPIOQUEUE_2] =
+				false;
+			if (!cci_gpio_info->status)
+				complete(&cci_gpio_info->reset_complete[GPIOQUEUE_2]);
 		}
 	}
 
@@ -215,6 +237,52 @@ irqreturn_t cam_cci_irq(int irq_num, void *data)
 			&cci_dev->cci_master_info[MASTER_0].lock_q[QUEUE_1],
 			flags);
 	}
+	if (irq_status1 & CCI_IRQ_STATUS_1_GPIO_Q0_REPORT_BMSK) {
+		struct cam_cci_gpio_info *cci_gpio_info;
+
+		CAM_DBG(CAM_CCI, "CCI_IRQ_STATUS_1_GPIO_Q0_REPORT_BMSK");
+
+		cci_gpio_info = &cci_dev->cci_gpio_info;
+		spin_lock_irqsave(
+			&cci_dev->cci_gpio_info.lock_q[GPIOQUEUE_0],
+			flags);
+		cci_gpio_info->status = 0;
+		complete(&cci_gpio_info->report_q[GPIOQUEUE_0]);
+		spin_unlock_irqrestore(
+			&cci_dev->cci_gpio_info.lock_q[GPIOQUEUE_0],
+			flags);
+	}
+	if (irq_status1 & CCI_IRQ_STATUS_1_GPIO_Q1_REPORT_BMSK) {
+		struct cam_cci_gpio_info *cci_gpio_info;
+
+		CAM_DBG(CAM_CCI, "CCI_IRQ_STATUS_1_GPIO_Q1_REPORT_BMSK");
+
+		cci_gpio_info = &cci_dev->cci_gpio_info;
+		spin_lock_irqsave(
+			&cci_dev->cci_gpio_info.lock_q[GPIOQUEUE_1],
+			flags);
+		cci_gpio_info->status = 0;
+		complete(&cci_gpio_info->report_q[GPIOQUEUE_1]);
+		spin_unlock_irqrestore(
+			&cci_dev->cci_gpio_info.lock_q[GPIOQUEUE_1],
+			flags);
+	}
+	if (irq_status1 & CCI_IRQ_STATUS_1_GPIO_Q2_REPORT_BMSK) {
+		struct cam_cci_gpio_info *cci_gpio_info;
+
+		CAM_DBG(CAM_CCI, "CCI_IRQ_STATUS_1_GPIO_Q2_REPORT_BMSK");
+
+		cci_gpio_info = &cci_dev->cci_gpio_info;
+		spin_lock_irqsave(
+			&cci_dev->cci_gpio_info.lock_q[GPIOQUEUE_2],
+			flags);
+		cci_gpio_info->status = 0;
+		complete(&cci_gpio_info->report_q[GPIOQUEUE_2]);
+		spin_unlock_irqrestore(
+			&cci_dev->cci_gpio_info.lock_q[GPIOQUEUE_2],
+			flags);
+	}
+
 	rd_done_th_assert = false;
 	if ((irq_status0 & CCI_IRQ_STATUS_0_I2C_M1_RD_DONE_BMSK) &&
 		(irq_status1 & CCI_IRQ_STATUS_1_I2C_M1_RD_THRESHOLD)) {
@@ -287,6 +355,21 @@ irqreturn_t cam_cci_irq(int irq_num, void *data)
 		cam_io_w_mb(CCI_M1_RESET_RMSK,
 			base + CCI_RESET_CMD_ADDR);
 	}
+	if (irq_status1 & CCI_IRQ_STATUS_1_GPIO_Q0_HALT_ACK_BMSK) {
+		cci_dev->cci_gpio_info.reset_pending[GPIOQUEUE_0] = true;
+		cam_io_w_mb(CCI_GPIO_Q0_RESET_RMSK,
+			base + CCI_RESET_CMD_ADDR);
+	}
+	if (irq_status1 & CCI_IRQ_STATUS_1_GPIO_Q1_HALT_ACK_BMSK) {
+		cci_dev->cci_gpio_info.reset_pending[GPIOQUEUE_1] = true;
+		cam_io_w_mb(CCI_GPIO_Q1_RESET_RMSK,
+			base + CCI_RESET_CMD_ADDR);
+	}
+	if (irq_status1 & CCI_IRQ_STATUS_1_GPIO_Q2_HALT_ACK_BMSK) {
+		cci_dev->cci_gpio_info.reset_pending[GPIOQUEUE_2] = true;
+		cam_io_w_mb(CCI_GPIO_Q2_RESET_RMSK,
+			base + CCI_RESET_CMD_ADDR);
+	}
 	if (irq_status0 & CCI_IRQ_STATUS_0_I2C_M0_ERROR_BMSK) {
 		cci_dev->cci_master_info[MASTER_0].status = -EINVAL;
 		if (irq_status0 & CCI_IRQ_STATUS_0_I2C_M0_Q0_NACK_ERROR_BMSK) {
@@ -350,6 +433,33 @@ irqreturn_t cam_cci_irq(int irq_num, void *data)
 
 		cci_dev->cci_master_info[MASTER_1].reset_pending = true;
 		cam_io_w_mb(CCI_M1_RESET_RMSK, base + CCI_RESET_CMD_ADDR);
+	}
+	if (irq_status1 & CCI_IRQ_STATUS_1_GPIO_Q0_ERROR_BMSK) {
+		cci_dev->cci_gpio_info.status = -EINVAL;
+		CAM_ERR(CAM_CCI,
+		"Base:%pK, cci: %d, Q0 QUEUE_OVER/UNDER_FLOW OR CMD ERR: 0x%x",
+			base, cci_dev->soc_info.index, irq_status1);
+
+		cci_dev->cci_gpio_info.reset_pending[GPIOQUEUE_0] = true;
+		cam_io_w_mb(CCI_GPIO_Q0_RESET_RMSK, base + CCI_RESET_CMD_ADDR);
+	}
+	if (irq_status1 & CCI_IRQ_STATUS_1_GPIO_Q1_ERROR_BMSK) {
+		cci_dev->cci_gpio_info.status = -EINVAL;
+		CAM_ERR(CAM_CCI,
+		"Base:%pK, cci: %d, Q1 QUEUE_OVER/UNDER_FLOW OR CMD ERR: 0x%x",
+			base, cci_dev->soc_info.index, irq_status1);
+
+		cci_dev->cci_gpio_info.reset_pending[GPIOQUEUE_1] = true;
+		cam_io_w_mb(CCI_GPIO_Q1_RESET_RMSK, base + CCI_RESET_CMD_ADDR);
+	}
+	if (irq_status1 & CCI_IRQ_STATUS_1_GPIO_Q2_ERROR_BMSK) {
+		cci_dev->cci_gpio_info.status = -EINVAL;
+		CAM_ERR(CAM_CCI,
+		"Base:%pK, cci: %d, Q2 QUEUE_OVER/UNDER_FLOW OR CMD ERR: 0x%x",
+			base, cci_dev->soc_info.index, irq_status1);
+
+		cci_dev->cci_gpio_info.reset_pending[GPIOQUEUE_2] = true;
+		cam_io_w_mb(CCI_GPIO_Q2_RESET_RMSK, base + CCI_RESET_CMD_ADDR);
 	}
 
 	return IRQ_HANDLED;
@@ -499,6 +609,7 @@ static int cam_cci_component_bind(struct device *dev,
 
 	g_cci_subdev[soc_info->index] = &new_cci_dev->v4l2_dev_str.sd;
 	mutex_init(&(new_cci_dev->init_mutex));
+	mutex_init(&(new_cci_dev->ctx_mutex));
 	CAM_DBG(CAM_CCI, "Device Type :%d", soc_info->index);
 
 	cpas_parms.cam_cpas_client_cb = NULL;
