@@ -145,6 +145,8 @@ static int cam_ife_mgr_handle_reg_dump(struct cam_ife_hw_mgr_ctx *ctx,
 	bool user_triggered_dump)
 {
 	int rc = 0, i;
+	uintptr_t cpu_addr = 0;
+	size_t    buf_size = 0;
 
 	if (!num_reg_dump_buf || !reg_dump_buf_desc) {
 		CAM_DBG(CAM_ISP,
@@ -163,24 +165,49 @@ static int cam_ife_mgr_handle_reg_dump(struct cam_ife_hw_mgr_ctx *ctx,
 		if (rc)
 			return rc;
 
-		CAM_DBG(CAM_ISP, "Reg dump cmd meta data: %u req_type: %u",
-			reg_dump_buf_desc[i].meta_data, meta_type);
+		CAM_DBG(CAM_ISP, "Reg dump cmd meta data: %u req_type: %u ctx_idx: %u req:%llu",
+			reg_dump_buf_desc[i].meta_data, meta_type, ctx->ctx_index,
+			ctx->applied_req_id);
 		if (reg_dump_buf_desc[i].meta_data == meta_type) {
+			if (in_serving_softirq()) {
+				cpu_addr = ctx->reg_dump_cmd_buf_addr_len[i].cpu_addr;
+				buf_size = ctx->reg_dump_cmd_buf_addr_len[i].buf_size;
+			} else {
+				rc = cam_mem_get_cpu_buf(reg_dump_buf_desc[i].mem_handle,
+					&cpu_addr, &buf_size);
+				if (rc) {
+					CAM_ERR(CAM_ISP,
+						"Failed in Get cpu addr, rc=%d, mem_handle =%d",
+						rc, reg_dump_buf_desc[i].mem_handle);
+					return rc;
+				}
+			}
+			if (!cpu_addr || (buf_size == 0)) {
+				CAM_ERR(CAM_ISP, "Invalid cpu_addr=%pK mem_handle=%d",
+					(void *)cpu_addr, reg_dump_buf_desc[i].mem_handle);
+				if (!in_serving_softirq())
+					cam_mem_put_cpu_buf(reg_dump_buf_desc[i].mem_handle);
+				return rc;
+			}
+
 			rc = cam_soc_util_reg_dump_to_cmd_buf(ctx,
 				&reg_dump_buf_desc[i],
 				ctx->applied_req_id,
 				cam_ife_mgr_regspace_data_cb,
 				soc_dump_args,
-				user_triggered_dump);
+				user_triggered_dump, cpu_addr, buf_size);
 			if (rc) {
 				CAM_ERR(CAM_ISP,
-					"Reg dump failed at idx: %d, rc: %d req_id: %llu meta type: %u",
-					i, rc, ctx->applied_req_id, meta_type);
+					"Reg dump failed at idx: %d, rc: %d req_id: %llu meta type: %u ctx_idx: %u",
+					i, rc, ctx->applied_req_id, meta_type, ctx->ctx_index);
+				if (!in_serving_softirq())
+					cam_mem_put_cpu_buf(reg_dump_buf_desc[i].mem_handle);
 				return rc;
 			}
+			if (!in_serving_softirq())
+				cam_mem_put_cpu_buf(reg_dump_buf_desc[i].mem_handle);
 		}
 	}
-
 	return rc;
 }
 
@@ -3334,6 +3361,7 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 
 	ife_ctx->hw_mgr = ife_hw_mgr;
 	ife_ctx->cdm_ops =  cam_cdm_publish_ops();
+	ife_ctx->skip_reg_dump_buf_put = false;
 
 	acquire_hw_info =
 		(struct cam_isp_acquire_hw_info *)acquire_args->acquire_info;
@@ -4544,6 +4572,12 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 #endif /* CONFIG_SPECTRA_SECURE */
 
 end:
+	if (!ctx->skip_reg_dump_buf_put) {
+		for (i = 0; i < ctx->num_reg_dump_buf; i++)
+			cam_mem_put_cpu_buf(ctx->reg_dump_buf_desc[i].mem_handle);
+		ctx->num_reg_dump_buf = 0;
+	}
+	ctx->skip_reg_dump_buf_put = false;
 	return rc;
 }
 
@@ -5037,7 +5071,6 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 	ctx->num_reg_dump_buf = 0;
 	ctx->custom_enabled = false;
 	ctx->custom_config = 0;
-	ctx->num_reg_dump_buf = 0;
 	ctx->is_dual = false;
 	ctx->dsp_enabled = false;
 	ctx->is_fe_enabled = false;
@@ -6888,6 +6921,27 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 				prepare->reg_dump_buf_desc,
 				sizeof(struct cam_cmd_buf_desc) *
 				prepare->num_reg_dump_buf);
+			/*
+			 * save the address for error/flush cases to avoid
+			 * invoking mutex(cpu get/put buf) in tasklet/atomic context.
+			 */
+			for (i = 0; i < ctx->num_reg_dump_buf; i++) {
+				rc = cam_mem_get_cpu_buf(ctx->reg_dump_buf_desc[i].mem_handle,
+					&(ctx->reg_dump_cmd_buf_addr_len[i].cpu_addr),
+					&(ctx->reg_dump_cmd_buf_addr_len[i].buf_size));
+
+				if (rc) {
+					CAM_ERR(CAM_ISP,
+						"Failed in get_cpu_addr i=%d rc=%d, cpu_addr=%pK",
+						i, rc,
+						(void *)ctx->reg_dump_cmd_buf_addr_len[i].cpu_addr);
+					for (--i; i >= 0; i--)
+						cam_mem_put_cpu_buf(
+							ctx->reg_dump_buf_desc[i].mem_handle);
+					ctx->skip_reg_dump_buf_put = true;
+					return rc;
+				}
+			}
 		} else {
 			prepare_hw_data->num_reg_dump_buf =
 				prepare->num_reg_dump_buf;
