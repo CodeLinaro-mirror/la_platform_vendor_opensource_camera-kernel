@@ -49,6 +49,20 @@ struct cam_ife_hw_mgr_debug {
 };
 
 /**
+ * struct cam_cmd_buf_desc_addr_len
+ *
+ * brief:                       structure to store cpu addr and size of
+ *                              reg dump descriptors
+ * @cpu_addr:                   cpu addr of buffer
+ * @size:                       size of the buffer
+ */
+
+struct cam_cmd_buf_desc_addr_len {
+	uintptr_t cpu_addr;
+	size_t    buf_size;
+};
+
+/**
  * struct cam_vfe_hw_mgr_ctx - IFE HW manager Context object
  *
  * @list:                   used by the ctx list.
@@ -89,6 +103,8 @@ struct cam_ife_hw_mgr_debug {
  * @config_done_complete    indicator for configuration complete
  * @reg_dump_buf_desc:      cmd buffer descriptors for reg dump
  * @num_reg_dump_buf:       Count of descriptors in reg_dump_buf_desc
+ * @reg_dump_cmd_buf_addr_len	store cpu addr and size of
+ *                          reg dump descriptors for flush/error cases
  * @applied_req_id:         Last request id to be applied
  * @last_dump_flush_req_id  Last req id for which reg dump on flush was called
  * @last_dump_err_req_id    Last req id for which reg dump on error was called
@@ -104,8 +120,9 @@ struct cam_ife_hw_mgr_debug {
  * @hw_enabled              Array to indicate active HW
  * @internal_cdm            Indicate whether context uses internal CDM
  * @pf_mid_found            in page fault, mid found for this ctx.
- * dynamic_rdi_alloc:       is dynamic rdi allocation enabled
- * dynamic_rdi_mask:        dynamic allocated resources mask*
+ * @dynamic_rdi_alloc:      is dynamic rdi allocation enabled
+ * @dynamic_rdi_mask:       dynamic allocated resources mask
+ * @skip_reg_dump_buf_put:  Set if put_cpu_buf for reg dump buf is already called
  */
 struct cam_ife_hw_mgr_ctx {
 	struct list_head                list;
@@ -147,6 +164,8 @@ struct cam_ife_hw_mgr_ctx {
 	struct cam_cmd_buf_desc         reg_dump_buf_desc[
 						CAM_REG_DUMP_MAX_BUF_ENTRIES];
 	uint32_t                        num_reg_dump_buf;
+	struct cam_cmd_buf_desc_addr_len reg_dump_cmd_buf_addr_len[
+						CAM_REG_DUMP_MAX_BUF_ENTRIES];
 	uint64_t                        applied_req_id;
 	uint64_t                        last_dump_flush_req_id;
 	uint64_t                        last_dump_err_req_id;
@@ -163,6 +182,7 @@ struct cam_ife_hw_mgr_ctx {
 	bool                            pf_mid_found;
 	bool                            dynamic_rdi_alloc;
 	uint32_t                        dynamic_rdi_mask;
+	bool                            skip_reg_dump_buf_put;
 };
 
 /**
