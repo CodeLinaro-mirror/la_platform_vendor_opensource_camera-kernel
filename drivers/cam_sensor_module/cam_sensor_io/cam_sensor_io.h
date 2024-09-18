@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_SENSOR_IO_H_
@@ -59,6 +60,15 @@ int32_t camera_io_dev_read_seq(struct camera_io_master *io_master_info,
 
 /**
  * @io_master_info: I2C/SPI master information
+ * @trigger_data: to receive the contextid
+ *
+ * This API get the contextid on master type
+ */
+int32_t camera_io_contextid(struct camera_io_master *io_master_info,
+	struct cam_cci_trigger_data *trigger_data);
+
+/**
+ * @io_master_info: I2C/SPI master information
  *
  * This API initializes the I2C/SPI master based on master type
  */
@@ -66,10 +76,28 @@ int32_t camera_io_init(struct camera_io_master *io_master_info);
 
 /**
  * @io_master_info: I2C/SPI master information
+ * @contextId: contextid
+ *
+ * This API releases the I2C/SPI master based on master type
+ */
+int32_t camera_io_contextid_release(struct camera_io_master *io_master_info,
+	uint32_t contextId);
+
+/**
+ * @io_master_info: I2C/SPI master information
  *
  * This API releases the I2C/SPI master based on master type
  */
 int32_t camera_io_release(struct camera_io_master *io_master_info);
+
+/**
+ * @io_master_info: I2C/SPI master information
+ * @trigger_data:   write settings information
+ *
+ * This API abstracts write functionality based on master type
+ */
+int32_t camera_io_gpio_write(struct camera_io_master *io_master_info,
+	struct cam_sensor_trigger_per_frame_data *trigger_data);
 
 /**
  * @io_master_info: I2C/SPI master information

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_SENSOR_I2C_H_
@@ -51,6 +52,16 @@ int32_t cam_camera_cci_i2c_read_seq(struct cam_sensor_cci_client *client,
 
 /**
  * @client: CCI client structure
+ * @trigger_data: GPIO register setting
+ *
+ * This API handles CCI random write
+ */
+int32_t cam_cci_gpio_write_table(
+	struct camera_io_master *client,
+	struct cam_sensor_trigger_per_frame_data *trigger_data);
+
+/**
+ * @client: CCI client structure
  * @write_setting: I2C register setting
  *
  * This API handles CCI random write
@@ -70,6 +81,28 @@ int32_t cam_cci_i2c_write_continuous_table(
 	struct camera_io_master *client,
 	struct cam_sensor_i2c_reg_setting *write_setting,
 	uint8_t cam_sensor_i2c_write_flag);
+
+/**
+ * @cci_client: CCI client structure
+ * @trigger_data: to receive the context id
+ * @cci_cmd: CCI command type
+ *
+ * Does I2C call to I2C functionalities
+ */
+int32_t cam_sensor_cci_get_contextid(struct cam_sensor_cci_client *cci_client,
+	struct cam_cci_trigger_data *trigger_data,
+	uint16_t cci_cmd);
+
+/**
+ * @cci_client: CCI client structure
+ * @cci_cmd: CCI command type
+ * @contextId:  context id
+ *
+ * Does I2C call to I2C functionalities
+ */
+int32_t cam_sensor_cci_release_contextid(struct cam_sensor_cci_client *cci_client,
+	uint16_t cci_cmd,
+	uint32_t contextId);
 
 /**
  * @cci_client: CCI client structure
