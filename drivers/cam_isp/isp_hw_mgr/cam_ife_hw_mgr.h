@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_IFE_HW_MGR_H_
@@ -41,7 +42,22 @@ struct cam_ife_hw_mgr_debug {
 };
 
 /**
- * struct cam_vfe_hw_mgr_ctx - IFE HW manager Context object
+ * struct cam_cmd_buf_desc_addr_len
+ *
+ * brief:                       structure to store cpu addr and size of
+ *                              reg dump descriptors
+ * @cpu_addr:                   cpu addr of buffer
+ * @size:                       size of the buffer
+ */
+
+struct cam_cmd_buf_desc_addr_len {
+	uintptr_t cpu_addr;
+	size_t    buf_size;
+};
+
+
+/**
+ * struct cam_ife_hw_mgr_ctx - IFE HW manager Context object
  *
  * @list:                   used by the ctx list.
  * @common:                 common acquired context data
@@ -78,6 +94,8 @@ struct cam_ife_hw_mgr_debug {
  * @config_done_complete    indicator for configuration complete
  * @reg_dump_buf_desc:      cmd buffer descriptors for reg dump
  * @num_reg_dump_buf:       Count of descriptors in reg_dump_buf_desc
+ * @reg_dump_cmd_buf_addr_len	store cpu addr and size of
+ *                          reg dump descriptors for flush/error cases
  * @applied_req_id:         Last request id to be applied
  * @last_dump_flush_req_id  Last req id for which reg dump on flush was called
  * @last_dump_err_req_id    Last req id for which reg dump on error was called
@@ -85,6 +103,7 @@ struct cam_ife_hw_mgr_debug {
  * @is_fe_enable            indicate whether fetch engine\read path is enabled
  * @is_dual                 indicate whether context is in dual VFE mode
  * @ts                      captured timestamp when the ctx is acquired
+ * @skip_reg_dump_buf_put: Set if put_cpu_buf for reg dump buf is already called
  */
 struct cam_ife_hw_mgr_ctx {
 	struct list_head                list;
@@ -132,6 +151,9 @@ struct cam_ife_hw_mgr_ctx {
 	bool                            is_fe_enable;
 	bool                            is_dual;
 	struct timespec64               ts;
+	struct cam_cmd_buf_desc_addr_len  reg_dump_cmd_buf_addr_len[
+						CAM_REG_DUMP_MAX_BUF_ENTRIES];
+	bool                            skip_reg_dump_buf_put;
 };
 
 /**
