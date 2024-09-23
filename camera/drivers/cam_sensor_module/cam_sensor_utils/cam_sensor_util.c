@@ -1759,7 +1759,16 @@ int cam_sensor_util_init_gpio_pin_tbl(
 		return -EINVAL;
 	}
 
-	of_node = soc_info->dev->of_node;
+	if (soc_info->is_child_node) {
+		of_node = soc_info->parent_node;
+	} else {
+		of_node = soc_info->dev->of_node;
+	}
+
+	if (!of_node) {
+		CAM_ERR(CAM_SENSOR_UTIL, "of_node is NULL");
+		return -EINVAL;
+	}
 
 	gconf = soc_info->gpio_data;
 	if (!gconf) {
