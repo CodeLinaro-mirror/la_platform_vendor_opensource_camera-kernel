@@ -789,6 +789,20 @@ static struct cam_vfe_bus_ver3_reg_offset_ubwc_client
 };
 
 static struct cam_vfe_bus_ver3_reg_offset_ubwc_client
+	vfe690_ubwc_regs_client_3 = {
+	.meta_addr        = 0x00000940,
+	.meta_cfg         = 0x00000944,
+	.mode_cfg         = 0x00000948,
+	.stats_ctrl       = 0x0000094C,
+	.ctrl_2           = 0x00000950,
+	.lossy_thresh0    = 0x00000954,
+	.lossy_thresh1    = 0x00000958,
+	.off_lossy_var    = 0x0000095C,
+	.bw_limit         = 0x0000091C,
+	.ubwc_comp_en_bit = BIT(1),
+};
+
+static struct cam_vfe_bus_ver3_reg_offset_ubwc_client
 	vfe690_ubwc_regs_client_4 = {
 	.meta_addr        = 0x00000A40,
 	.meta_cfg         = 0x00000A44,
@@ -803,16 +817,58 @@ static struct cam_vfe_bus_ver3_reg_offset_ubwc_client
 };
 
 static struct cam_vfe_bus_ver3_reg_offset_ubwc_client
-	vfe690_ubwc_regs_client_5 = {
-	.meta_addr        = 0x00000B40,
-	.meta_cfg         = 0x00000B44,
-	.mode_cfg         = 0x00000B48,
-	.stats_ctrl       = 0x00000B4C,
-	.ctrl_2           = 0x00000B50,
-	.lossy_thresh0    = 0x00000B54,
-	.lossy_thresh1    = 0x00000B58,
-	.off_lossy_var    = 0x00000B5C,
-	.bw_limit         = 0x00000B1C,
+	vfe690_ubwc_regs_client_19 = {
+	.meta_addr        = 0x00001940,
+	.meta_cfg         = 0x00001944,
+	.mode_cfg         = 0x00001948,
+	.stats_ctrl       = 0x0000194C,
+	.ctrl_2           = 0x00001950,
+	.lossy_thresh0    = 0x00001954,
+	.lossy_thresh1    = 0x00001958,
+	.off_lossy_var    = 0x0000195C,
+	.bw_limit         = 0x0000191C,
+	.ubwc_comp_en_bit = BIT(1),
+};
+
+static struct cam_vfe_bus_ver3_reg_offset_ubwc_client
+	vfe690_ubwc_regs_client_20 = {
+	.meta_addr        = 0x00001A40,
+	.meta_cfg         = 0x00001A44,
+	.mode_cfg         = 0x00001A48,
+	.stats_ctrl       = 0x00001A4C,
+	.ctrl_2           = 0x00001A50,
+	.lossy_thresh0    = 0x00001A54,
+	.lossy_thresh1    = 0x00001A58,
+	.off_lossy_var    = 0x00001A5C,
+	.bw_limit         = 0x00001A1C,
+	.ubwc_comp_en_bit = BIT(1),
+};
+
+static struct cam_vfe_bus_ver3_reg_offset_ubwc_client
+	vfe690_ubwc_regs_client_22 = {
+	.meta_addr        = 0x00001C40,
+	.meta_cfg         = 0x00001C44,
+	.mode_cfg         = 0x00001C48,
+	.stats_ctrl       = 0x00001C4C,
+	.ctrl_2           = 0x00001C50,
+	.lossy_thresh0    = 0x00001C54,
+	.lossy_thresh1    = 0x00001C58,
+	.off_lossy_var    = 0x00001C5C,
+	.bw_limit         = 0x00001C1C,
+	.ubwc_comp_en_bit = BIT(1),
+};
+
+static struct cam_vfe_bus_ver3_reg_offset_ubwc_client
+	vfe690_ubwc_regs_client_23 = {
+	.meta_addr        = 0x00001D40,
+	.meta_cfg         = 0x00001D44,
+	.mode_cfg         = 0x00001D48,
+	.stats_ctrl       = 0x00001D4C,
+	.ctrl_2           = 0x00001D50,
+	.lossy_thresh0    = 0x00001D54,
+	.lossy_thresh1    = 0x00001D58,
+	.off_lossy_var    = 0x00001D5C,
+	.bw_limit         = 0x00001D1C,
 	.ubwc_comp_en_bit = BIT(1),
 };
 
@@ -980,7 +1036,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe690_bus_hw_info = {
 			.debug_status_1           = 0x00000988,
 			.bw_limiter_addr          = 0x0000091C,
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_1,
-			.ubwc_regs                = &vfe690_ubwc_regs_client_4,
+			.ubwc_regs                = &vfe690_ubwc_regs_client_3,
 		},
 		/* BUS Client 4 DISP C */
 		{
@@ -1010,7 +1066,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe690_bus_hw_info = {
 			.debug_status_1           = 0x00000A88,
 			.bw_limiter_addr          = 0x00000A1C,
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_1,
-			.ubwc_regs                = &vfe690_ubwc_regs_client_5,
+			.ubwc_regs                = &vfe690_ubwc_regs_client_4,
 		},
 		/* BUS Client 5 DISP DS4 */
 		{
@@ -1451,7 +1507,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe690_bus_hw_info = {
 			.debug_status_1           = 0x00001988,
 			.bw_limiter_addr          = 0x0000191C,
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
-			.ubwc_regs                = NULL,
+			.ubwc_regs                = &vfe690_ubwc_regs_client_19,
 		},
 		/* BUS Client 20 AI_OUT_1_UV/C1 */
 		{
@@ -1481,7 +1537,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe690_bus_hw_info = {
 			.debug_status_1           = 0x00001A88,
 			.bw_limiter_addr          = 0x00001A1C,
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
-			.ubwc_regs                = NULL,
+			.ubwc_regs                = &vfe690_ubwc_regs_client_20,
 		},
 		/* BUS Client 21 AI_OUT_1_C2 */
 		{
@@ -1541,7 +1597,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe690_bus_hw_info = {
 			.debug_status_1           = 0x00001C88,
 			.bw_limiter_addr          = 0x00001C1C,
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
-			.ubwc_regs                = NULL,
+			.ubwc_regs                = &vfe690_ubwc_regs_client_22,
 		},
 		/* BUS Client 23 AI_OUT_2_UV/C1 */
 		{
@@ -1571,7 +1627,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe690_bus_hw_info = {
 			.debug_status_1           = 0x00001D88,
 			.bw_limiter_addr          = 0x00001D1C,
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
-			.ubwc_regs                = NULL,
+			.ubwc_regs                = &vfe690_ubwc_regs_client_23,
 		},
 		/* BUS Client 24 AI_OUT_2_C2 */
 		{
