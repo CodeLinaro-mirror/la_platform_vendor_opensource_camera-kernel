@@ -15293,7 +15293,8 @@ static int cam_ife_mgr_isp_add_reg_update(struct cam_ife_hw_mgr_ctx *ctx,
 }
 
 int cam_ife_hw_mgr_ul_setup_change_base(struct cam_isp_ctx_ul_data *ul_data,
-	void                    *priv) {
+	void                    *priv)
+{
 	struct cam_ife_hw_mgr_ctx               *ctx = (struct cam_ife_hw_mgr_ctx *)priv;
 	struct cam_isp_change_base_args          change_base_info = {0};
 	struct list_head                        *res_list = NULL;
@@ -15339,18 +15340,22 @@ int cam_ife_hw_mgr_ul_setup_change_base(struct cam_isp_ctx_ul_data *ul_data,
 				if (rc)
 					return rc;
 
-				ul_data->change_base.change_base_cmd[hw_type][base_idx].handle = ul_data->kmd_buf.handle;
-				ul_data->change_base.change_base_cmd[hw_type][base_idx].len    = get_base.cmd.used_bytes;
-				ul_data->change_base.change_base_cmd[hw_type][base_idx].offset = ul_data->kmd_buf.offset;
+				ul_data->change_base.change_base_cmd[hw_type][base_idx].handle =
+					ul_data->kmd_buf.handle;
+				ul_data->change_base.change_base_cmd[hw_type][base_idx].len    =
+					get_base.cmd.used_bytes;
+				ul_data->change_base.change_base_cmd[hw_type][base_idx].offset =
+					ul_data->kmd_buf.offset;
 
 				/* Marking change base as COMMON_CFG */
-				ul_data->change_base.change_base_cmd[hw_type][base_idx].flags  = CAM_ISP_COMMON_CFG_BL;
+				ul_data->change_base.change_base_cmd[hw_type][base_idx].flags  =
+					CAM_ISP_COMMON_CFG_BL;
 				CAM_DBG(CAM_ISP,
 					"hw_type %d base=%d handle=0x%x, len=%u, offset=%u",
 					hw_type, i,
-					ul_data->change_base.change_base_cmd[hw_type][base_idx].handle,
-					ul_data->change_base.change_base_cmd[hw_type][base_idx].len,
-					ul_data->change_base.change_base_cmd[hw_type][base_idx].offset);
+					ul_data->kmd_buf.handle,
+					get_base.cmd.used_bytes,
+					ul_data->kmd_buf.offset);
 
 				ul_data->kmd_buf.used_bytes += get_base.cmd.used_bytes;
 				ul_data->kmd_buf.offset     += get_base.cmd.used_bytes;
@@ -15571,15 +15576,15 @@ int cam_ife_mgr_prepare_ul_hw_update(void *hw_mgr_priv,
 			goto end;
 		}
 	}
-	for(i = 0; i < ctx->num_base; i++) {
-		if (ctx->base[i].hw_type == CAM_ISP_HW_TYPE_VFE) {
-			num_ent = prepare->num_hw_update_entries;
-			memcpy(&prepare->hw_update_entries[num_ent],
-				&ul_data->change_base.change_base_cmd[CAM_ISP_HW_TYPE_VFE][ctx->base[i].idx],
-				sizeof(struct cam_hw_update_entry));
-			prepare->num_hw_update_entries++;
-			break;
-		}
+	for (i = 0; i < ctx->num_base; i++) {
+		if (ctx->base[i].hw_type != CAM_ISP_HW_TYPE_VFE)
+			continue;
+		num_ent = prepare->num_hw_update_entries;
+		memcpy(&prepare->hw_update_entries[num_ent],
+		&ul_data->change_base.change_base_cmd[CAM_ISP_HW_TYPE_VFE][ctx->base[i].idx],
+		sizeof(struct cam_hw_update_entry));
+		prepare->num_hw_update_entries++;
+		break;
 	}
 
 	/*
@@ -15668,9 +15673,8 @@ int cam_ife_hw_mgr_prepare_ul_io(void *hw_mgr_priv,
 			break;
 		}
 	}
-	if (!ul_data->change_base.is_valid) {
+	if (!ul_data->change_base.is_valid)
 		cam_ife_hw_mgr_ul_setup_change_base(ul_data, (void *) ctx);
-	}
 
 	return rc;
 }

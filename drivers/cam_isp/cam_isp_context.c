@@ -546,7 +546,8 @@ static const char *__cam_isp_ctx_crm_trigger_point_to_string(
 }
 
 static int cam_isp_no_crm_apply_req_notify(struct cam_isp_context *ctx_isp, uint64_t  request_id,
-	int trigger_point, uint32_t res_id, uint64_t sof_irq_ts, uint64_t *last_applied_req_id, uint64_t setting_id)
+	int trigger_point, uint32_t res_id, uint64_t sof_irq_ts,
+	uint64_t *last_applied_req_id, uint64_t setting_id)
 {
 	int rc = -EINVAL;
 	struct cam_context *ctx = ctx_isp->base;
@@ -752,7 +753,8 @@ static int __cam_isp_ctx_notify_trigger_util(
 			}
 			if (!ctx_isp->mcu_enable)
 				cam_isp_no_crm_apply_req_notify(ctx_isp, request_id, trigger_type,
-					res_id, sof_irq_ts, &sof_notify.sensor_applied_req_id, sensor_setting_id);
+					res_id, sof_irq_ts, &sof_notify.sensor_applied_req_id,
+					sensor_setting_id);
 
 
 			ctx_isp->sensor_pd_handled = true;
@@ -7774,14 +7776,16 @@ err_out:
 }
 
 static int cam_isp_ul_update_dev(int32_t dev_hdl, struct cam_packet *packet,
-	struct port_pattern_period *port_enable_pattern_period) {
+	struct port_pattern_period *port_enable_pattern_period)
+{
 	int rc = 0;
 	struct cam_isp_ctx_req            *req_isp;
 	struct cam_hw_prepare_update_args  cfg = {0};
 	struct cam_hw_cmd_args             hw_cmd_args;
 	struct cam_isp_hw_cmd_args         isp_hw_cmd_args;
 	uint32_t                           packet_opcode = 0;
-	struct cam_context                 *ctx = (struct cam_context *) cam_get_device_priv(dev_hdl);
+	struct cam_context                 *ctx =
+		(struct cam_context *) cam_get_device_priv(dev_hdl);
 	struct cam_isp_context             *ctx_isp =
 		(struct cam_isp_context *) ctx->ctx_priv;
 	struct cam_isp_context_ul_setting_data  *setting_data;
@@ -8395,8 +8399,10 @@ static int __cam_isp_ctx_allocate_mem_hw_entries(
 	}
 
 	for (i = 0; i < MAX_SETTING_PACKETS && param->op_flags & CAM_IFE_CTX_UL_PATH; i++) {
-		ctx_isp->setting_data[i].req_isp.cfg  = ctx->hw_update_entry[i + CAM_ISP_CTX_REQ_MAX];
-		ctx_isp->setting_data[i].req_isp.fence_map_out = ctx->out_map_entries[i + CAM_ISP_CTX_REQ_MAX];
+		ctx_isp->setting_data[i].req_isp.cfg  =
+			ctx->hw_update_entry[i + CAM_ISP_CTX_REQ_MAX];
+		ctx_isp->setting_data[i].req_isp.fence_map_out =
+			ctx->out_map_entries[i + CAM_ISP_CTX_REQ_MAX];
 	}
 	list_for_each_entry_safe(req, temp_req,
 		&ctx->free_req_list, list) {
@@ -8922,7 +8928,8 @@ static int __cam_isp_ctx_ul_fastpath_retrieve_result_util(
 
 		if (found_match) {
 			__cam_isp_ctx_ul_fastpath_populate_buf_hdls(result_idx,
-				timestamp, boot_timestamp, req->request_id, isp_ctx, req_isp, response_buffers);
+				timestamp, boot_timestamp, req->request_id, isp_ctx,
+				req_isp, response_buffers);
 			isp_ctx->active_req_cnt--;
 			__cam_isp_ctx_handle_req_reset_util(isp_ctx, req);
 			rc = 0;
@@ -9005,7 +9012,7 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 		goto free_res;
 	}
 
-	ctx_isp->ul_path_en = 
+	ctx_isp->ul_path_en =
 		(param.op_flags & CAM_IFE_CTX_UL_PATH);
 	memset(&ctx_isp->ul_data, 0, sizeof(ctx_isp->ul_data));
 	rc = __cam_isp_ctx_allocate_mem_hw_entries(ctx, &param);
@@ -10288,7 +10295,8 @@ static int __cam_isp_ctx_send_req_error(struct cam_isp_context *ctx_isp,
 	return rc;
 }
 
-static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
+static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
+{
 	struct cam_ctx_request           *req;
 	struct cam_isp_ctx_req           *req_isp, *setting_req_isp;
 	struct cam_context               *cam_ctx = ctx_isp->base;
@@ -10309,9 +10317,10 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 	req->status = 1;
 
 
-	req_isp = (struct cam_isp_ctx_req*)req->req_priv;
+	req_isp = (struct cam_isp_ctx_req *)req->req_priv;
 	setting_req_isp = &ctx_isp->setting_data[setting_id % MAX_SETTING_PACKETS].req_isp;
-	memcpy(&req_isp->hw_update_data, &setting_req_isp->hw_update_data, sizeof(setting_req_isp->hw_update_data));
+	memcpy(&req_isp->hw_update_data, &setting_req_isp->hw_update_data,
+		sizeof(setting_req_isp->hw_update_data));
 
 	req_isp->num_cfg                  = setting_req_isp->num_cfg;
 	req_isp->num_acked                = setting_req_isp->num_acked;
@@ -10325,7 +10334,8 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 	req_isp->intermediate_irq_mask.reg_up_irq_mask = 0;
 	req_isp->intermediate_irq_mask.epoch_irq_mask = 0;
 	req_isp->ul_fp_result_posted = false;
-	memcpy(req_isp->cfg, setting_req_isp->cfg, sizeof(struct cam_hw_update_entry) * setting_req_isp->num_cfg);
+	memcpy(req_isp->cfg, setting_req_isp->cfg,
+		sizeof(struct cam_hw_update_entry) * setting_req_isp->num_cfg);
 	req_isp->num_fence_map_out        = 0;
 
 	res_data = ctx_isp->ul_data.resource_data;
@@ -10334,7 +10344,8 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 		if (!ctx_isp->ul_data.pattern_period[i].resource_type)
 			break;
 		res_type = ctx_isp->ul_data.pattern_period[i].resource_type;
-		port_pattern_curr_idx = ctx_isp->ul_data.curr_index_period % ctx_isp->ul_data.pattern_period[i].period;
+		port_pattern_curr_idx = ctx_isp->ul_data.curr_index_period %
+			ctx_isp->ul_data.pattern_period[i].period;
 		if (!(ctx_isp->ul_data.pattern_period[i].pattern & BIT(port_pattern_curr_idx)))
 			continue;
 		for (j = 0; j < MAX_IO_RESOURCES; j++) {
@@ -10352,7 +10363,8 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 					k = (k + 1) % res_data[j].buf_count;
 				} while (k != res_data[j].curr_buf_index);
 				if (!free_buffer_found) {
-					CAM_ERR(CAM_ISP, "Free buffer not found for res 0x%x", res_type);
+					CAM_ERR(CAM_ISP, "Free buffer not found for res 0x%x",
+						res_type);
 					req_isp->reapply_type = CAM_CONFIG_REAPPLY_NONE;
 					req_isp->cdm_reset_before_apply = false;
 					req_isp->num_acked = 0;
@@ -10388,7 +10400,8 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 
 		if (!buffer_found) {
 			for (j = 0; j < MAX_IO_RESOURCES; j++) {
-				if (res_data[j].resource_type == ctx_isp->primary_port_info[i].res_id)
+				if (res_data[j].resource_type ==
+					ctx_isp->primary_port_info[i].res_id)
 					break;
 			}
 
@@ -10404,7 +10417,8 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 					k = (k + 1) % res_data[j].buf_count;
 				};
 				if (!free_buffer_found) {
-					CAM_ERR(CAM_ISP, "Free buffer not found for res 0x%x", res_type);
+					CAM_ERR(CAM_ISP, "Free buffer not found for res 0x%x",
+						res_type);
 					req_isp->reapply_type = CAM_CONFIG_REAPPLY_NONE;
 					req_isp->cdm_reset_before_apply = false;
 					req_isp->num_acked = 0;
@@ -10420,7 +10434,8 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 			memcpy(&req_isp->fence_map_out[req_isp->num_fence_map_out],
 				&res_data[j].out_map_entries[k],
 				sizeof(struct cam_hw_fence_map_entry));
-			req_isp->hw_update_data.primary_port_entry_index = req_isp->num_fence_map_out;
+			req_isp->hw_update_data.primary_port_entry_index =
+				req_isp->num_fence_map_out;
 			req_isp->num_cfg++;
 			req_isp->num_fence_map_out++;
 			req_isp->hw_update_data.virtual_frame_en = true;
@@ -10431,7 +10446,8 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 		if (!ctx_isp->ul_data.pattern_period[i].resource_type)
 			break;
 		res_type = ctx_isp->ul_data.pattern_period[i].resource_type;
-		port_pattern_curr_idx = ctx_isp->ul_data.curr_index_period % ctx_isp->ul_data.pattern_period[i].period;
+		port_pattern_curr_idx = ctx_isp->ul_data.curr_index_period %
+			ctx_isp->ul_data.pattern_period[i].period;
 		if (!(ctx_isp->ul_data.pattern_period[i].pattern & BIT(port_pattern_curr_idx)))
 			continue;
 		for (j = 0; j < MAX_IO_RESOURCES; j++) {
@@ -10441,7 +10457,8 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp) {
 				producer_queue = (uint8_t *)res_data[j].producer_q_kmdvaddr;
 				producer_queue[res_data[j].curr_buf_index]  = 1;
 			}
-			res_data[j].curr_buf_index = (res_data[j].curr_buf_index + 1) % res_data[j].buf_count;
+			res_data[j].curr_buf_index =
+				(res_data[j].curr_buf_index + 1) % res_data[j].buf_count;
 			break;
 		}
 	}
@@ -11058,12 +11075,15 @@ int cam_isp_no_crm_handshake_device(struct cam_req_mgr_no_crm_handshake_data *ha
 
 int cam_isp_no_crm_setup_ul(int32_t dev_hdl, struct cam_packet *packet,
 	struct port_pattern_period *port_enable_pattern_period, uint32_t *num_res,
-	struct resource_info *res_info, struct producer_queue *producer_q, uint32_t num_producer_q) {
+	struct resource_info *res_info, struct producer_queue *producer_q,
+	uint32_t num_producer_q)
+{
 	int rc = 0, i, j;
 	size_t len;
 	bool match_found;
 	struct cam_hw_prepare_update_args  cfg = {0};
-	struct cam_context                 *ctx = (struct cam_context *) cam_get_device_priv(dev_hdl);
+	struct cam_context                 *ctx =
+		(struct cam_context *) cam_get_device_priv(dev_hdl);
 	struct cam_isp_context             *ctx_isp =
 		(struct cam_isp_context *) ctx->ctx_priv;
 	struct cam_isp_prepare_hw_update_data hw_update_data;
@@ -11097,10 +11117,11 @@ int cam_isp_no_crm_setup_ul(int32_t dev_hdl, struct cam_packet *packet,
 		res_info[*num_res].resource_type = res_data[i].resource_type;
 		res_info[*num_res].num_hdls      = res_data[i].buf_count;
 		for (j = 0; j < res_info[*num_res].num_hdls; j++)
-			res_info[*num_res].buf_hdl[j] = res_data[i].out_map_entries[j].buf_handle[0];
-		*num_res+=1;
+			res_info[*num_res].buf_hdl[j] =
+				res_data[i].out_map_entries[j].buf_handle[0];
+		*num_res += 1;
 		match_found = false;
-		for(j = 0; j < num_producer_q; j++) {
+		for (j = 0; j < num_producer_q; j++) {
 			if (res_data[i].resource_type == producer_q[j].resource_type) {
 				match_found = true;
 				break;

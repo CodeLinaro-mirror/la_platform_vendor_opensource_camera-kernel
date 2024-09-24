@@ -188,7 +188,7 @@ struct cam_isp_ul_primary_port_update_entry {
 
 /**
  * sturct cam_isp_ctx_ul_data
-*/
+ */
 struct cam_isp_ctx_ul_data {
 	struct port_pattern_period                  pattern_period[MAX_IO_RESOURCES];
 	struct cam_kmd_buf_info                     kmd_buf;
