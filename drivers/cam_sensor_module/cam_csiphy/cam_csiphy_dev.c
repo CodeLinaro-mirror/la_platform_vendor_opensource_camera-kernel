@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_csiphy_dev.h"
@@ -17,15 +17,15 @@ static struct dentry *root_dentry;
 
 static inline void cam_csiphy_trigger_reg_dump(struct csiphy_device *csiphy_dev)
 {
-			cam_csiphy_common_status_reg_dump(csiphy_dev);
+	cam_csiphy_common_status_reg_dump(csiphy_dev);
 
-			if (csiphy_dev->en_full_phy_reg_dump)
-				cam_csiphy_reg_dump(&csiphy_dev->soc_info);
+	if (csiphy_dev->en_full_phy_reg_dump)
+		cam_csiphy_reg_dump(&csiphy_dev->soc_info);
 
-			if (csiphy_dev->en_lane_status_reg_dump) {
+	if (csiphy_dev->en_lane_status_reg_dump) {
 		CAM_INFO(CAM_CSIPHY, "Status Reg Dump on failure");
-				cam_csiphy_dump_status_reg(csiphy_dev);
-			}
+		cam_csiphy_dump_status_reg(csiphy_dev);
+	}
 }
 
 static void cam_csiphy_subdev_handle_message(struct v4l2_subdev *sd,

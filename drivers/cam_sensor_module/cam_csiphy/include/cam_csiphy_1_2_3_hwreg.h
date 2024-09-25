@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_CSIPHY_1_2_3_HWREG_H_
@@ -21,7 +22,8 @@ struct csiphy_reg_parms_t csiphy_v1_2_3 = {
 	.csiphy_reset_exit_array_size = 0,
 	.csiphy_2ph_config_array_size = 16,
 	.csiphy_3ph_config_array_size = 31,
-	.csiphy_2ph_3ph_config_array_size = 0,
+        .csiphy_2l2ph_1l3ph_config_array_size = 0,
+        .csiphy_1l2ph_2l3ph_config_array_size = 0,
 	.csiphy_2ph_clock_lane = 0x1,
 	.csiphy_2ph_combo_ck_ln = 0x10,
 	.aon_sel_params = NULL,

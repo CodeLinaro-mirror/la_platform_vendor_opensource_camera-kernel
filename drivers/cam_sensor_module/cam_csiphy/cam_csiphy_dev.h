@@ -76,9 +76,15 @@
 #define PREAMBLE_PATTERN_SET_CHECKER    BIT(4)
 #define PREAMBLE_PATTERN_BIST_DONE      BIT(0)
 #define PREAMBLE_MAX_ERR_COUNT_ALLOWED  2
+
+/* Channel types */
 #define CSIPHY_CHANNEL_TYPE_INVALID  0x0
 #define CSIPHY_CHANNEL_TYPE_SHORT    0x1
 #define CSIPHY_CHANNEL_TYPE_STANDARD 0x2
+
+/* Cphy dphy combo mode types */
+#define CSIPHY_2LDPHY_1LCPHY 0x1
+#define CSIPHY_2LCPHY_1LDPHY 0x2
 
 enum cam_csiphy_state {
 	CAM_CSIPHY_INIT,
@@ -160,7 +166,8 @@ struct csiphy_reg_parms_t {
 	uint32_t csiphy_reset_exit_array_size;
 	uint32_t csiphy_2ph_config_array_size;
 	uint32_t csiphy_3ph_config_array_size;
-	uint32_t csiphy_2ph_3ph_config_array_size;
+	uint32_t csiphy_2l2ph_1l3ph_config_array_size;
+	uint32_t csiphy_1l2ph_2l3ph_config_array_size;
 	uint32_t csiphy_cpas_cp_bits_per_phy;
 	uint32_t csiphy_cpas_cp_is_interleaved;
 	uint32_t csiphy_cpas_cp_2ph_offset;
@@ -268,7 +275,8 @@ struct csiphy_ctrl_t {
 	struct csiphy_reg_t (*csiphy_2ph_combo_mode_reg)[MAX_SETTINGS_PER_LANE];
 	struct csiphy_reg_t (*csiphy_3ph_reg)[MAX_SETTINGS_PER_LANE];
 	struct csiphy_reg_t (*csiphy_3ph_combo_reg)[MAX_SETTINGS_PER_LANE];
-	struct csiphy_reg_t (*csiphy_2ph_3ph_mode_reg)[MAX_SETTINGS_PER_LANE];
+	struct csiphy_reg_t (*csiphy_2l2ph_1l3ph_mode_reg)[MAX_SETTINGS_PER_LANE];
+	struct csiphy_reg_t (*csiphy_1l2ph_2l3ph_mode_reg)[MAX_SETTINGS_PER_LANE];
 	struct bist_reg_settings_t *csiphy_bist_reg;
 	enum   cam_vote_level (*getclockvoting)(struct csiphy_device *phy_dev,
 		int32_t index);
@@ -387,6 +395,7 @@ struct csiphy_device {
 	uint32_t                       scm_ref_count;
 	uint32_t                       lanes_enabled;
 	uint32_t                       channel_type;
+	uint32_t                       dphy_cphy_combo_type;
 };
 
 /**

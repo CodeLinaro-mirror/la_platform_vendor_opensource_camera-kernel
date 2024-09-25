@@ -288,7 +288,12 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 	if (!of_property_read_bool(soc_info->dev->of_node, "is_standard_channel"))
 		csiphy_dev->channel_type = CSIPHY_CHANNEL_TYPE_SHORT;
 	else
-		csiphy_dev->is_aggregator_rx = CSIPHY_CHANNEL_TYPE_STANDARD;
+		csiphy_dev->channel_type = CSIPHY_CHANNEL_TYPE_STANDARD;
+
+	if (!of_property_read_bool(soc_info->dev->of_node, "is_2ldphy_1lcphy_combo"))
+		csiphy_dev->dphy_cphy_combo_type = CSIPHY_2LCPHY_1LDPHY;
+	else
+		csiphy_dev->dphy_cphy_combo_type = CSIPHY_2LDPHY_1LCPHY;
 
 	if (of_property_read_bool(soc_info->dev->of_node, "is-phy-protect"))
 		csiphy_dev->is_phy_protect = true;
@@ -302,7 +307,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v1_0_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v1_0_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v1_0_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = csiphy_3ph_v1_0_combo_mode_reg;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = csiphy_3ph_v1_0_combo_mode_reg;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_1_0;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_1_0;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_reg_1_0;
@@ -318,7 +324,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v1_1_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v1_1_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v1_1_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = csiphy_3ph_v1_1_combo_mode_reg;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = csiphy_3ph_v1_1_combo_mode_reg;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_1_1;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_1_1;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_reg_1_1;
@@ -334,7 +341,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v1_2_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v1_2_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v1_2_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_1_2;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_1_2;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_reg_1_2;
@@ -350,7 +358,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v1_2_1_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v1_2_1_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v1_2_1_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_1_2_1;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_1_2_1;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_reg_1_2_1;
@@ -366,7 +375,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v1_2_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v1_2_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v1_2_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_1_2;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_1_2;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_reg_1_2;
@@ -383,7 +393,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v1_2_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v1_2_2_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v1_2_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_1_2;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_1_2_2;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_reg_1_2;
@@ -399,7 +410,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v1_2_3_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v1_2_3_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v1_2_3_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_1_2_3;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_1_2_3;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_reg_1_2_3;
@@ -415,7 +427,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v1_2_3_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v1_2_3_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v1_2_3_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_1_2_3;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_1_2_3;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_reg_1_2_3;
@@ -431,7 +444,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v1_2_5_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v1_2_5_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v1_2_5_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_1_2_5;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_1_2_5;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_reg_1_2_5;
@@ -447,7 +461,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v1_2_6_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v1_2_6_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v1_2_6_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = csiphy_1l2ph_2l3ph_combo_mode_reg;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = csiphy_2l2ph_1l3ph_combo_mode_reg;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = csiphy_1l2ph_2l3ph_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_1_2_6;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_1_2_6;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_enter_reg_1_2_6;
@@ -463,7 +478,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v2_0_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v2_0_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v2_0_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_2_0;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_2_0;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_reg_2_0;
@@ -479,7 +495,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v2_0_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v2_0_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v2_0_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_2_0;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_2_0;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_reg_2_0;
@@ -495,7 +512,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v2_1_0_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v2_1_0_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v2_1_0_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_2_1_0;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_2_1_0;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_enter_reg_2_1_0;
@@ -512,7 +530,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v2_1_1_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v2_1_1_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v2_1_1_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_2_1_1;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_2_1_1;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_enter_reg_2_1_1;
@@ -529,7 +548,8 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v2_1_3_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v2_1_3_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v2_1_3_reg;
-		csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_2_1_3;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_2_1_3;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_enter_reg_2_1_3;
