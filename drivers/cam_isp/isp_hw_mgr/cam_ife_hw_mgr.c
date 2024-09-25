@@ -930,7 +930,7 @@ static int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 
 	for (i = 0; i < sensor_grp_config->num_grp_cfg; i++) {
 		stream_grp_cfg = &sensor_grp_config->stream_grp_cfg[i];
-		if (stream_grp_cfg->stream_cfg_cnt >= CAM_ISP_STREAM_CFG_MAX) {
+		if (stream_grp_cfg->stream_cfg_cnt > CAM_ISP_STREAM_CFG_MAX) {
 			CAM_ERR(CAM_ISP,
 				"stream config count %d exceed max supported value %d for stream_grp_cfg idx:%d",
 				stream_grp_cfg->stream_cfg_cnt, CAM_ISP_STREAM_CFG_MAX, i);
@@ -1009,12 +1009,6 @@ static int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 					goto err;
 			}
 			grp_cfg->stream_cfg_cnt++;
-			if (grp_cfg->stream_cfg_cnt >= CAM_ISP_STREAM_CFG_MAX) {
-				CAM_ERR(CAM_ISP,
-					"stream config count exceed maxs upported value");
-				rc = -EFAULT;
-				goto err;
-			}
 		}
 
 		grp_cfg->rdi_stream_cfg_cnt =
