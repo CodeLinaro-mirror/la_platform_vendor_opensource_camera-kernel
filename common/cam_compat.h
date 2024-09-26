@@ -42,15 +42,6 @@ struct cam_fw_alloc_info {
 	uint64_t       fw_hdl;
 };
 
-/* Unblock compilation if target does not support camnoc reg update through HYP */
-#ifndef CONFIG_SPECTRA_SECURE_CAMNOC_REG_UPDATE
-#define QCOM_SCM_CAMERA_MAX_QOS_CNT 20
-struct qcom_scm_camera_qos {
-	u32 offset;
-	u32 val;
-};
-#endif
-
 int cam_reserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length);
 void cam_unreserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length);
 int camera_component_match_add_drivers(struct device *master_dev,
