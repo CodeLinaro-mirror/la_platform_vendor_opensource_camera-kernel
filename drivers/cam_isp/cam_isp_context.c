@@ -575,7 +575,7 @@ static int __cam_isp_ctx_no_crm_apply_trigger_util(void *priv, void *data)
 	struct cam_req_mgr_no_crm_trigger_notify      *sof_notify = NULL;
 	int                                           rc = 0, req_id = 0, open_cnt = 0;
 	int                                           res_id = CAM_IFE_PIX_PATH_RES_MAX;
-	uint64_t                                      sof_ts = 0, sensor_setting_id;
+	uint64_t                                      sof_ts = 0, sensor_setting_id = 0;
 	struct cam_ctx_request                        *req, *req_temp;
 	struct cam_isp_ctx_req                        *req_isp;
 
@@ -684,7 +684,7 @@ static int __cam_isp_ctx_notify_trigger_util(
 	int trigger_type, struct cam_isp_context *ctx_isp, uint64_t  request_id, uint32_t res_id,
 	uint64_t sof_irq_ts)
 {
-	int                                      rc = 0, sensor_setting_id;
+	int                                      rc = 0, sensor_setting_id = 0;
 	struct cam_context                       *ctx = ctx_isp->base;
 	struct cam_req_mgr_trigger_notify        notify;
 	struct cam_req_mgr_no_crm_trigger_notify sof_notify;
@@ -8043,11 +8043,14 @@ static int cam_isp_ul_update_dev(int32_t dev_hdl, struct cam_packet *packet,
 	uint32_t                           packet_opcode = 0;
 	struct cam_context                 *ctx =
 		(struct cam_context *) cam_get_device_priv(dev_hdl);
-	struct cam_isp_context             *ctx_isp =
-		(struct cam_isp_context *) ctx->ctx_priv;
+	struct cam_isp_context             *ctx_isp;
 	struct cam_isp_context_ul_setting_data  *setting_data;
 
-	// req_isp = (struct cam_isp_ctx_req *) req->req_priv; TODO: Get request
+	if (!ctx) {
+		CAM_ERR(CAM_ISP, "Invalid context handle 0x%x", dev_hdl);
+		return -EINVAL;
+	}
+	ctx_isp = (struct cam_isp_context *) ctx->ctx_priv;
 
 	/* Query the packet opcode */
 	setting_data = &ctx_isp->setting_data[packet->header.request_id % MAX_SETTING_PACKETS];
@@ -8696,7 +8699,7 @@ static int __cam_isp_ctx_allocate_mem_hw_entries(
 		}
 	}
 
-	for (i = 0; i < MAX_SETTING_PACKETS; i++) {
+	for (i = 0; i < MAX_SETTING_PACKETS && param->op_flags & CAM_IFE_CTX_UL_PATH; i++) {
 		ctx_isp->setting_data[i].req_isp.cfg  =
 			ctx->hw_update_entry[i + CAM_ISP_CTX_REQ_MAX];
 		ctx_isp->setting_data[i].req_isp.fence_map_out =
@@ -9762,13 +9765,15 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 	struct response_buffer *response_buffers)
 {
 	int num_entries, rc = 0, i, result_idx = 0;
-	struct cam_isp_context *isp_ctx = (struct cam_isp_context *)ctx->ctx_priv;
+	struct cam_isp_context *isp_ctx;
 	uint32_t rd_idx, wr_idx, last_consumed;
 
 	if (!ctx || !num_responses || !response_buffers) {
 		CAM_ERR(CAM_ISP, "Invalid params");
 		return -EINVAL;
 	}
+
+	isp_ctx = (struct cam_isp_context *)ctx->ctx_priv;
 
 	rc = cam_common_wait_for_completion_timeout(
 		&isp_ctx->ul_fp_params.fast_path_buf_done, msecs_to_jiffies(500));
@@ -11515,9 +11520,14 @@ int cam_isp_no_crm_setup_ul(int32_t dev_hdl, struct cam_packet *packet,
 	struct cam_hw_prepare_update_args  cfg      = {0};
 	struct cam_context                 *ctx     =
 		(struct cam_context *) cam_get_device_priv(dev_hdl);
-	struct cam_isp_context             *ctx_isp =
-		(struct cam_isp_context *) ctx->ctx_priv;
+	struct cam_isp_context             *ctx_isp;
 	struct cam_isp_prepare_hw_update_data *hw_update_data;
+
+	if (!ctx) {
+		CAM_ERR(CAM_ISP, "Invalid context handle 0x%x", dev_hdl);
+		return -EINVAL;
+	}
+	ctx_isp = (struct cam_isp_context *) ctx->ctx_priv;
 
 	hw_update_data = kzalloc(sizeof(struct cam_isp_prepare_hw_update_data),
 				GFP_KERNEL);

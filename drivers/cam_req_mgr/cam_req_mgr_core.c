@@ -3974,6 +3974,12 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd)
 		return -EINVAL;
 	}
 	link = cam_get_link_priv(ul_packet->link_hdl);
+	if (!link) {
+		CAM_ERR(CAM_CRM, "Link 0x%x not valid",
+			ul_packet->link_hdl);
+		return -EINVAL;
+
+	}
 	if (link->state != CAM_CRM_LINK_STATE_READY) {
 		CAM_ERR(CAM_CRM, "Link 0x%x is not in ready state",
 			ul_packet->link_hdl);
@@ -4088,7 +4094,7 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd)
 		for (j = 0; j < link->num_devs; j++) {
 			if (link->l_dev[j].no_crm_ops->retrieve) {
 				link->l_dev[j].no_crm_ops->retrieve(
-					ul_packet->device_hdl[i], ul_packet);
+					link->l_dev[j].dev_hdl, ul_packet);
 			}
 		}
 	}
@@ -4098,6 +4104,10 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd)
 int cam_req_mgr_get_setting_id(int link_hdl, int pd)
 {
 	struct cam_req_mgr_core_link    *link = cam_get_link_priv(link_hdl);
+	if (!link) {
+		CAM_ERR(CAM_ISP, "link_hdl is invalid 0x%x", link_hdl);
+		return -1;
+	}
 
 	if (!link->is_setting_period_valid)
 		return -1;
@@ -4112,6 +4122,10 @@ int cam_req_mgr_get_setting_id(int link_hdl, int pd)
 int cam_req_mgr_increase_setting_idx(int link_hdl)
 {
 	struct cam_req_mgr_core_link    *link = cam_get_link_priv(link_hdl);
+	if (!link) {
+		CAM_ERR(CAM_ISP, "link_hdl is invalid 0x%x", link_hdl);
+		return -1;
+	}
 
 	link->curr_seting_idx = (link->curr_seting_idx + 1) % link->setting_period_packet.period;
 	return link->curr_seting_idx;
