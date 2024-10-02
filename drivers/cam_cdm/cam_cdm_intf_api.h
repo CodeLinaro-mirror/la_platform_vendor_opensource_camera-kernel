@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_CDM_API_H_
@@ -144,6 +144,7 @@ struct cam_cdm_bl_cmd {
  * @type : type of the submitted bl cmd address.
  * @cmd_arrary_count : Input number of BL commands to be submitted to CDM
  * @cookie : Cookie if the callback is gen irq status
+ * @fast_complete: Completion variable from CDM clients to be used under ISR
  * @avail_buff_size: Available buffer size in bytes
  * @bl_cmd_array     : Input payload holding the BL cmd's arrary
  *                     to be sumbitted.
@@ -157,6 +158,7 @@ struct cam_cdm_bl_request {
 	uint32_t cmd_arrary_count;
 	struct cam_kmd_buf_info *genirq_buff;
 	uint64_t cookie;
+	struct completion *fast_complete;
 	union {
 		struct cam_cdm_bl_cmd cmd[1];
 		__DECLARE_FLEX_ARRAY(struct cam_cdm_bl_cmd, cmd_flex);
