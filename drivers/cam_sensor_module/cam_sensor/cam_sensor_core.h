@@ -1,13 +1,15 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2018,2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_SENSOR_CORE_H_
 #define _CAM_SENSOR_CORE_H_
 
 #include "cam_sensor_dev.h"
+
+#define LT6911UXE_SENSOR_ID 0x2102
 
 /**
  * @s_ctrl: Sensor ctrl structure
