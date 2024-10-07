@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -225,6 +225,10 @@ static int32_t cam_sensor_driver_get_dt_data(struct cam_sensor_ctrl_t *s_ctrl)
 			= s_ctrl->cci_num;
 
 		CAM_DBG(CAM_SENSOR, "cci-index %d", s_ctrl->cci_num);
+	}
+
+	if (of_property_read_u32(of_node, "cci-timer", &s_ctrl->gpio_mask) < 0) {
+		CAM_DBG(CAM_SENSOR, "device failed to read cci-timer");
 	}
 
 	if (of_property_read_u32(of_node, "sensor-position-pitch",

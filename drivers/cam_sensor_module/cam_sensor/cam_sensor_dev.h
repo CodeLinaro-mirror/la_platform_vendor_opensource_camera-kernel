@@ -46,6 +46,12 @@ enum cam_sensor_state_t {
 	CAM_SENSOR_START,
 };
 
+enum cam_sensor_frame_state {
+	CAM_SENSOR_FRAME_APPLY_PENDING,
+	CAM_SENSOR_FRAME_APPLY,
+	CAM_SENSOR_FRAME_STATE_MAX
+};
+
 /**
  * struct sensor_intf_params
  * @device_hdl: Device Handle
@@ -117,6 +123,11 @@ struct cam_sensor_dev_res_info {
  * @dt: dt
  * @frame_duration: frame_duration
  * @root_dentry: root directory entry
+ * @gpio_mask: Timer number in a single cci core
+ * @frame_state: frame settings applied or not
+ * @cci_contextId:  sensor ID to be synchronized to the I2C command
+ * @is_trigger_mode: sensor is running in trigger mode or not
+ * @is_multistream_usecase: multistream supported in sensor
  */
 struct cam_sensor_ctrl_t {
 	char                           device_name[
@@ -161,6 +172,17 @@ struct cam_sensor_ctrl_t {
 
 	struct dentry                  *root_dentry;
 	bool                           pause_state;
+	uint32_t                       gpio_mask;
+	enum cam_sensor_frame_state    frame_state;
+	uint32_t                       cci_contextId;
+	bool                           is_trigger_mode;
+	bool                           is_multistream_usecase;
+};
+
+struct sensor_userdata {
+	struct cam_sensor_ctrl_t *sensor_ctrl;
+	uint64_t reqid;
+	void *userdata;
 };
 
 /**
