@@ -3711,6 +3711,9 @@ static void cam_icp_mgr_proc_shutdown(struct cam_icp_hw_mgr *hw_mgr)
 
 	icp_dev_intf->hw_ops.deinit(icp_dev_intf->hw_priv, NULL, 0);
 
+	if (hw_mgr->synx_signaling_en)
+		cam_sync_synx_core_recovery(hw_mgr->synx_core_id);
+
 	hw_mgr->icp_resumed = false;
 }
 

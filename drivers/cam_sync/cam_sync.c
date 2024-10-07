@@ -1893,6 +1893,18 @@ static int cam_generic_fence_cmd_parse_params(
 	return result;
 }
 
+int cam_sync_synx_core_recovery(
+	enum cam_sync_fencing_client_cores core_id)
+{
+	int rc = -EOPNOTSUPP;
+
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
+	  rc = cam_synx_core_recovery(core_id);
+#endif
+
+	return rc;
+}
+
 #if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
 static int cam_generic_fence_validate_signal_input_info_util(
 	int32_t fence_type,
