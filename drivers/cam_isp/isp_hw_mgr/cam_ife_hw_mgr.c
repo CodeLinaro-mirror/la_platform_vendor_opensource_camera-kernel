@@ -14777,6 +14777,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 	case CAM_ISP_GENERIC_BLOB_TYPE_CHECK_SETTING_ID: {
 		struct cam_isp_setting_id_info *setting_id_info;
 		struct cam_isp_prepare_hw_update_data *prepare_hw_data;
+		uint64_t max_setting_id;
 
 		prepare_hw_data = (struct cam_isp_prepare_hw_update_data *)
 			prepare->priv;
@@ -14789,6 +14790,15 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		}
 
 		setting_id_info = (struct cam_isp_setting_id_info *)blob_data;
+		max_setting_id = (1 << ife_mgr_ctx->setting_size) - 1;
+
+		if (setting_id_info->setting_id > max_setting_id) {
+			CAM_ERR(CAM_ISP,
+				"Invalid setting ID, max possible val:%u, setting id: %u",
+				max_setting_id, setting_id_info->setting_id);
+			return -EINVAL;
+		}
+
 		prepare_hw_data->setting_id = setting_id_info->setting_id;
 		CAM_DBG(CAM_ISP,
 			"Setting ID: %u, ctx: %u",

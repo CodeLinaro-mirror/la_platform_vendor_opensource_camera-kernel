@@ -365,6 +365,31 @@ struct cam_isp_context_ul_fp_handling_params {
 };
 
 /**
+ * struct cam_isp_ctx_sensor_fov_info - Sensor Foveation info
+ *
+ * @setting_size:              Size of setting variable ie: 32bit, 64 bit
+ * @settingbuf_res_id:         Resource ID of Setting ID buffer
+ * @scratch_buf_kmdvaddr:      KMD VA of scratch buffer
+ * @is_settingid_scratchcfg:   indicates that scratch buffer is programmed with valid settingID
+ * @prev_isp_settings:         stores previous ISP setting ID
+ * @prev_sensor_settings:      stores previous Sensor setting ID
+ * @isp_count:                 counter to increment when maximum possible ISP
+ *                             setting ID value is crossed
+ * @sensor_count:              counter to increment when maximum possible Sensor
+ *                             setting ID value is crossed.
+ */
+struct cam_isp_ctx_sensor_fov_info {
+	uint32_t                               settingbuf_res_id;
+	uint32_t                               setting_size;
+	uintptr_t                              scratch_buf_kmdvaddr;
+	bool                                   is_settingid_scratchcfg;
+	uint64_t                               prev_isp_settings;
+	uint64_t                               prev_sensor_settings;
+	uint32_t                               isp_count;
+	uint32_t                               sensor_count;
+};
+
+/**
  * struct cam_isp_context   -  ISP context object
  *
  * @base:                      Common context object pointer
@@ -445,11 +470,8 @@ struct cam_isp_context_ul_fp_handling_params {
  *                             for trigger case it is same as path_irq mask
  * @path_irq_mask:             mask created from requested ports, out param
  * @frame_drop_cnt             Count of continuous frame drops
- * @setting_size:              Size of setting variable ie: 32bit, 64 bit
  * @is_foveation_en:           flag to indicate if sensor foveation is enabled
- * @settingbuf_res_id:         Resource ID of Setting ID buffer
- * @scratch_buf_kmdvaddr:      KMD VA of scratch buffer
- * @is_settingid_scratchcfg:   indicates that scratch buffer is programmed with valid settingID
+ * @foveation_info:            sensor foveation data
  * @num_primary_ports:         Number of primary port configurations
  * @primary_port_info:         Primary port info array
  * @primary_port_exp_mask:     Indicates the expected mask for all master ports to be done for
@@ -540,11 +562,8 @@ struct cam_isp_context {
 	uint64_t                               csid_rup_aup_mask;
 	uint64_t                               path_irq_mask;
 	uint32_t                               frame_drop_cnt;
-	uint32_t                               settingbuf_res_id;
-	uint32_t                               setting_size;
 	bool                                   is_foveation_enable;
-	uintptr_t                              scratch_buf_kmdvaddr;
-	bool                                   is_settingid_scratchcfg;
+	struct cam_isp_ctx_sensor_fov_info     foveation_info;
 	struct cam_isp_context_ul_setting_data setting_data[MAX_SETTING_PACKETS];
 	struct cam_isp_ctx_ul_data             ul_data;
 	uint32_t                               num_primary_ports;

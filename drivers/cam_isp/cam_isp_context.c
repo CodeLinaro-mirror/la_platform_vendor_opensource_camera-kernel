@@ -568,6 +568,30 @@ static int cam_isp_no_crm_apply_req_notify(struct cam_isp_context *ctx_isp, uint
 	return rc;
 }
 
+static int cam_isp_ctx_scratchbuf_cfg(struct cam_isp_context *ctx_isp)
+{
+	struct cam_hw_cmd_args            hw_cmd_args;
+	struct cam_isp_hw_cmd_args        isp_hw_cmd_args;
+	struct cam_context               *cam_ctx = ctx_isp->base;
+	int rc = 0;
+
+	/*Configure scratch buffer*/
+	hw_cmd_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
+	hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+	isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_UPDATE_SCRATCH_BUF_CFG;
+	isp_hw_cmd_args.cmd_data = NULL;
+	hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+	rc = cam_ctx->hw_mgr_intf->hw_cmd(cam_ctx->hw_mgr_intf->hw_mgr_priv,
+			 &hw_cmd_args);
+	if (rc) {
+		CAM_ERR(CAM_ISP,
+			"Scratch buffer cfg failed! ctx: %u", cam_ctx->ctx_id);
+		return rc;
+	}
+	ctx_isp->foveation_info.is_settingid_scratchcfg = true;
+	return rc;
+}
+
 static int __cam_isp_ctx_no_crm_apply_trigger_util(void *priv, void *data)
 {
 	struct cam_isp_context                        *ctx_isp = NULL;
@@ -653,6 +677,8 @@ static int __cam_isp_ctx_no_crm_apply_trigger_util(void *priv, void *data)
 				"Skip sensor notification as no open request ctx:%u",
 				ctx->ctx_id);
 			ctx_isp->sensor_pd_handled = false;
+			if (ctx_isp->is_foveation_enable)
+				rc = cam_isp_ctx_scratchbuf_cfg(ctx_isp);
 			ctx_isp->sensor_req_info.correction = 0;
 		}
 
@@ -726,7 +752,8 @@ static int __cam_isp_ctx_notify_trigger_util(
 		sof_notify.link_hdl = ctx->link_hdl;
 		sof_notify.frame_id = ctx_isp->frame_id;
 
-		if (list_empty(&ctx->pending_req_list) && !(ctx_isp->ul_path_en || ctx_isp->is_foveation_enable)) {
+		if (list_empty(&ctx->pending_req_list) && !(ctx_isp->ul_path_en ||
+				ctx_isp->is_foveation_enable)) {
 			if (!ctx_isp->debug_frame_drop_cnt)
 				CAM_INFO(CAM_ISP,
 					"pending list empty, skipping ctx: %d last_applied_req %lld last_buf_done %lld",
@@ -760,6 +787,9 @@ static int __cam_isp_ctx_notify_trigger_util(
 					sensor_setting_id);
 
 			ctx_isp->sensor_pd_handled = true;
+
+			if (ctx_isp->is_foveation_enable)
+				rc = cam_isp_ctx_scratchbuf_cfg(ctx_isp);
 
 			ctx_isp->sensor_req_info.prev_applied_req =
 				ctx_isp->sensor_req_info.last_applied_req;
@@ -1960,7 +1990,9 @@ static int __cam_isp_ctx_signal_dummy_fences(
 	ev_timestamp.boot_timestamp = ctx_isp->boot_timestamp;
 
 	for (i = 0; i < req_isp->num_fence_map_out; i++) {
-		if (req_isp->fence_map_out[i].resource_handle == ctx_isp->settingbuf_res_id) {
+		if (req_isp->fence_map_out[i].resource_handle ==
+				ctx_isp->foveation_info.settingbuf_res_id) {
+			cam_mem_put_cpu_buf(req_isp->fence_map_out[i].buf_handle[0]);
 			param.sync_obj = req_isp->fence_map_out[i].sync_id;
 			rc = cam_sync_signal(&param, &ev_timestamp);
 			if (rc)
@@ -1972,7 +2004,7 @@ static int __cam_isp_ctx_signal_dummy_fences(
 	if (i == req_isp->num_fence_map_out) {
 		CAM_ERR(CAM_ISP,
 			"Setting buffer res_id: %u not found in resource handle, ctx: %u, req: %u",
-			ctx_isp->settingbuf_res_id, ctx_isp->base->ctx_id,
+			ctx_isp->foveation_info.settingbuf_res_id, ctx_isp->base->ctx_id,
 			req_isp->base->request_id);
 		rc = -EINVAL;
 	}
@@ -8452,10 +8484,13 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 					ctx->ctx_id, packet->header.request_id);
 				goto put_ref;
 			}
-			ctx_isp->is_foveation_enable = isp_hw_cmd_args.u.fov_info.foveation_en;
-			ctx_isp->setting_size = isp_hw_cmd_args.u.fov_info.setting_size;
-			ctx_isp->settingbuf_res_id = isp_hw_cmd_args.u.fov_info.settingbuf_res_id;
-			ctx_isp->scratch_buf_kmdvaddr = isp_hw_cmd_args.u.fov_info.scratch_buf_kva;
+			ctx_isp->is_foveation_enable =	isp_hw_cmd_args.u.fov_info.foveation_en;
+			ctx_isp->foveation_info.setting_size =
+					isp_hw_cmd_args.u.fov_info.setting_size;
+			ctx_isp->foveation_info.settingbuf_res_id =
+					isp_hw_cmd_args.u.fov_info.settingbuf_res_id;
+			ctx_isp->foveation_info.scratch_buf_kmdvaddr =
+					isp_hw_cmd_args.u.fov_info.scratch_buf_kva;
 		} else {
 			rc = -EINVAL;
 			CAM_ERR(CAM_ISP, "Receivied INIT pkt in wrong state:%d ctx:%u",
@@ -9447,7 +9482,7 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 
 	ctx_isp->hw_ctx = param.ctxt_to_hw_map;
 	ctx_isp->hw_acquired = true;
-	ctx_isp->is_settingid_scratchcfg = false;
+	ctx_isp->foveation_info.is_settingid_scratchcfg = false;
 	ctx->ctxt_to_hw_map = param.ctxt_to_hw_map;
 
 	/*
@@ -10718,12 +10753,13 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 	struct cam_context               *cam_ctx = ctx_isp->base;
 	struct cam_ctx_ops               *ctx_ops = NULL;
 	struct cam_req_mgr_apply_request apply_req;
-	struct cam_hw_cmd_args            hw_cmd_args;
-	struct cam_isp_hw_cmd_args        isp_hw_cmd_args;
 	struct list_head                  temp_req_list;
 	uint64_t prev_ts, curr_ts = 0, boot_ts;
 	uint64_t sensor_setting_id = 0, isp_setting_id;
 	uintptr_t sensor_setting_id_buf;
+	uint64_t max_settingid;
+	bool new_setting_found = false;
+
 
 	CAM_DBG(CAM_ISP, "enter no crm apply ctx:%u", cam_ctx->ctx_id);
 
@@ -10744,20 +10780,8 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 	mutex_unlock(&ctx_isp->isp_mutex);
 
 	if (rc) {
-		if (ctx_isp->is_foveation_enable) {
-			hw_cmd_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
-			hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
-			isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_UPDATE_SCRATCH_BUF_CFG;
-			isp_hw_cmd_args.cmd_data = NULL;
-			hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
-
-			rc = cam_ctx->hw_mgr_intf->hw_cmd(cam_ctx->hw_mgr_intf->hw_mgr_priv,
-				 &hw_cmd_args);
-			if (rc)
-				CAM_ERR(CAM_ISP,
-					"Scratch buffer cfg failed! ctx: %u", cam_ctx->ctx_id);
-			ctx_isp->is_settingid_scratchcfg = true;
-		}
+		if (ctx_isp->is_foveation_enable)
+			rc = cam_isp_ctx_scratchbuf_cfg(ctx_isp);
 		goto end;
 	}
 
@@ -10773,23 +10797,26 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 			sensor_setting_id_buf =
 				active_req_isp->hw_update_data.settingbuffer_kmdvaddr;
 		} else if (list_empty(&cam_ctx->active_req_list) &&
-				ctx_isp->is_settingid_scratchcfg) {
+				ctx_isp->foveation_info.is_settingid_scratchcfg) {
 			CAM_DBG(CAM_ISP,
 				"Active list empty, using scratch buffer to get sensor setting ID! ctx: %u",
 				cam_ctx->ctx_id);
-			sensor_setting_id_buf = ctx_isp->scratch_buf_kmdvaddr;
-			ctx_isp->is_settingid_scratchcfg = false;
+			sensor_setting_id_buf = ctx_isp->foveation_info.scratch_buf_kmdvaddr;
+			ctx_isp->foveation_info.is_settingid_scratchcfg = false;
 		} else {
+			mutex_unlock(&ctx_isp->isp_mutex);
 			goto apply;
 		}
 
 		mutex_unlock(&ctx_isp->isp_mutex);
 
-		if (ctx_isp->setting_size == 8)
+		max_settingid = (1 << ctx_isp->foveation_info.setting_size) - 1;
+
+		if (ctx_isp->foveation_info.setting_size == 8)
+			sensor_setting_id = *(uint8_t *)sensor_setting_id_buf;
+		else if (ctx_isp->foveation_info.setting_size == 32)
 			sensor_setting_id = *(uint32_t *)sensor_setting_id_buf;
-		else if (ctx_isp->setting_size == 32)
-			sensor_setting_id = *(uint32_t *)sensor_setting_id_buf;
-		else if (ctx_isp->setting_size == 64)
+		else if (ctx_isp->foveation_info.setting_size == 64)
 			sensor_setting_id = *(uint64_t *)sensor_setting_id_buf;
 		else
 			CAM_ERR(CAM_ISP,
@@ -10798,17 +10825,43 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 
 		isp_setting_id = req_isp->hw_update_data.setting_id;
 
+		if (ctx_isp->foveation_info.prev_isp_settings > isp_setting_id) {
+			ctx_isp->foveation_info.isp_count++;
+			if (((max_settingid + 1 + isp_setting_id) -
+				ctx_isp->foveation_info.prev_isp_settings) > 8)
+				CAM_WARN(CAM_ISP,
+					"Unusual jump between consequent ISP settingIDs, previous: %u, current: %u",
+					ctx_isp->foveation_info.prev_isp_settings, isp_setting_id);
+		}
+
+		if (ctx_isp->foveation_info.prev_sensor_settings > sensor_setting_id) {
+			ctx_isp->foveation_info.sensor_count++;
+			if (((max_settingid + 1 + sensor_setting_id) -
+				ctx_isp->foveation_info.prev_sensor_settings) > 8)
+				CAM_WARN(CAM_ISP,
+					"Unusual jump between consequent Sensor settingIDs, previous: %u, current: %u",
+					ctx_isp->foveation_info.prev_sensor_settings, isp_setting_id);
+		}
+
+		ctx_isp->foveation_info.prev_isp_settings = isp_setting_id;
+		ctx_isp->foveation_info.prev_sensor_settings = sensor_setting_id;
+
+		isp_setting_id += (ctx_isp->foveation_info.isp_count * (max_settingid + 1));
+		sensor_setting_id += (ctx_isp->foveation_info.sensor_count * (max_settingid + 1));
+
 		if (sensor_setting_id < isp_setting_id) {
 			CAM_INFO(CAM_ISP,
 				"Skip apply req: %d cam_ctx: %u link: 0x%x, mismatched sensor_setting_id: %u, isp_setting_id : %u",
 				req->request_id, cam_ctx->ctx_id, cam_ctx->link_hdl,
-				sensor_setting_id, isp_setting_id);
-			CAM_DBG(CAM_ISP, "exit no crm apply ctx:%d", cam_ctx->ctx_id);
-			return 0;
+				ctx_isp->foveation_info.prev_sensor_settings,
+				ctx_isp->foveation_info.prev_isp_settings);
+			rc = cam_isp_ctx_scratchbuf_cfg(ctx_isp);
+			goto end;
 		} else if (sensor_setting_id > isp_setting_id) {
 			CAM_WARN(CAM_ISP,
 				"Mismatched sensor_setting_id: %u, isp_setting_id : %u, req %lld ctx %d res %d",
-				sensor_setting_id, isp_setting_id, req->request_id,
+				ctx_isp->foveation_info.prev_sensor_settings,
+				ctx_isp->foveation_info.prev_isp_settings, req->request_id,
 				cam_ctx->ctx_id, res_id);
 			list_del_init(&req->list);
 			list_add_tail(&req->list, &temp_req_list);
@@ -10824,9 +10877,14 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 				} else {
 					CAM_DBG(CAM_ISP, "New setting found in req: %u, ctx: %u",
 						pending_req->request_id, cam_ctx->ctx_id);
+					new_setting_found = true;
 					req = pending_req;
 					break;
 				}
+			}
+			if (!new_setting_found) {
+				rc = cam_isp_ctx_scratchbuf_cfg(ctx_isp);
+				goto end;
 			}
 		}
 	}
