@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-mapping.h>
@@ -158,12 +158,20 @@ size_t cam_align_dma_buf_size(size_t len)
 }
 
 #ifdef CONFIG_SPECTRA_SECURE_CAMNOC_REG_UPDATE
+static_assert(sizeof(struct cam_scm_camera_qos)
+		== sizeof(struct qcom_scm_camera_qos));
+static_assert(offsetof(struct cam_scm_camera_qos, offset)
+		== offsetof(struct qcom_scm_camera_qos, offset));
+static_assert(offsetof(struct cam_scm_camera_qos, val)
+		== offsetof(struct qcom_scm_camera_qos, val));
 int cam_update_camnoc_qos_settings(uint32_t use_case_id,
-	uint32_t qos_cnt, struct qcom_scm_camera_qos *scm_buf)
+	uint32_t qos_cnt, struct cam_scm_camera_qos *scm_buf)
 {
 	int rc = 0;
+	struct qcom_scm_camera_qos qcom_scm_buf[QCOM_SCM_CAMERA_MAX_QOS_CNT] = {0};
+	memcpy(qcom_scm_buf, scm_buf, sizeof(struct cam_scm_camera_qos) * qos_cnt);
 
-	rc = qcom_scm_camera_update_camnoc_qos(use_case_id, qos_cnt, scm_buf);
+	rc = qcom_scm_camera_update_camnoc_qos(use_case_id, qos_cnt, qcom_scm_buf);
 	if (rc)
 		CAM_ERR(CAM_CPAS, "scm call to update QoS failed: %d, use_case_id: %d",
 			rc, use_case_id);
@@ -172,7 +180,7 @@ int cam_update_camnoc_qos_settings(uint32_t use_case_id,
 }
 #else
 int cam_update_camnoc_qos_settings(uint32_t use_case_id,
-	uint32_t qos_cnt, struct qcom_scm_camera_qos *scm_buf)
+	uint32_t qos_cnt, struct cam_scm_camera_qos *scm_buf)
 {
 	CAM_ERR(CAM_CPAS, "scm call to update QoS is not supported under this kernel");
 	return -EOPNOTSUPP;

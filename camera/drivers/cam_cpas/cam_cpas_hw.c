@@ -989,7 +989,7 @@ static int cam_cpas_apply_smart_qos(
 	uint8_t i;
 	int32_t reg_indx, cam_qos_cnt = 0, ret = 0;
 	uint32_t reg_base_mask;
-	struct qcom_scm_camera_qos scm_buf[QCOM_SCM_CAMERA_MAX_QOS_CNT] = {0};
+	struct cam_scm_camera_qos scm_buf[QCOM_SCM_CAMERA_MAX_QOS_CNT] = {0};
 
 	if (cpas_core->smart_qos_dump) {
 		CAM_INFO(CAM_PERF, "Printing SmartQoS values before update");
