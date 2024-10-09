@@ -82,3 +82,11 @@ config SPECTRA_TFE
     bool "enabling camera tfe module"
     help
       This is enabling camera tfe module.
+
+config MSM_GLOBAL_SYNX
+	bool "enable HW synx"
+	help
+	  This is enabling HW syx feature.
+	  synx hw signaling external to camera,
+	  like EVA and other.
+	  This is to avoid sw signaling latency.

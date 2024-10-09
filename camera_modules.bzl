@@ -10,6 +10,8 @@ def _define_module(target, variant):
     ]
     if target == "neo-la":
         deps.extend([
+            "//vendor/qcom/opensource/synx-kernel:synx_headers",
+            "//vendor/qcom/opensource/synx-kernel:{}_modules".format(tv),
         ])
     ddk_module(
         name = "{}_camera".format(tv),
