@@ -2025,7 +2025,13 @@ static int cam_config_mclk_reg(struct cam_sensor_power_ctrl_t *ctrl,
 						rc);
 					return rc;
 				}
-
+				rc = cam_cpas_gdsc_get_put(soc_info->index, false);
+				if (rc) {
+					CAM_ERR(CAM_SENSOR,
+						"sensor index: %d, gdsc put failure ",
+						soc_info->index);
+					return rc;
+				}
 				ps->data[0] =
 					soc_info->rgltr[j];
 			}
@@ -2118,7 +2124,13 @@ int cam_sensor_core_power_up(struct cam_sensor_power_ctrl_t *ctrl,
 							rc);
 						goto power_up_failed;
 					}
-
+					rc = cam_cpas_gdsc_get_put(soc_info->index, true);
+					if (rc) {
+						CAM_ERR(CAM_SENSOR,
+						"sensor index: %d, gdsc get failure ",
+							soc_info->index);
+						goto power_up_failed;
+					}
 					rc =  cam_soc_util_regulator_enable(
 					soc_info->rgltr[j],
 					soc_info->rgltr_name[j],
