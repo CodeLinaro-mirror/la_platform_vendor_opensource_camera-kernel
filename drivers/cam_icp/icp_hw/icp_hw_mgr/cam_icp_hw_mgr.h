@@ -173,6 +173,7 @@ struct cam_icp_clk_bw_req_internal_v2 {
 struct cam_icp_hal_buffer_fd {
 	int32_t bufferfd[CAM_MAX_HAL_BUFFER_FD];
 	uint32_t num_of_buffer;
+	int32_t buffermemhandle[CAM_MAX_HAL_BUFFER_FD];
 };
 
 /**

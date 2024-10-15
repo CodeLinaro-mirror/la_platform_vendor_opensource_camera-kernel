@@ -125,6 +125,7 @@ struct seccam_cmd_rsp_t {
 struct cam_hal_buffer_fd {
 	int32_t portindex;
 	int32_t bufferfd;
+	int32_t buffermemhandle;
 };
 
 static struct qseecom_handle *teehandle;                   // QSEE app handle
@@ -2157,6 +2158,8 @@ static int cam_icp_mgr_handle_frame_process(uint32_t *msg_ptr, int flag)
 	struct cam_hw_done_event_data buf_data;
 	uint32_t clk_type;
 	uint32_t event_id;
+	dma_addr_t hal_buf_addr;
+	size_t hal_buf_size;
 	struct seccam_cmd_req_t *cmdRequest  = NULL;
 	struct seccam_cmd_rsp_t *cmdResponse = NULL;
 	int rc = 0;
@@ -2234,14 +2237,24 @@ static int cam_icp_mgr_handle_frame_process(uint32_t *msg_ptr, int flag)
 				cmdResponse                         = (struct seccam_cmd_rsp_t *)(teehandle->sbuf +
 									QSEECOM_ALIGN(sizeof(struct seccam_cmd_req_t)));
 
-				cmdRequest->cmd_id                  = SCE_CMD_NOTIFY_CURRENT_BUF;
-				cmdRequest->buf_size                = (4095U + 4095U) & (~4095U);
-				cmdRequest->frame_info.frame_number = request_id - 1;
-				cmdRequest->buf                     = hfi_frame_process->hal_buffer_fd[idx].bufferfd[i];
+				//Get HAL buffer's physical address
+				rc = cam_mem_get_io_buf(hfi_frame_process->hal_buffer_fd[idx].buffermemhandle[i],
+							icp_hw_mgr.iommu_sec_hdl,
+							&hal_buf_addr, &hal_buf_size);
+				if (rc < 0)
+					CAM_ERR(CAM_ICP, "Failed to get buff phy addr, rc: %d",rc);
 
 				CAM_DBG(CAM_ICP,
-					"QSEE call for req_id =%lld fd = %d",
-					request_id, hfi_frame_process->hal_buffer_fd[idx].bufferfd[i]);
+					"QSEE call for req_id =%lld fd = %d, memhandle = %x, phyaddr = 0x%x, size = %d",
+					request_id, hfi_frame_process->hal_buffer_fd[idx].bufferfd[i],
+					hfi_frame_process->hal_buffer_fd[idx].buffermemhandle[i],
+					(unsigned int)hal_buf_addr, (int32_t)hal_buf_size);
+
+				cmdRequest->cmd_id                  = SCE_CMD_NOTIFY_CURRENT_BUF;
+				cmdRequest->buf_size                = hal_buf_size;
+				cmdRequest->frame_info.frame_number = request_id - 1;
+				cmdRequest->buf                     = hal_buf_addr;
+
 				rc =  qseecom_send_command(
 					teehandle, cmdRequest, QSEECOM_ALIGN(sizeof(struct seccam_cmd_req_t)),
 					cmdResponse, QSEECOM_ALIGN(sizeof(struct seccam_cmd_rsp_t)));
@@ -4773,9 +4786,11 @@ static int cam_icp_packet_generic_blob_handler(void *user_data,
 		per_req_hal_buffer_fd->num_of_buffer++;
 		halBufferfd = ((struct cam_hal_buffer_fd *)blob_data);
 		per_req_hal_buffer_fd->bufferfd[halBufferfd->portindex] = halBufferfd->bufferfd;
+		per_req_hal_buffer_fd->buffermemhandle[halBufferfd->portindex] = halBufferfd->buffermemhandle;
 		CAM_DBG(CAM_ICP,
-			"Req id = %lld, index = %d, portindex = %d fd = %d",
-			ctx_data->hfi_frame_process.request_id[index], index, halBufferfd->portindex, per_req_hal_buffer_fd->bufferfd[halBufferfd->portindex]);
+			"Req id = %lld, index = %d, portindex = %d fd = %d, memhandle: 0x%x",
+			ctx_data->hfi_frame_process.request_id[index], index, halBufferfd->portindex,
+			per_req_hal_buffer_fd->bufferfd[halBufferfd->portindex], per_req_hal_buffer_fd->buffermemhandle[halBufferfd->portindex]);
 		break;
 
 	default:
