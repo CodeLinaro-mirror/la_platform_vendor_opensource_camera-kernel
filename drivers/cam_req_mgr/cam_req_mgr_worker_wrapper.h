@@ -112,7 +112,7 @@ struct crm_worker_task {
  * @num_task    : size of tasks pool
  */
 struct cam_req_mgr_core_worker {
-#ifndef CONFIG_KTHREAD_WORKER
+#ifndef CONFIG_CAM_KTHREAD_WORKER
 	struct work_struct         work;
 	struct workqueue_struct   *job;
 #else
