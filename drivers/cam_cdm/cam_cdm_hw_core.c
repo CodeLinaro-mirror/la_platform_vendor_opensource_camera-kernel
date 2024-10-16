@@ -2509,10 +2509,16 @@ static int cam_hw_cdm_probe(struct platform_device *pdev)
 	return rc;
 }
 
-static int cam_hw_cdm_remove(struct platform_device *pdev)
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
+int cam_hw_cdm_remove(struct platform_device *pdev)
+#else
+void cam_hw_cdm_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_hw_cdm_component_ops);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 struct platform_driver cam_hw_cdm_driver = {
