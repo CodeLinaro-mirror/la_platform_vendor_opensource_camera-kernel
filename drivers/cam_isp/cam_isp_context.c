@@ -10653,6 +10653,7 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 	req_isp->intermediate_irq_mask.reg_up_irq_mask = 0;
 	req_isp->intermediate_irq_mask.epoch_irq_mask = 0;
 	req_isp->ul_fp_result_posted = false;
+	req->pf_data.packet               = req_isp->hw_update_data.packet;
 	memcpy(req_isp->cfg, setting_req_isp->cfg,
 		sizeof(struct cam_hw_update_entry) * setting_req_isp->num_cfg);
 	req_isp->num_fence_map_out        = 0;
