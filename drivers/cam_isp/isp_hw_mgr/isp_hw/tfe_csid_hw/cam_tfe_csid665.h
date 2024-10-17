@@ -286,6 +286,7 @@ static struct cam_tfe_csid_csi2_rx_reg_offset
 	.csi2_irq_mask_all                            = 0xFFFFFFF,
 	.csi2_misr_enable_shift_val                   = 6,
 	.csi2_vc_mode_shift_val                       = 2,
+	.csi2_rx_epd_mode_shift_en                    = 8,
 	.csi2_capture_long_pkt_en_shift               = 0,
 	.csi2_capture_short_pkt_en_shift              = 1,
 	.csi2_capture_cphy_pkt_en_shift               = 2,
