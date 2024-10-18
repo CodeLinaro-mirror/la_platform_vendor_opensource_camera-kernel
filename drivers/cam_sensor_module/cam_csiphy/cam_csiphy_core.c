@@ -1939,6 +1939,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			csiphy_dev->combo_mode);
 		if ((csiphy_dev->csiphy_state == CAM_CSIPHY_START) &&
 			(csiphy_dev->combo_mode == 0) &&
+			(csiphy_dev->cphy_dphy_combo_mode == 0) &&
 			(csiphy_dev->acquire_count > 0)) {
 			CAM_ERR(CAM_CSIPHY,
 				"NonComboMode does not support multiple acquire: Acquire_count: %d",
