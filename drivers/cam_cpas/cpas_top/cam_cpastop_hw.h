@@ -352,6 +352,8 @@ struct cam_camnoc_err_logger_info {
  * @err_logger: Pointer to CAMNOC IRQ Error logger read registers
  * @errata_wa_list: HW Errata workaround info
  * @enable_ipe_qos: Weather IPE QoS is enabled or not
+ * @ife_core_clk_list: Pointer to Core clock list
+ * @ife_core_clk_list_size: Array size of Core clock list
  *
  */
 struct cam_camnoc_info {
@@ -365,6 +367,8 @@ struct cam_camnoc_info {
 	struct cam_camnoc_err_logger_info *err_logger;
 	struct cam_cpas_hw_errata_wa_list *errata_wa_list;
 	bool enable_ipe_qos;
+	struct cam_cpas_hw_clk_gate_info *ife_core_clk_list;
+	int ife_core_clk_list_size;
 };
 
 /**
@@ -393,6 +397,11 @@ struct cam_cpas_work_payload {
 struct cam_cpas_camnoc_qchannel {
 	uint32_t qchannel_ctrl;
 	uint32_t qchannel_status;
+};
+
+struct cam_cpas_hw_clk_gate_info {
+	uint32_t core_clk_en_addr;
+	uint32_t core_en_value;
 };
 
 #endif /* _CAM_CPASTOP_HW_H_ */

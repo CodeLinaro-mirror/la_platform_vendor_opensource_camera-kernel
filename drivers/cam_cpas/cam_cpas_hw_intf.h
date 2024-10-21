@@ -49,7 +49,20 @@ enum cam_cpas_hw_cmd_process {
 	CAM_CPAS_HW_CMD_DEACTIVATE_LLC,
 	CAM_CPAS_HW_CMD_DUMP_BUFF_FILL_INFO,
 	CAM_CPAS_HW_CMD_GDSC_GET_PUT,
+	CAM_CPAS_HW_CMD_SET_CORE_HW_CLK,
 	CAM_CPAS_HW_CMD_INVALID,
+};
+
+/**
+ * struct cam_cpas_hw_cmd_set_core_clk : CPAS cmd struct for set core clk
+ *
+ * @hw_index: Core hw index
+ * @is_power_on: Set power on or off
+ *
+ */
+struct cam_cpas_hw_cmd_set_core_clk {
+	uint32_t hw_index;
+	bool is_power_on;
 };
 
 /**

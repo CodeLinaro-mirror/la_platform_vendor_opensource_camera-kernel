@@ -52,6 +52,8 @@
 /* This is as per CPHY standard */
 #define CAM_CSID_METADATA_DT           0x12
 
+#define CAM_IFE_CSID_IFE_HW_NUM_MAX    2
+
 static void cam_ife_csid_ver2_print_debug_reg_status(
 	struct cam_ife_csid_ver2_hw *csid_hw,
 	struct cam_isp_resource_node    *res);
@@ -4310,6 +4312,18 @@ static int cam_ife_csid_ver2_enable_core(struct cam_ife_csid_ver2_hw *csid_hw)
 			"CSID[%d] Enable soc failed",
 			csid_hw->hw_intf->hw_idx);
 		goto err;
+	}
+
+	if (csid_reg->cmn_reg->is_core_clk_gate_enable) {
+		rc = cam_cpas_set_ife_core_clk_gate_value(
+			csid_hw->hw_intf->hw_idx - CAM_IFE_CSID_IFE_HW_NUM_MAX,
+			true);
+		if (rc) {
+			CAM_ERR(CAM_ISP,
+				"CSID:%d set clk gate failed rc %d", rc);
+			return rc;
+		}
+		CAM_DBG(CAM_ISP, "CSID:%d clk gate value set properly");
 	}
 
 	irq_mask[CAM_IFE_CSID_IRQ_REG_TOP] = csid_reg->cmn_reg->top_reset_irq_mask;
