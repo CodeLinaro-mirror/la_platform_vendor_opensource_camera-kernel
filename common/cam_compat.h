@@ -14,6 +14,7 @@
 #include <linux/list_sort.h>
 #include <linux/spi/spi.h>
 #include <linux/firmware/qcom/qcom_scm.h>
+#include <linux/firmware/qcom/qcom_scm_addon.h>
 
 #include "cam_csiphy_dev.h"
 #include "cam_cpastop_hw.h"
@@ -35,6 +36,7 @@ MODULE_IMPORT_NS(DMA_BUF);
 #endif
 
 #define IS_CSF25(x, y) ((((x) == 2) && ((y) == 5)) ? 1 : 0)
+
 
 struct cam_fw_alloc_info {
 	struct device *fw_dev;
