@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -302,6 +302,74 @@ static int cam_icp_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#if defined(CONFIG_HIBERNATION)
+static int cam_icp_pm_freeze(struct device *dev)
+{
+	int rc = 0;
+	struct platform_device *pdev;
+	struct cam_subdev *sd;
+	struct cam_node *node;
+	struct cam_hw_mgr_intf *hw_mgr_intf;
+
+	if (!dev || !dev->driver || !of_device_is_compatible(dev->of_node, "qcom,cam-icp")) {
+		CAM_WARN(CAM_ICP, "ICP driver not yet probe");
+		return 0;
+	}
+
+	CAM_DBG(CAM_ICP, "ICP pm freeze enter");
+
+	pdev = to_platform_device(dev);
+	if (!pdev) {
+		CAM_ERR(CAM_ICP, "pdev is NULL");
+		rc = -EINVAL;
+		goto end;
+	}
+
+	sd = platform_get_drvdata(pdev);
+	if (!sd) {
+		CAM_ERR(CAM_ICP, "V4l2 subdev is NULL");
+		rc = -EINVAL;
+		goto end;
+	}
+
+	node = sd->token;
+	if (!node) {
+		CAM_ERR(CAM_ICP, "Node is NULL");
+		rc = -EINVAL;
+		goto end;
+	}
+
+	hw_mgr_intf = &node->hw_mgr_intf;
+	if (!hw_mgr_intf) {
+		CAM_ERR(CAM_ICP, "hw_mgr_intf is not initialized");
+		rc = -EINVAL;
+		goto end;
+	}
+
+	if (node->hw_mgr_intf.hw_close) {
+		CAM_INFO(CAM_ICP, "ICP pm close call");
+		node->hw_mgr_intf.hw_close(node->hw_mgr_intf.hw_mgr_priv, NULL);
+	}
+
+	CAM_DBG(CAM_ICP, "ICP pm freeze exit");
+end:
+	return rc;
+}
+
+static int cam_icp_pm_restore(struct device *dev)
+{
+	CAM_DBG(CAM_ICP, "ICP pm restore");
+	return 0;
+}
+#endif
+
+static const struct dev_pm_ops cam_icp_pm_ops = {
+#if defined(CONFIG_HIBERNATION)
+	.freeze = cam_icp_pm_freeze,
+	.restore = cam_icp_pm_restore
+#endif
+};
+
 struct platform_driver cam_icp_driver = {
 	.probe = cam_icp_probe,
 	.remove = cam_icp_remove,
@@ -310,6 +378,7 @@ struct platform_driver cam_icp_driver = {
 		.owner = THIS_MODULE,
 		.of_match_table = cam_icp_dt_match,
 		.suppress_bind_attrs = true,
+		.pm = &cam_icp_pm_ops,
 	},
 };
 
