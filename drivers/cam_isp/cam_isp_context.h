@@ -333,11 +333,13 @@ struct cam_isp_context_ul_setting_data {
  * @last_consumed_addr:       last consumed address
  * @timestamp:                SOF qtimer timestamp
  * @boot_timestamp:           SOF boot timestamp
+ * @staus:                    result status
  */
 struct cam_isp_context_ul_fp_results {
 	uint32_t last_consumed_addr;
 	uint64_t timestamp;
 	uint64_t boot_timestamp;
+	uint32_t status;
 };
 
 /**

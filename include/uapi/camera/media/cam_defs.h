@@ -78,6 +78,10 @@
 #define BUFFER_STATE_FREE         0
 #define BUFFER_STATE_INUSE        1
 
+#define BATCH_PACKET_RESULT_SUCCESS       0
+#define BATCH_PACKET_RESULT_BUFFER_ERROR  1
+#define BATCH_PACKET_RESULT_DEVICE_ERROR  2
+
 /**
  * enum flush_type_t - Identifies the various flush types
  *
