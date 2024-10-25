@@ -334,6 +334,7 @@ struct cam_isp_scratch_buf_mem {
  * @num_primary_ports:      Number of primary port configs
  * @primary_port_info:      Primary port configs array
  * @primary_port_cfg_done:  Primary port config exists for this stream
+ * @ul_io_packet:           IO packet for UL path
  */
 struct cam_ife_hw_mgr_ctx {
 	struct list_head                     list;
@@ -411,6 +412,7 @@ struct cam_ife_hw_mgr_ctx {
 	uint32_t                             num_primary_ports;
 	struct cam_isp_primary_port_info    *primary_port_info;
 	bool                                 primary_port_cfg_done;
+	struct cam_packet                   *ul_io_packet;
 };
 
 /**

@@ -16105,6 +16105,7 @@ int cam_ife_hw_mgr_prepare_ul_io(void *hw_mgr_priv,
 	}
 	if (!ul_data->change_base.is_valid)
 		cam_ife_hw_mgr_ul_setup_change_base(ul_data, (void *) ctx);
+	ctx->ul_io_packet = prepare->packet;
 
 	return rc;
 }
@@ -16641,54 +16642,54 @@ static void cam_ife_mgr_print_io_bufs(struct cam_ife_hw_mgr  *hw_mgr,
 	io_cfg = (struct cam_buf_io_cfg *)((uint32_t *)&packet->payload +
 		packet->io_configs_offset / 4);
 
+	*ctx_found = false;
 	for (i = 0; i < packet->num_io_configs; i++) {
 		if (io_cfg[i].resource_type != res_id)
 			continue;
-		else
-			break;
-		}
+		else {
+			*ctx_found = true;
+			for (j = 0; j < CAM_PACKET_MAX_PLANES; j++) {
+				if (!io_cfg[i].mem_handle[j])
+					break;
 
-		if (i == packet->num_io_configs) {
-			*ctx_found = false;
-			CAM_ERR(CAM_ISP,
-				"getting io port for mid resource id failed ctx id:%d req id:%lld res id:0x%x",
-				ctx->ctx_index, packet->header.request_id,
-				res_id);
-			return;
-		}
+				CAM_INFO(CAM_ISP, "port: 0x%x f: %u format: %d dir %d",
+					io_cfg[i].resource_type,
+					io_cfg[i].fence,
+					io_cfg[i].format,
+					io_cfg[i].direction);
 
-		for (j = 0; j < CAM_PACKET_MAX_PLANES; j++) {
-			if (!io_cfg[i].mem_handle[j])
-				break;
+				mmu_hdl = cam_mem_is_secure_buf(
+					io_cfg[i].mem_handle[j]) ? sec_mmu_hdl :
+					iommu_hdl;
+				rc = cam_mem_get_io_buf(io_cfg[i].mem_handle[j],
+					mmu_hdl, &iova_addr, &src_buf_size, NULL);
+				if (rc < 0) {
+					CAM_ERR(CAM_ISP,
+						"get src buf address fail mem_handle 0x%x",
+						io_cfg[i].mem_handle[j]);
+					continue;
+				}
 
-			CAM_INFO(CAM_ISP, "port: 0x%x f: %u format: %d dir %d",
-				io_cfg[i].resource_type,
-				io_cfg[i].fence,
-				io_cfg[i].format,
-				io_cfg[i].direction);
-
-			mmu_hdl = cam_mem_is_secure_buf(
-				io_cfg[i].mem_handle[j]) ? sec_mmu_hdl :
-				iommu_hdl;
-			rc = cam_mem_get_io_buf(io_cfg[i].mem_handle[j],
-				mmu_hdl, &iova_addr, &src_buf_size, NULL);
-			if (rc < 0) {
-				CAM_ERR(CAM_ISP,
-					"get src buf address fail mem_handle 0x%x",
+				CAM_INFO(CAM_ISP,
+					"pln %d w %d h %d s %u size %zu addr 0x%llx end_addr 0x%llx offset %x memh %x",
+					j, io_cfg[i].planes[j].width,
+					io_cfg[i].planes[j].height,
+					io_cfg[i].planes[j].plane_stride,
+					src_buf_size, iova_addr,
+					iova_addr + src_buf_size,
+					io_cfg[i].offsets[j],
 					io_cfg[i].mem_handle[j]);
-				continue;
 			}
-
-			CAM_INFO(CAM_ISP,
-				"pln %d w %d h %d s %u size %zu addr 0x%llx end_addr 0x%llx offset %x memh %x",
-				j, io_cfg[i].planes[j].width,
-				io_cfg[i].planes[j].height,
-				io_cfg[i].planes[j].plane_stride,
-				src_buf_size, iova_addr,
-				iova_addr + src_buf_size,
-				io_cfg[i].offsets[j],
-				io_cfg[i].mem_handle[j]);
 		}
+	}
+
+	if (!*ctx_found) {
+		CAM_ERR(CAM_ISP,
+			"getting io port for mid resource id failed ctx id:%d req id:%lld res id:0x%x",
+			ctx->ctx_index, packet->header.request_id,
+			res_id);
+	}
+
 }
 
 static void cam_ife_mgr_pf_dump(uint32_t res_id,
@@ -16854,6 +16855,8 @@ static void cam_ife_mgr_dump_pf_data(
 	cam_ife_mgr_pf_dump(ctx->pf_info.out_port_id, ctx);
 
 outportlog:
+	if (ctx->flags.is_ul_path)
+		packet = ctx->ul_io_packet;
 	cam_ife_mgr_print_io_bufs(hw_mgr, *resource_type, packet,
 		ctx_found, ctx);
 }
