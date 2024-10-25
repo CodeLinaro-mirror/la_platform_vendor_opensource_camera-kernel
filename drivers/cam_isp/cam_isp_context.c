@@ -9150,6 +9150,10 @@ static void __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 	response_buffers[idx].num_buffer = num_out;
 	trace_cam_ul_fastpath_retrieve("UL_Retrieve", ctx->ctx_id,
 		response_buffers[idx].setting_id, timestamp);
+	CAM_DBG(CAM_ISP,
+		"UL_Retrieve ctx: %u settings_id: %u timestamp: 0x%llx num_buffer: %u",
+		ctx->ctx_id, response_buffers[idx].setting_id,
+		timestamp, response_buffers[idx].num_buffer);
 	*result_idx = ++idx;
 }
 
@@ -9505,19 +9509,6 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 		}
 
 		__cam_isp_ctx_ul_fastpath_reset_result_queue(ctx_isp);
-
-		hw_cmd_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
-		hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
-		isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_FAST_RESULT_NOTIFIER_CFG;
-		isp_hw_cmd_args.cmd_data = ctx_isp;
-		isp_hw_cmd_args.u.fastpath_result_handler = cam_isp_update_fastpath_result_queue;
-		hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
-		rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
-			&hw_cmd_args);
-		if (rc) {
-			CAM_ERR(CAM_ISP, "Configuring fastpath result notifier failed rc: %d");
-			goto free_hw;
-		}
 	}
 
 	trace_cam_context_state("ISP", ctx);
@@ -9792,6 +9783,28 @@ static int __cam_isp_ctx_query_primary_port_info(
 		CAM_ERR(CAM_ISP, "Primary port expected for fastpath ctx: %u link: 0x%x",
 			ctx->ctx_id, ctx->link_hdl);
 		rc = -EINVAL;
+		goto end;
+	}
+
+	/* Set fastpath notifier if applicable */
+	if (isp_ctx->ul_path_en) {
+		struct cam_hw_cmd_args hw_cmd_args;
+		struct cam_isp_hw_cmd_args isp_hw_cmd_args;
+
+		hw_cmd_args.ctxt_to_hw_map = isp_ctx->hw_ctx;
+		hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+		isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_FAST_RESULT_NOTIFIER_CFG;
+		isp_hw_cmd_args.cmd_data = isp_ctx;
+		isp_hw_cmd_args.u.fastpath_result_handler = cam_isp_update_fastpath_result_queue;
+		hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+		rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
+			&hw_cmd_args);
+		if (rc) {
+			CAM_ERR(CAM_ISP,
+				"Configuring fastpath result notifier failed rc: %d ctx: %u",
+				rc, ctx->ctx_id);
+			goto end;
+		}
 	}
 
 end:
@@ -10411,6 +10424,8 @@ static int __cam_isp_ctx_reset_and_recover(
 	}
 	CAM_DBG(CAM_ISP, "Resume call success ctx: %u on link: 0x%x",
 		ctx->ctx_id, ctx->link_hdl);
+
+	__cam_isp_ctx_ul_fastpath_reset_result_queue(ctx_isp);
 
 	start_isp.hw_config.ctxt_to_hw_map = ctx_isp->hw_ctx;
 
