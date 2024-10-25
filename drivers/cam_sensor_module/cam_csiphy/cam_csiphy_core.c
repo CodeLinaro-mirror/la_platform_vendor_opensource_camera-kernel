@@ -1186,11 +1186,19 @@ int32_t cam_csiphy_config_dev(struct csiphy_device *csiphy_dev,
 		}
 	} else if (csiphy_dev->cphy_dphy_combo_mode) {
 		/* for CPHY and DPHY combo mode selection */
-		if (csiphy_dev->ctrl_reg->csiphy_2ph_3ph_mode_reg) {
-			reg_array = csiphy_dev
-				->ctrl_reg->csiphy_2ph_3ph_mode_reg;
+		if ((csiphy_dev->dphy_cphy_combo_type == CSIPHY_2LDPHY_1LCPHY) &&
+			csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg) {
+			reg_array = csiphy_dev->ctrl_reg
+					->csiphy_2l2ph_1l3ph_mode_reg;
 			cfg_size = csiphy_dev->ctrl_reg->csiphy_reg
-				.csiphy_2ph_3ph_config_array_size;
+				.csiphy_2l2ph_1l3ph_config_array_size;
+			max_lanes = CAM_CSIPHY_MAX_CPHY_DPHY_COMBO_LN;
+		} else if ((csiphy_dev->dphy_cphy_combo_type == CSIPHY_2LCPHY_1LDPHY) &&
+			csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg) {
+			reg_array = csiphy_dev->ctrl_reg
+					->csiphy_1l2ph_2l3ph_mode_reg;
+			cfg_size = csiphy_dev->ctrl_reg->csiphy_reg
+				.csiphy_1l2ph_2l3ph_config_array_size;
 			max_lanes = CAM_CSIPHY_MAX_CPHY_DPHY_COMBO_LN;
 		} else {
 			reg_array = csiphy_dev->ctrl_reg->csiphy_3ph_reg;
