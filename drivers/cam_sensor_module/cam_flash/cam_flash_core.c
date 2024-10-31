@@ -1616,6 +1616,30 @@ update_req_mgr:
 	return rc;
 }
 
+static int cam_flash_pmic_query_current(struct cam_flash_ctrl *fctrl,
+	struct cam_flash_query_curr *flash_query_info,
+	struct cam_flash_private_soc *soc_private)
+{
+	int query_curr_ma = 0, rc = 0;
+
+#if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
+	if (fctrl->pmic_lcdev[0] != NULL) {
+		rc = qcom_flash_led_get_max_avail_current(
+			fctrl->pmic_lcdev[0], &query_curr_ma);
+	}
+#elif __or(IS_REACHABLE(CONFIG_LEDS_QPNP_FLASH_V2), \
+			IS_REACHABLE(CONFIG_LEDS_QTI_FLASH))
+	rc = cam_flash_led_prepare(fctrl->switch_trigger,
+		QUERY_MAX_AVAIL_CURRENT, &query_curr_ma,
+		soc_private->is_wled_flash);
+#else
+	rc = -EOPNOTSUPP;
+#endif
+	CAM_DBG(CAM_FLASH, "query_curr_ma = %d", query_curr_ma);
+	flash_query_info->query_current_ma = query_curr_ma;
+	return rc;
+}
+
 int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 {
 	int rc = 0, i = 0;
@@ -2059,8 +2083,6 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 			return rc;
 		}
 		case CAMERA_SENSOR_FLASH_CMD_TYPE_QUERYCURR: {
-			int query_curr_ma = 0;
-
 			if (remain_len < sizeof(struct cam_flash_query_curr)) {
 				CAM_ERR(CAM_FLASH, "Not enough buffer");
 				rc = -EINVAL;
@@ -2070,13 +2092,8 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 			}
 			flash_query_info =
 				(struct cam_flash_query_curr *)cmd_buf;
-
-			rc = cam_flash_led_prepare(fctrl->switch_trigger,
-				QUERY_MAX_AVAIL_CURRENT, &query_curr_ma,
-				soc_private->is_wled_flash);
-
-			CAM_DBG(CAM_FLASH, "query_curr_ma = %d",
-				query_curr_ma);
+			rc = cam_flash_pmic_query_current(fctrl,
+				flash_query_info, soc_private);
 			if (rc) {
 				CAM_ERR(CAM_FLASH,
 				"Query current failed with rc=%d", rc);
@@ -2084,7 +2101,6 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 				cam_mem_put_cpu_buf(config.packet_handle);
 				return rc;
 			}
-			flash_query_info->query_current_ma = query_curr_ma;
 			break;
 		}
 		case CAMERA_SENSOR_FLASH_CMD_TYPE_RER: {
