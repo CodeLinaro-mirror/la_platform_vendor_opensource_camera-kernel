@@ -205,7 +205,7 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 	return rc;
 }
 
-#if defined CONFIG_SECURE_CAMERA_V3 || defined CONFIG_TZ_DCP_API_VER_2
+#ifdef CONFIG_SECURE_CAMERA_V3
 int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info)
 {
 	int rc = 0;
@@ -223,7 +223,7 @@ int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info)
 		goto release_client;
 	}
 
-	rc = trusted_camera_driver_dynamic_configure_ports_v2(sc_object, sec_unsec_port_info, 2);
+	rc = trusted_camera_driver_dynamic_configure_ports(sc_object, sec_unsec_port_info, 2);
 	if (rc) {
 		CAM_ERR(CAM_ISP,
 			"trusted_camera_driver_dynamic_configure_ports failed, rc: %d", rc);
@@ -246,9 +246,7 @@ release_client:
 
 	return rc;
 }
-#endif
 
-#ifdef CONFIG_SECURE_CAMERA_V3
 int32_t cam_convert_hw_id_to_secure_hw_type(uint32_t hw_id)
 {
 	uint32_t hw_type = -1;
@@ -302,6 +300,47 @@ int32_t cam_convert_hw_id_to_secure_hw_type(uint32_t hw_id)
 #endif
 
 #ifdef CONFIG_TZ_DCP_API_VER_2
+int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info)
+{
+	int rc = 0;
+	struct smci_object client_env, sc_object;
+
+	rc = get_client_env_object(&client_env);
+	if (rc) {
+		CAM_ERR(CAM_ISP, "Failed getting mink env object, rc: %d", rc);
+		return rc;
+	}
+
+	rc = smci_clientenv_open(client_env, CTRUSTEDCAMERADRIVER_UID, &sc_object);
+	if (rc) {
+		CAM_ERR(CAM_ISP, "Failed getting mink sc_object, rc: %d", rc);
+		goto release_client;
+	}
+
+	rc = trusted_camera_driver_dynamic_configure_ports_v2(sc_object, sec_unsec_port_info, 2);
+	if (rc) {
+		CAM_ERR(CAM_ISP,
+			"trusted_camera_driver_dynamic_configure_ports failed, rc: %d", rc);
+		goto release_sc_object;
+	}
+
+release_sc_object:
+	if (smci_object_release(sc_object)) {
+		if (!rc)
+			rc = -EINVAL;
+		CAM_ERR(CAM_ISP, "Failed releasing secure camera object, rc: %d", rc);
+	}
+
+release_client:
+	if (smci_object_release(client_env)) {
+		if (!rc)
+			rc = -EINVAL;
+		CAM_ERR(CAM_ISP, "Failed releasing mink env object, rc: %d", rc);
+	}
+
+	return rc;
+}
+
 int cam_convert_hw_idx_to_ife_hw_type(int hw_idx,
 	uint32_t num_ife, uint32_t num_ife_lite)
 {

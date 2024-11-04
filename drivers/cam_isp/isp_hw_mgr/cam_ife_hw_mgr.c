@@ -7146,7 +7146,7 @@ err:
 	return rc;
 }
 
-#if defined CONFIG_SECURE_CAMERA_V3 || defined CONFIG_TZ_DCP_API_VER_2
+#ifdef CONFIG_TZ_DCP_API_VER_2
 static int cam_ife_mgr_get_mapped_port_idx(uint32_t hw_type, uint32_t res_id)
 {
 	if (hw_type == ITRUSTEDCAMERADRIVER_IFE) {
@@ -7197,7 +7197,9 @@ static int cam_ife_mgr_get_mapped_port_idx(uint32_t hw_type, uint32_t res_id)
 
 	return -EINVAL;
 }
+#endif
 
+#if defined CONFIG_SECURE_CAMERA_V3 || defined CONFIG_TZ_DCP_API_VER_2
 static int cam_ife_mgr_get_phy_id(uint32_t res_id)
 {
 	int phy_id = -1;
@@ -7394,9 +7396,8 @@ end:
 
 	return rc;
 }
-#endif
 
-#ifdef CONFIG_TZ_DCP_API_VER_2
+#elif defined CONFIG_TZ_DCP_API_VER_2
 
 static int cam_get_ife_hw_idx(int hw_idx)
 {
@@ -7566,6 +7567,14 @@ end:
 	}
 
 	return rc;
+}
+#else
+static int cam_ife_hw_mgr_set_secure_port_info(
+	struct cam_ife_hw_mgr_ctx           *ife_ctx,
+	bool                                is_release,
+	bool                                is_shutdown)
+{
+	return 0;
 }
 #endif
 
