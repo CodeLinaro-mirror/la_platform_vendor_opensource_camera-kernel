@@ -5292,7 +5292,7 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 	struct cam_context *ctx, struct cam_req_mgr_apply_request *apply,
 	enum cam_isp_ctx_activated_substate next_state)
 {
-	int rc = 0;
+	int rc = 0, active_req_cnt, num_ul_results, rd_idx, wr_idx;
 	struct cam_ctx_request          *req;
 	struct cam_ctx_request          *active_req = NULL;
 	struct cam_isp_ctx_req          *req_isp;
@@ -5365,12 +5365,27 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 		__cam_isp_ctx_substate_val_to_type(ctx_isp->substate_activated),
 		ctx->ctx_id);
 	req_isp = (struct cam_isp_ctx_req *) req->req_priv;
+	active_req_cnt = ctx_isp->active_req_cnt;
+	if (ctx_isp->ul_path_en) {
+		spin_lock(&ctx_isp->ul_fp_params.fast_path_lock);
+		wr_idx = atomic_read(&ctx_isp->ul_fp_params.write_idx);
+		rd_idx = atomic_read(&ctx_isp->ul_fp_params.read_idx);
+		spin_unlock(&ctx_isp->ul_fp_params.fast_path_lock);
+		if (wr_idx >= rd_idx)
+			num_ul_results = wr_idx - rd_idx;
+		else
+			num_ul_results = MAX_IO_PACKETS - (rd_idx - wr_idx);
+		active_req_cnt -= num_ul_results;
+		if (active_req_cnt < 0)
+			CAM_WARN(CAM_ISP, "num_ul_results %d higher than active req cnt %d",
+				num_ul_results, ctx_isp->active_req_cnt);
+	}
 
-	if (ctx_isp->active_req_cnt >=  CAM_ISP_MAX_APPLY_COUNT2) {
+	if (active_req_cnt >=  CAM_ISP_MAX_APPLY_COUNT2) {
 		CAM_WARN_RATE_LIMIT(CAM_ISP,
 			"Reject apply request (id %lld) due to congestion(cnt = %d) ctx %u",
 			req->request_id,
-			ctx_isp->active_req_cnt,
+			active_req_cnt,
 			ctx->ctx_id);
 
 		mutex_lock(&ctx_isp->isp_mutex);
