@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -16,6 +16,7 @@
 #include "cam_ife_csid_lite650.h"
 #include "cam_ife_csid_lite636.h"
 #include "cam_ife_csid_lite736.h"
+#include "cam_ife_csid_lite634.h"
 
 #define CAM_CSID_LITE_DRV_NAME                    "csid_lite"
 
@@ -54,6 +55,10 @@ static struct cam_ife_csid_core_info cam_ife_csid_lite_736_hw_info = {
 	.sw_version  = CAM_IFE_CSID_VER_2_0,
 };
 
+static struct cam_ife_csid_core_info cam_ife_csid_lite_634_hw_info = {
+	.csid_reg = &cam_ife_csid_lite_634_reg_info,
+	.sw_version  = CAM_IFE_CSID_VER_2_0,
+};
 
 static const struct of_device_id cam_ife_csid_lite_dt_match[] = {
 	{
@@ -103,6 +108,10 @@ static const struct of_device_id cam_ife_csid_lite_dt_match[] = {
 	{
 		.compatible = "qcom,csid-lite736",
 		.data = &cam_ife_csid_lite_736_hw_info,
+	},
+	{
+		.compatible = "qcom,csid-lite634",
+		.data = &cam_ife_csid_lite_634_hw_info,
 	},
 	{}
 };
