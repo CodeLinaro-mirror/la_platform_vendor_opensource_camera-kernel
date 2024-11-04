@@ -98,7 +98,8 @@ typedef int (*cam_req_mgr_no_crm_notify)(uint32_t dev_hdl,
 typedef int (*cam_req_mgr_no_crm_add_req)(int32_t dev_hdl, struct cam_packet *packet,
 	struct port_pattern_period *port_enable_pattern_period);
 typedef int (*cam_req_mgr_no_crm_setup)(int32_t dev_hdl, struct cam_packet *packet,
-	struct port_pattern_period *port_enable_pattern_period);
+	struct port_pattern_period *port_enable_pattern_period, uint32_t *num_res,
+	struct resource_info *res_info, struct producer_queue *producer_q, uint32_t num_producer_q);
 typedef int (*cam_req_mgr_no_crm_retrieve)(int32_t dev_hdl, struct ul_cam_packet *ul_packet);
 
 /**
