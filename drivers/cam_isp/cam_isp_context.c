@@ -9496,6 +9496,7 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 	int num_entries, rc = 0, i, result_idx = 0;
 	struct cam_isp_context *isp_ctx = (struct cam_isp_context *)ctx->ctx_priv;
 	uint32_t rd_idx, wr_idx, last_consumed;
+	bool no_buf_error = false;
 
 	if (!ctx || !num_responses || !response_buffers) {
 		CAM_ERR(CAM_ISP, "Invalid params");
@@ -9529,6 +9530,11 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 		num_entries = MAX_IO_PACKETS - (rd_idx - wr_idx);
 
 	for (i = 0; i < num_entries; i++) {
+		if (isp_ctx->ul_fp_results[rd_idx].status == BATCH_PACKET_RESULT_NO_BUFFER) {
+			no_buf_error = true;
+			INC_VAL(rd_idx, 1, MAX_IO_PACKETS);
+			continue;
+		}
 		last_consumed = isp_ctx->ul_fp_results[rd_idx].last_consumed_addr;
 		rc = __cam_isp_ctx_ul_fastpath_retrieve_result_util(&result_idx, last_consumed,
 			isp_ctx->ul_fp_results[rd_idx].timestamp,
@@ -9542,9 +9548,18 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 		INC_VAL(rd_idx, 1, MAX_IO_PACKETS);
 	}
 
+	if (no_buf_error && !list_empty(&ctx->active_req_list))
+		CAM_INFO(CAM_ISP, "Dropped the frame but defer the error till active list is consumed");
+	else if (no_buf_error) {
+		CAM_INFO(CAM_ISP, "Signalling frame drop due to buffer unavailability");
+		response_buffers[result_idx].status[0]     = BATCH_PACKET_RESULT_NO_BUFFER;
+		response_buffers[result_idx].num_buffer    = 1;
+		response_buffers[result_idx].buffer_hdl[0] = 0x0;
+		result_idx++;
+	}
 	atomic_set(&isp_ctx->ul_fp_params.read_idx, rd_idx);
 
-	*num_responses = num_entries;
+	*num_responses = result_idx;
 	return 0;
 }
 
@@ -10321,6 +10336,7 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 	struct cam_isp_ul_resource_update_entry *res_data;
 	bool buffer_found;
 	uint8_t *producer_queue;
+	uint32_t rd_idx, wr_idx;
 
 	if (list_empty(&cam_ctx->free_req_list)) {
 		CAM_INFO(CAM_ISP, "free list empty, returning ctx:%u",
@@ -10381,6 +10397,21 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 				if (!free_buffer_found) {
 					CAM_ERR(CAM_ISP, "Free buffer not found for res 0x%x",
 						res_type);
+					spin_lock(&ctx_isp->ul_fp_params.fast_path_lock);
+					wr_idx = atomic_read(&ctx_isp->ul_fp_params.write_idx);
+					rd_idx = atomic_read(&ctx_isp->ul_fp_params.read_idx);
+
+					if ((wr_idx == rd_idx) ||
+						(ctx_isp->ul_fp_results[rd_idx].status !=
+						BATCH_PACKET_RESULT_NO_BUFFER)){
+						ctx_isp->ul_fp_results[wr_idx].status =
+							BATCH_PACKET_RESULT_NO_BUFFER;
+						atomic_set(&ctx_isp->ul_fp_params.write_idx,
+							INC_VAL(wr_idx, 1, MAX_IO_PACKETS));
+						complete(&ctx_isp->ul_fp_params.fast_path_buf_done);
+					}
+					spin_unlock(&ctx_isp->ul_fp_params.fast_path_lock);
+
 					req_isp->reapply_type = CAM_CONFIG_REAPPLY_NONE;
 					req_isp->cdm_reset_before_apply = false;
 					req_isp->num_acked = 0;
