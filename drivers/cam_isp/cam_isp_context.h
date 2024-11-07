@@ -356,8 +356,8 @@ struct cam_isp_context_ul_fp_results {
  * @fast_path_lock:           Spin lock to protect faspath parameters
  *                            between ISR and user thread context
  * @fast_path_buf_done:       Fastpath buf done completion variable
- * @read_idx:				  Read index of the result queue
- * @write_idx:				  Write index of the result queue
+ * @read_idx:                 Read index of the result queue
+ * @write_idx:                Write index of the result queue
  */
 struct cam_isp_context_ul_fp_handling_params {
 	spinlock_t        fast_path_lock;
