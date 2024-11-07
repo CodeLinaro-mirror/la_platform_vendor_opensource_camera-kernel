@@ -1778,7 +1778,7 @@ static int cam_ife_hw_mgr_acquire_csid_hw(
 		for (i = CAM_IFE_PIX_PATH_RES_RDI_0;
 			i <= CAM_IFE_PIX_PATH_RES_RDI_3;
 			i++) {
-			if (i != csid_acquire->res_id)
+			if ((tries < CAM_IFE_CSID_RDI_MAX-1) && (i != csid_acquire->res_id))
 				rdis[tries++] = i;
 		}
 	}
@@ -1857,7 +1857,7 @@ static int cam_ife_mgr_attempt_reuse_cid_res(
 		for (i = CAM_IFE_PIX_PATH_RES_RDI_0;
 			i <= CAM_IFE_PIX_PATH_RES_RDI_3;
 			i++) {
-			if (i != csid_acquire->res_id)
+			if ((tries < CAM_IFE_CSID_RDI_MAX-1) && (i != csid_acquire->res_id))
 				rdis[tries++] = i;
 		}
 	}
