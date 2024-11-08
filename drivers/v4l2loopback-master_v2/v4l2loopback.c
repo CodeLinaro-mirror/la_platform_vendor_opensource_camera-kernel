@@ -2489,6 +2489,10 @@ static int process_output_cmd(struct v4l2_loopback_device *dev,
 		dev->qcarcam_ctrl_ret = kcmd->ctrl_ret;
 		complete(&dev->ctrl_complete);
 		break;
+	case AIS_V4L2_OUTPUT_PRIV_CLOSE_RET:
+		dev->qcarcam_ctrl_ret = kcmd->ctrl_ret;
+		complete(&dev->ctrl_complete);
+		break;
 	case AIS_V4L2_OUTPUT_PRIV_START_RET:
 		dev->qcarcam_ctrl_ret = kcmd->ctrl_ret;
 		complete(&dev->ctrl_complete);
@@ -2788,6 +2792,7 @@ static int v4l2_loopback_close(struct file *file)
 	struct v4l2_loopback_opener *opener;
 	struct v4l2_loopback_device *dev;
 	int iswriter = 0;
+	int rc = 0;
 
 	MARK();
 	opener = fh_to_opener(file->private_data);
@@ -2812,6 +2817,14 @@ static int v4l2_loopback_close(struct file *file)
 		if (dev->state > V4L2L_READY_FOR_CAPTURE) {
 			send_v4l2_event(dev->vdev, AIS_V4L2_CLIENT_OUTPUT,
 				AIS_V4L2_CLOSE_INPUT);
+			rc = wait_for_completion_timeout(&dev->ctrl_complete,
+			    msecs_to_jiffies(CLOSE_TIMEOUT));
+		        if (rc) {
+				pr_info("app close success\n");
+			} else {
+				pr_info("app close failed\n");
+			}
+
 			free_buffers(dev);
 			reinit_completion(&dev->gparam_complete);
 			reinit_completion(&dev->sparam_complete);
