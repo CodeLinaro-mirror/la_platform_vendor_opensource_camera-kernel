@@ -82,7 +82,7 @@ ccflags-$(TARGET_SYNX_ENABLE) += -I$(SYNXVENDORDIR)/msm/synx
 ccflags-$(TARGET_SYNX_ENABLE) += -DCONFIG_TARGET_SYNX_ENABLE=1
 ccflags-y += -I$(CAMERA_KERNEL_ROOT)/../securemsm-kernel/
 ccflags-y += -I$(CAMERA_KERNEL_ROOT)/../securemsm-kernel/include/
-
+ccflags-y += $(LE_EXTRA_CFLAGS)
 # After creating lists, add content of 'ccflags-m' variable to 'ccflags-y' one.
 ccflags-y += ${ccflags-m}
 

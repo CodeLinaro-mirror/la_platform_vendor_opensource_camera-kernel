@@ -115,6 +115,7 @@ int cam_cpas_drv_channel_switch_for_dev(const struct device *dev)
 int cam_smmu_fetch_csf_version(struct cam_csf_version *csf_version)
 {
 #if KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE
+#ifdef CONFIG_DOMAIN_ID_SECURE_CAMERA
 	struct csf_version csf_ver;
 	int rc;
 
@@ -129,6 +130,7 @@ int cam_smmu_fetch_csf_version(struct cam_csf_version *csf_version)
 	csf_version->arch_ver = csf_ver.arch_ver;
 	csf_version->max_ver = csf_ver.max_ver;
 	csf_version->min_ver = csf_ver.min_ver;
+#endif
 #else
 	/* This defaults to the legacy version */
 	csf_version->arch_ver = 2;
