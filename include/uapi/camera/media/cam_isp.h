@@ -139,6 +139,7 @@
 #define CAM_ISP_GENERIC_BLOB_TYPE_SETTINGID_STREAM_CFG      29
 #define CAM_ISP_GENERIC_BLOB_TYPE_CHECK_SETTING_ID          30
 #define CAM_ISP_GENERIC_BLOB_TYPE_PRIMARY_PORT_CONFIG       31
+#define CAM_ISP_GENERIC_BLOB_TYPE_PRIMARY_SCRATCH_BUF_CFG   32
 
 #define CAM_ISP_VC_DT_CFG    4
 
@@ -1398,6 +1399,52 @@ struct cam_isp_primary_port_config {
 	struct cam_isp_primary_port_grp_info    port_info[];
 };
 
+/**
+ * struct cam_isp_primary_port_scratch_buf_plane_cfg  - Primary port Scratch buffer plane cfg
+ *
+ * @mem_handle   : Mem_handle for scratch buffer
+ * @offset       : Offset to the buffer
+ * @stride       : Stride in pixels
+ * @slice_height : Slice height in lines
+ * @meta_size    : UBWC metadata plane size
+ * @reserved     : Reserved for 64 bit alignment
+ */
+struct cam_isp_primary_port_scratch_buf_plane_cfg {
+	__s32     mem_handle;
+	__u32     offset;
+	__u32     stride;
+	__u32     slice_height;
+	__u32     meta_size;
+	__u32     reserved;
+};
+
+/**
+ * struct cam_isp_primary_port_scratch_buf_info - Primary port Scratch buffer info
+ *
+ * @res_id     : Output port resource ID
+ * @reserved   : Reserved for 64 bit alignment
+ * @plane_cfg  : Per plane config info
+ */
+struct cam_isp_primary_port_scratch_buf_info {
+	__u32     res_id;
+	__u32     reserved;
+	struct cam_isp_primary_port_scratch_buf_plane_cfg plane_cfg[CAM_PACKET_MAX_PLANES];
+};
+
+/**
+ * struct cam_isp_primary_port_scratch_buf_config - Primary port scratch buffer config
+ *                                                  provides scratch buffer info for Primary port
+ *                                                  as part of INIT packet
+ *
+ * @version          : Struct version
+ * @num_scratch_bufs : Number of scratch buffers
+ * @scratch_buf_info : Scratch buffer info
+ */
+struct cam_isp_primary_port_scratch_buf_config {
+	__u32                                        version;
+	__u32                                        num_scratch_bufs;
+	struct cam_isp_primary_port_scratch_buf_info scratch_buf_info[];
+};
 
 #define CAM_ISP_ACQUIRE_COMMON_VER0         0x1000
 
