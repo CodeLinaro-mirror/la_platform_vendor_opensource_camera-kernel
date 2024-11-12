@@ -29,6 +29,15 @@
 #define CAM_CPAS_QOS_CUSTOM_SETTINGS_MASK  0x2
 
 /**
+ * Secure camera QoS update id - Enum for identify QOS settings update type
+ */
+enum secure_camera_qos_update_type {
+	CAM_QOS_UPDATE_TYPE_STATIC = 0x0,
+	CAM_QOS_UPDATE_TYPE_SMART  = 0x1,
+	CAM_QOS_UPDATE_TYPE_MAX,
+};
+
+/**
  * enum cam_cpas_reg_base - Enum for register base identifier. These
  *                          are the identifiers used in generic register
  *                          write/read APIs provided by cpas driver.

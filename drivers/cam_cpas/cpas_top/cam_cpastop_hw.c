@@ -811,42 +811,55 @@ static int cam_cpastop_print_poweron_settings(struct cam_hw_info *cpas_hw)
 
 static int cam_cpastop_poweron(struct cam_hw_info *cpas_hw)
 {
-	int i;
+	int i, rc = 0;
 	struct cam_cpas_hw_errata_wa_list *errata_wa_list =
 		camnoc_info->errata_wa_list;
 	struct cam_cpas_hw_errata_wa *errata_wa;
+	struct cam_cpas_private_soc *soc_private =
+		(struct cam_cpas_private_soc *) cpas_hw->soc_info.soc_private;
 
 	cam_cpastop_reset_irq(cpas_hw);
-	for (i = 0; i < camnoc_info->specific_size; i++) {
-		if (camnoc_info->specific[i].enable) {
-			CAM_DBG(CAM_CPAS, "Updating QoS settings for %d %s",
-				camnoc_info->specific[i].port_type,
-				camnoc_info->specific[i].port_name);
-			cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
-				&camnoc_info->specific[i].priority_lut_low);
-			cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
-				&camnoc_info->specific[i].priority_lut_high);
-			cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
-				&camnoc_info->specific[i].urgency);
-			cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
-				&camnoc_info->specific[i].danger_lut);
-			cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
-				&camnoc_info->specific[i].safe_lut);
-			cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
-				&camnoc_info->specific[i].ubwc_ctl);
-			cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
-				&camnoc_info->specific[i].flag_out_set0_low);
-			cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
-				&camnoc_info->specific[i].dynattr_mainctl);
-			cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
-				&camnoc_info->specific[i].qosgen_mainctl);
-			cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
-				&camnoc_info->specific[i].qosgen_shaping_low);
-			cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
-				&camnoc_info->specific[i].qosgen_shaping_high);
-			cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
-				&camnoc_info->specific[i].dynattr_tr_type_lut);
+
+	if (!soc_private->enable_secure_qos_update) {
+		for (i = 0; i < camnoc_info->specific_size; i++) {
+			if (camnoc_info->specific[i].enable) {
+				CAM_DBG(CAM_CPAS, "Updating QoS settings for %d %s",
+					camnoc_info->specific[i].port_type,
+					camnoc_info->specific[i].port_name);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->specific[i].priority_lut_low);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->specific[i].priority_lut_high);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->specific[i].urgency);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->specific[i].danger_lut);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->specific[i].safe_lut);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->specific[i].ubwc_ctl);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->specific[i].flag_out_set0_low);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->specific[i].dynattr_mainctl);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->specific[i].qosgen_mainctl);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->specific[i].qosgen_shaping_low);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->specific[i].qosgen_shaping_high);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->specific[i].dynattr_tr_type_lut);
+			}
 		}
+	} else {
+		CAM_DBG(CAM_CPAS, "Updating secure camera static QoS settings");
+		rc = cam_update_camnoc_qos_settings(CAM_QOS_UPDATE_TYPE_STATIC, 0, NULL);
+		if (rc) {
+			CAM_ERR(CAM_CPAS, "Secure camera static QoS update failed: %d", rc);
+			return rc;
+		}
+		CAM_DBG(CAM_CPAS, "Updated secure camera static QoS settings");
 	}
 
 	if (errata_wa_list) {
