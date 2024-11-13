@@ -2387,8 +2387,8 @@ static int __cam_isp_ctx_handle_fence_signaling_util(
 		req->request_id, req_isp->fence_map_out[map_entry_idx].resource_handle,
 		req_isp->fence_map_out[map_entry_idx].sync_id, ctx->ctx_id);
 
-	/* For virtual frame no fence to signal */
-	if (req_isp->fence_map_out[map_entry_idx].virtual_frame_enabled)
+	/* No fence to signal for primary port with no io_buf */
+	if (req_isp->fence_map_out[map_entry_idx].primary_scratch_buf_enabled)
 		goto end;
 
 	if (req_isp->sof_timestamp_val && req_isp->boot_timestamp) {
@@ -8439,11 +8439,13 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 	req_isp->buf_done_tracker = 0x0;
 
 	for (i = 0; i < req_isp->num_fence_map_out; i++) {
-		rc = cam_sync_get_obj_ref(req_isp->fence_map_out[i].sync_id);
-		if (rc) {
-			CAM_ERR(CAM_ISP, "Can't get ref for fence %d ctx:%u",
-				req_isp->fence_map_out[i].sync_id, ctx->ctx_id);
-			goto put_ref;
+		if (!req_isp->fence_map_out[i].primary_scratch_buf_enabled) {
+			rc = cam_sync_get_obj_ref(req_isp->fence_map_out[i].sync_id);
+			if (rc) {
+				CAM_ERR(CAM_ISP, "Can't get ref for fence %d ctx:%u",
+					req_isp->fence_map_out[i].sync_id, ctx->ctx_id);
+				goto put_ref;
+			}
 		}
 	}
 
@@ -8708,7 +8710,8 @@ done:
 
 put_ref:
 	for (--i; i >= 0; i--) {
-		if (cam_sync_put_obj_ref(req_isp->fence_map_out[i].sync_id))
+		if (!req_isp->fence_map_out[i].primary_scratch_buf_enabled &&
+			cam_sync_put_obj_ref(req_isp->fence_map_out[i].sync_id))
 			CAM_ERR(CAM_CTXT, "Failed to put ref of fence %d ctx:%u",
 				req_isp->fence_map_out[i].sync_id, ctx->ctx_id);
 	}

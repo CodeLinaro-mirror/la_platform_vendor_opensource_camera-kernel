@@ -86,12 +86,13 @@ struct cam_hw_update_entry {
 /**
  * struct cam_hw_fence_map_entry - Entry for the resource to sync id map
  *
- * @resrouce_handle:       Resource port id for the buffer
- * @sync_id:               Sync id
- * @image_buf_addr:        Image buffer address array
- * @kernel_map_buf_addr:   Kernel map buffer address array
- * @buf_handle:            respective buffer headers for kernel maps
- * @virtual_frame_enabled: Virtual Frame enabled
+ * @resource_handle:             Resource port id for the buffer
+ * @sync_id:                     Sync id
+ * @image_buf_addr:              Image buffer address array
+ * @kernel_map_buf_addr:         Kernel map buffer address array
+ * @buf_handle:                  respective buffer headers for kernel maps
+ * @virtual_frame_enabled:       Virtual Frame enabled
+ * @primary_scratch_buf_enabled: Primary port scratch buffer enabled
  */
 struct cam_hw_fence_map_entry {
 	uint32_t           resource_handle;
@@ -100,6 +101,7 @@ struct cam_hw_fence_map_entry {
 	uint32_t          *kernel_map_buf_addr[CAM_PACKET_MAX_PLANES];
 	int32_t            buf_handle[CAM_PACKET_MAX_PLANES];
 	bool               virtual_frame_enabled;
+	bool               primary_scratch_buf_enabled;
 };
 
 /**
