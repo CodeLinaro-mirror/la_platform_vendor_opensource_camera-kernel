@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -12,12 +12,16 @@
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
 #include <linux/of_address.h>
+#if IS_ENABLED(CONFIG_QCOM_LAZY_MAPPING)
 #include <linux/msm_dma_iommu_mapping.h>
+#endif
 #include <linux/workqueue.h>
 #include <linux/genalloc.h>
 #include <linux/debugfs.h>
 
+#if IS_ENABLED(CONFIG_QCOM_SECURE_BUFFER)
 #include <soc/qcom/secure_buffer.h>
+#endif
 
 #include <media/cam_req_mgr.h>
 

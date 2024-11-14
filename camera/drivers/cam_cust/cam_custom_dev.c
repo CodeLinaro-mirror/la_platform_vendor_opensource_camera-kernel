@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -23,6 +23,7 @@
 #include "cam_smmu_api.h"
 #include "cam_compat.h"
 #include "camera_main.h"
+#include "cam_req_mgr_dev.h"
 
 static struct cam_custom_dev g_custom_dev;
 static uint32_t g_num_custom_hws;

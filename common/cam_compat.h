@@ -12,6 +12,9 @@
 #include <linux/component.h>
 #include <linux/iommu.h>
 #include <linux/list_sort.h>
+#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
+#include <linux/dma-iommu.h>
+#endif
 #include <linux/spi/spi.h>
 #include <linux/firmware/qcom/qcom_scm.h>
 #include <linux/firmware/qcom/qcom_scm_addon.h>
@@ -20,7 +23,13 @@
 #include "cam_cpastop_hw.h"
 #include "cam_smmu_api.h"
 
+#ifdef CONFIG_SPECTRA_SECURE_CAMERA_25
+#include <smmu-proxy/linux/qti-smmu-proxy.h>
+#endif
+
+#if IS_REACHABLE(CONFIG_SPECTRA_DMA_MAP_ATTRS)
 #include <linux/qcom-dma-mapping.h>
+#endif
 #include <linux/i3c/master.h>
 
 #include <linux/interconnect.h>

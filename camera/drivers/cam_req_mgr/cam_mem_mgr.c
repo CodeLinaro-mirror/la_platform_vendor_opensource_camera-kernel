@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -11,8 +11,10 @@
 #include <linux/dma-buf.h>
 #include <linux/version.h>
 #include <linux/debugfs.h>
-#if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
+#if IS_ENABLED(CONFIG_QCOM_MEM_BUF)
 #include <linux/mem-buf.h>
+#endif
+#if IS_ENABLED(CONFIG_QCOM_SECURE_BUFFER)
 #include <soc/qcom/secure_buffer.h>
 #endif
 
@@ -738,7 +740,6 @@ end:
 EXPORT_SYMBOL(cam_mem_mgr_cpu_access_op);
 
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
-
 #define CAM_MAX_VMIDS 4
 
 static void cam_mem_mgr_put_dma_heaps(void)
@@ -872,10 +873,12 @@ static int cam_mem_util_get_dma_buf(size_t len,
 	struct timespec64 ts1, ts2;
 	long microsec = 0;
 	bool use_cached_heap = false;
+#if IS_ENABLED(CONFIG_QCOM_MEM_BUF)
 	struct mem_buf_lend_kernel_arg arg;
 	int vmids[CAM_MAX_VMIDS];
 	int perms[CAM_MAX_VMIDS];
 	int num_vmids = 0;
+#endif
 
 	if (!buf) {
 		CAM_ERR(CAM_MEM, "Invalid params");
@@ -908,6 +911,8 @@ static int cam_mem_util_get_dma_buf(size_t len,
 	}
 
 	if (cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) {
+#if IS_ENABLED(CONFIG_QCOM_SECURE_BUFFER)
+#if IS_ENABLED(CONFIG_QCOM_MEM_BUF)
 		if (IS_CSF25(tbl.csf_version.arch_ver, tbl.csf_version.max_ver)) {
 			heap = tbl.system_heap;
 			len = cam_align_dma_buf_size(len);
@@ -942,6 +947,18 @@ static int cam_mem_util_get_dma_buf(size_t len,
 			heap = tbl.ubwc_p_heap;
 		CAM_DBG(CAM_MEM, "Allocating from ubwc-p heap %pK, size=%d, flags=0x%x",
 			heap, len, cam_flags);
+#else
+		CAM_ERR(CAM_MEM,
+			"Mem buf lend not available");
+
+		return -EOPNOTSUPP;
+#endif
+#else
+		CAM_ERR(CAM_MEM,
+			"Mem buf lend not available");
+
+		return -EOPNOTSUPP;
+#endif
 	} else if (use_cached_heap) {
 
 		/*
@@ -1003,6 +1020,7 @@ static int cam_mem_util_get_dma_buf(size_t len,
 
 	*i_ino = file_inode((*buf)->file)->i_ino;
 
+#if IS_ENABLED(CONFIG_QCOM_MEM_BUF)
 	if (((cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) &&
 		!IS_CSF25(tbl.csf_version.arch_ver, tbl.csf_version.max_ver)) ||
 		(cam_flags & CAM_MEM_FLAG_EVA_NOPIXEL)) {
@@ -1024,6 +1042,7 @@ static int cam_mem_util_get_dma_buf(size_t len,
 			goto end;
 		}
 	}
+#endif
 
 	CAM_DBG(CAM_MEM, "Allocate success, len=%zu, *buf=%pK, i_ino=%lu", len, *buf, *i_ino);
 
@@ -1039,6 +1058,7 @@ end:
 	dma_buf_put(*buf);
 	return rc;
 }
+
 #else
 
 bool cam_mem_mgr_ubwc_p_heap_supported(void)
