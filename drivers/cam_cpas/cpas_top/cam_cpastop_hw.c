@@ -817,6 +817,7 @@ static int cam_cpastop_poweron(struct cam_hw_info *cpas_hw)
 	struct cam_cpas_hw_errata_wa *errata_wa;
 	struct cam_cpas_private_soc *soc_private =
 		(struct cam_cpas_private_soc *) cpas_hw->soc_info.soc_private;
+	struct cam_cpas *cpas_core = cpas_hw->core_info;
 
 	cam_cpastop_reset_irq(cpas_hw);
 
@@ -860,6 +861,40 @@ static int cam_cpastop_poweron(struct cam_hw_info *cpas_hw)
 			return rc;
 		}
 		CAM_DBG(CAM_CPAS, "Updated secure camera static QoS settings");
+	}
+
+	if (cpas_core->enable_ipe_qos) {
+		for (i = 0; i < camnoc_info->ipe_qos_specific_size; i++) {
+			if (camnoc_info->ipe_qos_specific[i].enable) {
+				CAM_DBG(CAM_CPAS, "Updating IPE QoS settings for %d %s",
+					camnoc_info->ipe_qos_specific[i].port_type,
+					camnoc_info->ipe_qos_specific[i].port_name);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->ipe_qos_specific[i].priority_lut_low);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->ipe_qos_specific[i].priority_lut_high);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->ipe_qos_specific[i].urgency);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->ipe_qos_specific[i].danger_lut);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->ipe_qos_specific[i].safe_lut);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->ipe_qos_specific[i].ubwc_ctl);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->ipe_qos_specific[i].flag_out_set0_low);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->ipe_qos_specific[i].dynattr_mainctl);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->ipe_qos_specific[i].qosgen_mainctl);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->ipe_qos_specific[i].qosgen_shaping_low);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->ipe_qos_specific[i].qosgen_shaping_high);
+				cam_cpas_util_reg_update(cpas_hw, CAM_CPAS_REG_CAMNOC,
+					&camnoc_info->ipe_qos_specific[i].dynattr_tr_type_lut);
+			}
+		}
 	}
 
 	if (errata_wa_list) {
@@ -1106,6 +1141,7 @@ static int cam_cpastop_init_hw_version(struct cam_hw_info *cpas_hw,
 	}
 
 	cpas_core->camnoc_info = camnoc_info;
+	cpas_core->enable_ipe_qos = camnoc_info->enable_ipe_qos;
 	return 0;
 }
 

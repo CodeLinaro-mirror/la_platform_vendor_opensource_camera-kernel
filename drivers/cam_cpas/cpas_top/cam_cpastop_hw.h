@@ -344,21 +344,27 @@ struct cam_camnoc_err_logger_info {
  *
  * @specific: Pointer to CAMNOC SPECIFICTONTTPTR settings
  * @specific_size: Array size of SPECIFICTONTTPTR settings
+ * @specific: Pointer to IPE_QOS_CAMNOC SPECIFICTONTTPTR settings
+ * @specific_size: Array size of IPE_QOS_CAMNOC SPECIFICTONTTPTR settings
  * @irq_sbm: Pointer to CAMNOC IRQ SBM settings
  * @irq_err: Pointer to CAMNOC IRQ Error settings
  * @irq_err_size: Array size of IRQ Error settings
  * @err_logger: Pointer to CAMNOC IRQ Error logger read registers
  * @errata_wa_list: HW Errata workaround info
+ * @enable_ipe_qos: Weather IPE QoS is enabled or not
  *
  */
 struct cam_camnoc_info {
 	struct cam_camnoc_specific *specific;
 	int specific_size;
+	struct cam_camnoc_specific *ipe_qos_specific;
+	int ipe_qos_specific_size;
 	struct cam_camnoc_irq_sbm *irq_sbm;
 	struct cam_camnoc_irq_err *irq_err;
 	int irq_err_size;
 	struct cam_camnoc_err_logger_info *err_logger;
 	struct cam_cpas_hw_errata_wa_list *errata_wa_list;
+	bool enable_ipe_qos;
 };
 
 /**

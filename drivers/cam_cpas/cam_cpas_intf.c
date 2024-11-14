@@ -173,6 +173,7 @@ bool cam_cpas_is_feature_supported(uint32_t flag, uint32_t hw_map,
 {
 	struct cam_hw_info *cpas_hw = NULL;
 	struct cam_cpas_private_soc *soc_private = NULL;
+	struct cam_cpas *cpas_core = NULL;
 	bool supported = true;
 	int32_t i;
 
@@ -184,11 +185,15 @@ bool cam_cpas_is_feature_supported(uint32_t flag, uint32_t hw_map,
 	cpas_hw = (struct cam_hw_info *) g_cpas_intf->hw_intf->hw_priv;
 	soc_private =
 		(struct cam_cpas_private_soc *)cpas_hw->soc_info.soc_private;
+	cpas_core = (struct cam_cpas *)cpas_hw->core_info;
 
 	if (flag >= CAM_CPAS_FUSE_FEATURE_MAX) {
 		CAM_ERR(CAM_CPAS, "Unknown feature flag %x", flag);
 		return false;
 	}
+
+	if (flag == CAM_CPAS_IPE_QOS_ENABLE)
+		return cpas_core->enable_ipe_qos;
 
 	for (i = 0; i < soc_private->num_feature_info; i++)
 		if (soc_private->feature_info[i].feature == flag)

@@ -279,6 +279,7 @@ struct cam_cpas_monitor {
  * @monitor_entries: cpas monitor array
  * @full_state_dump: Whether to enable full cpas state dump or not
  * @smart_qos_dump: Whether to dump smart qos information on update
+ * @enable_ipe_qos: Whether IPE QoS is enabled or not
  * @camnoc_info: Pointer to camnoc header info
  * @gdsc_refcnt: Gdsc reference count
  * @gdsc_state: Gdsc state
@@ -308,6 +309,7 @@ struct cam_cpas {
 	struct cam_cpas_monitor monitor_entries[CAM_CPAS_MONITOR_MAX_ENTRIES];
 	bool full_state_dump;
 	bool smart_qos_dump;
+	bool enable_ipe_qos;
 	void *camnoc_info;
 	uint32_t gdsc_refcnt;
 	bool gdsc_state;
