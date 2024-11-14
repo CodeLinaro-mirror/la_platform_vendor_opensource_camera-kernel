@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_ICP_H__
@@ -17,7 +18,7 @@
 #define CAM_ICP_DEV_TYPE_BPS_CDM 5
 #define CAM_ICP_DEV_TYPE_MAX     5
 
-/* definitions needed for icp aquire device */
+/* definitions needed for icp acquire device */
 #define CAM_ICP_RES_TYPE_BPS         1
 #define CAM_ICP_RES_TYPE_IPE_RT      2
 #define CAM_ICP_RES_TYPE_IPE         3

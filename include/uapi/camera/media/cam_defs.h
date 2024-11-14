@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_DEFS_H__
@@ -213,7 +213,7 @@ struct cam_iommu_handle {
 #define PIXEL_PATTERN_CBYCRY                    0x6
 #define PIXEL_PATTERN_CRYCBY                    0x7
 
-/* camera rotaion */
+/* camera rotation */
 #define CAM_ROTATE_CW_0_DEGREE                  0
 #define CAM_ROTATE_CW_90_DEGREE                 1
 #define CAM_RORATE_CW_180_DEGREE                2

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_SENSOR_H__
@@ -642,7 +642,7 @@ struct cam_cmd_unconditional_wait {
 /**
  * cam_csiphy_info       : Provides cmdbuffer structre
  * @lane_assign          : Lane sensor will be using
- * @mipi_flags           : Phy flags for differnt calibration operations
+ * @mipi_flags           : Phy flags for different calibration operations
  * @lane_cnt             : Total number of lanes
  * @secure_mode          : Secure mode flag to enable / disable
  * @settle_time          : Settling time in ms
@@ -783,7 +783,7 @@ struct cam_sensor_streamon_dev {
 /**
  * stream_dimension : Stream dimension
  *
- * @left   : left pixel locaiton of stream
+ * @left   : left pixel location of stream
  * @top    : top  pixel location of stream
  * @width  : width of the image stream
  * @height : Height of the image stream

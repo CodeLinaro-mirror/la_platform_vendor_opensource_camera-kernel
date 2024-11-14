@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_JPEG_H__
@@ -15,7 +16,7 @@
 
 #define CAM_JPEG_NUM_DEV_PER_RES_MAX                          1
 
-/* definitions needed for jpeg aquire device */
+/* definitions needed for jpeg acquire device */
 #define CAM_JPEG_RES_TYPE_ENC                                 0
 #define CAM_JPEG_RES_TYPE_DMA                                 1
 #define CAM_JPEG_RES_TYPE_MAX                                 2
@@ -113,7 +114,7 @@ struct cam_jpeg_res_info {
 };
 
 /**
- * struct cam_jpeg_acquire_dev_info - An JPEG device info
+ * struct cam_jpeg_acquire_dev_info - A JPEG device info
  *
  * @dev_type : Device type (ENC/DMA)
  * @reserved : Reserved Bytes
