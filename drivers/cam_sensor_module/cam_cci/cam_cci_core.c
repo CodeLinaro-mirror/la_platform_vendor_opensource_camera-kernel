@@ -1797,17 +1797,19 @@ static void cam_cci_write_async_helper(struct work_struct *work)
 	cci_dev = write_async->cci_dev;
 	i2c_msg = &write_async->c_ctrl.cfg.cci_i2c_write_cfg;
 	master = write_async->c_ctrl.cci_info->cci_i2c_master;
-	cci_master_info = &cci_dev->cci_master_info[master];
+	if (master < NUM_MASTERS ){
+	    cci_master_info = &cci_dev->cci_master_info[master];
 
-	mutex_lock(&cci_master_info->mutex_q[write_async->queue]);
-	rc = cam_cci_i2c_write(&(cci_dev->v4l2_dev_str.sd),
-		&write_async->c_ctrl, write_async->queue, write_async->sync_en);
-	mutex_unlock(&cci_master_info->mutex_q[write_async->queue]);
-	if (rc < 0)
-		CAM_ERR(CAM_CCI, "failed rc: %d", rc);
+	    mutex_lock(&cci_master_info->mutex_q[write_async->queue]);
+	    rc = cam_cci_i2c_write(&(cci_dev->v4l2_dev_str.sd),
+	            &write_async->c_ctrl, write_async->queue, write_async->sync_en);
+	    mutex_unlock(&cci_master_info->mutex_q[write_async->queue]);
+	    if (rc < 0)
+	        CAM_ERR(CAM_CCI, "failed rc: %d", rc);
 
-	kfree(write_async->c_ctrl.cfg.cci_i2c_write_cfg.reg_setting);
-	kfree(write_async);
+	    kfree(write_async->c_ctrl.cfg.cci_i2c_write_cfg.reg_setting);
+	    kfree(write_async);
+	}
 }
 
 static int32_t cam_cci_i2c_write_async(struct v4l2_subdev *sd,
