@@ -82,9 +82,8 @@ static int cam_cci_init_master(struct cci_device *cci_dev,
 			= QUEUE_STATE_FREE;
 		cci_dev->cci_i2c_queue_info[master][QUEUE_1].queue_status
 			= QUEUE_STATE_FREE;
-		for (i = 0; i < CONTEXT_ID_MAX; i++) {
+		for (i = 0; i < CONTEXT_ID_MAX; i++)
 			cci_dev->is_contextid_acquire[i] = false;
-		}
 
 		CAM_DBG(CAM_CCI, "CCI%d_I2C_M%d:: Q0: %d Q1: %d",
 			cci_dev->soc_info.index, master,
