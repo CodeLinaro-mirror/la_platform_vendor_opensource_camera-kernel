@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2018, 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_sensor_cmn_header.h"
@@ -93,6 +94,37 @@ int32_t cam_camera_cci_i2c_read_seq(struct cam_sensor_cci_client *cci_client,
 	return rc;
 }
 
+
+static int32_t cam_cci_gpio_write_table_cmd(
+	struct camera_io_master *client,
+	struct cam_sensor_trigger_per_frame_data *trigger_data,
+	enum cam_cci_cmd_type cmd)
+{
+	int32_t rc = -EINVAL;
+	struct cam_cci_ctrl cci_ctrl;
+	struct cam_sensor_trigger_per_frame_data reg_setting;
+
+	cci_ctrl.cfg.gpio_cfg.reg_setting = &reg_setting;
+
+	if (!client || !trigger_data)
+		return rc;
+	cci_ctrl.cmd = cmd;
+	cci_ctrl.cci_info = client->cci_client;
+	cci_ctrl.cfg.gpio_cfg.reg_setting->timestamp = trigger_data->timestamp;
+	cci_ctrl.cfg.gpio_cfg.reg_setting->gpio_mask = trigger_data->gpio_mask;
+	cci_ctrl.cfg.gpio_cfg.reg_setting->contextid = trigger_data->contextid;
+	cci_ctrl.cfg.gpio_cfg.reg_setting->pulse_width = trigger_data->pulse_width;
+	cci_ctrl.cfg.gpio_cfg.reg_setting->is_nop = trigger_data->is_nop;
+	rc = v4l2_subdev_call(client->cci_client->cci_subdev,
+		core, ioctl, VIDIOC_MSM_CCI_CFG, &cci_ctrl);
+	if (rc < 0) {
+		CAM_ERR(CAM_SENSOR, "Failed rc = %d", rc);
+		return rc;
+	}
+	rc = cci_ctrl.status;
+	return rc;
+}
+
 static int32_t cam_cci_i2c_write_table_cmd(
 	struct camera_io_master *client,
 	struct cam_sensor_i2c_reg_setting *write_setting,
@@ -133,6 +165,13 @@ static int32_t cam_cci_i2c_write_table_cmd(
 	return rc;
 }
 
+int32_t cam_cci_gpio_write_table(
+	struct camera_io_master *client,
+	struct cam_sensor_trigger_per_frame_data *trigger_data)
+{
+	return cam_cci_gpio_write_table_cmd(client, trigger_data,
+		MSM_CCI_GPIO_WRITE);
+}
 
 int32_t cam_cci_i2c_write_table(
 	struct camera_io_master *client,
@@ -212,6 +251,45 @@ int32_t cam_cci_i2c_poll(struct cam_sensor_cci_client *client,
 		CAM_ERR(CAM_SENSOR, "poll failed rc=%d", rc);
 
 	return rc;
+}
+
+int32_t cam_sensor_cci_get_contextid(struct cam_sensor_cci_client *cci_client,
+	struct cam_cci_trigger_data *trigger_data,
+	uint16_t cci_cmd)
+{
+	int32_t rc = 0;
+	struct cam_cci_ctrl cci_ctrl;
+
+	cci_ctrl.cmd = cci_cmd;
+	cci_ctrl.cci_info = cci_client;
+	cci_ctrl.cfg.trigger_data.cid = trigger_data->cid;
+	cci_ctrl.cfg.trigger_data.csid = trigger_data->csid;
+	rc = v4l2_subdev_call(cci_client->cci_subdev,
+		core, ioctl, VIDIOC_MSM_CCI_CFG, &cci_ctrl);
+	if (rc < 0) {
+		CAM_ERR(CAM_SENSOR, "Failed rc = %d", rc);
+		return rc;
+	}
+	trigger_data->context_id = cci_ctrl.cfg.trigger_data.context_id;
+	return cci_ctrl.status;
+}
+
+int32_t cam_sensor_cci_release_contextid(struct cam_sensor_cci_client *cci_client,
+	uint16_t cci_cmd, uint32_t contextId)
+{
+	int32_t rc = 0;
+	struct cam_cci_ctrl cci_ctrl;
+
+	cci_ctrl.cmd = cci_cmd;
+	cci_ctrl.cci_info = cci_client;
+	cci_ctrl.cfg.trigger_data.context_id = contextId;
+	rc = v4l2_subdev_call(cci_client->cci_subdev,
+		core, ioctl, VIDIOC_MSM_CCI_CFG, &cci_ctrl);
+	if (rc < 0) {
+		CAM_ERR(CAM_SENSOR, "Failed rc = %d", rc);
+		return rc;
+	}
+	return cci_ctrl.status;
 }
 
 int32_t cam_sensor_cci_i2c_util(struct cam_sensor_cci_client *cci_client,

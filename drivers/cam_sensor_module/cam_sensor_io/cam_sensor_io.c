@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_sensor_io.h"
@@ -115,6 +116,25 @@ int32_t camera_io_dev_read_seq(struct camera_io_master *io_master_info,
 	return 0;
 }
 
+int32_t camera_io_gpio_write(struct camera_io_master *io_master_info,
+	struct cam_sensor_trigger_per_frame_data *trigger_data)
+{
+	if (!trigger_data || !io_master_info) {
+		CAM_ERR(CAM_SENSOR,
+			"Input parameters not valid ws: %pK ioinfo: %pK",
+			trigger_data, io_master_info);
+		return -EINVAL;
+	}
+	if (io_master_info->master_type == CCI_MASTER) {
+		return cam_cci_gpio_write_table(io_master_info,
+			trigger_data);
+	} else {
+		CAM_ERR(CAM_SENSOR, "Invalid Comm. Master:%d",
+			io_master_info->master_type);
+		return -EINVAL;
+	}
+}
+
 int32_t camera_io_dev_write(struct camera_io_master *io_master_info,
 	struct cam_sensor_i2c_reg_setting *write_setting)
 {
@@ -178,6 +198,19 @@ int32_t camera_io_dev_write_continuous(struct camera_io_master *io_master_info,
 	}
 }
 
+int32_t camera_io_contextid(struct camera_io_master *io_master_info,
+	struct cam_cci_trigger_data *trigger_data)
+{
+	if (io_master_info->master_type == CCI_MASTER) {
+		return cam_sensor_cci_get_contextid(io_master_info->cci_client,
+			trigger_data, MSM_CCI_GET_CONTEXT_ID);
+	} else {
+		CAM_ERR(CAM_SENSOR, "Invalid Comm. Master:%d",
+			io_master_info->master_type);
+		return -EINVAL;
+	}
+}
+
 int32_t camera_io_init(struct camera_io_master *io_master_info)
 {
 	if (!io_master_info) {
@@ -197,6 +230,25 @@ int32_t camera_io_init(struct camera_io_master *io_master_info)
 
 	return -EINVAL;
 }
+
+int32_t camera_io_contextid_release(struct camera_io_master *io_master_info, uint32_t contextId)
+{
+	if (!io_master_info) {
+		CAM_ERR(CAM_SENSOR, "Invalid Args");
+		return -EINVAL;
+	}
+
+	if (io_master_info->master_type == CCI_MASTER) {
+		return cam_sensor_cci_release_contextid(io_master_info->cci_client,
+			MSM_CCI_RELEASE_CONTEXT_ID, contextId);
+	} else if ((io_master_info->master_type == I2C_MASTER) ||
+		(io_master_info->master_type == SPI_MASTER)) {
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
 
 int32_t camera_io_release(struct camera_io_master *io_master_info)
 {
