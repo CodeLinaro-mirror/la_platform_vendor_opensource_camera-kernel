@@ -174,9 +174,8 @@ static int __cam_isp_ctx_dump_event_record(
 			return -ENOSPC;
 		}
 
-		min_len = sizeof(struct cam_isp_context_dump_header) +
-			((num_entries * CAM_ISP_CTX_DUMP_EVENT_NUM_WORDS) *
-				sizeof(uint64_t));
+		min_len = (sizeof(struct cam_isp_context_dump_header) +
+			(CAM_ISP_CTX_DUMP_EVENT_NUM_WORDS * sizeof(uint64_t))) * num_entries;
 		remain_len = dump_args->buf_len - dump_args->offset;
 
 		if (remain_len < min_len) {
@@ -648,7 +647,7 @@ static int __cam_isp_ctx_notify_trigger_util(
 
 	rc = ctx->ctx_crm_intf->notify_trigger(&notify);
 	if (rc)
-		CAM_ERR(CAM_ISP,
+		CAM_ERR_RATE_LIMIT(CAM_ISP,
 			"Failed to notify CRM %s on frame: %llu ctx: %u link: 0x%x last_buf_done_req: %lld rc: %d",
 			__cam_isp_ctx_crm_trigger_point_to_string(trigger_type),
 			ctx_isp->frame_id, ctx->ctx_id, ctx->link_hdl,
@@ -2472,7 +2471,7 @@ static int __cam_isp_ctx_apply_pending_req(
 		goto end;
 	}
 
-	CAM_DBG(CAM_REQ, "Apply request %lld in substate %d ctx %u",
+	CAM_DBG(CAM_REQ, "Apply request %llu in substate %d ctx %u",
 		req->request_id, ctx_isp->substate_activated, ctx->ctx_id);
 	req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 
@@ -2783,12 +2782,12 @@ static int __cam_isp_ctx_notify_sof_in_activated_state(
 
 			if (last_cdm_done_req >= req->request_id) {
 				CAM_DBG(CAM_ISP,
-					"CDM callback detected for req: %lld, possible buf_done delay, waiting for buf_done",
+					"CDM callback detected for req: %llu, possible buf_done delay, waiting for buf_done",
 					req->request_id);
 				ctx_isp->bubble_frame_cnt = 0;
 			} else {
 				CAM_DBG(CAM_ISP,
-					"CDM callback not happened for req: %lld, possible CDM stuck or workqueue delay",
+					"CDM callback not happened for req: %llu, possible CDM stuck or workqueue delay",
 					req->request_id);
 				req_isp->num_acked = 0;
 				req_isp->num_deferred_acks = 0;
@@ -2800,18 +2799,18 @@ static int __cam_isp_ctx_notify_sof_in_activated_state(
 				atomic_set(&ctx_isp->process_bubble, 0);
 				ctx_isp->active_req_cnt--;
 				CAM_DBG(CAM_REQ,
-					"Move active req: %lld to pending list(cnt = %d) [bubble re-apply],ctx %u",
+					"Move active req: %llu to pending list(cnt = %d) [bubble re-apply],ctx %u",
 					req->request_id,
 					ctx_isp->active_req_cnt, ctx->ctx_id);
 			}
 		} else if (req_isp->bubble_detected) {
 			ctx_isp->bubble_frame_cnt++;
 			CAM_DBG(CAM_ISP,
-				"Waiting on bufdone for bubble req: %lld, since frame_cnt = %lld",
+				"Waiting on bufdone for bubble req: %llu, since frame_cnt = %lld",
 				req->request_id,
 				ctx_isp->bubble_frame_cnt);
 		} else {
-			CAM_DBG(CAM_ISP, "Delayed bufdone for req: %lld",
+			CAM_DBG(CAM_ISP, "Delayed bufdone for req: %llu",
 				req->request_id);
 		}
 	}
@@ -2839,7 +2838,7 @@ notify_only:
 			else
 			{
 				CAM_ERR(CAM_ISP,
-					"request_id %lld, req: %lld, reported_req_id %lld ctx id %d bubbile detected %d ",
+					"request_id %llu, req: %llu, reported_req_id %lld ctx id %u bubbile detected %d ",
 					request_id, req->request_id,
 					ctx_isp->reported_req_id,ctx->ctx_id,req_isp->bubble_detected);
 			}
@@ -2854,7 +2853,7 @@ notify_only:
 		else
 		{
 			CAM_ERR(CAM_ISP,
-				"request_id %lld, req: %lld, since frame_cnt = %lld",
+				"request_id %llu, req: %llu, since frame_cnt = %llu",
 				request_id, req->request_id,
 				ctx_isp->bubble_frame_cnt);
 		}
@@ -4889,6 +4888,14 @@ static int __cam_isp_ctx_dump_in_top_state(
 	struct cam_hw_cmd_args              hw_cmd_args;
 	struct cam_isp_hw_cmd_args          isp_hw_cmd_args;
 
+	rc  = cam_mem_get_cpu_buf(dump_info->buf_handle,
+		&cpu_addr, &buf_len);
+	if (rc) {
+		CAM_ERR(CAM_ISP, "Invalid handle %u rc %d, ctx_idx: %u, link: 0x%x",
+			dump_info->buf_handle, rc, ctx->ctx_id, ctx->link_hdl);
+		return rc;
+	}
+
 	spin_lock_bh(&ctx->lock);
 	list_for_each_entry_safe(req, req_temp,
 		&ctx->active_req_list, list) {
@@ -4908,14 +4915,6 @@ static int __cam_isp_ctx_dump_in_top_state(
 	}
 	goto end;
 hw_dump:
-	rc  = cam_mem_get_cpu_buf(dump_info->buf_handle,
-		&cpu_addr, &buf_len);
-	if (rc) {
-		CAM_ERR(CAM_ISP, "Invalid handle %u rc %d",
-			dump_info->buf_handle, rc);
-		spin_unlock_bh(&ctx->lock);
-		return rc;
-	}
 	if (buf_len <= dump_info->offset) {
 		spin_unlock_bh(&ctx->lock);
 		CAM_WARN(CAM_ISP, "Dump buffer overshoot len %zu offset %zu",
@@ -4929,9 +4928,10 @@ hw_dump:
 		(CAM_ISP_CTX_DUMP_NUM_WORDS * sizeof(uint64_t));
 
 	if (remain_len < min_len) {
+		CAM_WARN(CAM_ISP,
+		    "Dump buffer exhaust remain %zu min %u, ctx_idx: %u, link: 0x%x",
+		    remain_len, min_len, ctx->ctx_id, ctx->link_hdl);
 		spin_unlock_bh(&ctx->lock);
-		CAM_WARN(CAM_ISP, "Dump buffer exhaust remain %zu min %u",
-			remain_len, min_len);
 		cam_mem_put_cpu_buf(dump_info->buf_handle);
 		return -ENOSPC;
 	}
@@ -4964,6 +4964,18 @@ hw_dump:
 	}
 	dump_info->offset = dump_args.offset;
 
+	min_len = sizeof(struct cam_isp_context_dump_header) +
+		(CAM_ISP_CTX_DUMP_NUM_WORDS * sizeof(int32_t));
+	remain_len = buf_len - dump_info->offset;
+	if (remain_len < min_len) {
+		CAM_WARN(CAM_ISP,
+		    "Dump buffer exhaust remain %zu min %u, ctx_idx: %u, link: 0x%x",
+		    remain_len, min_len, ctx->ctx_id, ctx->link_hdl);
+		spin_unlock_bh(&ctx->lock);
+		cam_mem_put_cpu_buf(dump_info->buf_handle);
+		return -ENOSPC;
+	}
+
 	/* Dump stream info */
 	ctx->ctxt_to_hw_map = ctx_isp->hw_ctx;
 	if (ctx->hw_mgr_intf->hw_dump) {
@@ -4975,6 +4987,17 @@ hw_dump:
 			CAM_ERR(CAM_ISP, "ISP CTX stream info dump fail %lld, rc: %d",
 				req->request_id, rc);
 			goto end;
+		}
+
+		dump_info->offset = dump_args.offset;
+		remain_len = buf_len - dump_info->offset;
+		if (remain_len < min_len) {
+			CAM_WARN(CAM_ISP,
+				"Dump buffer exhaust remain %zu min %u, ctx_idx: %u, link: 0x%x",
+				remain_len, min_len, ctx->ctx_id, ctx->link_hdl);
+			spin_unlock_bh(&ctx->lock);
+			cam_mem_put_cpu_buf(dump_info->buf_handle);
+			return -ENOSPC;
 		}
 
 		/* Dump second part of stream info from ife hw manager */
