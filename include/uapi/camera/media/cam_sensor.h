@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_SENSOR_H__
@@ -27,6 +27,9 @@
 
 /* Sensor Res Blob Type */
 #define CAM_SENSOR_GENERIC_BLOB_RES_INFO           0
+
+/* Sensor Qtimer Blob Type */
+#define CAM_SENSOR_GENERIC_BLOB_QTIMER_INFO        1
 
 enum camera_sensor_cmd_type {
 	CAMERA_SENSOR_CMD_TYPE_INVALID,
@@ -1024,6 +1027,36 @@ struct cam_sensor_res_info {
 	__u32 valid_param_mask;
 	__u16 params[4];
 } __attribute__((packed));
+
+/**
+ * struct cam_sensor_qtimer_info - Contains sensor qtimer info
+ *
+ * qtimer and vc/dt is the key property, it specifies the
+ * combinations of other properties enclosed in this
+ * structure.
+ *
+ * @version           : Version to indicate the change
+ * @vc                : Virtaul channel
+ * @dt                : Data type
+ * @qtimer            : qtimer timestamp
+ * @streamid          : Stream Id
+ * @width             : width
+ * @height            : height
+ * @pulseWidth        : pulseWidth
+ * @reserved          : reserved
+ */
+struct cam_sensor_qtimer_info {
+	__u32 version;
+	__u16 vc;
+	__u16 dt;
+	__u64 qtimer;
+	__u32 streamid;
+	__u32 width;
+	__u32 height;
+	__u32 pulseWidth;
+	__u32 reserved;
+} __attribute__((packed));
+
 
 #define VIDIOC_MSM_CCI_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 23, struct cam_cci_ctrl)
