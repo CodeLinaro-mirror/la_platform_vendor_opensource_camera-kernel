@@ -37,6 +37,9 @@
 
 #define CCI_I2C_QUEUE_0_SIZE 128
 #define CCI_I2C_QUEUE_1_SIZE 32
+#define CCI_GPIO_QUEUE_0_SIZE 32
+#define CCI_GPIO_QUEUE_1_SIZE 32
+#define CCI_GPIO_QUEUE_2_SIZE 32
 #define CCI_I2C_QUEUE_0_SIZE_V_1_2 64
 #define CCI_I2C_QUEUE_1_SIZE_V_1_2 16
 #define CYCLES_PER_MICRO_SEC_DEFAULT 4915
@@ -46,6 +49,7 @@
 #define CCI_TIMEOUT msecs_to_jiffies(100)
 
 #define NUM_QUEUES 2
+#define NUM_GPIO_QUEUES 3
 
 #define MSM_CCI_WRITE_DATA_PAYLOAD_SIZE_11 11
 #define BURST_MIN_FREE_SIZE 8
@@ -91,12 +95,28 @@ enum cam_cci_cmd_type {
 	MSM_CCI_GPIO_WRITE,
 	MSM_CCI_I2C_WRITE_SYNC,
 	MSM_CCI_I2C_WRITE_SYNC_BLOCK,
+	MSM_CCI_GET_CONTEXT_ID,
+	MSM_CCI_RELEASE_CONTEXT_ID,
+};
+
+enum cci_cci_sync_timer {
+	CCI_SET_CID_SYNC_TIMER_0,
+	CCI_SET_CID_SYNC_TIMER_1,
+	CCI_SET_CID_SYNC_TIMER_2,
+	CCI_SET_CID_SYNC_TIMER_3
 };
 
 enum cci_i2c_queue_t {
 	QUEUE_0,
 	QUEUE_1,
 	QUEUE_INVALID,
+};
+
+enum cci_gpio_queue_t {
+	GPIOQUEUE_0,
+	GPIOQUEUE_1,
+	GPIOQUEUE_2,
+	GPIOQUEUE_INVALID,
 };
 
 struct cam_cci_wait_sync_cfg {
@@ -109,6 +129,7 @@ struct cam_cci_wait_sync_cfg {
 struct cam_cci_gpio_cfg {
 	uint16_t gpio_queue;
 	uint16_t i2c_queue;
+	struct cam_sensor_trigger_per_frame_data *reg_setting;
 };
 
 struct cam_cci_read_cfg {
@@ -119,11 +140,18 @@ struct cam_cci_read_cfg {
 	uint16_t data_type;
 };
 
+enum queue_state {
+	QUEUE_STATE_FREE,
+	QUEUE_STATE_BUSY,
+	QUEUE_STATE_MAX
+};
+
 struct cam_cci_i2c_queue_info {
 	uint32_t max_queue_size;
 	uint32_t report_id;
 	uint32_t irq_en;
 	uint32_t capture_rep_data;
+	enum queue_state queue_status;
 };
 
 struct cam_cci_master_info {
@@ -142,6 +170,18 @@ struct cam_cci_master_info {
 	struct semaphore master_sem;
 	struct mutex freq_cnt_lock;
 	uint16_t freq_ref_cnt;
+	bool is_initilized;
+};
+
+struct cam_cci_gpio_info {
+	int32_t status;
+	uint8_t q_lock[NUM_GPIO_QUEUES];
+	uint8_t reset_pending[NUM_GPIO_QUEUES];
+	struct mutex mutex;
+	struct completion reset_complete[NUM_GPIO_QUEUES];
+	struct mutex mutex_q[NUM_GPIO_QUEUES];
+	struct completion report_q[NUM_GPIO_QUEUES];
+	spinlock_t lock_q[NUM_GPIO_QUEUES];
 	bool is_initilized;
 };
 
@@ -164,6 +204,18 @@ enum cam_cci_state_t {
 	CCI_STATE_DISABLED,
 };
 
+struct cci_trigger_data {
+	uint32_t csid;
+	uint32_t cid;
+	enum cci_i2c_queue_t i2cqueue;
+	enum cci_gpio_queue_t gpioqueue;
+	enum cci_i2c_master_t master;
+	uint32_t contextId;
+	uint16_t idx;
+	bool is_trigger_mode;
+	struct list_head list;
+};
+
 /**
  * struct cci_device
  * @pdev:                       Platform device
@@ -171,11 +223,14 @@ enum cam_cci_state_t {
  * @base:                       Base address of CCI device
  * @hw_version:                 Hardware version
  * @ref_count:                  Reference Count
+ * @num_active_trigger_sensor:  Number of trigger sensor in cci
  * @cci_state:                  CCI state machine
  * @num_clk:                    Number of CCI clock
  * @cci_clk:                    CCI clock structure
  * @cci_clk_info:               CCI clock information
  * @cam_cci_i2c_queue_info:     CCI queue information
+ * @cam_cci_gpio_queue_info:    CCI GPIO queue information
+ * @cam_cci_gpio_info:          GPIO queue related flags
  * @i2c_freq_mode:              I2C frequency of operations
  * @master_active_slave:        Number of active/connected slaves for master
  * @cci_clk_params:             CCI hw clk params
@@ -203,16 +258,23 @@ enum cam_cci_state_t {
  * @init_mutex:                 Mutex for maintaining refcount for attached
  *                              devices to cci during init/deinit.
  * @dump_en:                    To enable the selective dump
+ * @is_contextid_acquire        ContextId is acquire or not
+ * @trigger_ctx_array:          To save the contextid, csid, cid and other info
+ *                              of trigger sensor
  */
 struct cci_device {
 	struct v4l2_subdev subdev;
 	struct cam_hw_soc_info soc_info;
 	uint32_t hw_version;
 	uint8_t ref_count;
+	uint8_t num_active_trigger_sensor;
 	enum cam_cci_state_t cci_state;
 	struct cam_cci_i2c_queue_info
 		cci_i2c_queue_info[MASTER_MAX][NUM_QUEUES];
+	struct cam_cci_i2c_queue_info
+		cci_gpio_queue_info[NUM_GPIO_QUEUES];
 	struct cam_cci_master_info cci_master_info[MASTER_MAX];
+	struct cam_cci_gpio_info cci_gpio_info;
 	enum i2c_freq_mode i2c_freq_mode[MASTER_MAX];
 	uint8_t master_active_slave[MASTER_MAX];
 	struct cam_cci_clk_params_t cci_clk_params[I2C_MAX_MODES];
@@ -233,7 +295,10 @@ struct cci_device {
 	bool is_burst_read[MASTER_MAX];
 	uint32_t irqs_disabled;
 	struct mutex init_mutex;
+	struct mutex ctx_mutex;
 	uint64_t  dump_en;
+	bool is_contextid_acquire[CONTEXT_ID_MAX];
+	struct list_head trigger_ctx_array[CONTEXT_ID_MAX];
 };
 
 enum cam_cci_i2c_cmd_type {
@@ -266,6 +331,7 @@ enum cam_cci_gpio_cmd_type {
 	CCI_GPIO_REPORT_CMD,
 	CCI_GPIO_REPEAT_CMD,
 	CCI_GPIO_CONTINUE_CMD,
+	CCI_GPIO_WAIT_QTIMER_CMD,
 	CCI_GPIO_INVALID_CMD,
 };
 
@@ -291,6 +357,7 @@ struct cam_cci_ctrl {
 		struct cam_cci_read_cfg cci_i2c_read_cfg;
 		struct cam_cci_wait_sync_cfg cci_wait_sync_cfg;
 		struct cam_cci_gpio_cfg gpio_cfg;
+		struct cam_cci_trigger_data trigger_data;
 	} cfg;
 };
 

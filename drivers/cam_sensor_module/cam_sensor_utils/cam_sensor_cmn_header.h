@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_SENSOR_CMN_HEADER_
@@ -34,6 +34,7 @@
 #define CAM_SENSOR_LITE_NAME      "cam-sensor-lite"
 
 #define MAX_SYSTEM_PIPELINE_DELAY 2
+#define CONTEXT_ID_MAX 3
 
 #define CAM_PKT_NOP_OPCODE 127
 
@@ -206,6 +207,18 @@ struct cam_sensor_i2c_reg_array {
 	uint32_t data_mask;
 };
 
+/**
+ * struct cam_cci_trigger_data
+ * @csid:          CSID of sensor
+ * @cid:           CID of sensor
+ * @context_id:    Context ID of Trigger sensor
+ */
+struct cam_cci_trigger_data {
+	uint32_t csid;
+	uint32_t cid;
+	uint32_t context_id;
+};
+
 struct cam_sensor_i2c_reg_setting {
 	struct cam_sensor_i2c_reg_array *reg_setting;
 	uint32_t size;
@@ -223,6 +236,22 @@ struct cam_sensor_i2c_seq_reg {
 	enum camera_sensor_i2c_type addr_type;
 };
 
+/**
+ * struct cam_sensor_trigger_per_frame_data
+ * @gpio_mask:    Timer number to select GPIO ports
+ * @contextid:    Context Id of sensor
+ * @timestamp:    Qtimer timestamp
+ * @pulse_width:  Pulse width of FSIN pulse
+ * @is_nop:       NOP Packet or not
+ */
+struct cam_sensor_trigger_per_frame_data {
+	uint32_t gpio_mask;
+	uint32_t contextid;
+	uint64_t timestamp;
+	uint32_t pulse_width;
+	bool     is_nop;
+};
+
 struct i2c_settings_list {
 	struct cam_sensor_i2c_reg_setting i2c_settings;
 	struct cam_sensor_i2c_seq_reg seq_settings;
@@ -235,6 +264,7 @@ struct i2c_settings_array {
 	int32_t is_settings_valid;
 	int64_t request_id;
 	int64_t setting_id;
+	struct cam_sensor_trigger_per_frame_data trigger_data;
 };
 
 struct i2c_data_settings {

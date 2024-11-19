@@ -40,6 +40,387 @@ static int32_t cam_cci_convert_type_to_num_bytes(
 	return num_bytes;
 }
 
+static int cam_cci_get_context_id(
+	struct cci_device *cci_dev,
+	uint8_t active_trigger_sensor,
+	enum cci_i2c_master_t master,
+	struct cam_cci_trigger_data *ctx)
+{
+	int32_t rc = 0, i = 0;
+	struct cci_trigger_data *trigger_data =
+		kzalloc(sizeof(struct cci_trigger_data), GFP_KERNEL);
+	struct cam_cci_master_info *cci_master_info;
+	struct cam_cci_gpio_info *cci_gpio_info;
+
+	cci_master_info = &cci_dev->cci_master_info[master];
+	cci_gpio_info = &cci_dev->cci_gpio_info;
+
+	if (!trigger_data) {
+		CAM_ERR(CAM_CCI, "[%d] alloc failed", cci_dev->soc_info.index);
+		return -ENOMEM;
+	}
+	for (i = 0; i < NUM_QUEUES; i++) {
+		if (mutex_trylock(&cci_master_info->mutex_q[i])) {
+			if (cci_dev->cci_i2c_queue_info[master][i].queue_status ==
+					QUEUE_STATE_FREE) {
+				trigger_data->i2cqueue = i;
+				cci_dev->cci_i2c_queue_info[master][i].queue_status =
+					QUEUE_STATE_BUSY;
+				mutex_unlock(&cci_master_info->mutex_q[i]);
+				break;
+			}
+			mutex_unlock(&cci_master_info->mutex_q[i]);
+		}
+	}
+
+	if (i == NUM_QUEUES) {
+		CAM_ERR(CAM_CCI, "[%d] i2c queue not available", cci_dev->soc_info.index);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < NUM_GPIO_QUEUES; i++) {
+		if (mutex_trylock(&cci_gpio_info->mutex_q[i])) {
+			if (cci_dev->cci_gpio_queue_info[i].queue_status == QUEUE_STATE_FREE) {
+				trigger_data->gpioqueue = i;
+				cci_dev->cci_gpio_queue_info[i].queue_status = QUEUE_STATE_BUSY;
+				mutex_unlock(&cci_gpio_info->mutex_q[i]);
+				break;
+			}
+			mutex_unlock(&cci_gpio_info->mutex_q[i]);
+		}
+	}
+
+	if (i == NUM_GPIO_QUEUES) {
+		CAM_ERR(CAM_CCI, "[%d] GPIO queue not available", cci_dev->soc_info.index);
+		cci_dev->cci_i2c_queue_info[master][trigger_data->i2cqueue].queue_status =
+			QUEUE_STATE_FREE;
+		return -EINVAL;
+	}
+
+	for (i = 0 ; i < CONTEXT_ID_MAX; i++) {
+		if (!cci_dev->is_contextid_acquire[i]) {
+			cci_dev->is_contextid_acquire[i] = true;
+			ctx->context_id = i;
+			break;
+		}
+	}
+
+	if (i == CONTEXT_ID_MAX) {
+		CAM_ERR(CAM_CCI, "[%d]  All context are acquired", cci_dev->soc_info.index);
+		cci_dev->cci_i2c_queue_info[master][trigger_data->i2cqueue].queue_status =
+			QUEUE_STATE_FREE;
+		cci_dev->cci_i2c_queue_info[master][trigger_data->gpioqueue].queue_status =
+			QUEUE_STATE_FREE;
+		return -EINVAL;
+	}
+
+	switch (active_trigger_sensor) {
+	case CCI_SET_CID_SYNC_TIMER_0:
+		trigger_data->idx = CCI_SET_CID_SYNC_TIMER_0;
+		break;
+	case CCI_SET_CID_SYNC_TIMER_1:
+		trigger_data->idx = CCI_SET_CID_SYNC_TIMER_1;
+		break;
+	case CCI_SET_CID_SYNC_TIMER_2:
+		trigger_data->idx = CCI_SET_CID_SYNC_TIMER_2;
+		break;
+	case CCI_SET_CID_SYNC_TIMER_3:
+		trigger_data->idx = CCI_SET_CID_SYNC_TIMER_3;
+		break;
+	default:
+		CAM_ERR(CAM_CCI, "Invalid idmap");
+		cci_dev->cci_i2c_queue_info[master][trigger_data->i2cqueue].queue_status =
+			QUEUE_STATE_FREE;
+		cci_dev->cci_i2c_queue_info[master][trigger_data->gpioqueue].queue_status =
+			QUEUE_STATE_FREE;
+		cci_dev->is_contextid_acquire[ctx->context_id] = false;
+		return -EINVAL;
+	}
+	trigger_data->csid = ctx->csid;
+	trigger_data->cid = ctx->cid;
+	trigger_data->contextId  = ctx->context_id;
+	trigger_data->master = master;
+	CAM_DBG(CAM_CCI, "csid: %d cid: %d context_id %d", ctx->csid, ctx->cid, ctx->context_id);
+	CAM_DBG(CAM_CCI, " i2cqueue %d master %d gpioqueue %d",
+		trigger_data->i2cqueue, trigger_data->master, trigger_data->gpioqueue);
+	list_add_tail(&(trigger_data->list), &cci_dev->trigger_ctx_array[trigger_data->contextId]);
+	cci_dev->cci_gpio_info.is_initilized = false;
+	return rc;
+}
+
+static struct cci_trigger_data *cam_cci_get_ctx(
+	struct cci_device *cci_dev,
+	uint16_t idx)
+{
+	int i = 0;
+	struct list_head *pos = NULL, *pos_next = NULL;
+	struct cci_trigger_data *entry = NULL;
+
+	if (cci_dev->num_active_trigger_sensor > 0) {
+		mutex_lock(&cci_dev->ctx_mutex);
+		for (i = 0; i < CONTEXT_ID_MAX; i++) {
+			list_for_each_safe(pos,
+			pos_next, &cci_dev->trigger_ctx_array[i]) {
+				entry = list_entry(pos, struct cci_trigger_data, list);
+				if (entry->idx == idx) {
+					mutex_unlock(&cci_dev->ctx_mutex);
+					return entry;
+				}
+			}
+		}
+		mutex_unlock(&cci_dev->ctx_mutex);
+	}
+	return entry;
+}
+
+static enum cci_gpio_queue_t cam_cci_get_gpio_queue(
+	struct cci_device *cci_dev,
+	enum cci_i2c_queue_t queue)
+{
+	int i = 0;
+	struct list_head *pos = NULL, *pos_next = NULL;
+	struct cci_trigger_data *entry = NULL;
+
+	if (cci_dev->num_active_trigger_sensor > 0) {
+		for (i = 0; i < CONTEXT_ID_MAX; i++) {
+			list_for_each_safe(pos,
+			pos_next, &cci_dev->trigger_ctx_array[i]) {
+				entry = list_entry(pos, struct cci_trigger_data, list);
+				if (entry->i2cqueue == queue)
+					return entry->gpioqueue;
+			}
+		}
+	}
+	return GPIOQUEUE_INVALID;
+}
+
+static struct cci_trigger_data *cam_cci_get_context(
+	struct cci_device *cci_dev,
+	int contextId)
+{
+	struct list_head *pos = NULL, *pos_next = NULL;
+	struct cci_trigger_data *entry = NULL;
+	struct cci_trigger_data *matched_entry = NULL;
+
+	CAM_DBG(CAM_CCI, "contextId: %d", contextId);
+
+	if (contextId < CONTEXT_ID_MAX) {
+		mutex_lock(&cci_dev->ctx_mutex);
+		list_for_each_safe(pos,
+		pos_next, &cci_dev->trigger_ctx_array[contextId]) {
+			entry = list_entry(pos, struct cci_trigger_data, list);
+			if (entry->contextId == contextId)
+				matched_entry = entry;
+		}
+		mutex_unlock(&cci_dev->ctx_mutex);
+	} else {
+		CAM_ERR(CAM_CCI, "Invalid contextId: %d", contextId);
+		return NULL;
+	}
+	return matched_entry;
+}
+
+static int cam_cci_release_trigger_data(
+	struct cci_device *cci_dev,
+	enum cci_i2c_master_t master,
+	int contextId)
+{
+	struct list_head *pos = NULL, *pos_next = NULL;
+	struct cci_trigger_data *entry = NULL;
+	struct cci_trigger_data *get_ctx = cam_cci_get_context(cci_dev, contextId);
+
+	if (!get_ctx) {
+		CAM_ERR(CAM_CCI, "Invalid contextId");
+		return -EINVAL;
+	}
+	CAM_DBG(CAM_CCI, "contextId: %d", contextId);
+
+	if (contextId < CONTEXT_ID_MAX) {
+		mutex_lock(&cci_dev->ctx_mutex);
+		list_for_each_safe(pos,
+		pos_next, &cci_dev->trigger_ctx_array[contextId]) {
+			entry = list_entry(pos, struct cci_trigger_data, list);
+			if (entry->contextId == contextId) {
+				cci_dev->is_contextid_acquire[contextId] = false;
+				cci_dev->cci_i2c_queue_info[master][get_ctx->i2cqueue].queue_status =
+					QUEUE_STATE_FREE;
+				cci_dev->cci_gpio_queue_info[get_ctx->gpioqueue].queue_status =
+					QUEUE_STATE_FREE;
+				list_del(&entry->list);
+				kfree(entry);
+			}
+		}
+		mutex_unlock(&cci_dev->ctx_mutex);
+	} else {
+		CAM_ERR(CAM_CCI, "Invalid contextId: %d", contextId);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int cam_gpio_init(
+	struct cam_cci_ctrl *c_ctrl,
+	struct cci_device *cci_dev, enum cci_gpio_queue_t queue,
+	struct cci_trigger_data  *get_ctx)
+{
+	int rc = 0, i = 0;
+	uint32_t offset = 0, gpiooffset = 0;
+	void __iomem *base = NULL;
+	void __iomem *base1 = NULL;
+	struct cam_hw_soc_info *soc_info = NULL;
+	struct device_node *of_node = NULL;
+	c_ctrl->cci_info->id_map = get_ctx->idx;
+
+	soc_info = &cci_dev->soc_info;
+	base = soc_info->reg_map[0].mem_base;
+
+	if (!soc_info || !base) {
+		CAM_ERR(CAM_CCI,
+			"CCI%d_GPIOQ%d failed: invalid params soc_info:%pK, base:%pK",
+			cci_dev->soc_info.index, queue, soc_info, base);
+		rc = -EINVAL;
+		return rc;
+	}
+
+	CAM_DBG(CAM_CCI,
+		"CCI%d_GPIOQ%d gpio_mask 0x%x",
+		cci_dev->soc_info.index, queue, c_ctrl->cfg.gpio_cfg.reg_setting->gpio_mask);
+
+
+	if (cci_dev->num_active_trigger_sensor == 1) {
+		/* reinit the reports for the queue */
+		for (i = 0; i < NUM_GPIO_QUEUES; i++) {
+			reinit_completion(
+				&cci_dev->cci_gpio_info.report_q[i]);
+			reinit_completion(
+				&cci_dev->cci_gpio_info.reset_complete[i]);
+		}
+
+		/* Setting up the queue size */
+		cci_dev->cci_gpio_queue_info[GPIOQUEUE_0].max_queue_size
+				= CCI_GPIO_QUEUE_0_SIZE;
+		cci_dev->cci_gpio_queue_info[GPIOQUEUE_1].max_queue_size
+				= CCI_GPIO_QUEUE_1_SIZE;
+		cci_dev->cci_gpio_queue_info[GPIOQUEUE_2].max_queue_size
+				= CCI_GPIO_QUEUE_2_SIZE;
+	}
+
+	/* Set reset pending flag to true */
+	cci_dev->cci_gpio_info.reset_pending[queue] = true;
+	cci_dev->cci_gpio_info.status = 0;
+	cam_io_w_mb((1 | (1 << (CCI_GPIO_RESET_RMSK + queue))),
+		base + CCI_RESET_CMD_ADDR);
+
+
+	if (!cam_common_wait_for_completion_timeout(
+		&cci_dev->cci_gpio_info.reset_complete[queue],
+		CCI_TIMEOUT)) {
+			CAM_ERR(CAM_CCI,
+			"CCI%d_GPIOQ%d Failed: reset complete timeout",
+			cci_dev->soc_info.index, queue);
+		rc = -ETIMEDOUT;
+		return rc;
+	}
+
+	base1 = soc_info->reg_map[1].mem_base;
+	of_node = cci_dev->v4l2_dev_str.pdev->dev.of_node;
+	rc = of_property_read_u32(of_node, "cpas-mux-en-offset", &offset);
+	if (rc) {
+		CAM_ERR(CAM_CCI, "failed to read cpas-mux-en-offset");
+		rc = -EINVAL;
+		return rc;
+	}
+
+	CAM_DBG(CAM_CCI, "cpas-mux-en-offset:0x%x csid:%d cid:%d num_active_trigger_sensor %d",
+		offset, get_ctx->csid, get_ctx->cid, cci_dev->num_active_trigger_sensor);
+	if (base1 && rc == 0) {
+		if (get_ctx->csid <= 3) {
+			cam_io_w_mb(get_ctx->csid * CCI_SET_CSID_OFFSET,
+				base1 + offset);
+		} else {
+			cam_io_w_mb((get_ctx->csid + 1) * CCI_SET_CSID_OFFSET,
+				base1 + offset);
+		}
+	}
+	rc = of_property_read_u32(of_node, "cpas-mux-en-gpio-offset", &gpiooffset);
+	if (rc) {
+		CAM_ERR(CAM_CCI, "failed to read cpas-mux-en-gpio-offset");
+		rc = -EINVAL;
+		return rc;
+	}
+	CAM_DBG(CAM_CCI, "cpas-mux-en-gpio-offset 0x%x", gpiooffset);
+
+	if (cci_dev->soc_info.index == 1 || cci_dev->soc_info.index == 3 ||
+			cci_dev->soc_info.index == 5) {
+		CAM_DBG(CAM_CCI, "value 0x%x", 0x1f & (1 <<  c_ctrl->cfg.gpio_cfg.reg_setting->gpio_mask));
+		cam_io_w_mb(0x1f & (1 <<  c_ctrl->cfg.gpio_cfg.reg_setting->gpio_mask), base1 + gpiooffset);
+	} else {
+		CAM_DBG(CAM_CCI, "value 0x%x", 0x1f & ~(1 <<  c_ctrl->cfg.gpio_cfg.reg_setting->gpio_mask));
+		cam_io_w_mb(0x1f & ~(1 <<  c_ctrl->cfg.gpio_cfg.reg_setting->gpio_mask), base1 + gpiooffset);
+	}
+
+	cam_io_w_mb(get_ctx->cid,
+		base + CCI_SET_CID_SYNC_TIMER_ADDR +
+		get_ctx->idx *
+		CCI_SET_CID_SYNC_TIMER_OFFSET);
+
+	CAM_DBG(CAM_CCI, "CCI%d_GPIO: Q0: %d Q1: %d Q2: %d",
+		cci_dev->soc_info.index,
+		cci_dev->cci_gpio_queue_info[GPIOQUEUE_0].max_queue_size,
+		cci_dev->cci_gpio_queue_info[GPIOQUEUE_1].max_queue_size,
+		cci_dev->cci_gpio_queue_info[GPIOQUEUE_2].max_queue_size);
+
+	cci_dev->cci_gpio_info.status = 0;
+	cci_dev->cci_gpio_info.is_initilized = true;
+	return rc;
+}
+
+static void cam_cci_gpio_flush_queue(struct cci_device *cci_dev,
+	enum cci_gpio_queue_t queue)
+{
+	int32_t rc = 0;
+	struct cam_hw_soc_info *soc_info =
+		&cci_dev->soc_info;
+	void __iomem *base = soc_info->reg_map[0].mem_base;
+
+	cam_io_w_mb(1 << (2 + queue), base + CCI_HALT_REQ_ADDR);
+	if (!cci_dev->cci_gpio_info.status)
+		reinit_completion(&cci_dev->cci_gpio_info
+			.reset_complete[queue]);
+	if (!cam_common_wait_for_completion_timeout(
+		&cci_dev->cci_gpio_info.reset_complete[queue],
+		CCI_TIMEOUT)) {
+		CAM_DBG(CAM_CCI,
+			"CCI%d_GPIO wait timeout for reset complete",
+			cci_dev->soc_info.index);
+
+		/* Set reset pending flag to true */
+		cci_dev->cci_gpio_info.reset_pending[queue] = true;
+		cci_dev->cci_gpio_info.status = 0;
+
+		/* Set proper mask to RESET CMD address based on MASTER */
+		cam_io_w_mb(1 | (1 << (CCI_GPIO_RESET_RMSK + queue)),
+			base + CCI_RESET_CMD_ADDR);
+
+		/* wait for reset done irq */
+		if (!cam_common_wait_for_completion_timeout(
+			&cci_dev->cci_gpio_info.reset_complete[queue],
+			CCI_TIMEOUT)) {
+			rc = -EINVAL;
+			CAM_ERR(CAM_CCI,
+				"CCI%d_GPIO Retry:: wait timeout for reset complete",
+				cci_dev->soc_info.index);
+		}
+		cci_dev->cci_gpio_info.status = 0;
+	}
+
+	if (!rc)
+		CAM_DBG(CAM_CCI,
+			"CCI%d_GPIO Success: Reset complete",
+			cci_dev->soc_info.index);
+}
+
 static void cam_cci_flush_queue(struct cci_device *cci_dev,
 	enum cci_i2c_master_t master)
 {
@@ -87,6 +468,48 @@ static void cam_cci_flush_queue(struct cci_device *cci_dev,
 		CAM_DBG(CAM_CCI,
 			"CCI%d_I2C_M%d Success: Reset complete",
 			cci_dev->soc_info.index, master);
+}
+
+static int32_t cam_cci_validate_gpio_queue(struct cci_device *cci_dev,
+	uint32_t len,
+	enum cci_gpio_queue_t queue)
+{
+	int32_t rc = 0;
+	uint32_t read_val = 0;
+	uint32_t reg_offset = queue * 0x100;
+	struct cam_hw_soc_info *soc_info =
+		&cci_dev->soc_info;
+	void __iomem *base = soc_info->reg_map[0].mem_base;
+	unsigned long flags;
+
+	read_val = cam_io_r_mb(base +
+		CCI_GPIO_Q0_CUR_WORD_CNT_ADDR + reg_offset);
+	CAM_DBG(CAM_CCI,
+		"CCI%d_GPIO_Q%d_CUR_WORD_CNT_ADDR %d len %d max %d",
+		cci_dev->soc_info.index, queue, read_val, len,
+		cci_dev->cci_gpio_queue_info[queue].max_queue_size);
+	if ((read_val + len + 1) >
+		cci_dev->cci_gpio_queue_info[queue].max_queue_size) {
+		uint32_t reg_val = 0;
+
+		cam_io_w_mb(read_val, base +
+			CCI_GPIO_Q0_EXEC_WORD_CNT_ADDR + reg_offset);
+		reg_val = 1 << (GPIO_QUEUE_START_OFFSET + queue);
+		CAM_DBG(CAM_CCI, "CCI%d_GPIO_Q%d_START_ADDR", cci_dev->soc_info.index, queue);
+		spin_lock_irqsave(
+			&cci_dev->cci_gpio_info.lock_q[queue], flags);
+		cam_io_w_mb(reg_val, base + CCI_QUEUE_START_ADDR);
+		spin_unlock_irqrestore(
+			&cci_dev->cci_gpio_info.lock_q[queue], flags);
+		rc = cci_dev->cci_gpio_info.status;
+		if (rc < 0) {
+			CAM_ERR(CAM_CCI, "CCI%d_GPIO_Q%d is in error state",
+				cci_dev->soc_info.index, queue);
+			cci_dev->cci_gpio_info.status = 0;
+		}
+	}
+
+	return rc;
 }
 
 static int32_t cam_cci_validate_queue(struct cci_device *cci_dev,
@@ -270,6 +693,18 @@ void cam_cci_dump_registers(struct cci_device *cci_dev,
 			reg_offset, read_val);
 	}
 
+	/* CCI GPIO Queue registers */
+	CAM_INFO(CAM_CCI, " **** CCI%d_GPIO_Q%d Registers ****",
+		cci_dev->soc_info.index, queue);
+
+	for (i = 0; i < DEBUG_GPIO_QUEUE_REG_COUNT; i++) {
+		reg_offset = DEBUG_GPIO_QUEUE_REG_START +
+			queue*0x100 + i * 4;
+		read_val = cam_io_r_mb(base + reg_offset);
+		CAM_INFO(CAM_CCI, "offset = 0x%X value = 0x%X",
+			reg_offset, read_val);
+	}
+
 	/* CCI Interrupt registers */
 	CAM_INFO(CAM_CCI, " ****CCI Interrupt Registers****");
 	for (i = 0; i < DEBUG_INTR_REG_COUNT; i++) {
@@ -286,6 +721,7 @@ static uint32_t cam_cci_retry(struct cci_device *cci_dev,
 	enum cci_i2c_queue_t queue)
 {
 	int32_t rc = 0;
+	enum cci_gpio_queue_t gpioqueue;
 	uint32_t retry = 50;
 	uint32_t read_val0 = 0, read_val1 = 0;
 	uint32_t reg_offset = master * 0x200 + queue * 0x100;
@@ -337,6 +773,16 @@ static uint32_t cam_cci_retry(struct cci_device *cci_dev,
 				if (rc <= 0) {
 					rc = -ETIMEDOUT;
 					cam_cci_flush_queue(cci_dev, master);
+					if (cci_dev->cci_gpio_info.is_initilized) {
+						mutex_lock(&cci_dev->ctx_mutex);
+						gpioqueue = cam_cci_get_gpio_queue(cci_dev, queue);
+						mutex_unlock(&cci_dev->ctx_mutex);
+						if (gpioqueue == GPIOQUEUE_INVALID) {
+							CAM_ERR(CAM_CCI, "invalid gpio queue");
+							return -EINVAL;
+						}
+						cam_cci_gpio_flush_queue(cci_dev, gpioqueue);
+					}
 					break;
 				}
 			} else {
@@ -357,6 +803,16 @@ static uint32_t cam_cci_retry(struct cci_device *cci_dev,
 	if (retry == 0) {
 		rc = -ETIMEDOUT;
 		cam_cci_flush_queue(cci_dev, master);
+		if (cci_dev->cci_gpio_info.is_initilized) {
+			mutex_lock(&cci_dev->ctx_mutex);
+			gpioqueue = cam_cci_get_gpio_queue(cci_dev, queue);
+			mutex_unlock(&cci_dev->ctx_mutex);
+			if (gpioqueue == GPIOQUEUE_INVALID) {
+				CAM_ERR(CAM_CCI, "invalid gpio queue");
+				return -EINVAL;
+			}
+			cam_cci_gpio_flush_queue(cci_dev, gpioqueue);
+		}
 	}
 
 	return rc;
@@ -407,6 +863,39 @@ static uint32_t cam_cci_wait(struct cci_device *cci_dev,
 	return 0;
 }
 
+static void cam_cci_gpio_load_report_cmd(struct cci_device *cci_dev,
+	enum cci_gpio_queue_t queue)
+{
+	struct cam_hw_soc_info *soc_info =
+		&cci_dev->soc_info;
+	void __iomem *base = soc_info->reg_map[0].mem_base;
+
+	uint32_t reg_offset = queue * 0x100;
+	uint32_t read_val = cam_io_r_mb(base +
+		CCI_GPIO_Q0_CUR_WORD_CNT_ADDR + reg_offset);
+	uint32_t report_id =
+		cci_dev->cci_gpio_queue_info[queue].report_id;
+	uint32_t report_val = CCI_GPIO_REPORT_CMD | (1 << 8) |
+		(1 << 9) | (report_id << 4);
+
+	CAM_DBG(CAM_CCI,
+		"CCI%d_GPIO_Q%d_REPORT_CMD curr_w_cnt: %d report_id %d",
+		cci_dev->soc_info.index, queue, read_val, report_id);
+	cam_io_w_mb(report_val,
+		base + CCI_GPIO_Q0_LOAD_DATA_ADDR +
+		reg_offset);
+	read_val++;
+
+	cci_dev->cci_gpio_queue_info[queue].report_id++;
+	if (cci_dev->cci_gpio_queue_info[queue].report_id == REPORT_IDSIZE)
+		cci_dev->cci_gpio_queue_info[queue].report_id = 0;
+
+	CAM_DBG(CAM_CCI, "CCI%d_GPIO_Q%d_EXEC_WORD_CNT_ADDR %d",
+		cci_dev->soc_info.index, queue, read_val);
+	cam_io_w_mb(read_val, base +
+		CCI_GPIO_Q0_EXEC_WORD_CNT_ADDR + reg_offset);
+}
+
 static void cam_cci_load_report_cmd(struct cci_device *cci_dev,
 	enum cci_i2c_master_t master,
 	enum cci_i2c_queue_t queue)
@@ -439,6 +928,21 @@ static void cam_cci_load_report_cmd(struct cci_device *cci_dev,
 		cci_dev->soc_info.index, master, queue, read_val);
 	cam_io_w_mb(read_val, base +
 		CCI_I2C_M0_Q0_EXEC_WORD_CNT_ADDR + reg_offset);
+}
+
+static int32_t cam_cci_gpio_queue_execute_cmd(struct cci_device *cci_dev,
+	enum cci_gpio_queue_t queue)
+{
+	struct cam_hw_soc_info *soc_info =
+		&cci_dev->soc_info;
+	void __iomem *base = soc_info->reg_map[0].mem_base;
+
+	uint32_t reg_val = 1 << (4 + queue);
+
+	cam_io_w_mb(reg_val, base + CCI_QUEUE_START_ADDR);
+	cci_dev->cci_gpio_info.status = 0;
+
+	return 0;
 }
 
 static int32_t cam_cci_wait_report_cmd(struct cci_device *cci_dev,
@@ -814,6 +1318,90 @@ static int32_t cam_cci_set_clk_param(struct cci_device *cci_dev,
 	return 0;
 }
 
+static int32_t cam_cci_gpio_data_queue(struct cci_device *cci_dev,
+	struct cam_cci_ctrl *c_ctrl, enum cci_gpio_queue_t queue,
+	enum cci_i2c_sync sync_en,
+	uint8_t trig_i2c_queue)
+{
+	int32_t rc = 0;
+	uint32_t reg_offset, val;
+	uint32_t max_queue_size, queue_size = 0;
+	struct cam_hw_soc_info *soc_info =
+		&cci_dev->soc_info;
+	void __iomem *base = soc_info->reg_map[0].mem_base;
+	unsigned long flags;
+	uint32_t gpio_mask = c_ctrl->cfg.gpio_cfg.reg_setting->gpio_mask;
+	uint64_t qtimer_timestamp = c_ctrl->cfg.gpio_cfg.reg_setting->timestamp;
+	uint32_t pulse_width = c_ctrl->cfg.gpio_cfg.reg_setting->pulse_width;
+	CAM_DBG(CAM_CCI, "delay_cycle: %llu gpio_mask %d pulse_width %d",
+			qtimer_timestamp, gpio_mask, pulse_width);
+
+	reg_offset = queue * 0x100;
+
+	val = CCI_GPIO_SET_PARAM_CMD |  c_ctrl->cci_info->id_map << 4;
+
+	CAM_DBG(CAM_CCI, "CCI%d_GPIO_Q%d_LOAD_DATA_ADDR:val 0x%x:0x%x",
+		cci_dev->soc_info.index, queue, CCI_GPIO_Q0_LOAD_DATA_ADDR +
+		reg_offset, val);
+	cam_io_w_mb(val, base + CCI_GPIO_Q0_LOAD_DATA_ADDR +
+		reg_offset);
+
+	spin_lock_irqsave(&cci_dev->cci_gpio_info.lock_q[queue],
+		flags);
+	spin_unlock_irqrestore(&cci_dev->cci_gpio_info.lock_q[queue],
+		flags);
+
+	if (!(c_ctrl->cfg.gpio_cfg.reg_setting->is_nop)) {
+		val = CCI_GPIO_WAIT_I2C_Q_TRIG_EVENT_CMD | trig_i2c_queue << 4;
+		cam_io_w_mb(val, base + CCI_GPIO_Q0_LOAD_DATA_ADDR +
+			reg_offset);
+	}
+
+	val = (uint32_t) (CCI_GPIO_WAIT_QTIMER_CMD | 1 << 4 | qtimer_timestamp << 8);
+	cam_io_w_mb(val, base + CCI_GPIO_Q0_LOAD_DATA_ADDR +
+		reg_offset);
+
+	val = (uint32_t) ((qtimer_timestamp & (0xFFFFFFFFFF000000)) >> 24);
+	cam_io_w_mb(val, base + CCI_GPIO_Q0_LOAD_DATA_ADDR +
+		reg_offset);
+
+	cam_cci_gpio_load_report_cmd(cci_dev, queue);
+
+	val = CCI_GPIO_OUT_CMD | 1 << (4 + gpio_mask) |
+		1 << (12 + gpio_mask);
+	cam_io_w_mb(val, base + CCI_GPIO_Q0_LOAD_DATA_ADDR +
+		reg_offset);
+
+	val = CCI_GPIO_WAIT_CMD | (cci_dev->cycles_per_us/256) * pulse_width << 4;
+	cam_io_w_mb(val, base + CCI_GPIO_Q0_LOAD_DATA_ADDR +
+		reg_offset);
+
+	val = CCI_GPIO_OUT_CMD | 1 << (4 + gpio_mask);
+	cam_io_w_mb(val, base + CCI_GPIO_Q0_LOAD_DATA_ADDR +
+		reg_offset);
+
+	max_queue_size =
+		cci_dev->cci_gpio_queue_info[queue].max_queue_size;
+
+	queue_size = cam_io_r_mb(base +
+		CCI_GPIO_Q0_CUR_WORD_CNT_ADDR + reg_offset);
+	CAM_DBG(CAM_CCI, "CCI%d_GPIO_Q%d CUR_WORD_CNT_ADDR %d max %d",
+		cci_dev->soc_info.index, queue, queue_size, max_queue_size);
+
+	cam_io_w_mb(queue_size, base +
+		CCI_GPIO_Q0_EXEC_WORD_CNT_ADDR + reg_offset);
+
+	if (queue_size < max_queue_size) {
+		rc = cam_cci_gpio_queue_execute_cmd(cci_dev, queue);
+	} else {
+		CAM_ERR(CAM_CCI, "CCI%d_GPIO_Q%d queue full, current queue size %d max %d",
+			cci_dev->soc_info.index, queue, queue_size, max_queue_size);
+		rc = -EINVAL;
+	}
+
+	return rc;
+}
+
 static int32_t cam_cci_data_queue(struct cci_device *cci_dev,
 	struct cam_cci_ctrl *c_ctrl, enum cci_i2c_queue_t queue,
 	enum cci_i2c_sync sync_en)
@@ -821,8 +1409,7 @@ static int32_t cam_cci_data_queue(struct cci_device *cci_dev,
 	uint16_t i = 0, j = 0, k = 0, h = 0, len = 0;
 	int32_t rc = 0, free_size = 0, en_seq_write = 0;
 	uint8_t data[12];
-	struct cam_sensor_i2c_reg_setting *i2c_msg =
-		&c_ctrl->cfg.cci_i2c_write_cfg;
+	struct cam_sensor_i2c_reg_setting *i2c_msg = &c_ctrl->cfg.cci_i2c_write_cfg;
 	struct cam_sensor_i2c_reg_array *i2c_cmd = i2c_msg->reg_setting;
 	enum cci_i2c_master_t master = c_ctrl->cci_info->cci_i2c_master;
 	uint16_t reg_addr = 0, cmd_size = i2c_msg->size;
@@ -832,6 +1419,7 @@ static int32_t cam_cci_data_queue(struct cci_device *cci_dev,
 		&cci_dev->soc_info;
 	void __iomem *base = soc_info->reg_map[0].mem_base;
 	unsigned long flags;
+	struct cci_trigger_data  *get_ctx = cam_cci_get_ctx(cci_dev, c_ctrl->cci_info->id_map);
 
 	if (i2c_cmd == NULL) {
 		CAM_ERR(CAM_CCI, "CCI%d_I2C_M%d_Q%d Failed: i2c cmd is NULL",
@@ -1010,6 +1598,8 @@ static int32_t cam_cci_data_queue(struct cci_device *cci_dev,
 				} else
 					break;
 			}
+			CAM_DBG(CAM_CCI, "CCI%d_I2C_M%d_Q%d cmd_size %d addr 0x%x data 0x%x",
+				cci_dev->soc_info.index, master, queue, cmd_size, i2c_cmd->reg_addr, i2c_cmd->reg_data);
 			i2c_cmd++;
 			--cmd_size;
 		} while (((c_ctrl->cmd == MSM_CCI_I2C_WRITE_SEQ ||
@@ -1066,6 +1656,14 @@ static int32_t cam_cci_data_queue(struct cci_device *cci_dev,
 			cam_io_w_mb(read_val, base +
 				CCI_I2C_M0_Q0_EXEC_WORD_CNT_ADDR + reg_offset);
 		}
+	}
+
+	if (get_ctx && get_ctx->is_trigger_mode) {
+		CAM_DBG(CAM_CCI, "is_trigger_mode %d", get_ctx->is_trigger_mode);
+		val = CCI_I2C_TRIG_I2C_EVENT_CMD;
+		cam_io_w_mb(val,
+			base + CCI_I2C_M0_Q0_LOAD_DATA_ADDR +
+			reg_offset);
 	}
 
 	rc = cam_cci_transfer_end(cci_dev, master, queue);
@@ -1575,6 +2173,65 @@ rel_mutex_q:
 	return rc;
 }
 
+static int32_t cam_cci_gpio_write(struct v4l2_subdev *sd,
+       struct cam_cci_ctrl *c_ctrl, enum cci_gpio_queue_t queue,
+       enum cci_i2c_sync sync_en, struct cci_trigger_data  *get_ctx)
+{
+	int32_t rc = 0;
+	struct cci_device *cci_dev = v4l2_get_subdevdata(sd);
+	uint8_t trig_i2c_queue;
+
+	if (cci_dev->cci_state != CCI_STATE_ENABLED) {
+		CAM_ERR(CAM_CCI, "invalid cci: %d state: %d",
+		cci_dev->soc_info.index, cci_dev->cci_state);
+		return -EINVAL;
+	}
+	if (!cci_dev->cci_gpio_info.is_initilized) {
+		rc = cam_gpio_init(c_ctrl, cci_dev, queue, get_ctx);
+		if (rc < 0) {
+			CAM_ERR(CAM_CCI, "gpio_init fail");
+			return rc;
+		}
+	}
+	trig_i2c_queue = get_ctx->i2cqueue | get_ctx->master << 1;
+	CAM_DBG(CAM_CCI, "trig_i2c_queue 0x%x", trig_i2c_queue);
+
+	CAM_DBG(CAM_CCI, "CCI%d_GPIO_Q%d set param sid 0x%x retries %d id_map %d",
+		cci_dev->soc_info.index, queue, c_ctrl->cci_info->sid, c_ctrl->cci_info->retries,
+		 c_ctrl->cci_info->id_map);
+	reinit_completion(&cci_dev->cci_gpio_info.report_q[queue]);
+
+	/*
+	* Call validate queue to make sure queue is empty before starting.
+	* If this call fails, don't proceed with i2c_write call. This is to
+	* avoid overflow / underflow of queue
+	*/
+	rc = cam_cci_validate_gpio_queue(cci_dev,
+		cci_dev->cci_gpio_queue_info[queue].max_queue_size-1,
+		queue);
+	if (rc < 0) {
+		CAM_ERR(CAM_CCI, "CCI%d_GPIO_Q%d Initial validataion failed rc %d",
+			cci_dev->soc_info.index, queue, rc);
+		return -EINVAL;
+	}
+
+	if (c_ctrl->cci_info->retries > CCI_I2C_READ_MAX_RETRIES) {
+		CAM_ERR(CAM_CCI,
+			"CCI%d_GPIO_Q%d Invalid read retries info retries from slave: %d, max retries: %d",
+			cci_dev->soc_info.index, queue, c_ctrl->cci_info->retries, CCI_I2C_READ_MAX_RETRIES);
+		return -EINVAL;
+	}
+
+	rc = cam_cci_gpio_data_queue(cci_dev, c_ctrl, queue, sync_en, trig_i2c_queue);
+	if (rc < 0) {
+		CAM_ERR(CAM_CCI,
+			"CCI%d_GPIO_Q%d Failed in queueing the data for rc: %d",
+			cci_dev->soc_info.index, queue, rc);
+		return -EINVAL;
+	}
+	return rc;
+}
+
 static int32_t cam_cci_i2c_write(struct v4l2_subdev *sd,
 	struct cam_cci_ctrl *c_ctrl, enum cci_i2c_queue_t queue,
 	enum cci_i2c_sync sync_en)
@@ -1938,7 +2595,8 @@ static int32_t cam_cci_write(struct v4l2_subdev *sd,
 	struct cci_device *cci_dev;
 	enum cci_i2c_master_t master;
 	struct cam_cci_master_info *cci_master_info;
-	uint32_t i;
+	struct cam_cci_gpio_info *cci_gpio_info;
+	uint32_t i = 0;
 
 	cci_dev = v4l2_get_subdevdata(sd);
 	if (!cci_dev || !c_ctrl) {
@@ -1950,6 +2608,7 @@ static int32_t cam_cci_write(struct v4l2_subdev *sd,
 	}
 
 	master = c_ctrl->cci_info->cci_i2c_master;
+	cci_gpio_info = &cci_dev->cci_gpio_info;
 
 	if (c_ctrl->cci_info->cci_i2c_master >= MASTER_MAX
 		|| c_ctrl->cci_info->cci_i2c_master < 0) {
@@ -1959,8 +2618,8 @@ static int32_t cam_cci_write(struct v4l2_subdev *sd,
 
 	cci_master_info = &cci_dev->cci_master_info[master];
 
-	switch (c_ctrl->cmd) {
 	CAM_DBG(CAM_CCI, "CCI%d_I2C_M%d ctrl_cmd = %d", cci_dev->soc_info.index, master, c_ctrl->cmd);
+	switch (c_ctrl->cmd) {
 	case MSM_CCI_I2C_WRITE_SYNC_BLOCK:
 		mutex_lock(&cci_master_info->mutex_q[SYNC_QUEUE]);
 		rc = cam_cci_i2c_write(sd, c_ctrl,
@@ -1974,19 +2633,50 @@ static int32_t cam_cci_write(struct v4l2_subdev *sd,
 	case MSM_CCI_I2C_WRITE:
 	case MSM_CCI_I2C_WRITE_SEQ:
 	case MSM_CCI_I2C_WRITE_BURST:
-		for (i = 0; i < NUM_QUEUES; i++) {
-			if (mutex_trylock(&cci_master_info->mutex_q[i])) {
-				rc = cam_cci_i2c_write(sd, c_ctrl, i,
-					MSM_SYNC_DISABLE);
-				mutex_unlock(&cci_master_info->mutex_q[i]);
-				return rc;
+	{
+		struct cci_trigger_data  *get_ctx = cam_cci_get_ctx(cci_dev, c_ctrl->cci_info->id_map);
+		if (get_ctx) {
+			mutex_lock(&cci_master_info->mutex_q[get_ctx->i2cqueue]);
+			rc = cam_cci_i2c_write(sd, c_ctrl, get_ctx->i2cqueue,
+				MSM_SYNC_DISABLE);
+			get_ctx->is_trigger_mode = false;
+			mutex_unlock(&cci_master_info->mutex_q[get_ctx->i2cqueue]);
+		} else {
+			for (i = 0; i < NUM_QUEUES; i++) {
+				if (mutex_trylock(&cci_master_info->mutex_q[i])) {
+					if (cci_dev->cci_i2c_queue_info[master][i].queue_status == QUEUE_STATE_FREE) {
+						cci_dev->cci_i2c_queue_info[master][i].queue_status = QUEUE_STATE_BUSY;
+						rc = cam_cci_i2c_write(sd, c_ctrl, i,
+							MSM_SYNC_DISABLE);
+						cci_dev->cci_i2c_queue_info[master][i].queue_status = QUEUE_STATE_FREE;
+						mutex_unlock(&cci_master_info->mutex_q[i]);
+						return rc;
+					}
+					mutex_unlock(&cci_master_info->mutex_q[i]);
+				}
 			}
+			mutex_lock(&cci_master_info->mutex_q[PRIORITY_QUEUE]);
+			cci_dev->cci_i2c_queue_info[master][PRIORITY_QUEUE].queue_status = QUEUE_STATE_BUSY;
+			rc = cam_cci_i2c_write(sd, c_ctrl,
+				PRIORITY_QUEUE, MSM_SYNC_DISABLE);
+			cci_dev->cci_i2c_queue_info[master][PRIORITY_QUEUE].queue_status = QUEUE_STATE_FREE;
+			mutex_unlock(&cci_master_info->mutex_q[PRIORITY_QUEUE]);
 		}
-		mutex_lock(&cci_master_info->mutex_q[PRIORITY_QUEUE]);
-		rc = cam_cci_i2c_write(sd, c_ctrl,
-			PRIORITY_QUEUE, MSM_SYNC_DISABLE);
-		mutex_unlock(&cci_master_info->mutex_q[PRIORITY_QUEUE]);
 		break;
+	}
+	case MSM_CCI_GPIO_WRITE: {
+		struct cci_trigger_data *get_ctx = cam_cci_get_context(cci_dev, c_ctrl->cfg.gpio_cfg.reg_setting->contextid);
+		if (!get_ctx) {
+			CAM_ERR(CAM_CCI, "Invalid contextId");
+			return -EINVAL;
+		}
+		mutex_lock(&cci_gpio_info->mutex_q[get_ctx->gpioqueue]);
+		rc = cam_cci_gpio_write(sd, c_ctrl, get_ctx->gpioqueue,
+			MSM_SYNC_DISABLE, get_ctx);
+		get_ctx->is_trigger_mode = true;
+		mutex_unlock(&cci_gpio_info->mutex_q[get_ctx->gpioqueue]);
+		break;
+	}
 	case MSM_CCI_I2C_WRITE_ASYNC:
 		rc = cam_cci_i2c_write_async(sd, c_ctrl,
 			PRIORITY_QUEUE, MSM_SYNC_DISABLE);
@@ -2028,6 +2718,18 @@ int32_t cam_cci_core_cfg(struct v4l2_subdev *sd,
 	CAM_DBG(CAM_CCI, "CCI%d_I2C_M%d cmd = %d", cci_dev->soc_info.index, master, cci_ctrl->cmd);
 
 	switch (cci_ctrl->cmd) {
+	case MSM_CCI_GET_CONTEXT_ID:
+		mutex_lock(&cci_dev->ctx_mutex);
+		rc = cam_cci_get_context_id(cci_dev, cci_dev->num_active_trigger_sensor, master, &(cci_ctrl->cfg.trigger_data));
+		if (rc == 0)
+			++cci_dev->num_active_trigger_sensor;
+		mutex_unlock(&cci_dev->ctx_mutex);
+		break;
+	case MSM_CCI_RELEASE_CONTEXT_ID:
+		rc = cam_cci_release_trigger_data(cci_dev, master, (&cci_ctrl->cfg.trigger_data)->context_id);
+		if (rc == 0)
+			--cci_dev->num_active_trigger_sensor;
+		break;
 	case MSM_CCI_INIT:
 		mutex_lock(&cci_dev->init_mutex);
 		rc = cam_cci_init(sd, cci_ctrl);
@@ -2059,6 +2761,7 @@ int32_t cam_cci_core_cfg(struct v4l2_subdev *sd,
 		rc = cam_cci_write(sd, cci_ctrl);
 		break;
 	case MSM_CCI_GPIO_WRITE:
+		rc = cam_cci_write(sd, cci_ctrl);
 		break;
 	case MSM_CCI_SET_SYNC_CID:
 		rc = cam_cci_i2c_set_sync_prms(sd, cci_ctrl);
