@@ -4128,6 +4128,7 @@ static int __cam_isp_ctx_handle_error(struct cam_isp_context *ctx_isp,
 	struct cam_hw_fence_map_entry   *fence_map_out = NULL;
 	uint32_t                         evt_param;
 	struct cam_sync_signal_param     param;
+	unsigned long                    flags;
 
 	struct cam_context *ctx = ctx_isp->base;
 	struct cam_isp_hw_error_event_data  *error_event_data =
@@ -4196,7 +4197,7 @@ static int __cam_isp_ctx_handle_error(struct cam_isp_context *ctx_isp,
 			CAM_ERR(CAM_ISP, "signalled error for req %llu",
 				req->request_id);
 			if (ctx_isp->ul_path_en) {
-				spin_lock(&ctx_isp->ul_fp_params.fast_path_lock);
+				spin_lock_irqsave(&ctx_isp->ul_fp_params.fast_path_lock, flags);
 				wr_idx = atomic_read(&ctx_isp->ul_fp_params.write_idx);
 				primary_port_idx = req_isp->hw_update_data.primary_port_entry_index;
 				ctx_isp->ul_fp_results[wr_idx].last_consumed_addr =
@@ -4206,7 +4207,7 @@ static int __cam_isp_ctx_handle_error(struct cam_isp_context *ctx_isp,
 				atomic_set(&ctx_isp->ul_fp_params.write_idx,
 					INC_VAL(wr_idx, 1, MAX_IO_PACKETS));
 				complete(&ctx_isp->ul_fp_params.fast_path_buf_done);
-				spin_unlock(&ctx_isp->ul_fp_params.fast_path_lock);
+				spin_unlock_irqrestore(&ctx_isp->ul_fp_params.fast_path_lock, flags);
 			}
 			for (i = 0; i < req_isp->num_fence_map_out && !ctx_isp->ul_path_en; i++) {
 				fence_map_out =
@@ -5314,6 +5315,7 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 	struct cam_isp_ctx_req          *active_req_isp;
 	struct cam_isp_context          *ctx_isp = NULL;
 	struct cam_hw_config_args        cfg = {0};
+	unsigned long                    flags;
 
 	ctx_isp = (struct cam_isp_context *) ctx->ctx_priv;
 
@@ -5382,10 +5384,10 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 	req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 	active_req_cnt = ctx_isp->active_req_cnt;
 	if (ctx_isp->ul_path_en) {
-		spin_lock(&ctx_isp->ul_fp_params.fast_path_lock);
+		spin_lock_irqsave(&ctx_isp->ul_fp_params.fast_path_lock, flags);
 		wr_idx = atomic_read(&ctx_isp->ul_fp_params.write_idx);
 		rd_idx = atomic_read(&ctx_isp->ul_fp_params.read_idx);
-		spin_unlock(&ctx_isp->ul_fp_params.fast_path_lock);
+		spin_unlock_irqrestore(&ctx_isp->ul_fp_params.fast_path_lock, flags);
 		if (wr_idx >= rd_idx)
 			num_ul_results = wr_idx - rd_idx;
 		else
@@ -9850,6 +9852,7 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 	int num_entries, rc = 0, i, result_idx = 0;
 	struct cam_isp_context *isp_ctx;
 	uint32_t rd_idx, wr_idx, last_consumed;
+	unsigned long flags;
 
 	if (!ctx || !num_responses || !response_buffers) {
 		CAM_ERR(CAM_ISP, "Invalid params");
@@ -9867,11 +9870,11 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 		return -ETIME;
 	}
 
-	spin_lock(&isp_ctx->ul_fp_params.fast_path_lock);
+	spin_lock_irqsave(&isp_ctx->ul_fp_params.fast_path_lock, flags);
 	wr_idx = atomic_read(&isp_ctx->ul_fp_params.write_idx);
 	rd_idx = atomic_read(&isp_ctx->ul_fp_params.read_idx);
 	reinit_completion(&isp_ctx->ul_fp_params.fast_path_buf_done);
-	spin_unlock(&isp_ctx->ul_fp_params.fast_path_lock);
+	spin_unlock_irqrestore(&isp_ctx->ul_fp_params.fast_path_lock, flags);
 
 	if (wr_idx == rd_idx) {
 		CAM_ERR(CAM_ISP,
