@@ -442,13 +442,6 @@ int cam_req_mgr_ordered_list_cmp(void *priv,
 		list_entry(head_2, struct cam_subdev, list));
 }
 
-int cam_get_ddr_type(void)
-{
-	/* We assume all chipsets running kernel version 5.15+
-	 * to be using only DDR5 based memory.
-	 */
-	return DDR_TYPE_LPDDR5;
-}
 #else
 int cam_i3c_driver_remove(struct i3c_device *client)
 {
@@ -467,10 +460,6 @@ int cam_req_mgr_ordered_list_cmp(void *priv,
 		list_entry(head_2, struct cam_subdev, list));
 }
 
-int cam_get_ddr_type(void)
-{
-	return of_fdt_get_ddrtype();
-}
 #endif
 
 long cam_dma_buf_set_name(struct dma_buf *dmabuf, const char *name)
