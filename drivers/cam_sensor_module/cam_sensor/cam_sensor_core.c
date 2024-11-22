@@ -200,7 +200,12 @@ static int cam_sensor_handle_qtimer_info(
 	}
 
 	s_ctrl->i2c_data.per_frame[req_id % MAX_PER_FRAME_ARRAY].trigger_data.timestamp = qtimer_info->qtimer;
-	s_ctrl->i2c_data.per_frame[req_id % MAX_PER_FRAME_ARRAY].trigger_data.gpio_mask = s_ctrl->gpio_mask;
+	if (s_ctrl->gpio_mask >= 0) {
+		s_ctrl->i2c_data.per_frame[req_id % MAX_PER_FRAME_ARRAY].trigger_data.gpio_mask = s_ctrl->gpio_mask;
+	} else {
+		CAM_ERR(CAM_SENSOR, "Invalid cci-timer");
+		return -EINVAL;
+	}
 	s_ctrl->i2c_data.per_frame[req_id % MAX_PER_FRAME_ARRAY].trigger_data.is_nop = false;
 	s_ctrl->i2c_data.per_frame[req_id % MAX_PER_FRAME_ARRAY].trigger_data.pulse_width = qtimer_info->pulseWidth;
 	s_ctrl->vc = qtimer_info->vc;
@@ -1012,7 +1017,7 @@ void cam_sensor_shutdown(struct cam_sensor_ctrl_t *s_ctrl)
 
 	if (s_ctrl->io_master_info.master_type == CCI_MASTER) {
 		if(s_ctrl->is_trigger_mode) {
-			if ( s_ctrl->cci_contextId < CONTEXT_ID_MAX ) {
+			if (s_ctrl->cci_contextId < CONTEXT_ID_MAX) {
 				rc = camera_io_contextid_release(&(s_ctrl->io_master_info), s_ctrl->cci_contextId);
 				if (rc < 0) {
 					CAM_ERR(CAM_SENSOR, "Shutdown[%d] contextid release failed",
@@ -1495,11 +1500,13 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			goto release_mutex;
 		}
 		if (s_ctrl->is_trigger_mode) {
-			rc = camera_io_contextid_release(&(s_ctrl->io_master_info), s_ctrl->cci_contextId);
-			if (rc < 0) {
-				CAM_ERR(CAM_SENSOR, "Slot[%d] contextid release failed",
-					s_ctrl->soc_info.index);
-				goto release_mutex;
+			if (s_ctrl->cci_contextId < CONTEXT_ID_MAX) {
+				rc = camera_io_contextid_release(&(s_ctrl->io_master_info), s_ctrl->cci_contextId);
+				if (rc < 0) {
+					CAM_ERR(CAM_SENSOR, "Slot[%d] contextid release failed",
+						s_ctrl->soc_info.index);
+					goto release_mutex;
+				}
 			}
 		}
 
