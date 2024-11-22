@@ -263,11 +263,9 @@ static int cam_gpio_init(
 	struct cci_trigger_data  *get_ctx)
 {
 	int rc = 0, i = 0;
-	uint32_t offset = 0, gpiooffset = 0;
 	void __iomem *base = NULL;
-	void __iomem *base1 = NULL;
 	struct cam_hw_soc_info *soc_info = NULL;
-	struct device_node *of_node = NULL;
+	uint32_t gpio_mask = c_ctrl->cfg.gpio_cfg.reg_setting->gpio_mask;
 
 	c_ctrl->cci_info->id_map = get_ctx->idx;
 
@@ -283,8 +281,8 @@ static int cam_gpio_init(
 	}
 
 	CAM_DBG(CAM_CCI,
-		"CCI%d_GPIOQ%d gpio_mask 0x%x",
-		cci_dev->soc_info.index, queue, c_ctrl->cfg.gpio_cfg.reg_setting->gpio_mask);
+		"CCI%d_GPIOQ%d gpio_mask 0x%x num_active_trigger_sensor %d",
+		cci_dev->soc_info.index, queue, gpio_mask, cci_dev->num_active_trigger_sensor);
 
 
 	if (cci_dev->num_active_trigger_sensor == 1) {
@@ -322,45 +320,51 @@ static int cam_gpio_init(
 		return rc;
 	}
 
-	base1 = soc_info->reg_map[1].mem_base;
-	of_node = cci_dev->v4l2_dev_str.pdev->dev.of_node;
-	rc = of_property_read_u32(of_node, "cpas-mux-en-offset", &offset);
-	if (rc) {
-		CAM_ERR(CAM_CCI, "failed to read cpas-mux-en-offset");
-		rc = -EINVAL;
-		return rc;
-	}
+	if (cci_dev->num_active_trigger_sensor == 1) {
+		if (cci_dev->offset && cci_dev->gpio_offset) {
+			CAM_DBG(CAM_CCI, "offset:0x%x csid:%d cid:%d",
+				cci_dev->offset, get_ctx->csid, get_ctx->cid);
+			if (get_ctx->csid <= 3) {
+				rc = cam_cpas_reg_write(cci_dev->cpas_handle, CAM_CPAS_REG_CPASTOP,
+						cci_dev->offset,
+						true, get_ctx->csid * CCI_SET_CSID_OFFSET);
+			} else {
+				rc = cam_cpas_reg_write(cci_dev->cpas_handle, CAM_CPAS_REG_CPASTOP,
+						cci_dev->offset,
+						true, (get_ctx->csid + 1) * CCI_SET_CSID_OFFSET);
+			}
+			if (rc) {
+				CAM_ERR(CAM_CCI, "failed to write cpas cci mux_en");
+				rc = -EINVAL;
+				return rc;
+			}
 
-	CAM_DBG(CAM_CCI, "cpas-mux-en-offset:0x%x csid:%d cid:%d num_active_trigger_sensor %d",
-		offset, get_ctx->csid, get_ctx->cid, cci_dev->num_active_trigger_sensor);
-	if (base1 && rc == 0) {
-		if (get_ctx->csid <= 3) {
-			cam_io_w_mb(get_ctx->csid * CCI_SET_CSID_OFFSET,
-				base1 + offset);
+			CAM_DBG(CAM_CCI, "gpio_offset 0x%x", cci_dev->gpio_offset);
+			if (cci_dev->soc_info.index % 2 == 1) {
+				CAM_DBG(CAM_CCI, "value 0x%x", 0x1f & (1 << gpio_mask));
+				rc = cam_cpas_reg_write(cci_dev->cpas_handle, CAM_CPAS_REG_CPASTOP,
+						cci_dev->gpio_offset,
+						true, 0x1f & (1 << gpio_mask));
+			} else {
+				CAM_DBG(CAM_CCI, "value 0x%x", 0x1f & ~(1 << gpio_mask));
+				rc = cam_cpas_reg_write(cci_dev->cpas_handle, CAM_CPAS_REG_CPASTOP,
+						cci_dev->gpio_offset,
+						true, 0x1f & ~(1 << gpio_mask));
+			}
+			if (rc) {
+				CAM_ERR(CAM_CCI, "failed to write cpas cci gpio_mux_en");
+				rc = -EINVAL;
+				return rc;
+			}
 		} else {
-			cam_io_w_mb((get_ctx->csid + 1) * CCI_SET_CSID_OFFSET,
-				base1 + offset);
+			CAM_ERR(CAM_CCI, "failed to read cci cpas offset");
+			rc = -EINVAL;
+			return rc;
 		}
-	}
-	rc = of_property_read_u32(of_node, "cpas-mux-en-gpio-offset", &gpiooffset);
-	if (rc) {
-		CAM_ERR(CAM_CCI, "failed to read cpas-mux-en-gpio-offset");
+	} else {
+		CAM_ERR(CAM_CCI, "multiple trigger camera on same cci not supported for now ");
 		rc = -EINVAL;
 		return rc;
-	}
-	CAM_DBG(CAM_CCI, "cpas-mux-en-gpio-offset 0x%x", gpiooffset);
-
-	if (cci_dev->soc_info.index == 1 || cci_dev->soc_info.index == 3 ||
-			cci_dev->soc_info.index == 5) {
-		CAM_DBG(CAM_CCI, "value 0x%x", 0x1f &
-			(1 <<  c_ctrl->cfg.gpio_cfg.reg_setting->gpio_mask));
-		cam_io_w_mb(0x1f &
-			(1 <<  c_ctrl->cfg.gpio_cfg.reg_setting->gpio_mask), base1 + gpiooffset);
-	} else {
-		CAM_DBG(CAM_CCI, "value 0x%x", 0x1f &
-			~(1 <<  c_ctrl->cfg.gpio_cfg.reg_setting->gpio_mask));
-		cam_io_w_mb(0x1f &
-			~(1 <<  c_ctrl->cfg.gpio_cfg.reg_setting->gpio_mask), base1 + gpiooffset);
 	}
 
 	cam_io_w_mb(get_ctx->cid,
@@ -1443,11 +1447,6 @@ static int32_t cam_cci_data_queue(struct cci_device *cci_dev,
 		return -EINVAL;
 	}
 	reg_offset = master * 0x200 + queue * 0x100;
-
-	cam_io_w_mb(cci_dev->cci_wait_sync_cfg.cid,
-		base + CCI_SET_CID_SYNC_TIMER_ADDR +
-		cci_dev->cci_wait_sync_cfg.csid *
-		CCI_SET_CID_SYNC_TIMER_OFFSET);
 
 	val = CCI_I2C_SET_PARAM_CMD | c_ctrl->cci_info->sid << 4 |
 		c_ctrl->cci_info->retries << 16 |

@@ -50,6 +50,7 @@
 
 #define NUM_QUEUES 2
 #define NUM_GPIO_QUEUES 3
+#define CONTEXT_ID_MAX 3
 
 #define MSM_CCI_WRITE_DATA_PAYLOAD_SIZE_11 11
 #define BURST_MIN_FREE_SIZE 8
@@ -258,6 +259,10 @@ struct cci_trigger_data {
  * @init_mutex:                 Mutex for maintaining refcount for attached
  *                              devices to cci during init/deinit.
  * @dump_en:                    To enable the selective dump
+ * @offset:                     offset of software register which controls the
+ *                              selection of csid
+ * @gpio_offset:                offset of software register which controls the
+ *                              selection of timer
  * @is_contextid_acquire        ContextId is acquire or not
  * @trigger_ctx_array:          To save the contextid, csid, cid and other info
  *                              of trigger sensor
@@ -297,6 +302,8 @@ struct cci_device {
 	struct mutex init_mutex;
 	struct mutex ctx_mutex;
 	uint64_t  dump_en;
+	uint32_t offset;
+	uint32_t gpio_offset;
 	bool is_contextid_acquire[CONTEXT_ID_MAX];
 	struct list_head trigger_ctx_array[CONTEXT_ID_MAX];
 };

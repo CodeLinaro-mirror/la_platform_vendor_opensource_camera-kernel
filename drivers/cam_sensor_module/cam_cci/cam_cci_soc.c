@@ -417,6 +417,7 @@ int cam_cci_parse_dt_info(struct platform_device *pdev,
 	int rc = 0, i = 0;
 	struct cam_hw_soc_info *soc_info =
 		&new_cci_dev->soc_info;
+	struct device_node *of_node = NULL;
 
 	rc = cam_soc_util_get_dt_properties(soc_info);
 	if (rc < 0) {
@@ -436,6 +437,14 @@ int cam_cci_parse_dt_info(struct platform_device *pdev,
 	new_cci_dev->v4l2_dev_str.pdev = pdev;
 	cam_cci_init_cci_params(new_cci_dev);
 	cam_cci_init_clk_params(new_cci_dev);
+	of_node = new_cci_dev->v4l2_dev_str.pdev->dev.of_node;
+	if (of_property_read_u32(of_node, "cpas-mux-en-offset", &new_cci_dev->offset) < 0 ||
+		of_property_read_u32(of_node, "cpas-mux-en-gpio-offset",
+			&new_cci_dev->gpio_offset) < 0) {
+		CAM_DBG(CAM_CCI, "failed to read cci cpas offset");
+		new_cci_dev->offset = 0;
+		new_cci_dev->gpio_offset = 0;
+	}
 
 	for (i = 0; i < MASTER_MAX; i++) {
 		new_cci_dev->write_wq[i] = create_singlethread_workqueue(

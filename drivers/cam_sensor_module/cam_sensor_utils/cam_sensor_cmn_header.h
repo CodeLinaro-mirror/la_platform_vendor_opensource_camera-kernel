@@ -34,7 +34,6 @@
 #define CAM_SENSOR_LITE_NAME      "cam-sensor-lite"
 
 #define MAX_SYSTEM_PIPELINE_DELAY 2
-#define CONTEXT_ID_MAX 3
 
 #define CAM_PKT_NOP_OPCODE 127
 
