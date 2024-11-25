@@ -615,7 +615,7 @@ struct cam_isp_in_port_info_v3 {
 /**
  * struct cam_isp_resource - A resource bundle
  *
- * @resoruce_id:                resource id for the resource bundle
+ * @resource_id:                resource id for the resource bundle
  * @length:                     length of the while resource blob
  * @handle_type:                type of the resource handle
  * @reserved:                   reserved field for alignment
@@ -1129,7 +1129,7 @@ struct cam_isp_sfe_wm_exp_order_config {
 /**
  * struct cam_isp_sfe_exp_config - SFE out exposure config
  *
- *    Exp order is determined by it's index in wm_config[]
+ *    Exp order is determined by its index in wm_config[]
  *    The last resource in the array will be considered as
  *    last [shortest] exposure.
  *

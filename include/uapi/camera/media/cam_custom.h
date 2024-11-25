@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_CUSTOM_H__
@@ -155,7 +156,7 @@ struct cam_custom_in_port_info {
 /**
  * struct cam_custom_resource - A resource bundle
  *
- * @resoruce_id:                resource id for the resource bundle
+ * @resource_id:                resource id for the resource bundle
  * @length:                     length of the while resource blob
  * @handle_type:                type of the resource handle
  * @reserved:                   reserved field for alignment

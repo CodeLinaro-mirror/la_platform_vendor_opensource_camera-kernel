@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_CRE_H__
@@ -29,7 +30,7 @@
 #define CAM_CRE_MAX_PLANES        0x2
 #define CRE_MAX_BATCH_SIZE        0x10
 
-/* definitions needed for cre aquire device */
+/* Definitions needed for cre acquire device */
 #define CAM_CRE_DEV_TYPE_NRT      0x1
 #define CAM_CRE_DEV_TYPE_RT       0x2
 #define CAM_CRE_DEV_TYPE_MAX      0x3
@@ -92,7 +93,7 @@ struct cam_cre_io_buf_info {
 };
 
 /**
- * struct cam_cre_acquire_dev_info - An CRE device info
+ * struct cam_cre_acquire_dev_info - A CRE device info
  *
  * @dev_type:      NRT/RT Acquire
  * @dev_name:      Device name (CRE)

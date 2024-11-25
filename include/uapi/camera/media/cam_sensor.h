@@ -645,7 +645,7 @@ struct cam_cmd_unconditional_wait {
 /**
  * cam_csiphy_info       : Provides cmdbuffer structre
  * @lane_assign          : Lane sensor will be using
- * @mipi_flags           : Phy flags for differnt calibration operations
+ * @mipi_flags           : Phy flags for different calibration operations
  * @lane_cnt             : Total number of lanes
  * @secure_mode          : Secure mode flag to enable / disable
  * @settle_time          : Settling time in ms
@@ -786,7 +786,7 @@ struct cam_sensor_streamon_dev {
 /**
  * stream_dimension : Stream dimension
  *
- * @left   : left pixel locaiton of stream
+ * @left   : left pixel location of stream
  * @top    : top  pixel location of stream
  * @width  : width of the image stream
  * @height : Height of the image stream
