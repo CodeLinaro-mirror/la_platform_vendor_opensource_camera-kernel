@@ -16119,11 +16119,11 @@ int cam_ife_mgr_prepare_ul_hw_update(void *hw_mgr_priv,
 		num_ent = prepare->num_hw_update_entries;
 		if (hw_mgr->csid_rup_en)
 			rc = cam_ife_mgr_csid_add_reg_update(ctx,
-				prepare, &kmd_buf);
+				prepare, &ul_data->kmd_buf);
 
 		else
 			rc = cam_ife_mgr_isp_add_reg_update(ctx,
-				prepare, &kmd_buf);
+				prepare, &ul_data->kmd_buf);
 
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Add RUP fail csid_rup_en %d",
