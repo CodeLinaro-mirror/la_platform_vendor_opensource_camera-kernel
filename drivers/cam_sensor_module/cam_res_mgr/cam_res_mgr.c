@@ -757,18 +757,21 @@ static int cam_res_mgr_shared_pinctrl_init(
 static int cam_res_mgr_parse_dt_shared_gpio(
 	struct device *dev)
 {
-	int rc = 0;
+	int rc = 0, i = 0;
 	struct device_node *of_node = NULL;
 	struct cam_res_mgr_dt *dt = &cam_res->dt;
 
 	of_node = dev->of_node;
-	dt->num_shared_gpio = of_property_count_u32_elems(of_node,
-		"gpios-shared");
+	/* Validate input parameters */
+	if (!of_node) {
+		CAM_ERR(CAM_UTIL, "Invalid param of_node");
+		return -EINVAL;
+	}
 
-	if (dt->num_shared_gpio <= 0) {
-		CAM_DBG(CAM_RES,
-			"Not found any shared gpio");
-		return -ENODEV;
+	dt->num_shared_gpio = of_gpio_named_count(of_node, "gpios-shared");
+	if (dt->num_shared_gpio <=  0) {
+		CAM_DBG(CAM_RES, "Cannot find any shared gpios");
+		return -EINVAL;
 	}
 
 	if (dt->num_shared_gpio >= MAX_SHARED_GPIO_SIZE) {
@@ -779,11 +782,11 @@ static int cam_res_mgr_parse_dt_shared_gpio(
 		return -EINVAL;
 	}
 
-	rc = of_property_read_u32_array(of_node, "gpios-shared",
-		dt->shared_gpio, dt->num_shared_gpio);
-	if (rc) {
-		CAM_ERR(CAM_RES, "Get shared gpio array failed.");
-		return -EINVAL;
+	CAM_DBG(CAM_RES, "gpios-shared count: %d", dt->num_shared_gpio);
+
+	for (i = 0; i < dt->num_shared_gpio; i++) {
+		dt->shared_gpio[i] = of_get_named_gpio_flags(of_node, "gpios-shared", i, NULL);
+		CAM_DBG(CAM_RES, "gpios-shared[%d] = %d", i, dt->shared_gpio[i]);
 	}
 
 	return rc;
@@ -798,9 +801,8 @@ static int cam_res_mgr_parse_dt_shared_pinctrl_gpio(
 	struct cam_res_mgr_dt *dt = &cam_res->dt;
 
 	of_node = dev->of_node;
-	dt->num_shared_pctrl_gpio = of_property_count_u32_elems(of_node,
+	dt->num_shared_pctrl_gpio = of_gpio_named_count(of_node,
 		"gpios-shared-pinctrl");
-
 	if (dt->num_shared_pctrl_gpio <= 0) {
 		CAM_DBG(CAM_RES,
 			"Not found any shared pinctrl res");
@@ -825,14 +827,13 @@ static int cam_res_mgr_parse_dt_shared_pinctrl_gpio(
 		return -EINVAL;
 	}
 
-	CAM_INFO(CAM_RES,
-		"number of pctrl_gpio: %d", dt->num_shared_pctrl_gpio);
+	CAM_DBG(CAM_RES,
+		"gpios-shared-pinctrl count: %d", dt->num_shared_pctrl_gpio);
 
-	rc = of_property_read_u32_array(of_node, "gpios-shared-pinctrl",
-		dt->shared_pctrl_gpio, dt->num_shared_pctrl_gpio);
-	if (rc) {
-		CAM_ERR(CAM_RES, "Get shared pinctrl gpio array failed.");
-		return -EINVAL;
+	for (i = 0; i < dt->num_shared_pctrl_gpio; i++) {
+		dt->shared_pctrl_gpio[i] = of_get_named_gpio_flags(of_node,
+				"gpios-shared-pinctrl", i , NULL);
+		CAM_DBG(CAM_RES, "gpios-shared-pinctrl[%d] = %d", i, dt->shared_pctrl_gpio[i]);
 	}
 
 	for (i = 0; i < pinctrl_name_nodes; i++) {
