@@ -2395,8 +2395,13 @@ static int __cam_isp_ctx_handle_fence_signaling_util(
 		ev_timestamp.sof_timestamp = req_isp->sof_timestamp_val;
 		ev_timestamp.boot_timestamp = req_isp->boot_timestamp;
 	} else {
+		req_isp->sof_timestamp_val = ctx_isp->sof_timestamp_val;
+		req_isp->boot_timestamp = ctx_isp->boot_timestamp;
+		ev_timestamp.sof_timestamp = req_isp->sof_timestamp_val;
+		ev_timestamp.boot_timestamp = req_isp->boot_timestamp;
+
 		CAM_WARN(CAM_ISP,
-			"There is not sof coming before current buf done req %lld ctx %u sof_timestamp x%llx boot_timestamp 0x%llx",
+			"Correction buf done req %lld ctx %u sof_timestamp x%llx boot_timestamp 0x%llx",
 			req->request_id, ctx->ctx_id,
 			req_isp->sof_timestamp_val,
 			req_isp->boot_timestamp);
@@ -6969,8 +6974,12 @@ static int __cam_isp_ctx_rdi_only_epoch_in_applied(
 	uint64_t prev_ts, curr_ts = 0, boot_ts;
 
 	/*frame drop feature is currently supported for streaming case */
-	if (!(ctx_isp->independent_crm_en && ctx_isp->stream_type != CAM_REQ_MGR_LINK_TRIGGER_TYPE))
+	if (!(ctx_isp->independent_crm_en &&
+		ctx_isp->stream_type != CAM_REQ_MGR_LINK_TRIGGER_TYPE)) {
+		CAM_DBG(CAM_ISP, "Epoch in applied ctx %d ", ctx->ctx_id);
+		__cam_isp_ctx_handle_sof_util(epoch_event_data, ctx_isp);
 		goto end;
+	}
 
 	if (!list_empty(&ctx->active_req_list)) {
 		list_for_each_entry_safe(req, req_temp, &ctx->active_req_list, list) {
