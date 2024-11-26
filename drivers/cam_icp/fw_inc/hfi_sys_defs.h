@@ -89,6 +89,11 @@
 #define CAMERAICP_HFI_QUEUE_EMPTY      1002
 #define CAMERAICP_HFI_QUEUE_FULL       1003
 
+/* HFI Specified cores*/
+#define HW_CORE_IPE 0
+#define HW_CORE_OFE 1
+#define HW_CORE_BPS 2
+
 /* Core level commands */
 /* IPE/BPS core Commands */
 #define HFI_CMD_IPE_BPS_COMMON_START \
@@ -183,6 +188,8 @@
 #define HFI_PROPERTY_SYS_ICP_HW_FREQUENCY  (HFI_PROPERTY_ICP_COMMON_START + 0xa)
 #define HFI_PROPERTY_SYS_RAMDUMP_MODE      (HFI_PROPERTY_ICP_COMMON_START + 0xb)
 #define HFI_PROP_SYS_MEM_REGIONS           (HFI_PROPERTY_ICP_COMMON_START + 0xe)
+#define HFI_PROPERTY_QOS_PARAMS            (HFI_PROPERTY_ICP_COMMON_START + 0x10)
+
 
 /* Capabilities reported at sys init */
 #define HFI_CAPS_PLACEHOLDER_1         (HFI_COMMON_BASE + 0x1)
@@ -374,6 +381,31 @@ struct hfi_cmd_prop {
 	uint32_t pkt_type;
 	uint32_t num_prop;
 	uint32_t prop_data[1];
+} __packed;
+
+
+/**
+ * struct session_qos_params
+ * @session_id: Session id equivalent to FW handle id for the session
+ * @target_completion_cycles: Target completion cycles considering concurrent sessions workload
+ */
+struct session_qos_params {
+	uint32_t     session_id;
+	uint32_t     target_completion_cycles;
+} __packed;
+
+/**
+ * struct hfi_cmd_qos_params
+ * command to set QoS
+ * @core_id         : Hardware ID for QOS parameters
+ * @numValidSessions: Number of valid active sessions for QOS parameters array
+ * @qosParams       : QOS parameters array
+ * @HFI_PROPERTY_QOS_PARAMS
+ */
+struct hfi_cmd_qos_params {
+	uint32_t          core_id;
+	uint32_t          num_sessions;
+	struct session_qos_params qos_params[];
 } __packed;
 
 /**

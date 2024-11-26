@@ -228,6 +228,7 @@ struct hfi_frame_process_info {
  * @reserved: Reserved field
  * #uncompressed_bw: Current bandwidth voting
  * @compressed_bw: Current compressed bandwidth voting
+ * @budget_ns: Time required to process frame
  * @clk_rate: Supported clock rates for the context
  * @num_paths: Number of valid AXI paths
  * @axi_path: ctx based per path bw vote
@@ -240,6 +241,7 @@ struct cam_ctx_clk_info {
 	uint32_t reserved;
 	uint64_t uncompressed_bw;
 	uint64_t compressed_bw;
+	uint64_t budget_ns;
 	int32_t clk_rate[CAM_MAX_VOTE];
 	uint32_t num_paths;
 	struct cam_axi_per_path_bw_vote axi_path[CAM_ICP_MAX_PER_PATH_VOTES];
@@ -388,6 +390,7 @@ struct cam_icp_clk_info {
  *            re-downloaded for new camera session.
  * @synx_signaling_en: core to core fencing is enabled
  *                     using synx
+ * @enable_ipe_qos: flag to indicate whether ipe qos is enabled
  */
 struct cam_icp_hw_mgr {
 	struct mutex hw_mgr_mutex;
@@ -440,6 +443,7 @@ struct cam_icp_hw_mgr {
 	bool disable_ubwc_comp;
 	atomic_t recovery;
 	bool synx_signaling_en;
+	bool enable_ipe_qos;
 };
 
 /**

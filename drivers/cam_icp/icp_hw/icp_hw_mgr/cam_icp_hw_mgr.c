@@ -49,6 +49,7 @@
 #include "cam_common_util.h"
 #include "cam_mem_mgr_api.h"
 #include "cam_presil_hw_access.h"
+#include <dt-bindings/msm-camera.h>
 
 #define ICP_WORKQ_TASK_CMD_TYPE 1
 #define ICP_WORKQ_TASK_MSG_TYPE 2
@@ -468,6 +469,86 @@ static inline bool cam_icp_validate_bw_path_idx(
 	}
 }
 
+static int cam_icp_update_qos(struct cam_icp_hw_mgr *hw_mgr)
+{
+	uint64_t i, total_fmin, fmin, core_freq, total_ent = 0, num_ent = 0;
+	struct cam_icp_hw_ctx_data *ctx_data;
+	struct hfi_cmd_prop *set_prop = NULL;
+	struct hfi_cmd_qos_params *qos_data = NULL;
+	uint64_t mul = 1000000000, fps;
+	size_t payload_size;
+
+	if (!hw_mgr->enable_ipe_qos) {
+		CAM_DBG(CAM_ICP, "IPE QoS is disabled");
+		return 0;
+	}
+	total_fmin = 0;
+	core_freq = hw_mgr->clk_info[ICP_CLK_HW_IPE].curr_clk;
+	for (i = 0; i < CAM_ICP_CTX_MAX; i++) {
+		ctx_data = &hw_mgr->ctx_data[i];
+		if (ctx_data->state == CAM_ICP_CTX_STATE_ACQUIRED &&
+			ICP_DEV_TYPE_TO_CLK_TYPE(
+			ctx_data->icp_dev_acquire_info->dev_type) ==
+			ICP_CLK_HW_IPE && ctx_data->clk_info.curr_fc) {
+			CAM_DBG(CAM_ICP, "ctx %d curr fc %llu budget_ns %llu",
+				ctx_data->ctx_id, ctx_data->clk_info.curr_fc,
+				ctx_data->clk_info.budget_ns);
+			fps = mul / ctx_data->clk_info.budget_ns;
+			total_fmin += ctx_data->clk_info.curr_fc * fps;
+			total_ent++;
+		}
+	}
+
+	CAM_DBG(CAM_ICP, "total fmin %llu total_ent %d", total_fmin, total_ent);
+
+	if (!total_ent) {
+		CAM_DBG(CAM_ICP, "No valid context");
+		return 0;
+	}
+	payload_size = sizeof(struct hfi_cmd_prop) +
+		(sizeof(struct hfi_cmd_qos_params)) +
+		(sizeof(struct session_qos_params) * (total_ent));
+	set_prop = kzalloc(payload_size, GFP_KERNEL);
+	if (!set_prop)
+		return -ENOMEM;
+
+	set_prop->size = payload_size;
+	set_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
+	set_prop->num_prop = 1;
+	set_prop->prop_data[0] = HFI_PROPERTY_QOS_PARAMS;
+
+	qos_data = (struct hfi_cmd_qos_params *)&set_prop->prop_data[1];
+
+	qos_data->core_id = HW_CORE_IPE;
+	qos_data->num_sessions = total_ent;
+	for (i = 0; i < CAM_ICP_CTX_MAX; i++) {
+		ctx_data = &hw_mgr->ctx_data[i];
+		if (ctx_data->state == CAM_ICP_CTX_STATE_ACQUIRED &&
+			ICP_DEV_TYPE_TO_CLK_TYPE(
+			ctx_data->icp_dev_acquire_info->dev_type) ==
+			ICP_CLK_HW_IPE && ctx_data->clk_info.curr_fc){
+			fmin = ((ctx_data->clk_info.curr_fc * mul) /
+					ctx_data->clk_info.budget_ns);
+			fps = mul / ctx_data->clk_info.budget_ns;
+			qos_data->qos_params[num_ent].target_completion_cycles =
+				(fmin * core_freq) /
+					(total_fmin * fps);
+			qos_data->qos_params[num_ent].session_id = ctx_data->fw_handle;
+			CAM_DBG(CAM_ICP, "ctx %d core freq %llu tgc %llu fmin %llu",
+				ctx_data->ctx_id, core_freq,
+				qos_data->qos_params[num_ent].target_completion_cycles, fmin);
+			num_ent++;
+		}
+	}
+	CAM_DBG(CAM_ICP,
+		"QoS property payload size: %zu num_ent: %u",
+		payload_size, qos_data->num_sessions);
+
+	hfi_write_cmd(set_prop);
+	kfree(set_prop);
+	return 0;
+}
+
 static int cam_icp_remove_ctx_bw(struct cam_icp_hw_mgr *hw_mgr,
 	struct cam_icp_hw_ctx_data *ctx_data)
 {
@@ -694,6 +775,9 @@ static int cam_icp_remove_ctx_bw(struct cam_icp_hw_mgr *hw_mgr,
 				rc);
 	}
 
+	if (ctx_data->icp_dev_acquire_info->dev_type !=
+		CAM_ICP_RES_TYPE_BPS)
+		cam_icp_update_qos(hw_mgr);
 	ctx_data->clk_info.bw_included = false;
 
 	CAM_DBG(CAM_PERF, "X :ctx_id = %d curr_fc = %u bc = %u",
@@ -999,6 +1083,7 @@ static bool cam_icp_update_clk_busy(struct cam_icp_hw_mgr *hw_mgr,
 		}
 	}
 	ctx_data->clk_info.curr_fc = clk_info->frame_cycles;
+	ctx_data->clk_info.budget_ns = clk_info->budget_ns;
 
 	return rc;
 }
@@ -1063,6 +1148,7 @@ static bool cam_icp_update_clk_free(struct cam_icp_hw_mgr *hw_mgr,
 	bool over_clocked = false;
 
 	ctx_data->clk_info.curr_fc = clk_info->frame_cycles;
+	ctx_data->clk_info.budget_ns = clk_info->budget_ns;
 	ctx_data->clk_info.base_clk = base_clk;
 	cam_icp_calc_total_clk(hw_mgr, hw_mgr_clk_info,
 		ctx_data->icp_dev_acquire_info->dev_type);
@@ -1344,6 +1430,21 @@ static bool cam_icp_update_bw(struct cam_icp_hw_mgr *hw_mgr,
 	return true;
 }
 
+static int cam_icp_check_qos_update(struct cam_icp_hw_mgr *hw_mgr,
+	struct cam_icp_hw_ctx_data *ctx_data, int idx)
+{
+	int rc = false;
+	struct cam_icp_clk_bw_request *clk_info = &ctx_data->hfi_frame_process.clk_info[idx];
+
+	if ((ctx_data->icp_dev_acquire_info->dev_type != CAM_ICP_RES_TYPE_BPS) &&
+		(clk_info->frame_cycles != ctx_data->clk_info.curr_fc)) {
+		CAM_DBG(CAM_ICP, "curr fc %llu fc %llu ctx %d",
+			ctx_data->clk_info.curr_fc, clk_info->frame_cycles, ctx_data->ctx_id);
+		rc = true;
+	}
+	return rc;
+}
+
 static int cam_icp_check_clk_update(struct cam_icp_hw_mgr *hw_mgr,
 	struct cam_icp_hw_ctx_data *ctx_data, int idx)
 {
@@ -1354,6 +1455,7 @@ static int cam_icp_check_clk_update(struct cam_icp_hw_mgr *hw_mgr,
 	uint64_t req_id;
 	struct cam_icp_clk_info *hw_mgr_clk_info;
 	int i;
+	uint32_t actual_clk;
 
 	cam_icp_ctx_timer_reset(ctx_data);
 	if (ctx_data->icp_dev_acquire_info->dev_type == CAM_ICP_RES_TYPE_BPS) {
@@ -1400,7 +1502,18 @@ static int cam_icp_check_clk_update(struct cam_icp_hw_mgr *hw_mgr,
 			clk_info->budget_ns);
 	}
 
-	if (busy)
+	if (hw_mgr->enable_ipe_qos) {
+		ctx_data->clk_info.curr_fc = clk_info->frame_cycles;
+		ctx_data->clk_info.budget_ns = clk_info->budget_ns;
+		ctx_data->clk_info.base_clk = base_clk;
+		cam_icp_calc_total_clk(hw_mgr, hw_mgr_clk_info,
+			ctx_data->icp_dev_acquire_info->dev_type);
+		actual_clk = cam_icp_get_actual_clk_rate(hw_mgr,
+			ctx_data, hw_mgr_clk_info->base_clk);
+		if (actual_clk != hw_mgr_clk_info->curr_clk)
+			rc = true;
+		hw_mgr_clk_info->curr_clk = actual_clk;
+	} else if (busy)
 		rc = cam_icp_update_clk_busy(hw_mgr, ctx_data,
 			hw_mgr_clk_info, clk_info, base_clk);
 	else
@@ -1672,10 +1785,13 @@ static int cam_icp_mgr_ipe_bps_clk_update(struct cam_icp_hw_mgr *hw_mgr,
 	struct cam_icp_hw_ctx_data *ctx_data, int idx)
 {
 	int rc = 0;
+	bool qos_update, clk_update = false;
 
+	qos_update = cam_icp_check_qos_update(hw_mgr, ctx_data, idx);
 	rc = cam_icp_check_clk_update(hw_mgr, ctx_data, idx);
 	if (rc > 0) {
 		rc = cam_icp_update_clk_rate(hw_mgr, ctx_data);
+		clk_update = true;
 	} else if (rc < 0) {
 		CAM_ERR(CAM_PERF, "ctx_id %u check clk update failed", ctx_data->ctx_id);
 		return rc;
@@ -1684,6 +1800,8 @@ static int cam_icp_mgr_ipe_bps_clk_update(struct cam_icp_hw_mgr *hw_mgr,
 	if (cam_icp_check_bw_update(hw_mgr, ctx_data, idx))
 		rc |= cam_icp_update_cpas_vote(hw_mgr, ctx_data);
 
+	if (qos_update || clk_update)
+		cam_icp_update_qos(hw_mgr);
 	return rc;
 }
 
@@ -4515,6 +4633,8 @@ static int cam_icp_mgr_hw_open(void *hw_mgr_priv, void *download_fw_args)
 	if (rc)
 		goto fw_init_failed;
 
+	hw_mgr->enable_ipe_qos = cam_cpas_is_feature_supported(CAM_CPAS_IPE_QOS_ENABLE,
+		0, 0);
 	rc = cam_icp_mgr_send_memory_region_info(hw_mgr);
 	if (rc) {
 		CAM_ERR(CAM_ICP, "Failed in sending mem region info, rc %d", rc);

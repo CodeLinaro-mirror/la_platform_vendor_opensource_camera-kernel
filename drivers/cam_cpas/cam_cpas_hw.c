@@ -3058,6 +3058,9 @@ static int cam_cpas_util_create_debugfs(struct cam_cpas *cpas_core)
 
 	debugfs_create_bool("smart_qos_dump", 0644,
 		cpas_core->dentry, &cpas_core->smart_qos_dump);
+
+	debugfs_create_bool("enable_ipe_qos", 0644,
+		cpas_core->dentry, &cpas_core->enable_ipe_qos);
 end:
 	return rc;
 }
@@ -3104,6 +3107,7 @@ int cam_cpas_hw_probe(struct platform_device *pdev,
 	cpas_core->ahb_bus_scaling_disable = false;
 	cpas_core->full_state_dump = false;
 	cpas_core->smart_qos_dump = false;
+	cpas_core->enable_ipe_qos = false;
 
 	atomic64_set(&cpas_core->monitor_head, -1);
 
