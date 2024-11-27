@@ -208,7 +208,7 @@ int cam_cpas_soc_init_resources(struct cam_hw_soc_info *soc_info,
 	irq_handler_t vfe_irq_handler, struct cam_hw_info *cpas_hw);
 int cam_cpas_soc_deinit_resources(struct cam_hw_soc_info *soc_info);
 int cam_cpas_soc_enable_resources(struct cam_hw_soc_info *soc_info,
-	enum cam_vote_level default_level);
+	enum cam_vote_level default_level, bool enable_clocks, bool enable_irq);
 int cam_cpas_soc_disable_resources(struct cam_hw_soc_info *soc_info,
 	bool disable_clocks, bool disable_irq);
 int cam_cpas_soc_disable_irq(struct cam_hw_soc_info *soc_info);

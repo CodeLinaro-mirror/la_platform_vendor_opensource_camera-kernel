@@ -1798,8 +1798,7 @@ static int cam_cpas_hw_start(void *hw_priv, void *start_args,
 		count = cam_soc_util_regulators_enabled(&cpas_hw->soc_info);
 		if (count > 0)
 			CAM_DBG(CAM_CPAS, "Regulators already enabled %d", count);
-		rc = cam_cpas_soc_enable_resources(&cpas_hw->soc_info,
-			applied_level);
+		rc = cam_cpas_soc_enable_resources(&cpas_hw->soc_info, applied_level, true, true);
 		if (rc) {
 			atomic_set(&cpas_core->irq_count, 0);
 			CAM_ERR(CAM_CPAS, "enable_resorce failed, rc=%d", rc);
@@ -1963,9 +1962,21 @@ static int cam_cpas_hw_stop(void *hw_priv, void *stop_args,
 			}
 		}
 
+		rc = cam_cpas_soc_disable_resources(&cpas_hw->soc_info, false, false);
+		if (rc) {
+			CAM_ERR(CAM_CPAS, "disable_resorce failed, rc=%d", rc);
+			goto done;
+		}
+
 		count = cam_soc_util_regulators_enabled(&cpas_hw->soc_info);
 
-		if ((cpas_core->gdsc_refcnt == 0) || (count == 1)) {
+		rc = cam_cpas_soc_enable_resources(&cpas_hw->soc_info, CAM_SVS_VOTE, false, false);
+		if (rc) {
+			CAM_ERR(CAM_CPAS, "enable_resorce failed, rc=%d", rc);
+			goto done;
+		}
+
+		if ((cpas_core->gdsc_refcnt == 0) || (count == 0)) {
 			if (cpas_core->internal_ops.qchannel_handshake) {
 				rc = cpas_core->internal_ops.qchannel_handshake(cpas_hw, false,
 					false);
@@ -3181,7 +3192,8 @@ int cam_cpas_hw_probe(struct platform_device *pdev,
 		goto axi_cleanup;
 
 	rc = cam_cpas_soc_enable_resources(&cpas_hw->soc_info,
-			cpas_hw->soc_info.lowest_clk_level);
+			cpas_hw->soc_info.lowest_clk_level, true, true);
+
 	if (rc) {
 		CAM_ERR(CAM_CPAS, "failed in soc_enable_resources, rc=%d", rc);
 		goto remove_default_vote;
