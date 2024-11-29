@@ -619,6 +619,7 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 	uintptr_t                generic_ptr;
 	uintptr_t                generic_pkt_ptr;
 	struct cam_packet       *csl_packet = NULL;
+	struct cam_packet       *csl_packet_u = NULL;
 	struct cam_cmd_buf_desc *cmd_desc = NULL;
 	uint32_t                *cmd_buf = NULL;
 	struct cam_csiphy_info  *cam_cmd_csiphy_info = NULL;
@@ -654,13 +655,12 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 	}
 
 	remain_len -= (size_t)cfg_dev->offset;
-	csl_packet = (struct cam_packet *)
+	csl_packet_u = (struct cam_packet *)
 		(generic_pkt_ptr + (uint32_t)cfg_dev->offset);
 
-	if (cam_packet_util_validate_packet(csl_packet,
-		remain_len)) {
-		CAM_ERR(CAM_CSIPHY, "Invalid packet params");
-		rc = -EINVAL;
+	rc = cam_packet_util_copy_pkt_to_kmd(csl_packet_u, &csl_packet, remain_len);
+	if (rc) {
+		CAM_ERR(CAM_CSIPHY, "Copying packet to KMD failed");
 		cam_mem_put_cpu_buf(cfg_dev->packet_handle);
 		return rc;
 	}
@@ -669,12 +669,20 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 		((uint32_t *)&csl_packet->payload +
 		csl_packet->cmd_buf_offset / 4);
 
+	rc = cam_packet_util_validate_cmd_desc(cmd_desc);
+	if (rc) {
+		CAM_ERR(CAM_CSIPHY, "Invalid cmd desc ret: %d", rc);
+		cam_mem_put_cpu_buf(cfg_dev->packet_handle);
+		cam_common_mem_free(csl_packet);
+	}
+
 	rc = cam_mem_get_cpu_buf(cmd_desc->mem_handle,
 		&generic_ptr, &len);
 	if (rc < 0) {
 		CAM_ERR(CAM_CSIPHY,
 			"Failed to get cmd buf Mem address : %d", rc);
 		cam_mem_put_cpu_buf(cfg_dev->packet_handle);
+		cam_common_mem_free(csl_packet);
 		return rc;
 	}
 
@@ -705,7 +713,6 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 			cam_cmd_csiphy_info->lane_cnt);
 		goto end;
 	}
-
 
 	preamble_en = (cam_cmd_csiphy_info->mipi_flags &
 		PREAMBLE_PATTEN_CAL_MASK);
@@ -786,6 +793,7 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 
 	cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 	cam_mem_put_cpu_buf(cfg_dev->packet_handle);
+	cam_common_mem_free(csl_packet);
 	return rc;
 
 reset_settings:
@@ -793,6 +801,7 @@ reset_settings:
 end:
 	cam_mem_put_cpu_buf(cfg_dev->packet_handle);
 	cam_mem_put_cpu_buf(cmd_desc->mem_handle);
+	cam_common_mem_free(csl_packet);
 	return rc;
 }
 
