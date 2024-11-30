@@ -286,13 +286,20 @@ static irqreturn_t hdmi_bdg_uxe_irq_handler(int irq, void *p)
 		&s_hdmi_bdg_res_info.have_hdmi_signal,
 		&s_hdmi_bdg_res_info.width, &s_hdmi_bdg_res_info.height,
 		&s_hdmi_bdg_res_info.id);
-	if (!rc) {
-		CAM_INFO(CAM_SENSOR, "HDMI_BDG Input resolution = %d x %d",
-			 s_hdmi_bdg_res_info.width, s_hdmi_bdg_res_info.height);
-		is_irq_happen = true;
-		wake_up_all(&hdmi_bdg_uxe_read_wq);
-	} else {
-		CAM_ERR(CAM_SENSOR, "Get resolution failed!");
+	switch (rc) {
+		case LT6911UXE_VIDEO_EVENT:
+			if (s_hdmi_bdg_res_info.have_hdmi_signal)
+				CAM_INFO(CAM_SENSOR, "HDMI_BDG Input resolution = %d x %d",
+					s_hdmi_bdg_res_info.width, s_hdmi_bdg_res_info.height);
+			is_irq_happen = true;
+			wake_up_all(&hdmi_bdg_uxe_read_wq);
+			break;
+		case LT6911UXE_AUDIO_EVENT:
+			CAM_INFO(CAM_SENSOR, "Audio event, currently not handling.");
+			break;
+		default:
+			CAM_ERR(CAM_SENSOR, "Get resolution failed!");
+			break;
 	}
 	return IRQ_HANDLED;
 }

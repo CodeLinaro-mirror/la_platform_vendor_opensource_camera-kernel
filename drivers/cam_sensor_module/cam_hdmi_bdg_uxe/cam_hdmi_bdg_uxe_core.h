@@ -12,6 +12,12 @@
 #define HDMI_BDG_UXE_HDMI_CONNECTED    0x55
 #define HDMI_BDG_UXE_HDMI_DISCONNECTED 0x88
 
+enum lt6911uxe_event_type {
+	LT6911UXE_INVALID_EVENT = -1,
+	LT6911UXE_VIDEO_EVENT = 0,
+	LT6911UXE_AUDIO_EVENT = 1,
+};
+
 /**
  * This API upgrade lt6911 firmware.
  */
