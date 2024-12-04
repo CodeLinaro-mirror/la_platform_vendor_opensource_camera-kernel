@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_ISP_HW_MGR_INTF_H_
@@ -12,6 +12,7 @@
 #include <linux/list.h>
 #include <media/cam_isp.h>
 #include "cam_hw_mgr_intf.h"
+#include "cam_packet_util.h"
 
 /* MAX IFE instance */
 #define CAM_IFE_HW_NUM_MAX       16
@@ -247,6 +248,7 @@ struct cam_isp_bw_clk_config_info {
 /**
  * struct cam_isp_prepare_hw_update_data - hw prepare data
  *
+<<<<<<< HEAD
  * @isp_mgr_ctx:              ISP HW manager Context for current request
  * @packet_opcode_type:       Packet header opcode in the packet header
  *                            this opcode defines, packet is init packet or
@@ -264,6 +266,23 @@ struct cam_isp_bw_clk_config_info {
  * @virtual_rdi_mapping_cb:  virtual rdi mapping cb function for
  *                           respective sensor via ife_ctx
  * @per_port_enable:         Indicates if perport feature is enabled or not
+=======
+ * @isp_mgr_ctx:            ISP HW manager Context for current request
+ * @packet_opcode_type:     Packet header opcode in the packet header
+ *                          this opcode defines, packet is init packet or
+ *                          update packet
+ * @frame_header_cpu_addr:  Frame header cpu addr
+ * @frame_header_iova:      Frame header iova
+ * @frame_header_res_id:    Out port res_id corresponding to frame header
+ * @bw_clk_config:          BW and clock config info
+ * @reg_dump_buf_desc:     cmd buffer descriptors for reg dump
+ * @num_reg_dump_buf:      Count of descriptors in reg_dump_buf_desc
+ * @packet:                CSL packet from user mode driver
+ * @kmd_cmd_buff_info:         reference to kmd buffer
+ * @mup_val:               MUP value if configured
+ * @num_exp:               Num of exposures
+ * @mup_en:                Flag if dynamic sensor switch is enabled
+>>>>>>> 9caac19eb (msm: camera: common: Address potential use after free)
  *
  */
 struct cam_isp_prepare_hw_update_data {
@@ -277,6 +296,7 @@ struct cam_isp_prepare_hw_update_data {
 						CAM_REG_DUMP_MAX_BUF_ENTRIES];
 	uint32_t                              num_reg_dump_buf;
 	struct cam_packet                    *packet;
+	struct cam_kmd_buf_info               kmd_cmd_buff_info;
 	uint32_t                              mup_val;
 	uint32_t                              num_exp;
 	cam_hw_get_virtual_rdi_mapping_cb_func virtual_rdi_mapping_cb;
