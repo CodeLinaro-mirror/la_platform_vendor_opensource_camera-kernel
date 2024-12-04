@@ -53,6 +53,7 @@ enum cam_smmu_mapping_client {
  * @urefcount:      Reference counter to track whether the buffer is
  *                  mapped and in use by umd
  * @buf_name:       Name associated with buffer.
+ * @idx_lock:           spinlock for buffer
  */
 struct cam_mem_buf_queue {
 	struct dma_buf *dma_buf;
@@ -76,6 +77,7 @@ struct cam_mem_buf_queue {
 	enum cam_smmu_mapping_client smmu_mapping_client;
 	struct kref urefcount;
 	char buf_name[CAM_DMA_BUF_NAME_LEN];
+	spinlock_t idx_lock;
 };
 
 /**
