@@ -1761,7 +1761,7 @@ static int cam_ife_hw_mgr_acquire_csid_hw(
 	bool   try_again;
 	bool   is_rdi = false;
 	int    tries;
-	enum cam_ife_pix_path_res_id rdis[CAM_IFE_CSID_RDI_MAX];
+	enum cam_ife_pix_path_res_id rdis[CAM_IFE_CSID_RDI_MAX] = {CAM_IFE_PIX_PATH_RES_RDI_0};
 
 	if (!ife_hw_mgr || !csid_acquire) {
 		CAM_ERR(CAM_ISP,
@@ -1778,7 +1778,7 @@ static int cam_ife_hw_mgr_acquire_csid_hw(
 		for (i = CAM_IFE_PIX_PATH_RES_RDI_0;
 			i <= CAM_IFE_PIX_PATH_RES_RDI_3;
 			i++) {
-			if (i != csid_acquire->res_id)
+			if ((tries < CAM_IFE_CSID_RDI_MAX-1) && (i != csid_acquire->res_id))
 				rdis[tries++] = i;
 		}
 	}
@@ -1842,7 +1842,7 @@ static int cam_ife_mgr_attempt_reuse_cid_res(
 	int try_again = true;
 	bool is_rdi = false;
 	int tries;
-	enum cam_ife_pix_path_res_id rdis[CAM_IFE_CSID_RDI_MAX];
+	enum cam_ife_pix_path_res_id rdis[CAM_IFE_CSID_RDI_MAX] = {CAM_IFE_PIX_PATH_RES_RDI_0};
 
 	in_port = csid_acquire->in_port;
 
@@ -1857,7 +1857,7 @@ static int cam_ife_mgr_attempt_reuse_cid_res(
 		for (i = CAM_IFE_PIX_PATH_RES_RDI_0;
 			i <= CAM_IFE_PIX_PATH_RES_RDI_3;
 			i++) {
-			if (i != csid_acquire->res_id)
+			if ((tries < CAM_IFE_CSID_RDI_MAX-1) && (i != csid_acquire->res_id))
 				rdis[tries++] = i;
 		}
 	}
