@@ -310,6 +310,7 @@ struct cam_isp_bw_clk_config_info {
  * @reg_dump_buf_desc:         cmd buffer descriptors for reg dump
  * @num_reg_dump_buf:          Count of descriptors in reg_dump_buf_desc
  * @packet:                    CSL packet from user mode driver
+ * @kmd_cmd_buff_info:         reference to kmd buffer
  * @mup_val:                   MUP value if configured
  * @num_exp:                   Num of exposures
  * @primary_port_entry_index:  Primary port hw entry index for ease of access
@@ -336,6 +337,7 @@ struct cam_isp_prepare_hw_update_data {
 						CAM_REG_DUMP_MAX_BUF_ENTRIES];
 	uint32_t                              num_reg_dump_buf;
 	struct cam_packet                    *packet;
+	struct cam_kmd_buf_info               kmd_cmd_buff_info;
 	uint32_t                              mup_val;
 	uint32_t                              num_exp;
 	uint32_t                              primary_port_entry_index;
