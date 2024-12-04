@@ -25,6 +25,18 @@ enum lt6911uxe_fw_status {
 	UPDATE_FAILED = 2,
 };
 
+// LT6911UXE irq type shows below:
+// 0xE084 = 0 : Disconnected
+// 0xE084 = 1 : video ready
+// 0xE084 = 2 : audio disappear
+// 0xE084 = 3 : audio ready
+enum lt6911uxe_irq_type {
+	LT6911UXE_HDMI_DISCONNECT = 0,
+	LT6911UXE_HDMI_VIDEO_READY = 1,
+	LT6911UXE_HDMI_AUDIO_DISAPPEAR = 2,
+	LT6911UXE_HDMI_AUDIO_READY = 3,
+};
+
 enum lt6911uxe_fw_status lt6911uxe_fw_status;
 
 int lt6911uxe_get_fw_state(void)
@@ -792,6 +804,11 @@ uint32_t cam_hdmi_bdg_uxe_get_fw_version(void)
 	struct cam_sensor_i2c_reg_array m_i2cWriteRegArray;
 	struct cam_sensor_i2c_reg_setting m_i2c_write_settings;
 
+	if (s_ctrl == NULL) {
+		CAM_ERR(CAM_SENSOR, "LT6911 is not ready.");
+		goto end;
+	}
+
 	// Initialize
 	m_i2cWriteRegArray.reg_addr = 0;
 	m_i2cWriteRegArray.reg_data = 0;
@@ -949,10 +966,11 @@ int cam_hdmi_bdg_uxe_upgrade_firmware(void)
 int cam_hdmi_bdg_uxe_get_src_resolution(bool *signal_stable, int *width,
 				    int *height, int *id)
 {
-	int rc = 0;
+	int rc = 0, ret = 0;
 	u32 hactive_h, hactive_l;
 	u32 vactive_h, vactive_l;
 	u32 hdmi_signal_status;
+	u32 audio_sample_rate;
 	struct cam_sensor_i2c_reg_setting m_i2cWriteSettings;
 	struct cam_sensor_i2c_reg_array m_i2cWriteRegArray;
 
@@ -976,12 +994,7 @@ int cam_hdmi_bdg_uxe_get_src_resolution(bool *signal_stable, int *width,
 
 	m_i2cWriteRegArray.reg_addr = 0xff;
 	m_i2cWriteRegArray.reg_data = 0xe0;
-	rc = camera_io_dev_write(&(cam_hdmi_bdg_uxe_cam_ctrl->io_master_info),
-				 &m_i2cWriteSettings);
-	if (rc < 0)
-		goto fail;
-	m_i2cWriteRegArray.reg_addr = 0xb0;
-	m_i2cWriteRegArray.reg_data = 0x01;
+
 	rc = camera_io_dev_write(&(cam_hdmi_bdg_uxe_cam_ctrl->io_master_info),
 				 &m_i2cWriteSettings);
 	if (rc < 0)
@@ -996,70 +1009,96 @@ int cam_hdmi_bdg_uxe_get_src_resolution(bool *signal_stable, int *width,
 	if (rc < 0)
 		goto fail;
 
-	if ((hdmi_signal_status & 0x01) != 0x01) {
-		*signal_stable = false;
-		*height = 0;
-		*width = 0;
-		*id = cam_hdmi_bdg_uxe_cam_ctrl->id;
-		goto end;
+	switch (hdmi_signal_status) {
+		case LT6911UXE_HDMI_DISCONNECT:
+			*signal_stable = false;
+			*height = 0;
+			*width = 0;
+			*id = cam_hdmi_bdg_uxe_cam_ctrl->id;
+			ret = LT6911UXE_VIDEO_EVENT;
+			goto end;
+		case LT6911UXE_HDMI_VIDEO_READY:
+			rc = camera_io_dev_read(
+				&(cam_hdmi_bdg_uxe_cam_ctrl->io_master_info),
+				0x8c, &hactive_h, CAMERA_SENSOR_I2C_TYPE_BYTE,
+				CAMERA_SENSOR_I2C_TYPE_BYTE, true);
+			if (rc < 0)
+				goto fail;
+
+			rc = camera_io_dev_read(
+				&(cam_hdmi_bdg_uxe_cam_ctrl->io_master_info),
+				0x8d, &hactive_l, CAMERA_SENSOR_I2C_TYPE_BYTE,
+				CAMERA_SENSOR_I2C_TYPE_BYTE, true);
+			if (rc < 0)
+				goto fail;
+
+			rc = camera_io_dev_read(
+				&(cam_hdmi_bdg_uxe_cam_ctrl->io_master_info),
+				0x8e, &vactive_h, CAMERA_SENSOR_I2C_TYPE_BYTE,
+				CAMERA_SENSOR_I2C_TYPE_BYTE, true);
+			if (rc < 0)
+				goto fail;
+
+			rc = camera_io_dev_read(
+				&(cam_hdmi_bdg_uxe_cam_ctrl->io_master_info),
+				0x8f, &vactive_l, CAMERA_SENSOR_I2C_TYPE_BYTE,
+				CAMERA_SENSOR_I2C_TYPE_BYTE, true);
+			if (rc < 0)
+				goto fail;
+
+			*signal_stable = true;
+			*height = (vactive_h << 8) | vactive_l;
+			*width = (hactive_h << 8) | hactive_l;
+			*width = *width * 2;
+			*id = cam_hdmi_bdg_uxe_cam_ctrl->id;
+			CAM_INFO(CAM_SENSOR, "signal stable %d %d, x %d id %d", *signal_stable,
+				*width, *height, *id);
+			ret = LT6911UXE_VIDEO_EVENT;
+			break;
+		case LT6911UXE_HDMI_AUDIO_DISAPPEAR:
+			*id = cam_hdmi_bdg_uxe_cam_ctrl->id;
+			CAM_INFO(CAM_SENSOR, "Currently not handling audio event.");
+			ret = LT6911UXE_AUDIO_EVENT;
+			break;
+		case LT6911UXE_HDMI_AUDIO_READY:
+			*id = cam_hdmi_bdg_uxe_cam_ctrl->id;
+			// check audio signal
+			rc = camera_io_dev_read(
+					&(cam_hdmi_bdg_uxe_cam_ctrl->io_master_info),
+					0x91, &audio_sample_rate,
+					CAMERA_SENSOR_I2C_TYPE_BYTE,
+					CAMERA_SENSOR_I2C_TYPE_BYTE, true);
+			if (rc < 0)
+				goto fail;
+			CAM_INFO(CAM_SENSOR, "audio sample rate: %d",
+					audio_sample_rate);
+			CAM_INFO(CAM_SENSOR, "Currently not handling audio event.");
+			ret = LT6911UXE_AUDIO_EVENT;
+			break;
+		default:
+			CAM_ERR(CAM_SENSOR, "Invalid signal status: %d",
+					hdmi_signal_status);
+			*signal_stable = false;
+			*height = -1;
+			*width = -1;
+			*id = cam_hdmi_bdg_uxe_cam_ctrl->id;
+			goto fail;
 	}
-	if (hdmi_signal_status > 0xFF) {
-		/* Read value from I2C should not upper than 0xFF.*/
-		/* If so, it means LT6911UXC is closed.*/
-		*signal_stable = false;
-		*height = -1;
-		*width = -1;
-		*id = cam_hdmi_bdg_uxe_cam_ctrl->id;
-		goto end;
-	}
-	rc = camera_io_dev_read(&(cam_hdmi_bdg_uxe_cam_ctrl->io_master_info), 0x8c,
-				&hactive_h, CAMERA_SENSOR_I2C_TYPE_BYTE,
-				CAMERA_SENSOR_I2C_TYPE_BYTE, true);
-	if (rc < 0)
-		goto fail;
-
-	rc = camera_io_dev_read(&(cam_hdmi_bdg_uxe_cam_ctrl->io_master_info), 0x8d,
-				&hactive_l, CAMERA_SENSOR_I2C_TYPE_BYTE,
-				CAMERA_SENSOR_I2C_TYPE_BYTE, true);
-	if (rc < 0)
-		goto fail;
-
-	rc = camera_io_dev_read(&(cam_hdmi_bdg_uxe_cam_ctrl->io_master_info), 0x8e,
-				&vactive_h, CAMERA_SENSOR_I2C_TYPE_BYTE,
-				CAMERA_SENSOR_I2C_TYPE_BYTE, true);
-	if (rc < 0)
-		goto fail;
-
-	rc = camera_io_dev_read(&(cam_hdmi_bdg_uxe_cam_ctrl->io_master_info), 0x8f,
-				&vactive_l, CAMERA_SENSOR_I2C_TYPE_BYTE,
-				CAMERA_SENSOR_I2C_TYPE_BYTE, true);
-	if (rc < 0)
-		goto fail;
-
-	*signal_stable = true;
-	*height = (vactive_h << 8) | vactive_l;
-	*width = (hactive_h << 8) | hactive_l;
-	*width = *width * 2;
-	*id = cam_hdmi_bdg_uxe_cam_ctrl->id;
-	CAM_INFO(CAM_SENSOR, "signal stable %d %d, x %d id %d", *signal_stable,
-		 *width, *height, *id);
 
 end:
-	m_i2cWriteRegArray.reg_addr = 0xff;
-	m_i2cWriteRegArray.reg_data = 0xe0;
-	rc = camera_io_dev_write(&(cam_hdmi_bdg_uxe_cam_ctrl->io_master_info),
-				 &m_i2cWriteSettings);
-	if (rc < 0)
-		goto fail;
 	mutex_unlock(&(cam_hdmi_bdg_uxe_cam_ctrl->cam_sensor_mutex));
-	return rc;
+	if (rc < 0) {
+		ret = LT6911UXE_INVALID_EVENT;
+	}
+	return ret;
 
 fail:
+	ret = LT6911UXE_INVALID_EVENT;
 	*signal_stable = false;
 	*height = -1;
 	*width = -1;
 	mutex_unlock(&(cam_hdmi_bdg_uxe_cam_ctrl->cam_sensor_mutex));
-	return rc;
+	return ret;
 }
 EXPORT_SYMBOL(cam_hdmi_bdg_uxe_get_src_resolution);
 EXPORT_SYMBOL(cam_hdmi_bdg_uxe_get_fw_version);

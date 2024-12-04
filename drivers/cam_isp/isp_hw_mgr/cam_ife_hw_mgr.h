@@ -287,6 +287,8 @@ struct cam_ife_cdm_user_data {
  * @curr_num_exp:           Current num of exposures
  * @try_recovery_cnt:       Retry count for overflow recovery
  * @recovery_req_id:        The request id on which overflow recovery happens
+ * dynamic_rdi_alloc:       is dynamic rdi allocation enabled
+ * dynamic_rdi_mask:        dynamic allocated resources mask*
  *
  */
 struct cam_ife_hw_mgr_ctx {
@@ -346,6 +348,8 @@ struct cam_ife_hw_mgr_ctx {
 	uint32_t                                   curr_num_exp;
 	uint32_t                                   try_recovery_cnt;
 	uint64_t                                   recovery_req_id;
+	bool                                       dynamic_rdi_alloc;
+	uint32_t                                   dynamic_rdi_mask;
 };
 
 /**

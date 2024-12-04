@@ -3012,16 +3012,6 @@ static int cam_ife_csid_ver2_in_port_validate(
 	}
 
 	if (csid_hw->counters.csi2_reserve_cnt) {
-
-		if (csid_hw->token != reserve->cb_priv) {
-			CAM_ERR(CAM_ISP,
-				"CSID[%d] different Context for res %d",
-				csid_hw->hw_intf->hw_idx,
-				reserve->res_id);
-			rc = -EINVAL;
-			goto err;
-		}
-
 		if (csid_hw->res_type != reserve->in_port->res_type) {
 			CAM_ERR(CAM_ISP,
 				"CSID[%d] Invalid res[%d] in_res_type[%d]",
