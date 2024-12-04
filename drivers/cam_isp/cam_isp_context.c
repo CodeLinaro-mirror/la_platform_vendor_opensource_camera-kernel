@@ -10757,6 +10757,8 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 		sizeof(struct cam_hw_update_entry) * setting_req_isp->num_cfg);
 	req_isp->num_fence_map_out        = 0;
 
+	if (ctx_isp->last_applied_req_id == req->request_id)
+		req_isp->reapply_type = CAM_CONFIG_REAPPLY_IO;
 	res_data = ctx_isp->ul_data.resource_data;
 
 	for (i = 0; i < MAX_IO_RESOURCES; i++) {

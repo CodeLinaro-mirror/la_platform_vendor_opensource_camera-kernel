@@ -4047,12 +4047,19 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd)
 			}
 		}
 		if (ul_packet->num_setting_packets) {
+			if (!link->is_setting_period_valid) {
 				memcpy(&link->setting_period_packet,
 					&ul_packet->setting_pattern_period,
 					sizeof(struct setting_pattern_period));
 				link->curr_seting_idx = 0;
-				link->is_setting_sticky = ul_packet->is_setting_sticky;
-				link->is_setting_period_valid = true;
+			} else {
+				memcpy(&link->new_setting_period_packet,
+					&ul_packet->setting_pattern_period,
+					sizeof(struct setting_pattern_period));
+				link->is_new_setting_available = true;
+			}
+			link->is_setting_sticky = ul_packet->is_setting_sticky;
+			link->is_setting_period_valid = true;
 		}
 		link->ul_state = CAM_CRM_UL_LINK_STATE_READY;
 	} else if (ul_packet->batch_packet_type == BATCH_PACKET_TYPE_SETTING_UPDATE ||
@@ -4099,12 +4106,19 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd)
 				}
 			}
 		}
+		if (!link->is_setting_period_valid) {
 			memcpy(&link->setting_period_packet,
 				&ul_packet->setting_pattern_period,
 				sizeof(struct setting_pattern_period));
 			link->curr_seting_idx = 0;
-			link->is_setting_sticky = ul_packet->is_setting_sticky;
-			link->is_setting_period_valid = true;
+		} else {
+			memcpy(&link->new_setting_period_packet,
+				&ul_packet->setting_pattern_period,
+				sizeof(struct setting_pattern_period));
+			link->is_new_setting_available = true;
+		}
+		link->is_setting_sticky = ul_packet->is_setting_sticky;
+		link->is_setting_period_valid = true;
 	}
 	if (ul_packet->batch_packet_type == BATCH_PACKET_TYPE_SETTING_UPDATE_RETREIVE ||
 		ul_packet->batch_packet_type == BATCH_PACKET_TYPE_RETREIVE) {
@@ -4134,6 +4148,15 @@ int cam_req_mgr_get_setting_id(int link_hdl)
 	if (!link->is_setting_period_valid)
 		return -1;
 
+	if (link->is_new_setting_available) {
+		if (link->curr_setting % 2 != link->new_setting_period_packet.pattern[0] % 2) {
+			memcpy(&link->setting_period_packet,
+				&link->new_setting_period_packet,
+				sizeof(struct setting_pattern_period));
+			link->curr_seting_idx = 0;
+		}
+	}
+	link->curr_setting = link->setting_period_packet.pattern[link->curr_seting_idx];
 	return link->setting_period_packet.pattern[link->curr_seting_idx];
 }
 
@@ -5096,6 +5119,8 @@ int cam_req_mgr_link_v3(struct cam_req_mgr_ver_info *link_info)
 	link->trigger_cnt[1][CAM_TRIGGER_POINT_EOF] = 0;
 	link->ul_state = CAM_CRM_UL_LINK_STATE_INIT;
 	link->is_setting_period_valid = false;
+	link->curr_setting            = 0;
+	link->is_new_setting_available = false;
 
 	mutex_unlock(&link->lock);
 	mutex_unlock(&g_crm_core_dev->crm_lock);
