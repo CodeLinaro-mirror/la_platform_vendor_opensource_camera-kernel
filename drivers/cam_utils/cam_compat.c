@@ -156,7 +156,7 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 		params.phy_lane_sel_mask = csiphy_dev->csiphy_info[offset].csiphy_cpas_cp_reg_mask;
 		params.protect = protect ? 1 : 0;
 
-		CAM_DBG(CAM_UTIL, "phy_sel_m: %lld protect: %d",
+		CAM_INFO(CAM_UTIL, "phy_sel_m: %lld protect: %d",
 					params.phy_lane_sel_mask,
 					params.protect);
 
@@ -189,6 +189,8 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 			CAM_ERR(CAM_CSIPHY, "SCM call to hypervisor failed");
 			rc = -EINVAL;
 		}
+		CAM_INFO(CAM_CSIPHY,
+			"Legacy scm call shutdown %d", is_shutdown);
 	}
 #else
 	if (offset >= csiphy_dev->session_max_device_support) {

@@ -7401,18 +7401,23 @@ static int cam_ife_hw_mgr_set_secure_port_info(
 				sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].mask |= ife_ctx->res_list_ife_out[i].secure_mask;
 
 		CAM_DBG(CAM_ISP,
-			"%d: res_id 0x%x hw_type 0x%x protect %d phy_id %d mask 0x%x release %d ctx %d",
-			i, ife_ctx->res_list_ife_out[i].res_id, sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].hw_type,
+			"Ctx %d hw %d out idx %d: res_id 0x%x hw_type 0x%x protect %d phy_id %d mask 0x%x release %d",
+			ife_ctx->ctx_index, hw_id,
+			i, ife_ctx->res_list_ife_out[i].res_id,
+			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].hw_type,
 			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].protect,
 			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].phy_id,
-			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].mask, is_release,
-			ife_ctx->ctx_index);
+			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].mask,
+			is_release);
 		CAM_DBG(CAM_ISP,
-			"%d: res_id 0x%x hw_type 0x%x protect %d phy_id %d mask 0x%x release %d ctx %d",
-			i, ife_ctx->res_list_ife_out[i].res_id, sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].hw_type,
-			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].protect, sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].phy_id,
-			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].mask, is_release,
-			ife_ctx->ctx_index);
+			"Ctx %d hw %d out idx %d: res_id 0x%x hw_type 0x%x protect %d phy_id %d mask 0x%x release %d",
+			ife_ctx->ctx_index, hw_id,
+			i, ife_ctx->res_list_ife_out[i].res_id,
+			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].hw_type,
+			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].protect,
+			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].phy_id,
+			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].mask,
+			is_release);
 		}
 	}
 	/* During release no need to mark any port as non-secure */
@@ -7538,43 +7543,45 @@ static int cam_ife_hw_mgr_set_secure_port_info(
 
 
 	for (i = 0; i < max_ife_out_res; i++) {
-		if (ife_ctx->res_list_ife_out[i].res_id &&
+		if (!ife_ctx->res_list_ife_out[i].res_id ||
 			(cam_ife_mgr_get_mapped_port_idx(hw_type,
-			ife_ctx->res_list_ife_out[i].res_id) >= 0)) {
+			ife_ctx->res_list_ife_out[i].res_id) < 0))
+			continue;
 
-			if (ife_ctx->res_list_ife_out[i].is_secure) {
-				port_idx = sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports;
-				sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].port_id[port_idx] =
-					cam_ife_mgr_get_mapped_port_idx(hw_type,
-						ife_ctx->res_list_ife_out[i].res_id);
-				sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports++;
-			} else {
-				port_idx =
-					sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports;
-				sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].port_id[port_idx] =
-					cam_ife_mgr_get_mapped_port_idx(hw_type,
-						ife_ctx->res_list_ife_out[i].res_id);
-				sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports++;
-			}
+		if (ife_ctx->res_list_ife_out[i].is_secure) {
+			port_idx = sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports;
+			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].port_id[port_idx] =
+				cam_ife_mgr_get_mapped_port_idx(hw_type,
+					ife_ctx->res_list_ife_out[i].res_id);
+			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports++;
+			CAM_INFO(CAM_ISP,
+				"ctx %d hw %d out idx %d: res_id 0x%x hw_type 0x%x protect %d phy_id %d port %x num %d release %d",
+				ife_ctx->ctx_index, hw_id, i,
+				ife_ctx->res_list_ife_out[i].res_id,
+				sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].hw_type,
+				sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].protect,
+				sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].phy_id,
+				sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].port_id[port_idx],
+				sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports,
+				is_release);
+		} else {
+			port_idx =
+				sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports;
+			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].port_id[port_idx] =
+				cam_ife_mgr_get_mapped_port_idx(hw_type,
+					ife_ctx->res_list_ife_out[i].res_id);
+			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports++;
+			CAM_INFO(CAM_ISP,
+				"ctx %d hw %d out idx %d: res_id 0x%x hw_type 0x%x protect %d phy_id %d port %x num %d release %d",
+				ife_ctx->ctx_index, hw_id, i,
+				ife_ctx->res_list_ife_out[i].res_id,
+				sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].hw_type,
+				sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].protect,
+				sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].phy_id,
+				sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].port_id[port_idx],
+				sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports,
+				is_release);
 
-		CAM_DBG(CAM_ISP,
-			"ctx %d i %d: res_id 0x%x hw_type 0x%x protect %d phy_id %d port %x num %d release %d",
-			ife_ctx->ctx_index, i,
-			ife_ctx->res_list_ife_out[i].res_id,
-			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].hw_type,
-			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].protect,
-			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].phy_id,
-			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].port_id[port_idx],
-			sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports, is_release);
-		CAM_DBG(CAM_ISP,
-			"ctx %d i %d: res_id 0x%x hw_type 0x%x protect %d phy_id %d port %x num %d release %d",
-			ife_ctx->ctx_index, i,
-			ife_ctx->res_list_ife_out[i].res_id,
-			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].hw_type,
-			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].protect,
-			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].phy_id,
-			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].port_id[port_idx],
-			sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports, is_release);
 		}
 	}
 	/* During release no need to mark any port as non-secure */
@@ -7582,8 +7589,8 @@ static int cam_ife_hw_mgr_set_secure_port_info(
 		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports = 0;
 
 	CAM_INFO(CAM_ISP,
-		"hw_type 0x%x phy_id %d prot %d num_ports 0x%x prot %d num_ports %d release %d ctx %d",
-		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].hw_type,
+		"hw_type 0x%x hw %d phy_id %d prot %d num_ports 0x%x prot %d num_ports %d release %d ctx %d",
+		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].hw_type, hw_id,
 		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].phy_id,
 		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].protect,
 		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports,
