@@ -8,7 +8,13 @@ DLKM_DIR := $(TOP)/device/qcom/common/dlkm
 SMCINVOKE_DLKM_BOARDS := niobe
 
 ifeq ($(TARGET_BOARD_PLATFORM), niobe)
-	LOCAL_MODULE_DDK_BUILD := true
+    LOCAL_MODULE_DDK_BUILD := true
+endif
+
+LOCAL_MODULE_DDK_BUILD := true
+
+ifneq ($(TARGET_BOARD_PLATFORM),)
+LOCAL_MODULE_DDK_EXTRA_ARGS := "--//vendor/qcom/opensource/camera-kernel:project_name=$(TARGET_BOARD_PLATFORM)"
 endif
 
 # List of board platforms for which SMMU_PROXY_DLKM driver API should be enabled

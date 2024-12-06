@@ -1,5 +1,7 @@
 load("//build/kernel/kleaf:kernel.bzl", "ddk_module")
 load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
+load("//msm-kernel:target_variants.bzl", "get_all_variants")
+load(":project_defconfig.bzl", "get_project_defconfig")
 
 def _define_module(target, variant):
     tv = "{}_{}".format(target, variant)
@@ -8,6 +10,20 @@ def _define_module(target, variant):
         ":camera_banner",
         "//msm-kernel:all_headers",
     ]
+
+    # Generate the defconfig file dynamically
+    native.genrule(
+        name = "{}_defconfig_generated".format(tv),
+	srcs = [
+	    # Use the base target/variant defconfig to start
+	    # and concatenate and project-specific config
+	    #"{}_defconfig".format(tv),
+	    get_project_defconfig(target, variant),
+	],
+	outs = ["{}_defconfig.generated".format(tv)],
+	cmd = "cat $(SRCS) > $@",
+    )
+
     if target == "niobe":
         deps.extend([
 		"//vendor/qcom/opensource/dsp-kernel:{}_frpc-adsprpc".format(tv),
@@ -16,6 +32,9 @@ def _define_module(target, variant):
 		"//vendor/qcom/opensource/securemsm-kernel:smmu_proxy_headers",
 		"//vendor/qcom/opensource/securemsm-kernel:{}_smmu_proxy_dlkm".format(tv),
         ])
+    if target == "seraph":
+        deps.extend([
+	])
     ddk_module(
         name = "{}_camera".format(tv),
         out = "camera.ko",
@@ -243,5 +262,5 @@ def _define_module(target, variant):
     )
 
 def define_camera_module():
-    _define_module("niobe", "gki")
-    _define_module("niobe", "consolidate")
+    for (t, v) in get_all_variants():
+        _define_module(t, v)
