@@ -20124,6 +20124,20 @@ end:
 	return dumped_len;
 }
 
+static int cam_ife_mgr_close_hw(void *hw_priv, void *hw_close_args)
+{
+	int i;
+
+	CAM_DBG(CAM_ISP, "Clearing out stream groups");
+	for (i = 0; i < CAM_ISP_STREAM_GROUP_CFG_MAX; i++) {
+		if (!g_ife_sns_grp_cfg.grp_cfg[i])
+			continue;
+		cam_ife_mgr_clear_sensor_stream_cfg_grp(i);
+	}
+
+	return 0;
+}
+
 int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 {
 	int rc = -EFAULT;
@@ -20400,6 +20414,7 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 	hw_mgr_intf->hw_dump = cam_ife_mgr_dump;
 	hw_mgr_intf->hw_recovery = cam_ife_mgr_recover_hw;
 	hw_mgr_intf->hw_update_sensor_grp_stream_cfg = cam_ife_mgr_update_sensor_grp_stream_cfg;
+	hw_mgr_intf->hw_close    = cam_ife_mgr_close_hw;
 
 	if (iommu_hdl)
 		*iommu_hdl = g_ife_hw_mgr.mgr_common.img_iommu_hdl;
