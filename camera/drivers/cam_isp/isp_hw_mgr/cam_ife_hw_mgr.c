@@ -788,6 +788,8 @@ static int cam_ife_hw_mgr_is_rdi_res(uint32_t res_id)
 	case CAM_ISP_IFE_OUT_RES_RDI_1:
 	case CAM_ISP_IFE_OUT_RES_RDI_2:
 	case CAM_ISP_IFE_OUT_RES_RDI_3:
+	case CAM_ISP_IFE_OUT_RES_RDI_4:
+	case CAM_ISP_IFE_OUT_RES_RDI_5:
 		rc = 1;
 		break;
 	default:
@@ -855,7 +857,11 @@ static int cam_ife_hw_mgr_check_and_notify_overflow(
 		sfe_res_id = CAM_ISP_HW_SFE_IN_RDI3;
 		break;
 	case CAM_IFE_PIX_PATH_RES_RDI_4:
+		ife_res_id = CAM_ISP_HW_VFE_IN_RDI4;
 		sfe_res_id = CAM_ISP_HW_SFE_IN_RDI4;
+		break;
+	case CAM_IFE_PIX_PATH_RES_RDI_5:
+		ife_res_id = CAM_ISP_HW_VFE_IN_RDI5;
 		break;
 	default:
 		break;
@@ -2639,6 +2645,8 @@ static int cam_ife_hw_mgr_acquire_res_ife_out(
 		case CAM_ISP_HW_VFE_IN_RDI1:
 		case CAM_ISP_HW_VFE_IN_RDI2:
 		case CAM_ISP_HW_VFE_IN_RDI3:
+		case CAM_ISP_HW_VFE_IN_RDI4:
+		case CAM_ISP_HW_VFE_IN_RDI5:
 			rc = cam_ife_hw_mgr_acquire_res_ife_out_rdi(ife_ctx,
 				ife_src_res, in_port);
 			break;
@@ -2738,6 +2746,10 @@ static int cam_convert_rdi_out_res_id_to_src(int res_id)
 		return CAM_ISP_HW_VFE_IN_RDI2;
 	else if (res_id == CAM_ISP_IFE_OUT_RES_RDI_3)
 		return CAM_ISP_HW_VFE_IN_RDI3;
+	else if (res_id == CAM_ISP_IFE_OUT_RES_RDI_4)
+		return CAM_ISP_HW_VFE_IN_RDI4;
+	else if (res_id == CAM_ISP_IFE_OUT_RES_RDI_5)
+		return CAM_ISP_HW_VFE_IN_RDI5;
 	return CAM_ISP_HW_VFE_IN_MAX;
 }
 
@@ -2757,6 +2769,12 @@ static int cam_convert_csid_rdi_res_to_ife_src(int res_id)
 		break;
 	case CAM_IFE_PIX_PATH_RES_RDI_3:
 		src_id = CAM_ISP_HW_VFE_IN_RDI3;
+		break;
+	case CAM_IFE_PIX_PATH_RES_RDI_4:
+		src_id = CAM_ISP_HW_VFE_IN_RDI4;
+		break;
+	case CAM_IFE_PIX_PATH_RES_RDI_5:
+		src_id = CAM_ISP_HW_VFE_IN_RDI5;
 		break;
 	default:
 		src_id = CAM_ISP_HW_VFE_IN_MAX;
@@ -2810,6 +2828,10 @@ static int cam_convert_res_id_to_hw_path(int res_id, int csid_res_id)
 		return CAM_ISP_RDI2_PATH;
 	} else if (res_id == CAM_ISP_HW_VFE_IN_RDI3) {
 		return CAM_ISP_RDI3_PATH;
+	} else if (res_id == CAM_ISP_HW_VFE_IN_RDI4) {
+		return CAM_ISP_RDI4_PATH;
+	} else if (res_id == CAM_ISP_HW_VFE_IN_RDI5) {
+		return CAM_ISP_RDI5_PATH;
 	}
 
 	return 0;
@@ -3524,6 +3546,14 @@ skip_get_ife_src_res:
 			break;
 		case CAM_IFE_PIX_PATH_RES_RDI_3:
 			vfe_acquire.vfe_in.res_id = CAM_ISP_HW_VFE_IN_RDI3;
+			vfe_acquire.vfe_in.sync_mode = CAM_ISP_HW_SYNC_NONE;
+			break;
+		case CAM_IFE_PIX_PATH_RES_RDI_4:
+			vfe_acquire.vfe_in.res_id = CAM_ISP_HW_VFE_IN_RDI4;
+			vfe_acquire.vfe_in.sync_mode = CAM_ISP_HW_SYNC_NONE;
+			break;
+		case CAM_IFE_PIX_PATH_RES_RDI_5:
+			vfe_acquire.vfe_in.res_id = CAM_ISP_HW_VFE_IN_RDI5;
 			vfe_acquire.vfe_in.sync_mode = CAM_ISP_HW_SYNC_NONE;
 			break;
 		default:
@@ -6396,7 +6426,7 @@ static int cam_isp_classify_vote_info(
 			}
 		} else if ((hw_mgr_res->res_id >= CAM_ISP_HW_VFE_IN_RDI0)
 			&& (hw_mgr_res->res_id <=
-			CAM_ISP_HW_VFE_IN_RDI3)) {
+			CAM_ISP_HW_VFE_IN_RDI5)) {
 			for (i = 0; i < bw_config->num_paths; i++) {
 				if ((bw_config->axi_path[i].usage_data ==
 					CAM_ISP_USAGE_RDI) &&
@@ -6676,7 +6706,7 @@ static int cam_isp_blob_bw_update(
 				}
 			else if ((hw_mgr_res->res_id >= CAM_ISP_HW_VFE_IN_RDI0)
 					&& (hw_mgr_res->res_id <=
-					CAM_ISP_HW_VFE_IN_RDI3)) {
+					CAM_ISP_HW_VFE_IN_RDI5)) {
 				uint32_t idx = hw_mgr_res->res_id -
 						CAM_ISP_HW_VFE_IN_RDI0;
 				if (idx >= bw_config->num_rdi)
@@ -9831,7 +9861,7 @@ static int cam_isp_blob_ife_clock_update(
 					camif_r_clk_updated = true;
 				}
 			} else if ((hw_mgr_res->res_id >= CAM_ISP_HW_VFE_IN_RD) &&
-				(hw_mgr_res->res_id <= CAM_ISP_HW_VFE_IN_RDI3)) {
+				(hw_mgr_res->res_id <= CAM_ISP_HW_VFE_IN_RDI5)) {
 				for (j = 0; j < clock_config->num_rdi; j++)
 					clk_rate = max(clock_config->rdi_hz[j], clk_rate);
 			} else {
@@ -15533,6 +15563,8 @@ static int cam_ife_hw_mgr_handle_hw_rup(
 	case CAM_ISP_HW_VFE_IN_RDI1:
 	case CAM_ISP_HW_VFE_IN_RDI2:
 	case CAM_ISP_HW_VFE_IN_RDI3:
+	case CAM_ISP_HW_VFE_IN_RDI4:
+	case CAM_ISP_HW_VFE_IN_RDI5:
 		if (!cam_isp_is_ctx_primary_rdi(ife_hw_mgr_ctx))
 			break;
 		if (atomic_read(&ife_hw_mgr_ctx->overflow_pending))
@@ -15581,6 +15613,8 @@ static int cam_ife_hw_mgr_handle_hw_epoch(
 	case CAM_ISP_HW_VFE_IN_RDI1:
 	case CAM_ISP_HW_VFE_IN_RDI2:
 	case CAM_ISP_HW_VFE_IN_RDI3:
+	case CAM_ISP_HW_VFE_IN_RDI4:
+	case CAM_ISP_HW_VFE_IN_RDI5:
 	case CAM_ISP_HW_VFE_IN_PDLIB:
 	case CAM_ISP_HW_VFE_IN_LCR:
 		break;
@@ -15658,6 +15692,8 @@ static int cam_ife_hw_mgr_handle_hw_sof(
 	case CAM_ISP_HW_VFE_IN_RDI1:
 	case CAM_ISP_HW_VFE_IN_RDI2:
 	case CAM_ISP_HW_VFE_IN_RDI3:
+	case CAM_ISP_HW_VFE_IN_RDI4:
+	case CAM_ISP_HW_VFE_IN_RDI5:
 		if (!cam_isp_is_ctx_primary_rdi(ife_hw_mgr_ctx))
 			break;
 
@@ -15722,6 +15758,8 @@ static int cam_ife_hw_mgr_handle_hw_eof(
 	case CAM_ISP_HW_VFE_IN_RDI1:
 	case CAM_ISP_HW_VFE_IN_RDI2:
 	case CAM_ISP_HW_VFE_IN_RDI3:
+	case CAM_ISP_HW_VFE_IN_RDI4:
+	case CAM_ISP_HW_VFE_IN_RDI5:
 		if (!ife_hw_mgr_ctx->flags.is_rdi_only_context)
 			break;
 		if (atomic_read(&ife_hw_mgr_ctx->overflow_pending))
