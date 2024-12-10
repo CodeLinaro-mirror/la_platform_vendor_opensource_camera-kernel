@@ -62,7 +62,7 @@ static long cam_tpg_subdev_ioctl(struct v4l2_subdev *sd,
 		mutex_unlock(&tpg_dev->mutex);
 		break;
 	default:
-		CAM_ERR(CAM_TPG, "Wrong ioctl : %d", cmd);
+		CAM_ERR_RATE_LIMIT(CAM_TPG, "Wrong ioctl : %d", cmd);
 		rc = -ENOIOCTLCMD;
 		break;
 	}
