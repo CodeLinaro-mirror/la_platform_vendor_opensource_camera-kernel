@@ -1288,9 +1288,13 @@ static int cam_hw_cdm_work(void *priv, void *data)
 				core->bl_fifo[fifo_idx].bl_tag_reuse = false;
 				if (node->request_type ==
 					CAM_HW_CDM_BL_CB_CLIENT) {
+					spin_unlock_irqrestore(
+						&core->bl_fifo[fifo_idx].fifo_hw_lock, flag);
 					cam_cdm_notify_clients(cdm_hw,
 					CAM_CDM_CB_STATUS_BL_SUCCESS,
 					(void *)node);
+					spin_lock_irqsave(
+						&core->bl_fifo[fifo_idx].fifo_hw_lock, flag);
 				} else if (node->request_type ==
 					CAM_HW_CDM_BL_CB_INTERNAL) {
 					CAM_ERR(CAM_CDM,
@@ -1317,9 +1321,13 @@ static int cam_hw_cdm_work(void *priv, void *data)
 				entry) {
 				if (node->request_type ==
 					CAM_HW_CDM_BL_CB_CLIENT) {
+					spin_unlock_irqrestore(
+						&core->bl_fifo[fifo_idx].fifo_hw_lock, flag);
 					cam_cdm_notify_clients(cdm_hw,
 					CAM_CDM_CB_STATUS_BL_SUCCESS,
 					(void *)node);
+					spin_lock_irqsave(
+						&core->bl_fifo[fifo_idx].fifo_hw_lock, flag);
 				} else if (node->request_type ==
 					CAM_HW_CDM_BL_CB_INTERNAL) {
 					CAM_ERR(CAM_CDM,

@@ -194,7 +194,10 @@ void cam_cdm_notify_clients(struct cam_hw_info *cdm_hw,
 			return;
 		}
 		cam_cdm_get_client_refcount(client);
-		spin_lock_irqsave(&client->hw_lock, flags);
+		if (node->irq_cb_type == CAM_HW_CDM_IRQ_CB_INTERNAL)
+			spin_lock_irqsave(&client->hw_lock, flags);
+		else
+			mutex_lock(&client->lock);
 		if (client->data.cam_cdm_callback) {
 			CAM_DBG(CAM_CDM, "Calling client=%s cb cookie=%d",
 				client->data.identifier, node->cookie);
@@ -207,7 +210,10 @@ void cam_cdm_notify_clients(struct cam_hw_info *cdm_hw,
 			CAM_ERR(CAM_CDM, "No cb registered for client hdl=%x",
 				node->client_hdl);
 		}
-		spin_unlock_irqrestore(&client->hw_lock, flags);
+		if (node->irq_cb_type == CAM_HW_CDM_IRQ_CB_INTERNAL)
+			spin_unlock_irqrestore(&client->hw_lock, flags);
+		else
+			mutex_unlock(&client->lock);
 		cam_cdm_put_client_refcount(client);
 		return;
 	} else if (status == CAM_CDM_CB_STATUS_HW_RESET_DONE ||
