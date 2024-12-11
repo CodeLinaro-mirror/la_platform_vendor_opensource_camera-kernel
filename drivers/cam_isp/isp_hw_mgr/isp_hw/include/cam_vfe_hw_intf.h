@@ -302,6 +302,20 @@ struct cam_vfe_clock_update_args {
 };
 
 /*
+ * struct cam_vfe_bus_hwfence_mode_cfg_args:
+ *
+ * @res_type              Resource to configure hw fencing for
+ * @fencing_mode          Frame or slice
+ * @src_grp               Source group
+ *
+ */
+struct cam_vfe_bus_hwfence_mode_cfg_args {
+	uint32_t          res_type;
+	uint32_t          fencing_mode;
+	uint32_t          src_grp;
+};
+
+/*
  * struct cam_vfe_core_config_args:
  *
  * @node_res:                Resource to get the time stamp
@@ -459,6 +473,24 @@ struct cam_vfe_generic_ubwc_config {
 struct cam_vfe_hw_stop_args {
 	struct cam_isp_resource_node            *node_res;
 	bool                                     is_internal_stop;
+};
+
+/* struct cam_vfe_bus_ipcc_config:
+ *
+ * @ipcc_reg_iova:     HW Fence queue IOVA
+ * @len:               length of mapped region
+ * @group_id:          source group ID
+ * @client_id:         IPCC client ID (core ID + signal ID)
+ * @ipcc_signal_id:    signal ID unique per IPCC client
+ * @session_cookie:    Fence session cookie
+ */
+struct cam_vfe_bus_ipcc_config {
+	dma_addr_t ipcc_reg_iova;
+	size_t len;
+	uint32_t group_id;
+	uint32_t client_id;
+	uint32_t ipcc_signal_id;
+	int32_t  session_cookie;
 };
 
 /*

@@ -324,6 +324,8 @@ struct cam_isp_bw_clk_config_info {
  * @setting_id:                Per request setting ID received from UMD
  * @settingbuffer_kmdvaddr:    Setting buffer cpu address
  * @virtual_frame_en:          Indicates if virtual frame is enabled
+ * @hwfence_en:                Indiactes if HW fence is enabled
+ * @hwfence_info:              HW fence info for the given sync object
  *
  */
 struct cam_isp_prepare_hw_update_data {
@@ -352,6 +354,8 @@ struct cam_isp_prepare_hw_update_data {
 	bool                                  is_ul_setup;
 	bool                                  is_ul_update;
 	bool                                  virtual_frame_en;
+	bool                                  hwfence_en;
+	struct cam_sync_hwfence_info         *hwfence_info;
 };
 
 

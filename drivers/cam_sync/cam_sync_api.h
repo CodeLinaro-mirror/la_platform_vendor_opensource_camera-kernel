@@ -60,7 +60,7 @@ enum cam_sync_fencing_client_cores {
  * @param fencing_protocol: Indicates fencing protocol is used
  */
 struct cam_sync_hwfence_session_initialize_params {
-	char *name;
+	char name[100];
 	enum cam_sync_fencing_client_cores client_core;
 	uint32_t signal_id;
 
@@ -281,6 +281,8 @@ int cam_sync_check_valid(int32_t sync_obj);
  */
 int cam_sync_synx_core_recovery(
 	enum cam_sync_fencing_client_cores core_id);
+
+int cam_sync_hw_fence_session_cleanup(void);
 
 /**
  * @brief: Initialize HW fence session for a given client

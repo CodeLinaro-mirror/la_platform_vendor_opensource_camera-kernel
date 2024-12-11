@@ -280,13 +280,21 @@ enum cam_vfe_bus_ver3_stored_irq_masks {
 	CAM_VFE_BUS_VER3_MAX_STORED_MASKS,
 };
 
+struct cam_vfe_bus_ver3_ipcc_out_info {
+	dma_addr_t  queue_addr;
+	uint32_t    signal_id;
+	uint32_t    hwfence_queue_size;
+	int32_t     session_cookie;
+	int32_t     wr_ptr;
+	bool    updated;
+};
+
 struct cam_vfe_bus_ver3_vfe_out_data {
 	uint32_t                              out_type;
 	uint32_t                              source_group;
 	uint32_t                              buf_done_mask_shift;
 	struct cam_vfe_bus_ver3_common_data  *common_data;
 	struct cam_vfe_bus_ver3_priv         *bus_priv;
-
 	uint32_t                         num_wm;
 	struct cam_isp_resource_node    *wm_res;
 
@@ -314,6 +322,10 @@ struct cam_vfe_bus_ver3_vfe_out_data {
 		void *data;
 		cam_isp_ctx_update_fastpath_result handler_cb;
 	} fastpath_notifier;
+	uint32_t                         hwfence_cap;
+	uint32_t                         hwfence_mode_offset;
+	uint32_t                         hwfenceinfo_update;
+	uint32_t                         hwfencemode_set;
 };
 
 /*
@@ -399,6 +411,13 @@ struct cam_vfe_bus_ver3_hw_info {
 	uint32_t image_size_violation_shift;
 	uint32_t ccif_violation_shift;
 	uint32_t constraint_violation_shift;
+	uint32_t ipcc_client_send_offset;
+	uint32_t ipcc_protocol_reg_block_size;
+	uint32_t ipcc_client_reg_block_size;
+	uint32_t ipcc_offset_shift;
+	uint32_t fence_entry_size_shift;
+	uint32_t fence_offset_shift;
+	uint32_t ipcc_dest_client_shift;
 };
 
 /**
@@ -451,6 +470,8 @@ struct cam_vfe_bus_ver3_wm_resource_data {
 	uint32_t             index;
 	struct cam_vfe_bus_ver3_common_data            *common_data;
 	struct cam_vfe_bus_ver3_reg_offset_bus_client  *hw_regs;
+	struct cam_vfe_bus_ver3_vfe_out_data           *out_rsrc_data;
+	struct cam_vfe_bus_ver3_ipcc_out_info ipcc_out_info;
 
 	bool                 init_cfg_done;
 	bool                 hfr_cfg_done;
@@ -493,6 +514,9 @@ struct cam_vfe_bus_ver3_wm_resource_data {
 
 	uint32_t             tunnel_id;
 	uint32_t             tunnel_en;
+	uint32_t             wm_ipcc_id;
+	uint32_t             hwfence_cap_mask;
+	uint32_t             hwfence_mode;
 };
 
 struct cam_vfe_bus_ver3_common_data {
@@ -541,6 +565,13 @@ struct cam_vfe_bus_ver3_common_data {
 	uint32_t                                    constraint_violation_shift;
 	uint32_t                                    ipcc_addr_violation_shift;
 	uint32_t                                    ipcc_data_violation_shift;
+	uint32_t                                    ipcc_client_send_offset;
+	uint32_t                                    ipcc_protocol_reg_block_size;
+	uint32_t                                    ipcc_client_reg_block_size;
+	uint32_t                                    ipcc_offset_shift;
+	uint32_t                                    fence_offset_shift;
+	uint32_t                                    fence_entry_size_shift;
+	uint32_t                                    ipcc_dest_client_shift;
 };
 
 int cam_vfe_populate_out(

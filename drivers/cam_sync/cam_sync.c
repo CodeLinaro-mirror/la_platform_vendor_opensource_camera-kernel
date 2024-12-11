@@ -3300,6 +3300,34 @@ static int cam_sync_soccp_ssr_notify(struct notifier_block *nb, unsigned long ac
 }
 
 #if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
+int cam_sync_hw_fence_session_cleanup(void)
+{
+	int i, j, rc = 0;
+	uint32_t client_entry_idx;
+	struct cam_sync_hw_fence_client_entries *client_entry;
+
+	for (i = 0; i < CAM_SYNC_HW_FENCE_MAX_CLIENTS; i++)
+	{
+		for (j = 0; j < CAM_SYNC_HW_FENCE_MAX_SUB_GRPS; j++)
+		{
+			client_entry_idx = (i * CAM_SYNC_HW_FENCE_MAX_SUB_GRPS) + j;
+			spin_lock(hw_fence_info.hw_fence_locks[client_entry_idx]);
+			client_entry = &hw_fence_info.hw_fence_tbl[client_entry_idx];
+			if (client_entry->active) {
+				clear_bit(j, hw_fence_info.client_bitmaps[i]);
+				rc = cam_sync_deinitialize_hw_fence_session(
+					client_entry->cookie);
+				if (rc) {
+					spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
+					return rc;
+				}
+			}
+			spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
+		}
+	}
+	return rc;
+}
+
 int cam_sync_initialize_hw_fence_session(
 	struct cam_sync_hwfence_session_initialize_params *init_params)
 {
@@ -3446,6 +3474,11 @@ end:
 }
 
 #else
+int cam_sync_hw_fence_session_cleanup()
+{
+	return -EOPNOTSUPP;
+}
+
 int cam_sync_initialize_hw_fence_session(
 	struct cam_sync_hwfence_session_initialize_params *init_params)
 {

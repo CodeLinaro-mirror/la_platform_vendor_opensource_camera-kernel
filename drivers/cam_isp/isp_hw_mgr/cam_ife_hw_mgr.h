@@ -206,6 +206,7 @@ struct cam_ife_hw_mgr_sfe_info {
  * @is_trigger_type           Context type trigger
  * @is_ul_path                Ultra lite path context
  * @skip_reg_dump_buf_put:    Set if put_cpu_buf for reg dump buf is already called
+ * @hwfence_en:               set if HW fence is enabled
  *
  */
 struct cam_ife_hw_mgr_ctx_flags {
@@ -236,6 +237,7 @@ struct cam_ife_hw_mgr_ctx_flags {
 	bool   is_trigger_type;
 	bool   is_ul_path;
 	bool   skip_reg_dump_buf_put;
+	bool   hwfence_en;
 };
 
 /**
@@ -377,6 +379,7 @@ struct cam_isp_res_scratch_buf_info {
  * @ul_io_packet:           IO packet for UL path
  * @primary_port_scratch_buf_info: Primary port scratch buf info
  * @num_primary_port_scratch_bufs: Number of primary port scratch bufs
+ * @hwfence_info:           HW fence info for the given sync object
  */
 struct cam_ife_hw_mgr_ctx {
 	struct list_head                     list;
@@ -458,6 +461,7 @@ struct cam_ife_hw_mgr_ctx {
 	struct cam_packet                   *ul_io_packet;
 	struct cam_isp_res_scratch_buf_info *primary_port_scratch_buf_info;
 	uint32_t                             num_primary_port_scratch_bufs;
+	struct cam_sync_hwfence_info        *hwfence_info;
 };
 
 /**
@@ -465,14 +469,18 @@ struct cam_ife_hw_mgr_ctx {
  *
  * @max_vfe_out_res_type  :  max ife out res type value from hw
  * @max_sfe_out_res_type  :  max sfe out res type value from hw
+ * @num_src_groups        :  Number of source groups supported in HW
  * @support_consumed_addr :  indicate whether hw supports last consumed address
  * @fifo_depth            :  Max fifo depth supported
+ * @ipcc_en               :  Flag to indicate ipcc is enabled
  */
 struct cam_isp_bus_hw_caps {
 	uint32_t     max_vfe_out_res_type;
 	uint32_t     max_sfe_out_res_type;
+	uint32_t     num_src_groups;
 	bool         support_consumed_addr;
 	uint32_t     fifo_depth;
+	bool         ipcc_en;
 };
 
 /*

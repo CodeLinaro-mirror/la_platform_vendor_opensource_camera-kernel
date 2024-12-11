@@ -953,6 +953,13 @@ static struct cam_vfe_bus_ver3_hw_info vfe736x_bus_hw_info = {
 	.constraint_violation_shift = 28,
 	.ccif_violation_shift       = 30,
 	.image_size_violation_shift = 31,
+	.ipcc_client_send_offset      = 0xC,
+	.ipcc_protocol_reg_block_size = 0x40000,
+	.ipcc_client_reg_block_size   = 0x1000,
+	.ipcc_offset_shift = 4,
+	.fence_offset_shift = 9,
+	.ipcc_dest_client_shift = 16,
+	.fence_entry_size_shift = 1,
 };
 
 static struct cam_vfe_irq_hw_info vfe73x_irq_hw_info = {
