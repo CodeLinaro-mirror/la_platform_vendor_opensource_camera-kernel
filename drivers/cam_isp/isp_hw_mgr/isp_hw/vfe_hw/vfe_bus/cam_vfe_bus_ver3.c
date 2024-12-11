@@ -3237,6 +3237,7 @@ static int cam_vfe_bus_ver3_err_irq_bottom_half(
 	struct cam_isp_hw_error_event_info err_evt_info;
 	uint32_t status = 0, image_size_violation = 0, ccif_violation = 0, constraint_violation = 0;
 	uint32_t tunnel_overflow = 0;
+	uint32_t ipcc_addr_violation = 0, ipcc_data_violation = 0;
 
 	if (!handler_priv || !evt_payload_priv)
 		return -EINVAL;
@@ -3244,14 +3245,16 @@ static int cam_vfe_bus_ver3_err_irq_bottom_half(
 	common_data = &bus_priv->common_data;
 
 	status = evt_payload->irq_reg_val[CAM_IFE_IRQ_BUS_VER3_REG_STATUS0];
-	image_size_violation = (status >> 31) & 0x1;
-	ccif_violation = (status >> 30) & 0x1;
-	constraint_violation = (status >> 28) & 0x1;
+	image_size_violation = (status >> common_data->image_size_violation_shift) & 0x1;
+	ccif_violation = (status >> common_data->ccif_violation_shift) & 0x1;
+	constraint_violation = (status >> common_data->constraint_violation_shift) & 0x1;
+	ipcc_addr_violation = (status >> common_data->ipcc_addr_violation_shift) & 0x1;
+	ipcc_data_violation = (status >> common_data->ipcc_data_violation_shift) & 0x1;
 
 	CAM_ERR(CAM_ISP,
-		"VFE:%d BUS error image size violation %d CCIF violation %d constraint violation %d",
+		"VFE:%d BUS error image size violation %d CCIF violation %d constraint violation %d, IPCC address violation :%d, IPCC data violation: %d",
 		bus_priv->common_data.core_index, image_size_violation,
-		ccif_violation, constraint_violation);
+		ccif_violation, constraint_violation, ipcc_addr_violation, ipcc_data_violation);
 	CAM_INFO(CAM_ISP,
 		"Image Size violation status 0x%X CCIF violation status 0x%X",
 		evt_payload->image_size_violation_status,
@@ -5807,6 +5810,13 @@ int cam_vfe_bus_ver3_init(
 	bus_priv->common_data.buf_done_evt_control = false;
 	bus_priv->common_data.pack_align_shift =
 		ver3_hw_info->pack_align_shift;
+	bus_priv->common_data.ipcc_addr_violation_shift = ver3_hw_info->ipcc_addr_violation_shift;
+	bus_priv->common_data.ipcc_data_violation_shift = ver3_hw_info->ipcc_data_violation_shift;
+	bus_priv->common_data.image_size_violation_shift =
+		ver3_hw_info->image_size_violation_shift;
+	bus_priv->common_data.ccif_violation_shift = ver3_hw_info->ccif_violation_shift;
+	bus_priv->common_data.constraint_violation_shift =
+		ver3_hw_info->constraint_violation_shift;
 	bus_priv->common_data.max_bw_counter_limit =
 		ver3_hw_info->max_bw_counter_limit;
 	bus_priv->num_cons_err = ver3_hw_info->num_cons_err;
