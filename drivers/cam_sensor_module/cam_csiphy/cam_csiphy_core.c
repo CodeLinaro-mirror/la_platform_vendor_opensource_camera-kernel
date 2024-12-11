@@ -1486,6 +1486,15 @@ static void cam_csiphy_update_lane_assign_info(
 {
 	int i = 0;
 
+	CAM_DBG(CAM_CSIPHY,
+		"acquire_cnt: %d phy_idx: %d offset: %d lane_assign: 0x%x, lanes_enabled: 0x%x max_dev_support: %d",
+		csiphy->acquire_count,
+		csiphy->soc_info.index,
+		index,
+		csiphy->csiphy_info[index].lane_assign,
+		csiphy->lanes_enabled,
+		csiphy->session_max_device_support);
+
 	if (enable) {
 		for (i = 0; i < csiphy->session_max_device_support; i++) {
 			if (csiphy->lanes_assigned[i].lane_assign
@@ -1518,11 +1527,17 @@ static void cam_csiphy_update_lane_assign_info(
 		}
 	}
 
-	CAM_DBG(CAM_CSIPHY,
-		"lane_assign_cnt: 0%d, lane_assign: 0x%x, lanes_enabled: 0x%x",
-		csiphy->lanes_assigned[i].lane_assign_cnt,
-		csiphy->lanes_assigned[i].lane_assign,
-		csiphy->lanes_enabled);
+
+	if (i < csiphy->session_max_device_support && i >= 0) {
+		CAM_DBG(CAM_CSIPHY,
+			"lane_assign_cnt: 0%d, lane_assign: 0x%x, lanes_enabled: 0x%x",
+			csiphy->lanes_assigned[i].lane_assign_cnt,
+			csiphy->lanes_assigned[i].lane_assign,
+			csiphy->lanes_enabled);
+	} else {
+		CAM_ERR(CAM_CSIPHY,
+			"Array out of bounds: > i: %d", i);
+	}
 }
 
 static int __csiphy_cpas_configure_for_main_or_aon(
@@ -2164,9 +2179,19 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			goto release_mutex;
 		}
 
+		cam_csiphy_update_lane_assign_info(csiphy_dev, offset, false);
+
 		if (--csiphy_dev->start_dev_count) {
 			if (csiphy_dev->is_aggregator_rx) {
-				cam_csiphy_update_lane_assign_info(csiphy_dev, offset, false);
+				if (csiphy_dev->csiphy_info[offset].secure_mode)
+					cam_csiphy_program_secure_mode(
+						csiphy_dev,
+						CAM_SECURE_MODE_NON_SECURE, offset, false);
+
+				csiphy_dev->csiphy_info[offset].secure_mode =
+					CAM_SECURE_MODE_NON_SECURE;
+				csiphy_dev->csiphy_info[offset].csiphy_cpas_cp_reg_mask
+					= 0;
 				CAM_INFO(CAM_CSIPHY,
 					"CAM_STOP_PHYDEV: %d dev_cnt: %u, slot: %d",
 					soc_info->index,
@@ -2360,20 +2385,40 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			goto release_mutex;
 		}
 
+		cam_csiphy_update_lane_assign_info(csiphy_dev, offset, true);
+
 		if (csiphy_dev->start_dev_count) {
-			if (csiphy_dev->is_aggregator_rx) {
-				cam_csiphy_update_lane_assign_info(csiphy_dev, offset, true);
-				if ((csiphy_dev->lanes_enabled
-					& csiphy_dev->csiphy_info[offset].lane_enable)
-					== csiphy_dev->csiphy_info[offset].lane_enable) {
-					csiphy_dev->start_dev_count++;
-					CAM_INFO(CAM_CSIPHY,
-						"CAM_START_PHYDEV: %d dev_cnt: %u, slot: %d",
-						soc_info->index,
-						csiphy_dev->start_dev_count,
-						offset);
+			if ((csiphy_dev->is_aggregator_rx) &&
+				((csiphy_dev->lanes_enabled
+				& csiphy_dev->csiphy_info[offset].lane_enable)
+				== csiphy_dev->csiphy_info[offset].lane_enable)) {
+				if ((csiphy_dev->csiphy_info[offset].secure_mode == 1) &&
+						(!cam_cpas_is_feature_supported(
+						CAM_CPAS_SECURE_CAMERA_ENABLE,
+						CAM_CPAS_HW_IDX_ANY, NULL))) {
+						CAM_ERR(CAM_CSIPHY,
+							"sec_cam: camera fuse bit not set");
+						goto release_mutex;
+				}
+
+				if ((csiphy_dev->csiphy_info[offset].secure_mode == 1) &&
+					(cam_csiphy_program_secure_mode(csiphy_dev,
+					CAM_SECURE_MODE_SECURE, offset, false) < 0)) {
+					csiphy_dev->csiphy_info[offset]
+						.secure_mode =
+						CAM_SECURE_MODE_NON_SECURE;
+					CAM_ERR(CAM_CSIPHY,
+						"sec_cam: notify failed: rc: %d",
+						rc);
 					goto release_mutex;
 				}
+				csiphy_dev->start_dev_count++;
+				CAM_INFO(CAM_CSIPHY,
+					"CAM_START_PHYDEV: %d dev_cnt: %u, slot: %d",
+					soc_info->index,
+					csiphy_dev->start_dev_count,
+					offset);
+				goto release_mutex;
 			}
 
 			clk_vote_level =
