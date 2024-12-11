@@ -8611,7 +8611,8 @@ done:
 	}
 
 	if (ctx_isp->independent_crm_en && ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) {
-		if (ctx->state == CAM_CTX_ACTIVATED && ctx_isp->rdi_only_context) {
+		if (ctx->state == CAM_CTX_ACTIVATED && (ctx_isp->rdi_only_context ||
+			ctx_isp->rdi_stats_context)) {
 			CAM_DBG(CAM_ISP,
 				"independent CRM apply from config_dev ctx:%u", ctx->ctx_id);
 

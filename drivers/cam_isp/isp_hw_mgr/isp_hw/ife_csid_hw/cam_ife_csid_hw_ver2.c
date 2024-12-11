@@ -2159,6 +2159,13 @@ static int cam_ife_csid_ver2_disable_path(
 		path_cfg->discard_irq_handle = 0;
 	}
 
+	if (res->res_id != CAM_IFE_PIX_PATH_RES_IPP &&
+		csid_hw->trigger_cam_data.primary_vc >= 0 &&
+		path_cfg->path_vcdt.vc_dt[0].vc !=
+			csid_hw->trigger_cam_data.primary_vc)
+		csid_hw->trigger_cam_data.active_res_mask &=
+			~(1 << res->res_id);
+
 	/* Reset frame drop fields at stream off */
 	path_cfg->discard_init_frames = false;
 	path_cfg->skip_discard_frame_cfg = false;
@@ -2923,6 +2930,7 @@ int cam_ife_csid_ver2_release(void *hw_priv,
 
 	csid_hw->sync_mode = CAM_ISP_HW_SYNC_NONE;
 	csid_hw->rup_aup_mask = 0;
+	csid_hw->trigger_cam_data.is_trigger_type = false;
 
 	if (csid_hw->counters.csi2_reserve_cnt)
 		csid_hw->counters.csi2_reserve_cnt--;
@@ -3484,6 +3492,7 @@ static int cam_ife_csid_ver2_program_rdi_path(
 	void __iomem *mem_base;
 	uint32_t val = 0;
 	struct cam_ife_csid_ver2_path_cfg *path_cfg;
+	bool enable_rdi_irq = false;
 
 	rc = cam_ife_csid_ver2_init_config_rdi_path(
 		csid_hw, res);
@@ -3522,7 +3531,16 @@ static int cam_ife_csid_ver2_program_rdi_path(
 
 	val = csid_hw->debug_info.path_mask;
 
-	if (res->rdi_only_ctx) {
+	if (csid_hw->trigger_cam_data.is_trigger_type &&
+		csid_hw->trigger_cam_data.primary_vc >= 0 &&
+		path_cfg->path_vcdt.vc_dt[0].vc !=
+		csid_hw->trigger_cam_data.primary_vc)
+		enable_rdi_irq = true;
+
+	if (!res->rdi_only_ctx)
+		csid_hw->trigger_cam_data.active_res_mask &= ~(1 << res->res_id);
+
+	if (res->rdi_only_ctx || enable_rdi_irq) {
 		path_cfg->handle_camif_irq = true;
 		val |= path_reg->rup_irq_mask;
 		if (path_cfg->handle_camif_irq)
@@ -4632,6 +4650,7 @@ int cam_ife_csid_ver2_start(void *hw_priv, void *args,
 	struct cam_ife_csid_ver2_reg_info     *csid_reg;
 	struct cam_hw_soc_info                *soc_info;
 	struct cam_hw_info                    *hw_info;
+	struct cam_ife_csid_ver2_path_cfg     *path_cfg;
 	uint32_t                               rup_aup_mask = 0;
 	int                                    rc = 0, i;
 
@@ -4658,6 +4677,39 @@ int cam_ife_csid_ver2_start(void *hw_priv, void *args,
 	csid_hw->counters.irq_debug_cnt = 0;
 
 	rc = cam_ife_csid_ver2_enable_hw(csid_hw);
+
+	csid_hw->trigger_cam_data.is_trigger_type = start_args->is_trigger_mode;
+
+	if (start_args->is_trigger_mode) {
+		if (!(csid_hw->trigger_cam_data.active_res_mask &
+			(1 << CAM_IFE_PIX_PATH_RES_IPP)))
+			csid_hw->trigger_cam_data.primary_vc = -1;
+
+		for (i = 0; i < start_args->num_res; i++) {
+			res = start_args->node_res[i];
+
+			if (res->res_id >= CAM_IFE_PIX_PATH_RES_MAX)
+				continue;
+
+			if (res->res_id != CAM_IFE_PIX_PATH_RES_IPP) {
+				csid_hw->trigger_cam_data.active_res_mask |=
+					(1 << res->res_id);
+				continue;
+			}
+
+			path_cfg = (struct cam_ife_csid_ver2_path_cfg *)
+					res->res_priv;
+			if (path_cfg) {
+				csid_hw->trigger_cam_data.primary_vc =
+					path_cfg->path_vcdt.vc_dt[0].vc;
+				csid_hw->trigger_cam_data.active_res_mask |=
+					(1 << res->res_id);
+			} else {
+				CAM_ERR(CAM_ISP, "CSID:%d path cfg NULL",
+					csid_hw->hw_intf->hw_idx);
+			}
+		}
+	}
 
 	for (i = 0; i < start_args->num_res; i++) {
 
@@ -4791,6 +4843,13 @@ int cam_ife_csid_ver2_stop(void *hw_priv,
 	for (i = 0; i < csid_stop->num_res; i++) {
 
 		res = csid_stop->node_res[i];
+
+		if (res->res_id == CAM_IFE_PIX_PATH_RES_IPP) {
+			csid_hw->trigger_cam_data.primary_vc = -1;
+			csid_hw->trigger_cam_data.active_res_mask &=
+				~(1 << res->res_id);
+		}
+
 		rc = cam_ife_csid_ver2_disable_path(csid_hw, res);
 		res->res_state = CAM_ISP_RESOURCE_STATE_INIT_HW;
 		CAM_DBG(CAM_ISP, "CSID:%d res_type %d Resource[id:%d name:%s]",
@@ -5960,6 +6019,25 @@ static int cam_ife_csid_init_config_update(
 	return 0;
 }
 
+static int cam_ife_csid_get_path_vc_mask(
+	struct cam_ife_csid_ver2_hw *csid_hw,
+	void *cmd_args)
+{
+	struct cam_ife_csid_get_all_path_vc_mask *vc_info;
+
+	if (!cmd_args) {
+		CAM_ERR(CAM_ISP, "CSID: %u,Invalid params",
+			csid_hw->hw_intf->hw_idx);
+		return  -EINVAL;
+	}
+
+	vc_info = (struct cam_ife_csid_get_all_path_vc_mask *)cmd_args;
+
+	vc_info->enabled_path_vc = csid_hw->trigger_cam_data.active_res_mask;
+
+	return 0;
+}
+
 static int cam_ife_csid_ver2_update_aup(struct cam_ife_csid_ver2_hw *csid_hw,
 	void *cmd_args)
 {
@@ -6151,6 +6229,9 @@ static int cam_ife_csid_ver2_process_cmd(void *hw_priv,
 		break;
 	case CAM_ISP_HW_CMD_CSID_UPDATE_AUP:
 		rc = cam_ife_csid_ver2_update_aup(csid_hw, cmd_args);
+		break;
+	case CAM_ISP_HW_CMD_GET_PATH_VC_INFO:
+		rc = cam_ife_csid_get_path_vc_mask(csid_hw, cmd_args);
 		break;
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d unsupported cmd:%d",
