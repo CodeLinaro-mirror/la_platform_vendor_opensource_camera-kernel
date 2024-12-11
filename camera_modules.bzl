@@ -37,6 +37,12 @@ def _define_module(target, variant):
     if target == "seraph":
         deps.extend([
 		"//vendor/qcom/opensource/dsp-kernel:{}_frpc-adsprpc".format(tv),
+    ])
+    if target == "neo-la":
+        deps.extend([
+		"//vendor/qcom/opensource/dsp-kernel:{}_frpc-adsprpc".format(tv),
+		"//vendor/qcom/opensource/securemsm-kernel:smcinvoke_kernel_headers",
+		"//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
 	])
     ddk_module(
         name = "{}_camera".format(tv),
@@ -65,7 +71,7 @@ def _define_module(target, variant):
             "drivers/cam_smmu/cam_smmu_api.c",
             "drivers/cam_sync/cam_sync.c",
             "drivers/cam_sync/cam_sync_util.c",
-	    "drivers/cam_sync/cam_sync_dma_fence.c",
+            "drivers/cam_sync/cam_sync_dma_fence.c",
             "drivers/cam_cpas/cpas_top/cam_cpastop_hw.c",
             "drivers/cam_cpas/camss_top/cam_camsstop_hw.c",
             "drivers/cam_cpas/cam_cpas_soc.c",
