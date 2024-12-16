@@ -5330,7 +5330,7 @@ apply_pending:
 			CAM_DBG(CAM_ISP,
 				"signal fence in pending list. fence num %d req id %lld ctx:%u",
 				req_isp->num_fence_map_out, req->request_id, ctx->ctx_id);
-			for (i = 0; i < req_isp->num_fence_map_out; i++) {
+			for (i = 0; i < req_isp->num_fence_map_out && !ctx_isp->ul_path_en; i++) {
 				if (req_isp->fence_map_out[i].sync_id != -1) {
 					memset(&param, 0, sizeof(param));
 					param.sync_obj = req_isp->fence_map_out[i].sync_id;
@@ -5341,6 +5341,8 @@ apply_pending:
 					cam_sync_signal(&param, NULL);
 				}
 			}
+			if (ctx_isp->ul_path_en)
+				cam_isp_ctx_reset_producer_q_for_req(ctx_isp, req_isp);
 			list_del_init(&req->list);
 			list_add_tail(&req->list, &ctx->free_req_list);
 		}
@@ -10984,6 +10986,14 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 
 	CAM_DBG(CAM_ISP, "enter no crm apply ctx:%u", cam_ctx->ctx_id);
 
+	if ((ctx_isp->substate_activated == CAM_ISP_CTX_ACTIVATED_APPLIED &&
+		check_applied_state)) {
+
+		CAM_DBG(CAM_ISP, "skip apply as isp context in applied state on ctx: %u",
+			cam_ctx->ctx_id);
+		return 0;
+	}
+
 	INIT_LIST_HEAD(&temp_req_list);
 
 	if (ctx_isp->ul_path_en)
@@ -11155,52 +11165,44 @@ apply:
 		__cam_isp_ctx_crm_trigger_point_to_string(apply_req.trigger_point), req->request_id,
 		cam_ctx->ctx_id, cam_ctx->link_hdl, apply_req.request_id);
 
-	if ((ctx_isp->substate_activated == CAM_ISP_CTX_ACTIVATED_APPLIED &&
-		check_applied_state)) {
+	CAM_DBG(CAM_ISP, "Enter: apply req in Substate[%s] request_id:%lld ctx:%d",
+		__cam_isp_ctx_substate_val_to_type(
+		ctx_isp->substate_activated), apply_req.request_id,
+		cam_ctx->ctx_id);
+	ctx_ops = &ctx_isp->substate_machine[ctx_isp->substate_activated];
 
-		CAM_DBG(CAM_ISP, "skip apply as isp context in applied state on ctx: %u",
-			cam_ctx->ctx_id);
-
+	if (ctx_ops->crm_ops.apply_req) {
+		rc = ctx_ops->crm_ops.apply_req(cam_ctx, &apply_req);
 	} else {
-		CAM_DBG(CAM_ISP, "Enter: apply req in Substate[%s] request_id:%lld ctx:%d",
+		CAM_WARN_RATE_LIMIT(CAM_ISP,
+			"No handle function in activated Substate[%s] ctx:%d",
 			__cam_isp_ctx_substate_val_to_type(
-			ctx_isp->substate_activated), apply_req.request_id,
-			cam_ctx->ctx_id);
-		ctx_ops = &ctx_isp->substate_machine[ctx_isp->substate_activated];
-
-		if (ctx_ops->crm_ops.apply_req) {
-			rc = ctx_ops->crm_ops.apply_req(cam_ctx, &apply_req);
-		} else {
-			CAM_WARN_RATE_LIMIT(CAM_ISP,
-				"No handle function in activated Substate[%s] ctx:%d",
-				__cam_isp_ctx_substate_val_to_type(
-				ctx_isp->substate_activated), cam_ctx->ctx_id);
-			rc = -EFAULT;
-		}
-		if (rc) {
-			CAM_WARN_RATE_LIMIT(CAM_ISP,
-				"Apply failed in active Substate[%s] rc %d ctx:%u",
-				__cam_isp_ctx_substate_val_to_type(
-				ctx_isp->substate_activated), rc, cam_ctx->ctx_id);
-		} else {
-			*applied_req = apply_req.request_id;
-			ctx_isp->additional_timeout =
-				cam_req_mgr_link_get_additional_timeout(ctx_isp->base->link_hdl);
-		}
-
-		/* Signal error for older requests and move them to free req list */
-		if (!list_empty(&temp_req_list)) {
-			list_for_each_entry_safe(req, req_temp, &temp_req_list, list) {
-				req_isp = (struct cam_isp_ctx_req *) req->req_priv;
-				__cam_isp_ctx_send_req_error(ctx_isp, req_isp);
-				mutex_lock(&ctx_isp->isp_mutex);
-				list_del_init(&req->list);
-				list_add_tail(&req->list, &cam_ctx->free_req_list);
-				mutex_unlock(&ctx_isp->isp_mutex);
-			}
-		}
-		crm_timer_reset(ctx_isp->independent_crm_sof_timer);
+			ctx_isp->substate_activated), cam_ctx->ctx_id);
+		rc = -EFAULT;
 	}
+	if (rc) {
+		CAM_WARN_RATE_LIMIT(CAM_ISP,
+			"Apply failed in active Substate[%s] rc %d ctx:%u",
+			__cam_isp_ctx_substate_val_to_type(
+			ctx_isp->substate_activated), rc, cam_ctx->ctx_id);
+	} else {
+		*applied_req = apply_req.request_id;
+		ctx_isp->additional_timeout =
+			cam_req_mgr_link_get_additional_timeout(ctx_isp->base->link_hdl);
+	}
+
+	/* Signal error for older requests and move them to free req list */
+	if (!list_empty(&temp_req_list)) {
+		list_for_each_entry_safe(req, req_temp, &temp_req_list, list) {
+			req_isp = (struct cam_isp_ctx_req *) req->req_priv;
+			__cam_isp_ctx_send_req_error(ctx_isp, req_isp);
+			mutex_lock(&ctx_isp->isp_mutex);
+			list_del_init(&req->list);
+			list_add_tail(&req->list, &cam_ctx->free_req_list);
+			mutex_unlock(&ctx_isp->isp_mutex);
+		}
+	}
+	crm_timer_reset(ctx_isp->independent_crm_sof_timer);
 
 end:
 	CAM_DBG(CAM_ISP, "exit no crm apply");
