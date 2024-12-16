@@ -10550,6 +10550,15 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 	uint64_t prev_ts, curr_ts = 0, boot_ts;
 
 	CAM_DBG(CAM_ISP, "enter no crm apply ctx:%u", cam_ctx->ctx_id);
+
+	if ((ctx_isp->substate_activated == CAM_ISP_CTX_ACTIVATED_APPLIED &&
+		check_applied_state)) {
+
+		CAM_DBG(CAM_ISP, "skip apply as isp context in applied state on ctx: %u",
+			cam_ctx->ctx_id);
+		return 0;
+	}
+
 	if (ctx_isp->ul_path_en)
 		cam_context_prepare_ul_request(ctx_isp);
 	mutex_lock(&ctx_isp->isp_mutex);
@@ -10607,40 +10616,32 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 		__cam_isp_ctx_crm_trigger_point_to_string(apply_req.trigger_point), req->request_id,
 		cam_ctx->ctx_id, cam_ctx->link_hdl, apply_req.request_id);
 
-	if ((ctx_isp->substate_activated == CAM_ISP_CTX_ACTIVATED_APPLIED &&
-		check_applied_state)) {
+	CAM_DBG(CAM_ISP, "Enter: apply req in Substate[%s] request_id:%lld ctx:%d",
+		__cam_isp_ctx_substate_val_to_type(
+		ctx_isp->substate_activated), apply_req.request_id,
+		cam_ctx->ctx_id);
+	ctx_ops = &ctx_isp->substate_machine[ctx_isp->substate_activated];
 
-		CAM_DBG(CAM_ISP, "skip apply as isp context in applied state on ctx: %u",
-			cam_ctx->ctx_id);
-
+	if (ctx_ops->crm_ops.apply_req) {
+		rc = ctx_ops->crm_ops.apply_req(cam_ctx, &apply_req);
 	} else {
-		CAM_DBG(CAM_ISP, "Enter: apply req in Substate[%s] request_id:%lld ctx:%d",
+		CAM_WARN_RATE_LIMIT(CAM_ISP,
+			"No handle function in activated Substate[%s] ctx:%d",
 			__cam_isp_ctx_substate_val_to_type(
-			ctx_isp->substate_activated), apply_req.request_id,
-			cam_ctx->ctx_id);
-		ctx_ops = &ctx_isp->substate_machine[ctx_isp->substate_activated];
-
-		if (ctx_ops->crm_ops.apply_req) {
-			rc = ctx_ops->crm_ops.apply_req(cam_ctx, &apply_req);
-		} else {
-			CAM_WARN_RATE_LIMIT(CAM_ISP,
-				"No handle function in activated Substate[%s] ctx:%d",
-				__cam_isp_ctx_substate_val_to_type(
-				ctx_isp->substate_activated), cam_ctx->ctx_id);
-			rc = -EFAULT;
-		}
-		if (rc) {
-			CAM_WARN_RATE_LIMIT(CAM_ISP,
-				"Apply failed in active Substate[%s] rc %d ctx:%u",
-				__cam_isp_ctx_substate_val_to_type(
-				ctx_isp->substate_activated), rc, cam_ctx->ctx_id);
-		} else {
-			*applied_req = apply_req.request_id;
-			ctx_isp->additional_timeout =
-				cam_req_mgr_link_get_additional_timeout(ctx_isp->base->link_hdl);
-		}
-		crm_timer_reset(ctx_isp->independent_crm_sof_timer);
+			ctx_isp->substate_activated), cam_ctx->ctx_id);
+		rc = -EFAULT;
 	}
+	if (rc) {
+		CAM_WARN_RATE_LIMIT(CAM_ISP,
+			"Apply failed in active Substate[%s] rc %d ctx:%u",
+			__cam_isp_ctx_substate_val_to_type(
+			ctx_isp->substate_activated), rc, cam_ctx->ctx_id);
+	} else {
+		*applied_req = apply_req.request_id;
+		ctx_isp->additional_timeout =
+			cam_req_mgr_link_get_additional_timeout(ctx_isp->base->link_hdl);
+	}
+	crm_timer_reset(ctx_isp->independent_crm_sof_timer);
 
 end:
 	CAM_DBG(CAM_ISP, "exit no crm apply");
