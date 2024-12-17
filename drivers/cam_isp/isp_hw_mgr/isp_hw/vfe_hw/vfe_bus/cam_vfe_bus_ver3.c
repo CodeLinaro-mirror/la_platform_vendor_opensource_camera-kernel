@@ -1770,8 +1770,14 @@ static int cam_vfe_bus_ver3_start_comp_grp(
 		rsrc_data->comp_grp_type, comp_grp->res_state,
 		rsrc_data->composite_mask);
 
-	if (comp_grp->res_state == CAM_ISP_RESOURCE_STATE_STREAMING)
+	if (comp_grp->res_state == CAM_ISP_RESOURCE_STATE_STREAMING) {
+		if (comp_grp->is_per_port_start)
+			bus_irq_reg_mask[CAM_VFE_BUS_VER3_IRQ_REG0] =
+				(0x1 << (rsrc_data->comp_grp_type +
+				vfe_out_data->buf_done_mask_shift +
+				rsrc_data->common_data->comp_done_shift));
 		return 0;
+	}
 
 	if (!common_data->comp_config_needed)
 		goto skip_comp_cfg;
@@ -2272,6 +2278,7 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 	for (i = 0; i < rsrc_data->num_wm; i++)
 		rc = cam_vfe_bus_ver3_start_wm(&rsrc_data->wm_res[i]);
 
+	rsrc_data->comp_grp->is_per_port_start = vfe_out->is_per_port_start;
 	if ((!bus_priv->common_data.buf_done_evt_control) ||
 		(bus_priv->common_data.buf_done_evt_control && rsrc_data->primary_port_en))
 		rc = cam_vfe_bus_ver3_start_comp_grp(rsrc_data,
