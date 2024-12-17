@@ -1907,6 +1907,69 @@ int cam_sensor_util_init_gpio_pin_tbl(
 		rc = 0;
 	}
 
+	rc = of_property_read_u32(of_node, "gpio-custom3", &val);
+	if (rc != -EINVAL) {
+		if (rc < 0) {
+			CAM_ERR(CAM_SENSOR,
+				"read gpio-custom3 failed rc %d", rc);
+			goto free_gpio_info;
+		} else if (val >= gpio_array_size) {
+			CAM_ERR(CAM_SENSOR, "gpio-custom3 invalid %d", val);
+			rc = -EINVAL;
+			goto free_gpio_info;
+		}
+		gpio_num_info->gpio_num[SENSOR_CUSTOM_GPIO3] =
+			gconf->cam_gpio_common_tbl[val].gpio;
+		gpio_num_info->valid[SENSOR_CUSTOM_GPIO3] = 1;
+
+		CAM_DBG(CAM_SENSOR, "gpio-custom3 %d",
+			gpio_num_info->gpio_num[SENSOR_CUSTOM_GPIO3]);
+	} else {
+		rc = 0;
+	}
+
+	rc = of_property_read_u32(of_node, "gpio-custom4", &val);
+	if (rc != -EINVAL) {
+		if (rc < 0) {
+			CAM_ERR(CAM_SENSOR,
+				"read gpio-custom4 failed rc %d", rc);
+			goto free_gpio_info;
+		} else if (val >= gpio_array_size) {
+			CAM_ERR(CAM_SENSOR, "gpio-custom4 invalid %d", val);
+			rc = -EINVAL;
+			goto free_gpio_info;
+		}
+		gpio_num_info->gpio_num[SENSOR_CUSTOM_GPIO4] =
+			gconf->cam_gpio_common_tbl[val].gpio;
+		gpio_num_info->valid[SENSOR_CUSTOM_GPIO4] = 1;
+
+		CAM_DBG(CAM_SENSOR, "gpio-custom4 %d",
+			gpio_num_info->gpio_num[SENSOR_CUSTOM_GPIO4]);
+	} else {
+		rc = 0;
+	}
+
+	rc = of_property_read_u32(of_node, "gpio-custom5", &val);
+	if (rc != -EINVAL) {
+		if (rc < 0) {
+			CAM_ERR(CAM_SENSOR,
+				"read gpio-custom5 failed rc %d", rc);
+			goto free_gpio_info;
+		} else if (val >= gpio_array_size) {
+			CAM_ERR(CAM_SENSOR, "gpio-custom5 invalid %d", val);
+			rc = -EINVAL;
+			goto free_gpio_info;
+		}
+		gpio_num_info->gpio_num[SENSOR_CUSTOM_GPIO5] =
+			gconf->cam_gpio_common_tbl[val].gpio;
+		gpio_num_info->valid[SENSOR_CUSTOM_GPIO5] = 1;
+
+		CAM_DBG(CAM_SENSOR, "gpio-custom5 %d",
+			gpio_num_info->gpio_num[SENSOR_CUSTOM_GPIO5]);
+	} else {
+		rc = 0;
+	}
+
 	return rc;
 
 free_gpio_info:
@@ -2170,6 +2233,9 @@ int cam_sensor_core_power_up(struct cam_sensor_power_ctrl_t *ctrl,
 		case SENSOR_STANDBY:
 		case SENSOR_CUSTOM_GPIO1:
 		case SENSOR_CUSTOM_GPIO2:
+		case SENSOR_CUSTOM_GPIO3:
+		case SENSOR_CUSTOM_GPIO4:
+		case SENSOR_CUSTOM_GPIO5:
 			if (no_gpio) {
 				CAM_ERR(CAM_SENSOR, "request gpio failed");
 				goto power_up_failed;
@@ -2290,6 +2356,9 @@ power_up_failed:
 		case SENSOR_STANDBY:
 		case SENSOR_CUSTOM_GPIO1:
 		case SENSOR_CUSTOM_GPIO2:
+		case SENSOR_CUSTOM_GPIO3:
+		case SENSOR_CUSTOM_GPIO4:
+		case SENSOR_CUSTOM_GPIO5:
 			if (!gpio_num_info)
 				continue;
 			if (!gpio_num_info->valid
@@ -2448,7 +2517,9 @@ int cam_sensor_util_power_down(struct cam_sensor_power_ctrl_t *ctrl,
 		case SENSOR_STANDBY:
 		case SENSOR_CUSTOM_GPIO1:
 		case SENSOR_CUSTOM_GPIO2:
-
+		case SENSOR_CUSTOM_GPIO3:
+		case SENSOR_CUSTOM_GPIO4:
+		case SENSOR_CUSTOM_GPIO5:
 			if (!gpio_num_info->valid[pd->seq_type])
 				continue;
 
