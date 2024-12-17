@@ -5094,6 +5094,39 @@ static int cam_isp_ctx_reapply_iq_config(struct cam_context *ctx, struct cam_ctx
 	return rc;
 }
 
+static void cam_isp_ctx_reset_producer_q_for_req(struct cam_isp_context *ctx_isp,
+	struct cam_isp_ctx_req               *req_isp)
+{
+	struct cam_isp_ul_resource_update_entry *res_data;
+	int i, j, k;
+	uint8_t *producer_queue;
+
+	res_data = ctx_isp->ul_data.resource_data;
+	for (i = 0; i < req_isp->num_fence_map_out; i++) {
+		for (j = 0; j < MAX_IO_RESOURCES; j++) {
+			if (req_isp->fence_map_out[i].resource_handle != res_data[j].resource_type)
+				continue;
+
+			if (!res_data[j].is_producer_q_valid)
+				break;
+
+			producer_queue = (uint8_t *)res_data[j].producer_q_kmdvaddr;
+
+			for (k = 0; k < res_data[j].buf_count; k++) {
+				if (res_data[j].out_map_entries[k].image_buf_addr[0] !=
+					req_isp->fence_map_out[i].image_buf_addr[0]) {
+					continue;
+				}
+				CAM_INFO(CAM_ISP, "resetting producer q for frame drop ctx %d",
+					ctx_isp->base->ctx_id);
+				producer_queue[k] = 0;
+				break;
+			}
+			break;
+		}
+	}
+}
+
 static int __cam_isp_ctx_apply_dropped_req_in_bubble_state(
 	struct cam_context *ctx, uint64_t ife_dropped_req, uint64_t sensor_applied_req,
 	uint64_t *last_applied_ife_req, bool is_impacted_ctx)
@@ -5131,7 +5164,7 @@ static int __cam_isp_ctx_apply_dropped_req_in_bubble_state(
 		/* Signal Fence failures for active reqs dropped req */
 		CAM_DBG(CAM_ISP, "signal fence in active list. fence num %d req id %lld ctx:%u",
 			req_isp->num_fence_map_out, req->request_id, ctx->ctx_id);
-		for (i = 0; i < req_isp->num_fence_map_out; i++) {
+		for (i = 0; i < req_isp->num_fence_map_out && !ctx_isp->ul_path_en; i++) {
 			if (req_isp->fence_map_out[i].sync_id != -1) {
 				memset(&param, 0, sizeof(param));
 				param.sync_obj = req_isp->fence_map_out[i].sync_id;
@@ -5142,6 +5175,8 @@ static int __cam_isp_ctx_apply_dropped_req_in_bubble_state(
 				cam_sync_signal(&param, NULL);
 			}
 		}
+		if (ctx_isp->ul_path_en)
+			cam_isp_ctx_reset_producer_q_for_req(ctx_isp, req_isp);
 		ctx_isp->active_req_cnt--;
 		list_del_init(&req->list);
 		list_add_tail(&req->list, &ctx->free_req_list);
@@ -5182,7 +5217,7 @@ apply_wait:
 			CAM_INFO(CAM_ISP,
 				"signal fence in wait list. fence num %d req id %lld ctx:%u",
 				req_isp->num_fence_map_out, req->request_id, ctx->ctx_id);
-			for (i = 0; i < req_isp->num_fence_map_out; i++) {
+			for (i = 0; i < req_isp->num_fence_map_out && !ctx_isp->ul_path_en; i++) {
 				if (req_isp->fence_map_out[i].sync_id != -1) {
 					memset(&param, 0, sizeof(param));
 					param.sync_obj = req_isp->fence_map_out[i].sync_id;
@@ -5193,6 +5228,8 @@ apply_wait:
 					cam_sync_signal(&param, NULL);
 				}
 			}
+			if (ctx_isp->ul_path_en)
+				cam_isp_ctx_reset_producer_q_for_req(ctx_isp, req_isp);
 			ctx_isp->waitlist_req_cnt--;
 			list_del_init(&req->list);
 			list_add_tail(&req->list, &ctx->free_req_list);
@@ -10525,7 +10562,7 @@ static int __cam_isp_ctx_reset_and_recover(
 
 	/* IQ applied for this request, on next trigger skip IQ cfg */
 	if (ctx_isp->frame_drop) {
-		for (i = 0; i < req_isp->num_fence_map_out; i++) {
+		for (i = 0; i < req_isp->num_fence_map_out && !ctx_isp->ul_path_en; i++) {
 			if (req_isp->fence_map_out[i].sync_id != -1) {
 				trace_cam_isp_buf_done("ISP", ctx, req->request_id,
 					req_isp->fence_map_out[i].resource_handle);
@@ -10538,6 +10575,8 @@ static int __cam_isp_ctx_reset_and_recover(
 				cam_sync_signal(&param, NULL);
 			}
 		}
+		if (ctx_isp->ul_path_en)
+			cam_isp_ctx_reset_producer_q_for_req(ctx_isp, req_isp);
 		list_del_init(&req->list);
 		list_add_tail(&req->list, &ctx->free_req_list);
 		ctx_isp->waitlist_req_cnt--;
