@@ -1755,7 +1755,8 @@ static int dump_settings_array(
 static uint64_t cam_sensor_find_latest_req(
 	struct cam_sensor_ctrl_t *s_ctrl,
 	uint64_t request_id,
-	uint64_t last_applied_req_id)
+	uint64_t last_applied_req_id,
+	uint64_t *latest_nop_req_id)
 {
 	int i, offset = -1;
 	uint64_t latest_request_id = 0;
@@ -1773,12 +1774,14 @@ static uint64_t cam_sensor_find_latest_req(
 	/* TODO: Better to search in reverse order from request */
 	/* find the latest non nop request id which is valid */
 	for (i = 0; i < MAX_PER_FRAME_ARRAY; i++) {
-		if ((i2c_set[i].request_id > latest_request_id) &&
-			(i2c_set[i].is_settings_valid) &&
+		if ((i2c_set[i].is_settings_valid) &&
 			(i2c_set[i].request_id <= request_id) &&
-			(i2c_set[i].request_id > last_applied_req_id) &&
-			(!list_empty(&i2c_set[i].list_head))) {
-			latest_request_id = i2c_set[i].request_id;
+			(i2c_set[i].request_id > last_applied_req_id)) {
+			if ((i2c_set[i].request_id > latest_request_id) &&
+				(!list_empty(&i2c_set[i].list_head)))
+				latest_request_id = i2c_set[i].request_id;
+			else
+				*latest_nop_req_id = i2c_set[i].request_id;
 		}
 	}
 
@@ -1922,11 +1925,13 @@ static int cam_sensor_apply_settings_no_crm(
 	/* detected a skip */
 	if ((sensor_req_id - s_ctrl->last_applied_req) > 1) {
 		uint64_t new_req_id = 0;
+		uint64_t latest_nop_req_id = 0;
 
 		new_req_id = cam_sensor_find_latest_req(
 							s_ctrl,
 							sensor_req_id,
-							s_ctrl->last_applied_req);
+							s_ctrl->last_applied_req,
+							&latest_nop_req_id);
 		if (new_req_id > 0) {
 			rc = cam_sensor_apply_settings(
 					s_ctrl,
@@ -1941,10 +1946,13 @@ static int cam_sensor_apply_settings_no_crm(
 							s_ctrl->last_applied_req);
 			}
 		} else {
+			s_ctrl->last_applied_req = latest_nop_req_id;
+			notify->last_apply_req = latest_nop_req_id;
 			CAM_INFO(CAM_SENSOR,
-					"slot[%d] RequestId[%d] not in queue ",
+					"slot[%d] RequestId[%d] not in queue nop[%llu]",
 					s_ctrl->soc_info.index,
-					sensor_req_id);
+					sensor_req_id,
+					latest_nop_req_id);
 		}
 	} else {
 		/* This is a no skip case */
