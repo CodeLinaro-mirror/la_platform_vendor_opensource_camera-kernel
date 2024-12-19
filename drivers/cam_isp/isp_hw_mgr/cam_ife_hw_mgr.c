@@ -32,6 +32,7 @@
 #include "cam_presil_hw_access.h"
 #include "cam_rpmsg.h"
 #include "cam_ife_csid_common.h"
+#include "cam_sync_api.h"
 
 #define CAM_IFE_SAFE_DISABLE 0
 #define CAM_IFE_SAFE_ENABLE 1
@@ -429,20 +430,52 @@ static inline void cam_ife_mgr_free_cdm_cmd(
 	*cdm_cmd = NULL;
 }
 
+static int cam_convert_hw_idx_to_ife_hw_num(int hw_idx)
+{
+	if (hw_idx < g_num_ife) {
+		switch (hw_idx) {
+		case 0: return CAM_ISP_IFE0_HW;
+		case 1: return CAM_ISP_IFE1_HW;
+		case 2: return CAM_ISP_IFE2_HW;
+		default: return -1;
+		}
+	} else if (hw_idx < g_num_ife + g_num_ife_lite) {
+		switch (hw_idx - g_num_ife) {
+		case 0: return CAM_ISP_IFE0_LITE_HW;
+		case 1: return CAM_ISP_IFE1_LITE_HW;
+		case 2: return CAM_ISP_IFE2_LITE_HW;
+		case 3: return CAM_ISP_IFE3_LITE_HW;
+		case 4: return CAM_ISP_IFE4_LITE_HW;
+		case 5: return CAM_ISP_IFE5_LITE_HW;
+		case 6: return CAM_ISP_IFE6_LITE_HW;
+		case 7: return CAM_ISP_IFE7_LITE_HW;
+		case 8: return CAM_ISP_IFE8_LITE_HW;
+		case 9: return CAM_ISP_IFE9_LITE_HW;
+		default: return -1;
+		}
+	} else {
+		CAM_ERR(CAM_ISP, "hw idx %d out-of-bounds", hw_idx);
+	}
+	return 0;
+}
+
 static int cam_ife_mgr_get_hw_caps_common(void *hw_mgr_priv,
 	void *hw_caps_args, uint32_t version)
 {
 	int rc = 0;
-	int i;
+	int i, j;
 	struct cam_ife_hw_mgr             *hw_mgr = hw_mgr_priv;
 	struct cam_query_cap_cmd          *query = hw_caps_args;
 	struct cam_isp_query_cap_cmd       query_isp;
 	struct cam_isp_query_cap_cmd_v2    query_isp_v2;
+	struct cam_isp_query_cap_cmd_v3   *query_isp_v3 = NULL;
 	struct cam_isp_dev_cap_info       *ife_full_hw_info = NULL;
 	struct cam_isp_dev_cap_info       *ife_lite_hw_info = NULL;
 	struct cam_isp_dev_cap_info       *csid_full_hw_info = NULL;
 	struct cam_isp_dev_cap_info       *csid_lite_hw_info = NULL;
 	struct cam_ife_csid_hw_caps       *ife_csid_caps = {0};
+	struct cam_hw_intf                *hw_intf = NULL;
+	uint32_t                           dev_type, fence_info_hw_idx;
 	int                               *num_dev = NULL;
 	bool                               is_ife_full_hw = false;
 	bool                               is_ife_lite_hw = false;
@@ -465,7 +498,7 @@ static int cam_ife_mgr_get_hw_caps_common(void *hw_mgr_priv,
 		csid_lite_hw_info = &query_isp.dev_caps[query_isp.num_dev];
 		csid_full_hw_info = &query_isp.dev_caps[query_isp.num_dev];
 		num_dev = &query_isp.num_dev;
-	} else {
+	} else if (version == 1) {
 		if (copy_from_user(&query_isp_v2, u64_to_user_ptr(query->caps_handle),
 			sizeof(struct cam_isp_query_cap_cmd_v2))) {
 			rc = -EFAULT;
@@ -481,6 +514,32 @@ static int cam_ife_mgr_get_hw_caps_common(void *hw_mgr_priv,
 		csid_lite_hw_info = &query_isp_v2.dev_caps[query_isp_v2.num_dev];
 		csid_full_hw_info = &query_isp_v2.dev_caps[query_isp_v2.num_dev];
 		num_dev = &query_isp_v2.num_dev;
+	} else {
+		query_isp_v3 = kvzalloc(sizeof(struct cam_isp_query_cap_cmd_v3), GFP_KERNEL);
+		if (!query_isp_v3) {
+			CAM_ERR(CAM_ISP, "Allocation failed for query_isp");
+			return -EINVAL;
+		}
+
+		if (copy_from_user(query_isp_v3, u64_to_user_ptr(query->caps_handle),
+			sizeof(struct cam_isp_query_cap_cmd_v3))) {
+			rc = -EFAULT;
+			kvfree(query_isp_v3);
+			return rc;
+		}
+		query_isp_v3->device_iommu.non_secure = hw_mgr->mgr_common.img_iommu_hdl;
+		query_isp_v3->device_iommu.secure = hw_mgr->mgr_common.img_iommu_hdl_secure;
+		query_isp_v3->cdm_iommu.non_secure = hw_mgr->mgr_common.cmd_iommu_hdl;
+		query_isp_v3->cdm_iommu.secure = hw_mgr->mgr_common.cmd_iommu_hdl_secure;
+		query_isp_v3->num_dev = 0;
+		ife_lite_hw_info = &query_isp_v3->dev_caps[query_isp_v3->num_dev];
+		ife_full_hw_info = &query_isp_v3->dev_caps[query_isp_v3->num_dev];
+		csid_lite_hw_info = &query_isp_v3->dev_caps[query_isp_v3->num_dev];
+		csid_full_hw_info = &query_isp_v3->dev_caps[query_isp_v3->num_dev];
+		num_dev = &query_isp_v3->num_dev;
+		query_isp_v3->hw_fence_device_info.num_valid_hws = 0;
+		query_isp_v3->hw_fence_device_info.version       = 0;
+		query_isp_v3->hw_fence_device_info.fencing_type  = CAM_HW_FENCING;
 	}
 
 	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
@@ -520,6 +579,27 @@ static int cam_ife_mgr_get_hw_caps_common(void *hw_mgr_priv,
 				is_ife_full_hw = true;
 			}
 			ife_full_hw_info->num_hw++;
+		}
+		if (version == 2 && g_ife_hw_mgr.isp_bus_caps.ipcc_en) {
+			hw_intf = hw_mgr->ife_devices[i]->hw_intf;
+			if (hw_intf->hw_ops.process_cmd) {
+				rc = hw_intf->hw_ops.process_cmd(hw_intf->hw_priv,
+					CAM_ISP_HW_CMD_GET_HWFENCE_DEVICE_INFO,
+					&query_isp_v3->hw_fence_device_info,
+					sizeof(struct cam_hw_fence_device_info));
+			}
+			query_isp_v3->hw_fence_device_info.num_valid_hws++;
+			dev_type = cam_convert_hw_idx_to_ife_hw_num(hw_intf->hw_idx);
+			if (dev_type == -1) {
+				CAM_ERR(CAM_ISP, "Invalid dev type");
+				kvfree(query_isp_v3);
+				return -EINVAL;
+			}
+			fence_info_hw_idx = query_isp_v3->hw_fence_device_info.num_valid_hws - 1;
+			for (j = 0; j < query_isp_v3->hw_fence_device_info.
+				num_resources_per_hw[fence_info_hw_idx]; j++)
+				query_isp_v3->hw_fence_device_info.
+					fence_info[fence_info_hw_idx][j].dev_type = dev_type;
 		}
 	}
 
@@ -570,13 +650,19 @@ static int cam_ife_mgr_get_hw_caps_common(void *hw_mgr_priv,
 		if (copy_to_user(u64_to_user_ptr(query->caps_handle),
 			&query_isp, sizeof(struct cam_isp_query_cap_cmd)))
 			rc = -EFAULT;
-	} else {
+	} else if (version == 1) {
 		query_isp_v2.ispctx_queue_depth = CAM_IFE_CTX_MAX;
 		if (copy_to_user(u64_to_user_ptr(query->caps_handle),
 			&query_isp_v2, sizeof(struct cam_isp_query_cap_cmd_v2)))
 			rc = -EFAULT;
+	} else {
+		query_isp_v3->isp_ctx_queue_depth = CAM_IFE_CTX_MAX;
+		if (copy_to_user(u64_to_user_ptr(query->caps_handle),
+			query_isp_v3, sizeof(struct cam_isp_query_cap_cmd_v3)))
+			rc = -EFAULT;
 	}
 
+	kvfree(query_isp_v3);
 	return rc;
 }
 
@@ -2654,34 +2740,6 @@ static int cam_ife_mgr_process_base_info(
 	}
 	CAM_DBG(CAM_ISP, "ctx base num = %d", ctx->num_base);
 
-	return 0;
-}
-
-static int cam_convert_hw_idx_to_ife_hw_num(int hw_idx)
-{
-	if (hw_idx < g_num_ife) {
-		switch (hw_idx) {
-		case 0: return CAM_ISP_IFE0_HW;
-		case 1: return CAM_ISP_IFE1_HW;
-		case 2: return CAM_ISP_IFE2_HW;
-		}
-	} else if (hw_idx < g_num_ife + g_num_ife_lite) {
-		switch (hw_idx - g_num_ife) {
-		case 0: return CAM_ISP_IFE0_LITE_HW;
-		case 1: return CAM_ISP_IFE1_LITE_HW;
-		case 2: return CAM_ISP_IFE2_LITE_HW;
-		case 3: return CAM_ISP_IFE3_LITE_HW;
-		case 4: return CAM_ISP_IFE4_LITE_HW;
-		case 5: return CAM_ISP_IFE5_LITE_HW;
-		case 6: return CAM_ISP_IFE6_LITE_HW;
-		case 7: return CAM_ISP_IFE7_LITE_HW;
-		case 8: return CAM_ISP_IFE8_LITE_HW;
-		case 9: return CAM_ISP_IFE9_LITE_HW;
-
-		}
-	} else {
-		CAM_ERR(CAM_ISP, "hw idx %d out-of-bounds", hw_idx);
-	}
 	return 0;
 }
 

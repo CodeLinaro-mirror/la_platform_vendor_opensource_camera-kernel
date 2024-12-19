@@ -4049,6 +4049,58 @@ end:
 	return ret;
 }
 
+static int cam_vfe_bus_ver3_get_res_type_for_vfe_out_type(
+	struct cam_isp_resource_node *wm_res, uint32_t *ipcc_id)
+{
+	struct cam_vfe_bus_ver3_wm_resource_data *wm_rsrc_data;
+	struct cam_vfe_bus_ver3_vfe_out_data *vfe_out_data;
+
+	wm_rsrc_data = wm_res->res_priv;
+	vfe_out_data = wm_rsrc_data->out_rsrc_data;
+	*ipcc_id = wm_rsrc_data->wm_ipcc_id;
+
+	switch (vfe_out_data->out_type) {
+	case CAM_VFE_BUS_VER3_VFE_OUT_RDI0:
+		return CAM_ISP_IFE_OUT_RES_RDI_0;
+	case CAM_VFE_BUS_VER3_VFE_OUT_RDI1:
+		return CAM_ISP_IFE_OUT_RES_RDI_1;
+	case CAM_VFE_BUS_VER3_VFE_OUT_RDI2:
+		return CAM_ISP_IFE_OUT_RES_RDI_2;
+	case CAM_VFE_BUS_VER3_VFE_OUT_RDI3:
+		return CAM_ISP_IFE_OUT_RES_RDI_3;
+	case CAM_VFE_BUS_VER3_VFE_OUT_FULL:
+		return CAM_ISP_IFE_OUT_RES_FULL;
+	case CAM_VFE_BUS_VER3_VFE_OUT_FD:
+		return CAM_ISP_IFE_OUT_RES_FD;
+	case CAM_VFE_BUS_VER3_VFE_OUT_2PD:
+		return CAM_ISP_IFE_OUT_RES_PDAF;
+	case CAM_VFE_BUS_VER3_VFE_OUT_DS4:
+		return CAM_ISP_IFE_OUT_RES_DS4;
+	case CAM_VFE_BUS_VER3_VFE_OUT_DS16:
+		return CAM_ISP_IFE_OUT_RES_DS16;
+	case CAM_VFE_BUS_VER3_VFE_OUT_FULL_DISP:
+		return CAM_ISP_IFE_OUT_RES_FULL_DISP;
+	case CAM_VFE_BUS_VER3_VFE_OUT_DS4_DISP:
+		return CAM_ISP_IFE_OUT_RES_DS4_DISP;
+	case CAM_VFE_BUS_VER3_VFE_OUT_DS16_DISP:
+		return CAM_ISP_IFE_OUT_RES_DS16_DISP;
+	case CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_RAW:
+		return CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW;
+	case CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_RAW1:
+		return CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW1;
+	case CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_RAW2:
+		return CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW2;
+	case CAM_VFE_BUS_VER3_VFE_OUT_MONO_DS_OUT:
+		return CAM_ISP_IFE_OUT_RES_MONO_DS_OUT;
+	case CAM_VFE_BUS_VER3_VFE_OUT_MONO_FULL_OUT:
+		return CAM_ISP_IFE_OUT_RES_MONO_FULL_OUT;
+	case CAM_VFE_BUS_VER3_VFE_OUT_GAMMA_DS:
+		return CAM_ISP_IFE_LITE_OUT_RES_GAMMA_DS;
+	default:
+		return -EINVAL;
+	}
+}
+
 static int cam_vfe_bus_ver3_update_hwfence_info(void *priv, void *cmd_args,
 		uint32_t arg_size)
 {
@@ -4166,6 +4218,69 @@ static int cam_vfe_bus_ver3_hwfence_mode_cfg(void *priv, void *cmd_args,
 		return -EINVAL;
 	}
 
+	return 0;
+}
+
+static int cam_vfe_bus_ver3_get_hwfence_device_info(void *priv, void *cmd_args,
+	uint32_t arg_size)
+{
+	int i, j;
+	struct cam_hw_fence_device_info *hw_fence_device_info;
+	struct cam_vfe_bus_ver3_priv    *bus_priv;
+	struct cam_hw_fence_session_info *hw_fence_client_info;
+	struct cam_vfe_bus_ver3_vfe_out_data   *vfe_out_data = NULL;
+	struct cam_vfe_bus_ver3_wm_resource_data *wm_data;
+	uint32_t hw_idx;
+	uint32_t resource_idx;
+	int32_t res_type;
+
+	hw_fence_device_info = (struct cam_hw_fence_device_info *) cmd_args;
+	bus_priv = (struct cam_vfe_bus_ver3_priv  *) priv;
+
+	hw_idx = hw_fence_device_info->num_valid_hws;
+	resource_idx = 0;
+
+	for (i = 0; i < bus_priv->num_out; i++) {
+		vfe_out_data = (struct cam_vfe_bus_ver3_vfe_out_data   *)
+			bus_priv->vfe_out[i].res_priv;
+		if (!vfe_out_data || !vfe_out_data->hwfence_cap)
+			continue;
+
+		for (j = 0; j < vfe_out_data->num_wm; j++) {
+			wm_data = vfe_out_data->wm_res[j].res_priv;
+			hw_fence_client_info =
+				&hw_fence_device_info->fence_info[hw_idx][resource_idx++];
+			hw_fence_client_info->session_cookie =
+				wm_data->ipcc_out_info.session_cookie;
+			hw_fence_client_info->supported_modes =
+				wm_data->hwfence_cap_mask;
+
+			res_type = cam_vfe_bus_ver3_get_res_type_for_vfe_out_type(
+					&vfe_out_data->wm_res[j],
+					&hw_fence_client_info->client_ipcc_id);
+			if (res_type < 0) {
+				CAM_ERR(CAM_ISP,
+						"failed to get res type for invalid vfe_out_type: %d",
+						vfe_out_data->out_type);
+				return -EINVAL;
+			}
+
+			hw_fence_client_info->resource_type = res_type;
+			hw_fence_client_info->source_group  = vfe_out_data->source_group;
+			hw_fence_client_info->plane = j;
+
+			CAM_DBG(CAM_ISP,
+				"Sending data as query caps: session_cookie: %u, supported_modes: %u, res: %u, plane: %u,  source_group: %u, ipcc_id: %u",
+				hw_fence_client_info->session_cookie,
+				hw_fence_client_info->supported_modes,
+				hw_fence_client_info->resource_type,
+				hw_fence_client_info->plane,
+				hw_fence_client_info->source_group,
+				hw_fence_client_info->client_ipcc_id);
+		}
+	}
+
+	hw_fence_device_info->num_resources_per_hw[hw_idx] = resource_idx;
 	return 0;
 }
 
@@ -5590,6 +5705,9 @@ static int cam_vfe_bus_ver3_process_cmd(
 		break;
 	case CAM_ISP_HW_CMD_UPDATE_HWFENCE_INFO:
 		rc = cam_vfe_bus_ver3_update_hwfence_info(priv, cmd_args, arg_size);
+		break;
+	case CAM_ISP_HW_CMD_GET_HWFENCE_DEVICE_INFO:
+		rc = cam_vfe_bus_ver3_get_hwfence_device_info(priv, cmd_args, arg_size);
 		break;
 	default:
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "Invalid camif process command:%d",
