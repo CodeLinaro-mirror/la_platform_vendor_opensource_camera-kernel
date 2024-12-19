@@ -14,6 +14,24 @@
 extern struct sync_device *sync_dev;
 
 /**
+ * struct cam_sync_check_for_dma_release -
+ *                          Checks if the dma fence being released
+ *                          was created with the sync obj
+ *
+ * @dma_fence_row_idx     : Get DMA fence row idx that is associated with
+ *                          the sync obj
+ * @dma_fence_fd          : Check if DMA fence fd is associated with
+ *                          sync obj
+ * @sync_created_with_dma : Set if the dma fence fd was created
+ *                          with sync obj
+ */
+struct cam_sync_check_for_dma_release {
+	int32_t dma_fence_row_idx;
+	int32_t dma_fence_fd;
+	bool sync_created_with_dma;
+};
+
+/**
  * @brief: Function to initialize an empty row in the sync table. This should be
  *         called only for individual sync objects.
  *
@@ -31,12 +49,14 @@ int cam_sync_init_row(struct sync_table_row *table,
 /**
  * @brief: Function to uninitialize a row in the sync table
  *
- * @param table : Pointer to the sync objects table
- * @param idx   : Index of row to initialize
+ * @param table                          : Pointer to the sync objects table
+ * @param idx                            : Index of row to initialize
+ * @optional param check_for_dma_release : checks for dma fence release
  *
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
-int cam_sync_deinit_object(struct sync_table_row *table, uint32_t idx);
+int cam_sync_deinit_object(struct sync_table_row *table, uint32_t idx,
+	struct cam_sync_check_for_dma_release *check_for_dma_release);
 
 /**
  * @brief: Function to re-initialize a row in the sync table
@@ -66,8 +86,6 @@ int cam_sync_init_group_object(struct sync_table_row *table,
 	uint32_t *sync_objs,
 	uint32_t num_objs,
 	uint32_t type);
-
-int cam_sync_deinit_object(struct sync_table_row *table, uint32_t idx);
 
 /**
  * @brief: Function to dispatch a kernel callback for a sync callback
