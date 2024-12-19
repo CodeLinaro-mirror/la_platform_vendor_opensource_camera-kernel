@@ -177,9 +177,9 @@ clean_children_info:
 	return rc;
 }
 
-
 int cam_sync_deinit_object(struct sync_table_row *table, uint32_t sync_var,
-	struct cam_sync_check_for_dma_release *check_for_dma_release)
+	struct cam_sync_check_for_dma_release *check_for_dma_release,
+	struct cam_sync_check_for_synx_release *check_for_synx_release)
 {
 	struct sync_table_row      *row;
 	struct sync_child_info     *child_info, *temp_child;
@@ -330,6 +330,19 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t sync_var,
 					row->dma_fence_info.sync_created_with_dma;
 				check_for_dma_release->dma_fence_row_idx =
 					row->dma_fence_info.dma_fence_row_idx;
+			}
+		}
+	}
+
+	/* Check if same synx obj is being released with the sync obj */
+	if (test_bit(CAM_GENERIC_FENCE_TYPE_SYNX_OBJ, &row->ext_fence_mask)) {
+		if (check_for_synx_release) {
+			if (row->synx_obj_info.synx_obj ==
+				check_for_synx_release->synx_obj) {
+				check_for_synx_release->synx_obj_row_idx =
+					row->synx_obj_info.synx_obj_row_idx;
+				check_for_synx_release->sync_created_with_synx =
+					row->synx_obj_info.sync_created_with_synx;
 			}
 		}
 	}

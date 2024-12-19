@@ -10,6 +10,8 @@ def _define_module(target, variant):
     ]
     if target == "niobe":
         deps.extend([
+		"//vendor/qcom/opensource/synx-kernel:synx_headers",
+		"//vendor/qcom/opensource/synx-kernel:{}_modules".format(tv),
 		"//vendor/qcom/opensource/dsp-kernel:{}_frpc-adsprpc".format(tv),
 		"//vendor/qcom/opensource/securemsm-kernel:smcinvoke_kernel_headers",
 		"//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
@@ -65,6 +67,9 @@ def _define_module(target, variant):
             "CONFIG_INTERCONNECT_QCOM": {
                 True: ["drivers/cam_utils/cam_soc_icc.c"],
             },
+	    "CONFIG_MSM_GLOBAL_SYNX_V2": {
+		True: ["drivers/cam_sync/cam_sync_synx.c"],
+	    },
             "CONFIG_SPECTRA_ISP": {
                 True: [
                     "drivers/cam_isp/isp_hw_mgr/hw_utils/cam_tasklet_util.c",
