@@ -226,6 +226,7 @@
 #define CAM_IFE_DECODE_FORMAT_SHIFT_VAL 8
 
 #define CAM_IFE_GET_QUERY_CAP_V2        1
+#define CAM_IFE_GET_QUERY_CAP_V3        2
 
 /* ISP stream config params */
 #define CAM_ISP_STREAM_GROUP_CFG_MAX   12
@@ -286,6 +287,30 @@ struct cam_isp_query_cap_cmd_v2 {
 	struct cam_iommu_handle     device_iommu;
 	struct cam_iommu_handle     cdm_iommu;
 	struct cam_isp_dev_cap_info dev_caps[CAM_ISP_HW_MAX];
+};
+
+/**
+ * struct cam_isp_query_cap_cmd_v3 - ISP query device capability payload
+ *
+ * @version:                    version details
+ * @num_dev:                    returned number of device capabilities
+ * @ispctx_qu_depth:            returned isp context queue depth
+ * @reserved:                   reserved field for alignment
+ * @device_iommu:               returned iommu handles for device
+ * @cdm_iommu:                  returned iommu handles for cdm
+ * @dev_caps:                   returned device capability array
+ * @hw_fence_device_info:       returned HW fence device info
+ *
+ */
+struct cam_isp_query_cap_cmd_v3 {
+	__u32                            version;
+	__s32                            num_dev;
+	__u32                            isp_ctx_queue_depth;
+	__u32                            reserved;
+	struct cam_iommu_handle          device_iommu;
+	struct cam_iommu_handle          cdm_iommu;
+	struct cam_isp_dev_cap_info      dev_caps[CAM_ISP_HW_MAX];
+	struct cam_hw_fence_device_info  hw_fence_device_info;
 };
 
 /* Acquire Device */
