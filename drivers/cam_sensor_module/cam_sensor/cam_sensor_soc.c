@@ -229,6 +229,7 @@ static int32_t cam_sensor_driver_get_dt_data(struct cam_sensor_ctrl_t *s_ctrl)
 
 	if (of_property_read_u32(of_node, "cci-timer", &s_ctrl->gpio_mask) < 0) {
 		CAM_DBG(CAM_SENSOR, "device failed to read cci-timer");
+		s_ctrl->gpio_mask = -1;
 	}
 
 	if (of_property_read_u32(of_node, "sensor-position-pitch",
