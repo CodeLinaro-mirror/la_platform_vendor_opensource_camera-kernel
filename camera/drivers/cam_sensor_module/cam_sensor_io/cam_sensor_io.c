@@ -152,6 +152,37 @@ int32_t camera_io_dev_write(struct camera_io_master *io_master_info,
 	return -EINVAL;
 }
 
+int32_t camera_io_dev_read_append_write(
+	struct camera_io_master *io_master_info,
+	struct cam_sensor_i2c_reg_setting *write_setting)
+{
+
+	if (!write_setting || !io_master_info) {
+		CAM_ERR(CAM_SENSOR,
+			"Input parameters not valid ws: %pK ioinfo: %pK",
+			write_setting, io_master_info);
+		return -EINVAL;
+	}
+
+	if (!write_setting->reg_setting) {
+		CAM_ERR(CAM_SENSOR, "Invalid Register Settings");
+		return -EINVAL;
+	}
+
+	switch (io_master_info->master_type) {
+	case CCI_MASTER:
+		return cam_cci_i2c_read_append_write(io_master_info, write_setting);
+	case I2C_MASTER:
+	case SPI_MASTER:
+	case I3C_MASTER:
+		CAM_ERR(CAM_SENSOR, "Read append write only supported in CCI Master");
+	default:
+		CAM_ERR(CAM_SENSOR, "Invalid Master Type:%d", io_master_info->master_type);
+	}
+
+	return -EINVAL;
+}
+
 int32_t camera_io_dev_sequential_xfer(struct camera_io_master *io_master_info,
 	struct cam_cmd_i2c_sequential_xfer *seq_xfer)
 {
@@ -239,7 +270,8 @@ int32_t camera_io_init(struct camera_io_master *io_master_info)
 			}
 		}
 		return 0;
-	case SPI_MASTER: return 0;
+	case SPI_MASTER:
+		return 0;
 	default:
 		CAM_ERR(CAM_SENSOR, "Invalid Master Type:%d", io_master_info->master_type);
 	}
@@ -266,7 +298,8 @@ int32_t camera_io_release(struct camera_io_master *io_master_info)
 			pm_runtime_put_sync(io_master_info->client->adapter->dev.parent);
 		}
 		return 0;
-	case SPI_MASTER: return 0;
+	case SPI_MASTER:
+		return 0;
 	default:
 		CAM_ERR(CAM_SENSOR, "Invalid Master Type:%d", io_master_info->master_type);
 	}

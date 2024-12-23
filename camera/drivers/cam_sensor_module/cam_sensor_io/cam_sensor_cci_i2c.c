@@ -257,6 +257,45 @@ int32_t cam_sensor_cci_i2c_util(struct camera_io_master *client,
 	return cci_ctrl.status;
 }
 
+int32_t cam_cci_i2c_read_append_write(
+	struct camera_io_master *client,
+	struct cam_sensor_i2c_reg_setting *rd_append_write_setting)
+{
+	int32_t rc = 0;
+	struct cam_cci_ctrl cci_ctrl;
+
+	if (rd_append_write_setting->addr_type <= CAMERA_SENSOR_I2C_TYPE_INVALID
+		|| rd_append_write_setting->addr_type >= CAMERA_SENSOR_I2C_TYPE_MAX
+		|| rd_append_write_setting->data_type <= CAMERA_SENSOR_I2C_TYPE_INVALID
+		|| rd_append_write_setting->data_type >= CAMERA_SENSOR_I2C_TYPE_MAX)
+		return rc;
+
+	cci_ctrl.cmd = MSM_CCI_I2C_READ_APPEND_WRITE;
+	cci_ctrl.cci_info = client->cci_client;
+	cci_ctrl.cfg.cci_i2c_write_cfg.reg_setting =
+		rd_append_write_setting->reg_setting;
+	cci_ctrl.cfg.cci_i2c_write_cfg.data_type = rd_append_write_setting->data_type;
+	cci_ctrl.cfg.cci_i2c_write_cfg.addr_type = rd_append_write_setting->addr_type;
+	cci_ctrl.cfg.cci_i2c_write_cfg.size = rd_append_write_setting->size;
+
+	rc = v4l2_subdev_call(client->cci_client->cci_subdev,
+		core, ioctl, VIDIOC_MSM_CCI_CFG, &cci_ctrl);
+	if (rc < 0) {
+		CAM_ERR(CAM_SENSOR, "Failed rc = %d", rc);
+		return rc;
+	}
+
+	rc = cci_ctrl.status;
+	if (rd_append_write_setting->delay > 20)
+		msleep(rd_append_write_setting->delay);
+	else if (rd_append_write_setting->delay)
+		usleep_range(rd_append_write_setting->delay * 1000, (rd_append_write_setting->delay
+			* 1000) + 1000);
+
+	return rc;
+}
+
+
 int32_t cam_cci_i2c_sequential_xfer(
 	struct camera_io_master *io_master_info,
 	struct cam_cmd_i2c_sequential_xfer *seq_xfer)
@@ -266,7 +305,7 @@ int32_t cam_cci_i2c_sequential_xfer(
 	struct cam_cci_ctrl cci_ctrl;
 
 	if (seq_xfer->cmd_type != CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_LOCK
-		|| seq_xfer->cmd_type != CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_UNLOCK) {
+		&& seq_xfer->cmd_type != CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_UNLOCK) {
 			CAM_ERR(CAM_SENSOR, "Invalid cmd_type=%d", seq_xfer->cmd_type);
 		return -EINVAL;
 	}

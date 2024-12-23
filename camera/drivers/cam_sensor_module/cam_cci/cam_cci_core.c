@@ -2407,8 +2407,8 @@ static int32_t cam_cci_i2c_write(struct v4l2_subdev *sd,
 		rc = cam_cci_data_queue(cci_dev, c_ctrl, queue, sync_en);
 		if (rc < 0) {
 			CAM_ERR(CAM_CCI,
-				"CCI%d_I2C_M%d_Q%d Failed in queueing the data for rc: %d",
-				cci_dev->soc_info.index, master, queue, rc);
+				"CCI%d_I2C_M%d_Q%d Failed in queueing the data for rc: %d sid 0x%x ",
+				cci_dev->soc_info.index, master, queue, rc, c_ctrl->cci_info->sid);
 			goto ERROR;
 		}
 	}
@@ -2803,13 +2803,122 @@ static int32_t cam_cci_write(struct v4l2_subdev *sd,
 	return rc;
 }
 
+static uint32_t cam_cci_read_append_write_modify_bits(
+	uint32_t rd_value, uint32_t mask, uint32_t new_bits)
+{
+	CAM_DBG(CAM_CCI, "Input Args reg=0x%x, mask=0x%x, value=0x%x",
+		rd_value, mask, new_bits);
+	rd_value &= ~mask;
+	rd_value |= (new_bits & mask);
+	CAM_DBG(CAM_CCI, "Output=0x%x", rd_value);
+	return rd_value;
+}
+
+static int cam_cci_read_append_write(struct v4l2_subdev *sd,
+	struct cam_cci_ctrl *cci_ctrl)
+{
+	int32_t rc = 0;
+	struct cci_device *cci_dev = NULL;
+	enum cci_i2c_master_t master;
+	enum camera_sensor_i2c_type data_type;
+	struct cam_cci_ctrl rd_ctrl;
+	struct cam_cci_master_info *cci_master_info;
+	uint32_t i;
+	unsigned char buf[CAMERA_SENSOR_I2C_TYPE_DWORD];
+	uint32_t rd_data;
+
+	cci_dev = v4l2_get_subdevdata(sd);
+	if (!cci_dev || !cci_ctrl) {
+		CAM_ERR(CAM_CCI,
+			"Failed: invalid params cci_dev:%pK, c_ctrl:%pK",
+			cci_dev, cci_ctrl);
+		rc = -EINVAL;
+		return rc;
+	}
+
+	master = cci_ctrl->cci_info->cci_i2c_master;
+
+	if (cci_ctrl->cci_info->cci_i2c_master >= MASTER_MAX
+		|| cci_ctrl->cci_info->cci_i2c_master < 0) {
+		CAM_ERR(CAM_CCI, "CCI%d_I2C_M%d Invalid I2C master addr",
+			cci_dev->soc_info.index, master);
+		return -EINVAL;
+	}
+
+	cci_master_info = &cci_dev->cci_master_info[master];
+
+	CAM_DBG(CAM_CCI, "CCI%d_I2C_M%d ctrl_cmd = %d",
+		cci_dev->soc_info.index, master, cci_ctrl->cmd);
+
+	rd_ctrl.cmd = cci_ctrl->cmd;
+	rd_ctrl.cci_info = cci_ctrl->cci_info;
+	rd_ctrl.cfg.cci_i2c_read_cfg.addr =
+		cci_ctrl->cfg.cci_i2c_write_cfg.reg_setting->reg_addr;
+	rd_ctrl.cfg.cci_i2c_read_cfg.addr_type =
+		cci_ctrl->cfg.cci_i2c_write_cfg.addr_type;
+	rd_ctrl.cfg.cci_i2c_read_cfg.data_type =
+		cci_ctrl->cfg.cci_i2c_write_cfg.data_type;
+	rd_ctrl.cfg.cci_i2c_read_cfg.data = buf;
+	rd_ctrl.cfg.cci_i2c_read_cfg.num_byte =
+		cci_ctrl->cfg.cci_i2c_write_cfg.data_type;
+
+	data_type = rd_ctrl.cfg.cci_i2c_read_cfg.data_type;
+
+	rc = cam_cci_read_bytes(sd, &rd_ctrl);
+	if (rc) {
+		CAM_ERR(CAM_CCI, "Read failed, rc: %d", rc);
+		goto exit;
+	}
+
+	if (data_type == CAMERA_SENSOR_I2C_TYPE_BYTE)
+		rd_data = buf[0];
+	else if (data_type == CAMERA_SENSOR_I2C_TYPE_WORD)
+		rd_data = buf[0] << 8 | buf[1];
+	else if (data_type == CAMERA_SENSOR_I2C_TYPE_3B)
+		rd_data = buf[0] << 16 | buf[1] << 8 | buf[2];
+	else
+		rd_data = buf[0] << 24 | buf[1] << 16 |
+			buf[2] << 8 | buf[3];
+
+	CAM_DBG(CAM_CCI, "CCI read_data: 0x%x", rd_data);
+	CAM_DBG(CAM_CCI, "User reg_data before: 0x%x",
+		cci_ctrl->cfg.cci_i2c_write_cfg.reg_setting->reg_data);
+
+	cci_ctrl->cfg.cci_i2c_write_cfg.reg_setting->reg_data =
+		cam_cci_read_append_write_modify_bits(rd_data,
+			cci_ctrl->cfg.cci_i2c_write_cfg.reg_setting->data_mask,
+            cci_ctrl->cfg.cci_i2c_write_cfg.reg_setting->reg_data);
+
+	CAM_DBG(CAM_CCI, "User reg_data after: 0x%x",
+		cci_ctrl->cfg.cci_i2c_write_cfg.reg_setting->reg_data);
+
+	mutex_lock(&cci_master_info->mutex_q[SYNC_QUEUE]);
+	rc = cam_cci_i2c_write(sd, cci_ctrl,
+		SYNC_QUEUE, MSM_SYNC_DISABLE);
+	mutex_unlock(&cci_master_info->mutex_q[SYNC_QUEUE]);
+
+exit:
+	return rc;
+}
+
 int32_t cam_cci_core_cfg(struct v4l2_subdev *sd,
 	struct cam_cci_ctrl *cci_ctrl)
 {
 	int32_t rc = 0;
-	struct cci_device *cci_dev = v4l2_get_subdevdata(sd);
+	struct cci_device *cci_dev = NULL;
 	enum cci_i2c_master_t master = MASTER_MAX;
 
+	if (!sd) {
+		CAM_ERR(CAM_CCI, "SD IS NULL");
+		return -EINVAL;
+	}
+
+	if (!cci_ctrl) {
+		CAM_ERR(CAM_CCI, "CCI_CTRL IS NULL");
+		return -EINVAL;
+	}
+
+	cci_dev = v4l2_get_subdevdata(sd);
 	if (!cci_dev) {
 		CAM_ERR(CAM_CCI, "CCI_DEV is null");
 		return -EINVAL;
@@ -2876,6 +2985,9 @@ int32_t cam_cci_core_cfg(struct v4l2_subdev *sd,
 	case MSM_CCI_SET_SYNC_CID:
 		rc = cam_cci_i2c_set_sync_prms(sd, cci_ctrl);
 		break;
+	case MSM_CCI_I2C_READ_APPEND_WRITE:
+		rc = cam_cci_read_append_write(sd, cci_ctrl);
+		break;
 	case MSM_CCI_I2C_SEQUENTIAL_XFER_LOCK:
 	case MSM_CCI_I2C_SEQUENTIAL_XFER_UNLOCK:
 		break;
@@ -2901,6 +3013,5 @@ int32_t cam_cci_core_cfg(struct v4l2_subdev *sd,
 		}
 	}
 
-	//Restore the original RC status here
 	return cci_ctrl->status;
 }
