@@ -1611,6 +1611,11 @@ static void __cam_isp_ctx_send_sof_timestamp(
 		}
 	}
 
+	if (ctx_isp->ul_path_en) {
+		CAM_DBG(CAM_ISP, "Skip SOF notification for UL path ctx %d", ctx_isp->base->ctx_id);
+		return;
+	}
+
 	if ((ctx_isp->v4l2_event_sub_ids & (1 << V4L_EVENT_CAM_REQ_MGR_SOF_UNIFIED_TS))
 		&& !ctx_isp->use_frame_header_ts) {
 		__cam_isp_ctx_send_unified_timestamp(ctx_isp, request_id);
