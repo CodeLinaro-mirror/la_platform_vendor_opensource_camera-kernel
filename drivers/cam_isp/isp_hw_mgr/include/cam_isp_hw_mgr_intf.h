@@ -62,6 +62,9 @@
  */
 #define CAM_ISP_SFE_CTX_CFG_MAX                 40
 
+/* Maximum number of primary ports */
+#define CAM_IFE_HW_PRIMARY_PORT_MAX 16
+
 /* ctx get virtual rdi mapping callback function type */
 typedef int (*cam_hw_get_virtual_rdi_mapping_cb_func)(void *context,
 	uint32_t out_port, bool is_virtual_rdi);
@@ -553,7 +556,7 @@ struct cam_isp_hw_cmd_args {
 		} path_mask;
 		struct {
 			uint32_t                num_ports;
-			void                   *primary_port_cfg;
+			void                   *primary_port_cfg[CAM_IFE_HW_PRIMARY_PORT_MAX];
 			bool                    use_primary_port_config;
 		} primary_port_info;
 		uint64_t                      dropped_ife_req;
@@ -615,10 +618,14 @@ struct cam_isp_lcr_rdi_cfg_args {
 
 /** struct cam_isp_primary_port_info - Primary port config info
  *
- * @res_id : res_id of the primary/leading port
+ * @res_id :          res_id of the primary/leading port
+ * @num_linked_ports: Number of ports associated with primary port
+ * @linked_ports:     Associated ports res id array
  */
 struct cam_isp_primary_port_info {
-	uint32_t res_id;
+	uint32_t  res_id;
+	uint32_t  num_linked_ports;
+	uint32_t *linked_ports;
 };
 
 /**

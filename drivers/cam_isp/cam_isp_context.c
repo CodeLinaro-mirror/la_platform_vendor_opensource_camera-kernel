@@ -2450,54 +2450,126 @@ end:
 	return 0;
 }
 
-static int __cam_isp_ctx_handle_buf_done_for_remaining_ports(
+static void __cam_isp_ctx_handle_buf_done_util(
 	bool defer_buf_done, uint32_t bubble_state,
+	uint32_t map_entry_idx, struct cam_ctx_request *req,
+	struct cam_isp_context *ctx_isp)
+{
+	struct cam_isp_ctx_req *req_isp =
+		(struct cam_isp_ctx_req *)req->req_priv;
+	struct cam_context *ctx = ctx_isp->base;
+	uint32_t deferred_indx;
+
+	if (defer_buf_done) {
+		deferred_indx = req_isp->num_deferred_acks;
+
+		/*
+		 * If we are handling this BUF_DONE event for a request
+		 * that is still in wait_list, do not signal now,
+		 * instead mark it as done and handle it later -
+		 * if this request is going into BUBBLE state later
+		 * it will automatically be re-applied. If this is not
+		 * going into BUBBLE, signal fences later.
+		 * Note - we will come here only if the last consumed
+		 * address matches with this ports buffer.
+		 */
+		req_isp->deferred_fence_map_index[deferred_indx] = map_entry_idx;
+		req_isp->num_deferred_acks++;
+		CAM_DBG(CAM_ISP,
+			"ctx[%d] : Deferred buf done for %llu with bubble state %d recovery %d",
+			ctx->ctx_id, req->request_id, bubble_state, req_isp->bubble_report);
+		CAM_DBG(CAM_ISP,
+			"ctx[%d] : Deferred info : num_acks=%d, fence_map_index=%d, resource_handle=0x%x, sync_id=%d",
+			ctx->ctx_id, req_isp->num_deferred_acks, map_entry_idx,
+			req_isp->fence_map_out[map_entry_idx].resource_handle,
+			req_isp->fence_map_out[map_entry_idx].sync_id);
+	} else if (!req_isp->bubble_detected) {
+		trace_cam_buf_done("ISP", ctx, req);
+		__cam_isp_ctx_handle_fence_signaling_util(true, map_entry_idx, ctx_isp, req);
+		req_isp->num_acked++;
+	} else if (!req_isp->bubble_report) {
+		trace_cam_isp_buf_done("ISP", ctx, req->request_id,
+			req_isp->fence_map_out[map_entry_idx].resource_handle);
+		__cam_isp_ctx_handle_fence_signaling_util(false, map_entry_idx, ctx_isp, req);
+		req_isp->num_acked++;
+	} else {
+		/*
+		 * Ignore the buffer done if bubble detect is on
+		 * Increment the ack number here, and queue the
+		 * request back to pending list whenever all the
+		 * buffers are done.
+		 */
+		req_isp->num_acked++;
+		CAM_DBG(CAM_ISP,
+			"ctx[%d] : buf done with bubble state %d recovery %d", bubble_state,
+			ctx->ctx_id, req_isp->bubble_report);
+
+		/* Process deferred buf_done acks */
+		if (req_isp->num_deferred_acks)
+			__cam_isp_handle_deferred_buf_done(ctx_isp, req, true,
+				CAM_SYNC_STATE_SIGNALED_ERROR, CAM_SYNC_ISP_EVENT_BUBBLE);
+	}
+}
+
+static int __cam_isp_ctx_handle_buf_done_for_remaining_ports(
+	bool defer_buf_done, uint32_t bubble_state, uint32_t primary_port_res_hdl,
 	struct cam_ctx_request *req,
 	struct cam_isp_context *ctx_isp)
 {
-	int j;
+	int i, j;
 	struct cam_context *ctx = ctx_isp->base;
 	struct cam_isp_ctx_req *req_isp =
 		(struct cam_isp_ctx_req *)req->req_priv;
+	uint32_t *linked_ports = NULL;
 
-	for (j = 0; j < req_isp->num_fence_map_out; j++) {
-		/* Skip ports that have already been handled for this request */
-		if ((req_isp->buf_done_tracker) &
-			(BIT_ULL(req_isp->fence_map_out[j].resource_handle & 0xFF)))
-			continue;
+	/*
+	 * Incase of single primary port, Need to signal all ports when buf done for
+	 * primary port is received.
+	 */
+	if (ctx_isp->num_primary_ports == 1) {
+		for (j = 0; j < req_isp->num_fence_map_out; j++) {
+			/* Skip ports that have already been handled for this request */
+			if ((req_isp->buf_done_tracker) &
+				(BIT_ULL(req_isp->fence_map_out[j].resource_handle & 0xFF)))
+				continue;
 
-		if (defer_buf_done) {
-			uint32_t deferred_indx = req_isp->num_deferred_acks;
-
-			req_isp->deferred_fence_map_index[deferred_indx] = j;
-			req_isp->num_deferred_acks++;
-			CAM_DBG(CAM_ISP,
-				"ctx[%d] : Deferred buf done for %llu with bubble state %d recovery %d",
-				ctx->ctx_id, req->request_id, bubble_state,
-				req_isp->bubble_report);
-			CAM_DBG(CAM_ISP,
-				"ctx[%d] : Deferred info : num_acks=%d, fence_map_index=%d, resource_handle=0x%x, sync_id=%d",
-				ctx->ctx_id, req_isp->num_deferred_acks, j,
-				req_isp->fence_map_out[j].resource_handle,
-				req_isp->fence_map_out[j].sync_id);
-			continue;
-		} else if (!req_isp->bubble_detected) {
-			__cam_isp_ctx_handle_fence_signaling_util(true, j, ctx_isp, req);
-			req_isp->num_acked++;
-		} else if (!req_isp->bubble_report) {
-			__cam_isp_ctx_handle_fence_signaling_util(false, j, ctx_isp, req);
-			req_isp->num_acked++;
-		} else {
-			req_isp->num_acked++;
-			CAM_DBG(CAM_ISP,
-				"buf done with bubble state %d recovery %d",
-				bubble_state, req_isp->bubble_report);
-
-			if (req_isp->num_deferred_acks)
-				__cam_isp_handle_deferred_buf_done(ctx_isp, req, true,
-					CAM_SYNC_STATE_SIGNALED_ERROR,
-					CAM_SYNC_ISP_EVENT_BUBBLE);
+			__cam_isp_ctx_handle_buf_done_util(defer_buf_done, bubble_state, j, req,
+				ctx_isp);
 		}
+		return 0;
+	}
+
+	/*
+	 * Incase of multiple primary ports, Need to signal ports grouped to each primary port
+	 * when buf done for corresponding primary port is received.
+	 */
+	for (i = 0; i < ctx_isp->num_primary_ports; i++) {
+		if (primary_port_res_hdl == ctx_isp->primary_port_info[i]->res_id) {
+			linked_ports = ctx_isp->primary_port_info[i]->linked_ports;
+			break;
+		}
+	}
+
+	if (!linked_ports) {
+		CAM_ERR(CAM_ISP,
+			"linked_ports associated to primary_port: 0x%x not found for req_id: %lld in ctx: %u",
+			primary_port_res_hdl, req->request_id, ctx->ctx_id);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < ctx_isp->primary_port_info[i]->num_linked_ports; i++) {
+		for (j = 0; j < req_isp->num_fence_map_out; j++) {
+			if (linked_ports[i] == req_isp->fence_map_out[j].resource_handle)
+				break;
+		}
+
+		if (j == req_isp->num_fence_map_out) {
+			CAM_ERR(CAM_ISP,
+				"linked_port:0x%x not found in fence_map for req_id: %lld in ctx: %u",
+				linked_ports[i], req->request_id, ctx->ctx_id);
+			return -EINVAL;
+		}
+		__cam_isp_ctx_handle_buf_done_util(defer_buf_done, bubble_state, j, req, ctx_isp);
 	}
 
 	return 0;
@@ -2589,84 +2661,13 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 		req_isp->buf_done_tracker |=
 			BIT_ULL(req_isp->fence_map_out[j].resource_handle & 0xFF);
 
-		/* Check if master port is done */
-		if (ctx_isp->num_primary_ports)
-			req_isp->primary_port_done_mask &=
-				~BIT_ULL(req_isp->fence_map_out[j].resource_handle & 0xFF);
-
-		if (defer_buf_done) {
-			uint32_t deferred_indx = req_isp->num_deferred_acks;
-
-			/*
-			 * If we are handling this BUF_DONE event for a request
-			 * that is still in wait_list, do not signal now,
-			 * instead mark it as done and handle it later -
-			 * if this request is going into BUBBLE state later
-			 * it will automatically be re-applied. If this is not
-			 * going into BUBBLE, signal fences later.
-			 * Note - we will come here only if the last consumed
-			 * address matches with this ports buffer.
-			 */
-			req_isp->deferred_fence_map_index[deferred_indx] = j;
-			req_isp->num_deferred_acks++;
-			CAM_DBG(CAM_ISP,
-				"ctx[%d] : Deferred buf done for %llu with bubble state %d recovery %d",
-				ctx->ctx_id, req->request_id, bubble_state,
-				req_isp->bubble_report);
-			CAM_DBG(CAM_ISP,
-				"ctx[%d] : Deferred info : num_acks=%d, fence_map_index=%d, resource_handle=0x%x, sync_id=%d",
-				ctx->ctx_id, req_isp->num_deferred_acks, j,
-				req_isp->fence_map_out[j].resource_handle,
-				req_isp->fence_map_out[j].sync_id);
+		__cam_isp_ctx_handle_buf_done_util(defer_buf_done, bubble_state, j, req, ctx_isp);
+		if (defer_buf_done || (req_isp->bubble_detected && req_isp->bubble_report))
 			continue;
-		} else if (!req_isp->bubble_detected) {
-			trace_cam_buf_done("ISP", ctx, req);
-			CAM_DBG(CAM_ISP,
-				"Sync with success: req %lld res 0x%x fd 0x%x, ctx %u",
-				req->request_id,
-				req_isp->fence_map_out[j].resource_handle,
-				req_isp->fence_map_out[j].sync_id,
-				ctx->ctx_id);
-
-			__cam_isp_ctx_handle_fence_signaling_util(true, j, ctx_isp, req);
-		} else if (!req_isp->bubble_report) {
-			trace_cam_isp_buf_done("ISP", ctx, req->request_id,
-				req_isp->fence_map_out[j].resource_handle);
-			CAM_DBG(CAM_ISP,
-				"Sync with failure: req %lld res 0x%x fd 0x%x, ctx %u",
-				req->request_id,
-				req_isp->fence_map_out[j].resource_handle,
-				req_isp->fence_map_out[j].sync_id,
-				ctx->ctx_id);
-			__cam_isp_ctx_handle_fence_signaling_util(true, j, ctx_isp, req);
-		} else {
-			/*
-			 * Ignore the buffer done if bubble detect is on
-			 * Increment the ack number here, and queue the
-			 * request back to pending list whenever all the
-			 * buffers are done.
-			 */
-			req_isp->num_acked++;
-			CAM_DBG(CAM_ISP,
-				"buf done with bubble state %d recovery %d",
-				bubble_state, req_isp->bubble_report);
-				/* Process deferred buf_done acks */
-
-			if (req_isp->num_deferred_acks)
-				__cam_isp_handle_deferred_buf_done(ctx_isp, req,
-					true,
-					CAM_SYNC_STATE_SIGNALED_ERROR,
-					CAM_SYNC_ISP_EVENT_BUBBLE);
-
-			continue;
-		}
 
 		CAM_DBG(CAM_ISP, "req %lld, reset sync id 0x%x ctx %u",
 			req->request_id,
 			req_isp->fence_map_out[j].sync_id, ctx->ctx_id);
-		if (!rc) {
-			req_isp->num_acked++;
-		}
 
 		if ((ctx_isp->use_frame_header_ts) &&
 			(req_isp->hw_update_data.frame_header_res_id ==
@@ -2675,6 +2676,22 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 				ctx_isp,
 				req_isp->hw_update_data.frame_header_cpu_addr,
 				req->request_id, CAM_REQ_MGR_SOF_EVENT_SUCCESS);
+		/*
+		 * Incase of multiple primary ports, After signalling a primary port
+		 * signalling remaining ports associated to it for the given frame.
+		 */
+		if (ctx_isp->num_primary_ports) {
+			rc = __cam_isp_ctx_handle_buf_done_for_remaining_ports(defer_buf_done,
+				bubble_state, req_isp->fence_map_out[j].resource_handle, req,
+				ctx_isp);
+			if (rc) {
+				CAM_ERR(CAM_ISP,
+					"Buf done failed for remaining ports associated to primary_port: 0x%x req_id: %lld ctx_id: %d rc: %d",
+					req_isp->fence_map_out[j].resource_handle, req->request_id,
+					ctx->ctx_id, rc);
+				return rc;
+			}
+		}
 	}
 
 	if (req_isp->num_acked > req_isp->num_fence_map_out) {
@@ -2684,15 +2701,6 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 			req->request_id, req_isp->num_acked,
 			req_isp->num_fence_map_out, ctx->ctx_id);
 	}
-
-	/*
-	 * Check if primary port scheme is enabled, and if all the primary ports are
-	 * done processing, signal the remaining ports in the request for
-	 * the given frame
-	 */
-	if (ctx_isp->num_primary_ports && !req_isp->primary_port_done_mask)
-		__cam_isp_ctx_handle_buf_done_for_remaining_ports(defer_buf_done,
-			bubble_state, req, ctx_isp);
 
 	if (req_isp->num_acked == req_isp->num_fence_map_out)
 		rc = __cam_isp_ctx_handle_buf_done_for_req_list(ctx_isp, req);
@@ -8435,7 +8443,6 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 	req_isp->bubble_detected = false;
 	req_isp->cdm_reset_before_apply = false;
 	req_isp->hw_update_data.packet = packet;
-	req_isp->primary_port_done_mask = ctx_isp->primary_port_exp_mask;
 	req_isp->buf_done_tracker = 0x0;
 
 	for (i = 0; i < req_isp->num_fence_map_out; i++) {
@@ -9295,7 +9302,7 @@ static int __cam_isp_ctx_ul_fastpath_retrieve_result_util(
 					continue;
 
 				found_match = __cam_isp_ctx_ul_fastpath_match_for_primary_port(
-					isp_ctx->primary_port_info[0].res_id,
+					isp_ctx->primary_port_info[0]->res_id,
 					last_consumed_addr, req);
 
 				if (found_match) {
@@ -9324,7 +9331,7 @@ static int __cam_isp_ctx_ul_fastpath_retrieve_result_util(
 					continue;
 
 				found_match = __cam_isp_ctx_ul_fastpath_match_for_primary_port(
-					isp_ctx->primary_port_info[0].res_id,
+					isp_ctx->primary_port_info[0]->res_id,
 					last_consumed_addr, req);
 
 				if (found_match) {
@@ -9351,7 +9358,7 @@ static int __cam_isp_ctx_ul_fastpath_retrieve_result_util(
 			continue;
 
 		found_match = __cam_isp_ctx_ul_fastpath_match_for_primary_port(
-			isp_ctx->primary_port_info[0].res_id,
+			isp_ctx->primary_port_info[0]->res_id,
 			last_consumed_addr, req);
 
 		if (found_match) {
@@ -9854,21 +9861,19 @@ static int __cam_isp_ctx_query_primary_port_info(
 
 	if (isp_hw_cmd_args.u.primary_port_info.use_primary_port_config) {
 		isp_ctx->num_primary_ports = isp_hw_cmd_args.u.primary_port_info.num_ports;
-		isp_ctx->primary_port_info = (struct cam_isp_primary_port_info *)
-			isp_hw_cmd_args.u.primary_port_info.primary_port_cfg;
-		if (IS_ERR_OR_NULL(isp_ctx->primary_port_info)) {
-			CAM_ERR(CAM_ISP,
-				"Primary port info invalid for ctx: %u link: 0x%x with rc: %d",
-				ctx->ctx_id, ctx->link_hdl, rc);
-			rc = -EINVAL;
-			goto end;
-		}
-
 		for (i = 0; i < isp_ctx->num_primary_ports; i++) {
-			isp_ctx->primary_port_exp_mask |=
-				BIT_ULL(isp_ctx->primary_port_info[i].res_id & 0xFF);
+			isp_ctx->primary_port_info[i] = (struct cam_isp_primary_port_info *)
+				isp_hw_cmd_args.u.primary_port_info.primary_port_cfg[i];
+			if (IS_ERR_OR_NULL(isp_ctx->primary_port_info[i])) {
+				CAM_ERR(CAM_ISP,
+					"Primary port info invalid for ctx: %u link: 0x%x with rc: %d",
+					ctx->ctx_id, ctx->link_hdl, rc);
+				rc = -EINVAL;
+				goto end;
+			}
+
 			CAM_DBG(CAM_ISP, "Primary port: 0x%x selected for ctx: %u link: 0x%x",
-				isp_ctx->primary_port_info[i].res_id, ctx->link_hdl);
+				isp_ctx->primary_port_info[i]->res_id, ctx->ctx_id, ctx->link_hdl);
 		}
 	} else if (isp_ctx->ul_path_en) {
 		CAM_ERR(CAM_ISP, "Primary port expected for fastpath ctx: %u link: 0x%x",
@@ -10290,13 +10295,14 @@ static int __cam_isp_ctx_stop_dev_in_activated_unlock(
 	ctx_isp->sensor_req_info.prev_applied_req = 0;
 	ctx_isp->frame_drop_cnt = 0;
 	ctx_isp->csid_rup_aup_mask = 0;
-	ctx_isp->primary_port_info = NULL;
-	ctx_isp->primary_port_exp_mask = 0x0;
 	ctx_isp->num_primary_ports = 0;
 	atomic_set(&ctx_isp->process_bubble, 0);
 	atomic_set(&ctx_isp->internal_recovery_set, 0);
 	atomic_set(&ctx_isp->rxd_epoch, 0);
 	atomic64_set(&ctx_isp->state_monitor_head, -1);
+
+	for (i = 0; i < CAM_IFE_HW_PRIMARY_PORT_MAX; i++)
+		ctx_isp->primary_port_info[i] = NULL;
 
 	for (i = 0; i < CAM_ISP_CTX_EVENT_MAX; i++)
 		atomic64_set(&ctx_isp->event_record_head[i], -1);
@@ -10882,7 +10888,7 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 	for (i = 0; i < ctx_isp->num_primary_ports; i++) {
 		buffer_found = false;
 		for (j = 0; j < req_isp->num_fence_map_out; j++) {
-			if (ctx_isp->primary_port_info[i].res_id ==
+			if (ctx_isp->primary_port_info[i]->res_id ==
 				req_isp->fence_map_out[j].resource_handle) {
 				buffer_found = true;
 				req_isp->hw_update_data.primary_port_entry_index = j;
@@ -10893,7 +10899,7 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 		if (!buffer_found) {
 			for (j = 0; j < MAX_IO_RESOURCES; j++) {
 				if (res_data[j].resource_type ==
-					ctx_isp->primary_port_info[i].res_id)
+					ctx_isp->primary_port_info[i]->res_id)
 					break;
 			}
 

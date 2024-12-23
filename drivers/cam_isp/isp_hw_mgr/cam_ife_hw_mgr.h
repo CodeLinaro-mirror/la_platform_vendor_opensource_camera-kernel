@@ -451,7 +451,7 @@ struct cam_ife_hw_mgr_ctx {
 	bool                                 settingid_check;
 	struct cam_isp_scratch_buf_mem       scratch_buf_info;
 	uint32_t                             num_primary_ports;
-	struct cam_isp_primary_port_info    *primary_port_info;
+	struct cam_isp_primary_port_info    *primary_port_info[CAM_IFE_HW_PRIMARY_PORT_MAX];
 	bool                                 primary_port_cfg_done;
 	struct cam_packet                   *ul_io_packet;
 	struct cam_isp_res_scratch_buf_info *primary_port_scratch_buf_info;

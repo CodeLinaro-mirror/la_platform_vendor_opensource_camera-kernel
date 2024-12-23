@@ -1867,6 +1867,7 @@ static int cam_vfe_bus_ver3_handle_comp_done_bottom_half(
 	struct cam_isp_resource_node          *comp_grp = vfe_out->comp_grp;
 	struct cam_vfe_bus_irq_evt_payload    *evt_payload = evt_payload_priv;
 	struct cam_vfe_bus_ver3_comp_grp_data *rsrc_data = comp_grp->res_priv;
+	struct cam_vfe_bus_ver3_priv          *bus_priv = NULL;
 	uint32_t                              *cam_ife_irq_regs;
 	uint32_t                               status_0;
 
@@ -1893,7 +1894,11 @@ static int cam_vfe_bus_ver3_handle_comp_done_bottom_half(
 		rsrc_data->common_data->core_index, rsrc_data->comp_grp_type,
 		status_0, rc);
 
-	*comp_mask = rsrc_data->composite_mask;
+	bus_priv = vfe_out->bus_priv;
+	if (bus_priv->common_data.buf_done_evt_control && vfe_out->primary_port_en)
+		*comp_mask = (1ULL << vfe_out->out_type);
+	else
+		*comp_mask = rsrc_data->composite_mask;
 
 	return rc;
 }
