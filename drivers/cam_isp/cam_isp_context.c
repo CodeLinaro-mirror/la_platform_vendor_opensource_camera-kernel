@@ -3682,8 +3682,19 @@ static int __cam_isp_ctx_epoch_in_applied(struct cam_isp_context *ctx_isp,
 	}
 
 	ctx_isp->frame_id_meta = epoch_done_event_data->frame_id_meta;
-
 	__cam_isp_ctx_handle_sof_util(epoch_done_event_data, ctx_isp);
+
+	/* This condition in trigger camera is only possible in case
+	 * of apply request through config_dev when no request pending
+	 * in kmd and if config_dev comes in between reg update and
+	 * epoch of the frame.
+	 */
+	if (ctx_isp->acquire_type != CAM_ISP_ACQUIRE_TYPE_HYBRID &&
+		ctx_isp->independent_crm_en &&
+		ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) {
+		CAM_DBG(CAM_ISP, "Epoch in applied ctx %d ", ctx->ctx_id);
+		goto end;
+	}
 
 	if (list_empty(&ctx->wait_req_list)) {
 		/*
@@ -8659,8 +8670,7 @@ done:
 	}
 
 	if (ctx_isp->independent_crm_en && ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) {
-		if (ctx->state == CAM_CTX_ACTIVATED && (ctx_isp->rdi_only_context ||
-			ctx_isp->rdi_stats_context)) {
+		if (ctx->state == CAM_CTX_ACTIVATED) {
 			CAM_DBG(CAM_ISP,
 				"independent CRM apply from config_dev ctx:%u", ctx->ctx_id);
 
@@ -10079,8 +10089,7 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 		CAM_DBG(CAM_REQ,
 			"Move pending req: %lld to free list(cnt: %d) offline ctx %u",
 			req->request_id, ctx_isp->active_req_cnt, ctx->ctx_id);
-	} else if ((ctx_isp->rdi_only_context || ctx_isp->rdi_stats_context) &&
-		!req_isp->num_fence_map_out) {
+	} else if (!ctx_isp->offline_context && !req_isp->num_fence_map_out) {
 		list_add_tail(&req->list, &ctx->free_req_list);
 		CAM_DBG(CAM_REQ,
 			"Move pending req: %lld to free list(cnt: %d) ctx %u",
