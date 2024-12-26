@@ -441,6 +441,7 @@ struct cam_ife_hw_concrete_ctx {
 	bool                                 is_offline;
 	bool                                 waiting_start;
 	uint32_t                             start_ctx_idx;
+	bool                                 sfe_rd_only;
 };
 
 /**
