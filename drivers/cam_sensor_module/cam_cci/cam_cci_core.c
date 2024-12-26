@@ -295,12 +295,21 @@ static int cam_gpio_init(
 		}
 
 		/* Setting up the queue size */
-		cci_dev->cci_gpio_queue_info[GPIOQUEUE_0].max_queue_size
-				= CCI_GPIO_QUEUE_0_SIZE;
-		cci_dev->cci_gpio_queue_info[GPIOQUEUE_1].max_queue_size
-				= CCI_GPIO_QUEUE_1_SIZE;
-		cci_dev->cci_gpio_queue_info[GPIOQUEUE_2].max_queue_size
-				= CCI_GPIO_QUEUE_2_SIZE;
+		if (cci_dev->hw_version >= CCI_VERSION_1_11_0) {
+			cci_dev->cci_gpio_queue_info[GPIOQUEUE_0].max_queue_size
+					= CCI_GPIO_QUEUE_0_SIZE_V_1_11;
+			cci_dev->cci_gpio_queue_info[GPIOQUEUE_1].max_queue_size
+					= CCI_GPIO_QUEUE_1_SIZE_V_1_11;
+			cci_dev->cci_gpio_queue_info[GPIOQUEUE_2].max_queue_size
+					= CCI_GPIO_QUEUE_2_SIZE_V_1_11;
+		} else {
+			cci_dev->cci_gpio_queue_info[GPIOQUEUE_0].max_queue_size
+					= CCI_GPIO_QUEUE_0_SIZE;
+			cci_dev->cci_gpio_queue_info[GPIOQUEUE_1].max_queue_size
+					= CCI_GPIO_QUEUE_1_SIZE;
+			cci_dev->cci_gpio_queue_info[GPIOQUEUE_2].max_queue_size
+					= CCI_GPIO_QUEUE_2_SIZE;
+		}
 	}
 
 	/* Set reset pending flag to true */
