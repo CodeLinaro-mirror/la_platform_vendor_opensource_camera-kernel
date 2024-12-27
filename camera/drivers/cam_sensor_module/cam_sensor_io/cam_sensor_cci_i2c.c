@@ -235,19 +235,55 @@ int32_t cam_cci_i2c_poll(struct cam_sensor_cci_client *client,
 	return rc;
 }
 
-int32_t cam_sensor_cci_i2c_util(struct cam_sensor_cci_client *cci_client,
+int32_t cam_sensor_cci_i2c_util(struct camera_io_master *client,
 	uint16_t cci_cmd)
 {
 	int32_t rc = 0;
 	struct cam_cci_ctrl cci_ctrl;
 
+	if (!client) {
+		CAM_ERR(CAM_SENSOR, "Master clinet Null pointer");
+		return -EINVAL;
+	}
+
 	cci_ctrl.cmd = cci_cmd;
-	cci_ctrl.cci_info = cci_client;
-	rc = v4l2_subdev_call(cci_client->cci_subdev,
+	cci_ctrl.cci_info = client->cci_client;
+	rc = v4l2_subdev_call(client->cci_client->cci_subdev,
 		core, ioctl, VIDIOC_MSM_CCI_CFG, &cci_ctrl);
 	if (rc < 0) {
 		CAM_ERR(CAM_SENSOR, "Failed rc = %d", rc);
 		return rc;
 	}
 	return cci_ctrl.status;
+}
+
+int32_t cam_cci_i2c_sequential_xfer(
+	struct camera_io_master *io_master_info,
+	struct cam_cmd_i2c_sequential_xfer *seq_xfer)
+{
+	int32_t rc = 0;
+	uint32_t reg_data = 0;
+	struct cam_cci_ctrl cci_ctrl;
+
+	if (seq_xfer->cmd_type != CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_LOCK
+		|| seq_xfer->cmd_type != CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_UNLOCK) {
+			CAM_ERR(CAM_SENSOR, "Invalid cmd_type=%d", seq_xfer->cmd_type);
+		return -EINVAL;
+	}
+
+	cci_ctrl.cmd = ((seq_xfer->cmd_type == CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_LOCK) ?
+		MSM_CCI_I2C_SEQUENTIAL_XFER_LOCK : MSM_CCI_I2C_SEQUENTIAL_XFER_UNLOCK);
+	cci_ctrl.cci_info = io_master_info->cci_client;
+
+	rc = v4l2_subdev_call(io_master_info->cci_client->cci_subdev,
+		core, ioctl, VIDIOC_MSM_CCI_CFG, &cci_ctrl);
+	if (rc < 0) {
+		CAM_ERR(CAM_SENSOR, "Failed rc = %d", rc);
+		return rc;
+	}
+
+	rc = cci_ctrl.status;
+	/*Lock unlock will not have delay */
+
+	return rc;
 }
