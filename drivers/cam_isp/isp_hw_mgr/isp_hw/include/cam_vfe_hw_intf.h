@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_VFE_HW_INTF_H_
@@ -95,21 +95,25 @@ enum cam_vfe_reset_type {
 /*
  * struct cam_vfe_hw_get_hw_cap:
  *
- * @Brief:       Argument type for fetching the hw information for Query caps
- * @major:       Major revision number
- * @minor:       Minor revision number
- * @incr:        Increment revision number
- * @is_lite:     Flag to indicate Whether a full vfe or a Lite vfe
- * @secure_cdm   Flag to indicate whether its secure cdm or not
- * @is_virt:     Flag to indicate Whether a HW is virtual or not
+ * @Brief:          Argument type for fetching the hw information for Query caps
+ * @major:          Major revision number
+ * @minor:          Minor revision number
+ * @incr:           Increment revision number
+ * @group_id:       Group id of IFE LITE
+ * @is_lite:        Flag to indicate Whether a full vfe or a Lite vfe
+ * @secure_cdm      Flag to indicate whether its secure cdm or not
+ * @is_virt:        Flag to indicate Whether a HW is virtual or not
+ * @is_grp_support: Flag to indicate Whether a HW is grouped based on power domain
  */
 struct cam_vfe_hw_get_hw_cap {
 	uint32_t major;
 	uint32_t minor;
 	uint32_t incr;
+	uint32_t group_id;
 	bool     is_lite;
 	bool     secure_cdm;
 	bool     is_virtual;
+	bool     is_grp_support;
 };
 
 /*

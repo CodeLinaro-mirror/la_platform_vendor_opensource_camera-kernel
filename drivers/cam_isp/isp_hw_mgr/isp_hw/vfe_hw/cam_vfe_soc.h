@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_VFE_SOC_H_
@@ -29,6 +30,8 @@
  * @ife_clk_src:             IFE source clock
  * @num_pid:                 Number of pids of ife
  * @pid:                     IFE pid values list
+ * @group_id:                IFE lite hw group id based on power domain
+ * @is_grp_support:          Flag to indicate if ife lite hw grouping supported
  */
 struct cam_vfe_soc_private {
 	uint32_t    cpas_handle;
@@ -40,6 +43,8 @@ struct cam_vfe_soc_private {
 	uint64_t    ife_clk_src;
 	uint32_t    num_pid;
 	uint32_t    pid[CAM_ISP_HW_MAX_PID_VAL];
+	uint32_t    group_id;
+	bool        is_grp_support;
 };
 
 /*
