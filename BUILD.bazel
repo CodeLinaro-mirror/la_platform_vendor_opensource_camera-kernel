@@ -150,3 +150,21 @@ ddk_headers(
 load(":camera_modules.bzl", "define_camera_module")
 
 define_camera_module()
+
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+string_flag(
+    name = "project_name",
+    build_setting_default = "none",
+)
+config_setting(
+    name = "no_project",
+    flag_values = {":project_name": "none"},
+)
+config_setting(
+    name = "niobe",
+    flag_values = {":project_name": "niobe"},
+)
+config_setting(
+    name = "seraph",
+    flag_values = {":project_name": "seraph"},
+)
