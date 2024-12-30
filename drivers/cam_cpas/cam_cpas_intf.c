@@ -282,6 +282,33 @@ int cam_cpas_get_hw_info(uint32_t *camera_family,
 }
 EXPORT_SYMBOL(cam_cpas_get_hw_info);
 
+int cam_cpas_set_ife_core_clk_gate_value(uint32_t hw_index,
+	bool is_power_on)
+{
+	int rc = 0;
+
+	if (g_cpas_intf->hw_intf->hw_ops.process_cmd) {
+		struct cam_cpas_hw_cmd_set_core_clk core_clk;
+
+		core_clk.hw_index = hw_index;
+		core_clk.is_power_on = is_power_on;
+
+		rc = g_cpas_intf->hw_intf->hw_ops.process_cmd(
+			g_cpas_intf->hw_intf->hw_priv,
+			CAM_CPAS_HW_CMD_SET_CORE_HW_CLK,
+			&core_clk,
+			sizeof(struct cam_cpas_hw_cmd_set_core_clk));
+		if (rc)
+			CAM_ERR(CAM_CPAS, "Failed in process_cmd, rc=%d", rc);
+	} else {
+		CAM_ERR(CAM_CPAS, "Invalid process_cmd ops");
+		rc = -EINVAL;
+	}
+
+	return rc;
+}
+EXPORT_SYMBOL(cam_cpas_set_ife_core_clk_gate_value);
+
 int cam_cpas_reg_write(uint32_t client_handle,
 	enum cam_cpas_reg_base reg_base, uint32_t offset, bool mb,
 	uint32_t value)

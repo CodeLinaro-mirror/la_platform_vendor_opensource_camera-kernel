@@ -2682,6 +2682,39 @@ static int cam_cpas_deactivate_cache(
 	return rc;
 }
 
+static int cam_cpas_set_core_hw_clk(
+	struct cam_hw_info *cpas_hw,
+	uint32_t hw_index, bool is_power_on)
+{
+	int rc = 0;
+	struct cam_cpas *cpas_core = (struct cam_cpas *) cpas_hw->core_info;
+	struct cam_hw_soc_info *soc_info = &cpas_hw->soc_info;
+	struct cam_camnoc_info *camnoc_info =
+		(struct cam_camnoc_info *)cpas_core->camnoc_info;
+	struct cam_cpas_hw_clk_gate_info *ife_core_clk_list =
+		camnoc_info->ife_core_clk_list;
+	int32_t reg_indx = cpas_core->regbase_index[CAM_CPAS_REG_CPASTOP];
+	uint32_t clk_reg_val = 0;
+
+	if (hw_index > camnoc_info->ife_core_clk_list_size) {
+		CAM_ERR(CAM_CPAS, "Invalid hw index %d max size %d",
+			hw_index, camnoc_info->ife_core_clk_list_size);
+		return -EINVAL;
+	}
+
+	if (is_power_on)
+		clk_reg_val = ife_core_clk_list[hw_index].core_en_value;
+
+	cam_io_w_mb(clk_reg_val, soc_info->reg_map[reg_indx].mem_base +
+		ife_core_clk_list[hw_index].core_clk_en_addr);
+
+	CAM_DBG(CAM_CPAS, "Set core hw clk for hw id %d val %d addr 0x%x",
+		hw_index, clk_reg_val,
+		ife_core_clk_list[hw_index].core_clk_en_addr);
+
+	return rc;
+}
+
 static inline int cam_cpas_validate_cache_type(
 	uint32_t num_caches, enum cam_sys_cache_config_types type)
 {
@@ -2979,6 +3012,20 @@ static int cam_cpas_hw_process_cmd(void *hw_priv,
 
 		gdsc = (struct cam_cpas_gdsc_params *)cmd_args;
 		rc = cam_cpas_hw_gdsc_get_put(hw_priv, *gdsc);
+		break;
+	}
+	case CAM_CPAS_HW_CMD_SET_CORE_HW_CLK: {
+		struct cam_cpas_hw_cmd_set_core_clk *core_hw_clk;
+
+		if (sizeof(struct cam_cpas_hw_cmd_set_core_clk) != arg_size) {
+			CAM_ERR(CAM_CPAS, "cmd_type %d, size mismatch %d",
+				cmd_type, arg_size);
+			break;
+		}
+
+		core_hw_clk = (struct cam_cpas_hw_cmd_set_core_clk *)cmd_args;
+		rc = cam_cpas_set_core_hw_clk(hw_priv, core_hw_clk->hw_index,
+			core_hw_clk->is_power_on);
 		break;
 	}
 	default:

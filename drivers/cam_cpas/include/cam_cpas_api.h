@@ -837,4 +837,17 @@ int cam_cpas_dump_camnoc_buff_fill_info(uint32_t client_handle);
  */
 int cam_cpas_gdsc_get_put(uint32_t sensor_index, bool enable);
 
+/**
+ * cam_cpas_set_ife_core_clk_gate_value()
+ *
+ * @brief: API to maintain enable ife core
+ *
+ * @hw_index: Ife lite hw index
+ *
+ * @is_power_on: Power on or off
+ *
+ * @return 0 on Success
+ */
+int cam_cpas_set_ife_core_clk_gate_value(uint32_t hw_index, bool is_power_on);
+
 #endif /* _CAM_CPAS_API_H_ */
