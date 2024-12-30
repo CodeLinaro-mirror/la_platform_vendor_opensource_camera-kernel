@@ -18085,6 +18085,43 @@ static int cam_ife_mgr_get_primary_port_info(
 	return 0;
 }
 
+static int cam_ife_mgr_get_last_consumed_addr_info(
+	struct cam_ife_hw_mgr_ctx *ctx, struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
+{
+	int rc = 0, res_id;
+	struct cam_isp_hw_mgr_res *isp_out_res;
+	struct cam_isp_resource_node *isp_res;
+	struct cam_isp_last_consumed_addr_info *last_consumed_addr_info;
+
+	last_consumed_addr_info = (struct cam_isp_last_consumed_addr_info *)
+		isp_hw_cmd_args->cmd_data;
+
+	res_id = last_consumed_addr_info->res_info[0].res_id & 0xFF;
+	isp_out_res = &ctx->res_list_ife_out[res_id];
+	isp_res = isp_out_res->hw_res[0];
+	if (!isp_res) {
+		CAM_ERR(CAM_ISP, "ctx: %u Left resource invalid for out resource: 0x%x",
+			ctx->ctx_index, last_consumed_addr_info->res_info[0].res_id);
+		goto err;
+	}
+
+	rc = isp_res->hw_intf->hw_ops.process_cmd(
+		isp_res->hw_intf->hw_priv,
+		CAM_ISP_HW_CMD_LAST_CONSUMED_ADDR_INFO,
+		last_consumed_addr_info, sizeof(last_consumed_addr_info));
+	if (rc) {
+		CAM_ERR(CAM_ISP,
+			"Getting last consumed addr info failed for ctx: %u rc: %d",
+			ctx->ctx_index, rc);
+		goto err;
+	}
+
+	return rc;
+err:
+	rc = -EINVAL;
+	return rc;
+}
+
 static int cam_ife_mgr_set_fast_path_notifier(
 	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx,
 	struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
@@ -18297,6 +18334,12 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			break;
 		case CAM_ISP_HW_MGR_FAST_RESULT_NOTIFIER_CFG:
 			rc = cam_ife_mgr_set_fast_path_notifier(ctx, isp_hw_cmd_args);
+			break;
+		case CAM_ISP_HW_MGR_GET_LAST_CONSUMED_ADDR_INFO:
+			rc = cam_ife_mgr_get_last_consumed_addr_info(ctx, isp_hw_cmd_args);
+			break;
+		case CAM_ISP_HW_MGR_GET_MAX_IFE_OUT_RES:
+			isp_hw_cmd_args->u.max_ife_out_res = max_ife_out_res;
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "Invalid HW mgr command:0x%x",

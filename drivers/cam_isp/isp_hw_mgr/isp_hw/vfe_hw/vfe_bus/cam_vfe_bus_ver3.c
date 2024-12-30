@@ -4328,7 +4328,6 @@ static int cam_vfe_bus_ver3_update_primary_port_config(
 	return 0;
 }
 
-
 static int cam_vfe_bus_ver3_update_res_wm(
 	struct cam_vfe_bus_ver3_priv           *ver3_bus_priv,
 	struct cam_vfe_hw_vfe_out_acquire_args *out_acq_args,
@@ -5103,6 +5102,20 @@ static int cam_vfe_bus_ver3_process_cmd(
 			vfe_out_data->fastpath_notifier.handler_cb = notifier_cfg->handler_cb;
 			rc = 0;
 		}
+	}
+		break;
+	case CAM_ISP_HW_CMD_LAST_CONSUMED_ADDR_INFO: {
+		int32_t i;
+		struct cam_isp_last_consumed_addr_info *addr_info;
+		struct cam_isp_res_last_consumed_addr  *res_info;
+
+		bus_priv = (struct cam_vfe_bus_ver3_priv *)priv;
+		addr_info = (struct cam_isp_last_consumed_addr_info *)cmd_args;
+		res_info = addr_info->res_info;
+		for (i = 0; i < addr_info->num_res; i++)
+			res_info[i].last_consumed_addr = cam_vfe_bus_ver3_get_last_consumed_addr(
+			     bus_priv, res_info[i].res_id);
+		rc = 0;
 	}
 		break;
 	default:

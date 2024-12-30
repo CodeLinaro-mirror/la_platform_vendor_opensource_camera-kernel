@@ -1884,6 +1884,7 @@ static int __cam_isp_ctx_handle_buf_done_for_req_list(
 	uint32_t *kernel_buf_ptr;
 	int32_t kernel_buf_handle;
 	struct  cam_sync_signal_param param;
+	struct cam_isp_ctx_res_info *res_info;
 
 	req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 	ctx_isp->active_req_cnt--;
@@ -1967,6 +1968,16 @@ static int __cam_isp_ctx_handle_buf_done_for_req_list(
 					CAM_REQ_MGR_SOF_EVENT_SUCCESS);
 		}
 
+		if (ctx_isp->num_primary_ports) {
+			ctx_isp->prev_req_info->req_id = req->request_id;
+			ctx_isp->prev_req_info->num_res = req_isp->num_fence_map_out;
+			for (i = 0; i < req_isp->num_fence_map_out; i++) {
+				res_info = &ctx_isp->prev_req_info->res_info[i];
+				res_info->resource_id = req_isp->fence_map_out[i].resource_handle;
+				res_info->image_buf_addr =
+					req_isp->fence_map_out[i].image_buf_addr[0];
+			}
+		}
 		__cam_isp_ctx_handle_req_reset_util(ctx_isp, req);
 	}
 
@@ -3204,6 +3215,69 @@ end:
 	return rc;
 }
 
+static int cam_isp_context_last_consumed_addr_check(struct cam_isp_context *ctx_isp)
+{
+	int rc = 0, i, j;
+	struct cam_ctx_request  *req;
+	struct cam_context      *ctx = ctx_isp->base;
+	struct cam_isp_ctx_req  *req_isp;
+	struct cam_hw_cmd_args hw_cmd_args;
+	struct cam_isp_hw_cmd_args isp_hw_cmd_args;
+
+	req = list_first_entry(&ctx->wait_req_list, struct cam_ctx_request, list);
+	if (ctx_isp->skip_addr_check) {
+		ctx_isp->skip_addr_check = false;
+		CAM_WARN(CAM_ISP,
+			"Skip last consumed addr check in case of frame drop for req_id: %lld ctx: %u",
+			req->request_id, ctx->ctx_id);
+		goto end;
+	}
+
+	ctx_isp->addr_info->num_res = ctx_isp->prev_req_info->num_res;
+	for (i = 0; i < ctx_isp->addr_info->num_res; i++)
+		ctx_isp->addr_info->res_info[i].res_id =
+			ctx_isp->prev_req_info->res_info[i].resource_id;
+
+	hw_cmd_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
+	hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+	isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_GET_LAST_CONSUMED_ADDR_INFO;
+	isp_hw_cmd_args.cmd_data = ctx_isp->addr_info;
+	hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+	rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
+		&hw_cmd_args);
+	if (rc) {
+		CAM_ERR(CAM_ISP,
+			"Gettting last consumed addr info failed rc: %d ctx: %u request: %lld",
+			rc, ctx->ctx_id, req->request_id);
+		goto end;
+	}
+
+	for (i = 0; i < ctx_isp->addr_info->num_res; i++) {
+		if (ctx_isp->prev_req_info->res_info[i].image_buf_addr !=
+			ctx_isp->addr_info->res_info[i].last_consumed_addr) {
+			req_isp = (struct cam_isp_ctx_req *) req->req_priv;
+			for (j = 0; j < req_isp->num_fence_map_out; j++) {
+				if ((ctx_isp->addr_info->res_info[i].res_id ==
+					req_isp->fence_map_out[j].resource_handle) &&
+					ctx_isp->addr_info->res_info[i].last_consumed_addr !=
+					req_isp->fence_map_out[j].image_buf_addr[0])
+					CAM_ERR(CAM_ISP,
+						"ctx: %u Buf done is not received for res: 0x%x last_consumed_addr: 0x%x prev_req_info req_id: %lld image_buf_addr: 0x%x cur_req_info req_id: %lld image_buf_addr: 0x%x",
+						ctx->ctx_id,
+						req_isp->fence_map_out[j].resource_handle,
+						ctx_isp->addr_info->res_info[i].last_consumed_addr,
+						ctx_isp->prev_req_info->req_id,
+						ctx_isp->prev_req_info->res_info[i].image_buf_addr,
+						req->request_id,
+						req_isp->fence_map_out[j].image_buf_addr[0]);
+			}
+		}
+	}
+
+end:
+	return rc;
+}
+
 static int __cam_isp_ctx_reg_upd_in_applied_state(
 	struct cam_isp_context *ctx_isp, void *evt_data)
 {
@@ -3340,6 +3414,15 @@ static int __cam_isp_ctx_reg_upd_in_applied_state(
 	}
 	req = list_first_entry(&ctx->wait_req_list,
 			struct cam_ctx_request, list);
+	if (ctx_isp->num_primary_ports && (req->request_id > 1)) {
+		rc = cam_isp_context_last_consumed_addr_check(ctx_isp);
+		if (rc) {
+			CAM_ERR(CAM_ISP,
+				"last consumed addr check failed for request: %lld ctx: %u rc: %d",
+				req->request_id, ctx->ctx_id, rc);
+			goto end;
+		}
+	}
 	list_del_init(&req->list);
 
 	req_isp = (struct cam_isp_ctx_req *) req->req_priv;
@@ -6909,6 +6992,9 @@ static int __cam_isp_ctx_frame_drop_recovery(
 	ctx_isp->sensor_req_info.last_applied_req =
 			ctx_isp->sensor_req_info.prev_applied_req;
 
+	/* Skip last consumed address check in case of frame drop */
+	ctx_isp->skip_addr_check = true;
+
 	CAM_DBG(CAM_ISP, "frame drop detected for req:%lld ctx:%d",
 		req->request_id, ctx->ctx_id);
 	ctx_isp->frame_drop_detected = true;
@@ -7925,6 +8011,7 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 	ctx_isp->sensor_req_info.last_applied_req = 0;
 	ctx_isp->sensor_req_info.prev_applied_req = 0;
 	ctx_isp->mcu_enable = 0;
+	ctx_isp->skip_addr_check = false;
 
 	atomic64_set(&ctx_isp->state_monitor_head, -1);
 
@@ -7953,6 +8040,14 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 	kfree(ctx_isp->ul_fp_results);
 	ctx_isp->ul_fp_results = NULL;
 	ctx_isp->ul_path_en = false;
+	kfree(ctx_isp->addr_info->res_info);
+	ctx_isp->addr_info->res_info = NULL;
+	kfree(ctx_isp->addr_info);
+	ctx_isp->addr_info = NULL;
+	kfree(ctx_isp->prev_req_info->res_info);
+	ctx_isp->prev_req_info->res_info = NULL;
+	kfree(ctx_isp->prev_req_info);
+	ctx_isp->prev_req_info = NULL;
 
 	trace_cam_context_state("ISP", ctx);
 	CAM_DBG(CAM_ISP, "Release device success[%u] next state %d",
@@ -9589,6 +9684,51 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 	ctx_isp->hw_acquired = true;
 	ctx_isp->foveation_info.is_settingid_scratchcfg = false;
 	ctx->ctxt_to_hw_map = param.ctxt_to_hw_map;
+
+	/* Query for maximum ife_out res */
+	isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_GET_MAX_IFE_OUT_RES;
+	rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv, &hw_cmd_args);
+	if (rc) {
+		CAM_ERR(CAM_ISP, "HW command %u failed rc: %d ctx_id: %u",
+			isp_hw_cmd_args.cmd_type, rc, ctx->ctx_id);
+		goto free_hw;
+	}
+
+	ctx_isp->addr_info = kvzalloc(sizeof(struct cam_isp_last_consumed_addr_info), GFP_KERNEL);
+	if (!ctx_isp->addr_info) {
+		CAM_ERR(CAM_ISP, "Failed to allocate last consumed addr info ctx_id %d",
+			ctx->ctx_id);
+		rc = -ENOMEM;
+		goto free_hw;
+	}
+
+	ctx_isp->addr_info->res_info = kvzalloc((isp_hw_cmd_args.u.max_ife_out_res *
+		sizeof(struct cam_isp_res_last_consumed_addr)), GFP_KERNEL);
+	if (!ctx_isp->addr_info->res_info) {
+		CAM_ERR(CAM_ISP, "Failed to allocate res info in addr_info ctx_id %d",
+			ctx->ctx_id);
+		rc = -ENOMEM;
+		goto free_hw;
+	}
+
+	ctx_isp->prev_req_info = kvzalloc(sizeof(struct cam_isp_context_prev_req_info),
+		GFP_KERNEL);
+	if (!ctx_isp->prev_req_info) {
+		CAM_ERR(CAM_ISP, "Failed to allocate Previous buf done request info ctx_id %d",
+			ctx->ctx_id);
+		rc = -ENOMEM;
+		goto free_hw;
+	}
+
+	ctx_isp->prev_req_info->res_info = kvzalloc((isp_hw_cmd_args.u.max_ife_out_res *
+		sizeof(struct cam_isp_ctx_res_info)), GFP_KERNEL);
+	if (!ctx_isp->addr_info->res_info) {
+		CAM_ERR(CAM_ISP, "Failed to allocate res info in prev_req_info ctx_id %d",
+			ctx->ctx_id);
+		rc = -ENOMEM;
+		goto free_hw;
+	}
+	ctx_isp->skip_addr_check = false;
 
 	/*
 	 * If Fastpath setup last consumed queue, allow request thread to process the

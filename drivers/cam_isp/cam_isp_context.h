@@ -389,6 +389,30 @@ struct cam_isp_ctx_sensor_fov_info {
 };
 
 /**
+ * struct cam_isp_ctx_res_info - Resource info
+ *
+ * @resource_id:            Resource id
+ * @image_buf_addr:         Image buffer address
+ */
+struct cam_isp_ctx_res_info {
+	uint32_t   resource_id;
+	dma_addr_t image_buf_addr;
+};
+
+/**
+ * struct cam_isp_context_prev_req_info - Last buf done req info
+ *
+ * @req_id:    Request id
+ * @num_res:   Number of resources
+ * @res_info:  Resource info array
+ */
+struct cam_isp_context_prev_req_info {
+	uint64_t req_id;
+	uint32_t num_res;
+	struct cam_isp_ctx_res_info *res_info;
+};
+
+/**
  * struct cam_isp_context   -  ISP context object
  *
  * @base:                      Common context object pointer
@@ -475,6 +499,9 @@ struct cam_isp_ctx_sensor_fov_info {
  * @primary_port_info:         Primary port info array
  * @ul_fp_params:              Parameters to maintain the ul fastpath result queue
  * @ul_fp_results:             Result queue associated with ul fastpath streams
+ * @prev_req_info:             Previous buf done request info
+ * @addr_info:                 Last consumed address info
+ * @skip_addr_check:           Skip last consumed addr check incase of frame drop
  */
 struct cam_isp_context {
 	struct cam_context              *base;
@@ -567,6 +594,9 @@ struct cam_isp_context {
 	struct cam_isp_primary_port_info      *primary_port_info[CAM_IFE_HW_PRIMARY_PORT_MAX];
 	struct cam_isp_context_ul_fp_handling_params ul_fp_params;
 	struct cam_isp_context_ul_fp_results *ul_fp_results;
+	struct cam_isp_context_prev_req_info   *prev_req_info;
+	struct cam_isp_last_consumed_addr_info *addr_info;
+	bool                                    skip_addr_check;
 };
 
 /**
