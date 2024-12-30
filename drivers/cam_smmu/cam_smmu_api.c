@@ -16,6 +16,7 @@
 #include <linux/workqueue.h>
 #include <linux/genalloc.h>
 #include <linux/debugfs.h>
+#include <linux/mem-buf.h>
 
 #include <soc/qcom/secure_buffer.h>
 
@@ -3533,6 +3534,7 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 	struct dma_buf_attachment *attach = NULL;
 	struct sg_table *table = NULL;
 	struct cam_sec_buff_info *mapping_info = NULL;
+	uint32_t smmu_proxy_buf_hdl = 0;
 
 	/* clean the content from clients */
 	*paddr_ptr = 0;
@@ -3592,10 +3594,15 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 	mapping_info->attach = attach;
 	mapping_info->table = table;
 
-	CAM_DBG(CAM_SMMU, "idx=%d, ion_fd=%d, i_ino=%lu, dev=%pOFfp, paddr=0x%llx, len=%zu",
+	if (IS_CSF25(iommu_cb_set.csf_version.arch_ver,
+		iommu_cb_set.csf_version.max_ver))
+		mem_buf_dma_buf_get_memparcel_hdl(dmabuf, &smmu_proxy_buf_hdl);
+
+	CAM_DBG(CAM_SMMU,
+		"idx=%d, ion_fd=%d, i_ino=%lu, dev=%pOFfp, paddr=0x%llx, len=%zu buf pxy hdl 0x%",
 		idx, ion_fd, mapping_info->i_ino,
 		iommu_cb_set.cb_info[idx].dev->of_node,
-		*paddr_ptr, *len_ptr);
+		*paddr_ptr, *len_ptr, smmu_proxy_buf_hdl);
 
 	/* add to the list */
 	list_add(&mapping_info->list, &iommu_cb_set.cb_info[idx].smmu_buf_list);
