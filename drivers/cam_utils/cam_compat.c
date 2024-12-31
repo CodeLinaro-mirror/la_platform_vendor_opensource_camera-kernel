@@ -348,7 +348,7 @@ int cam_convert_hw_idx_to_ife_hw_type(int hw_idx,
 {
 	if (hw_idx < num_ife)
 		return ITRUSTEDCAMERADRIVER_IFE;
-	else if (hw_idx < num_ife + num_ife_lite)
+	else if (hw_idx <= num_ife_lite)
 		return ITRUSTEDCAMERADRIVER_IFE_LITE;
 
 	CAM_ERR(CAM_ISP, "hw idx %d out-of-bounds", hw_idx);
