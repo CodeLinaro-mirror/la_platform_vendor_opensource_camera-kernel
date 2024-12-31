@@ -55,8 +55,12 @@ int cam_sync_init_row(struct sync_table_row *table,
 	INIT_LIST_HEAD(&row->children_list);
 	row->type = type;
 	row->sync_id = idx;
-	init_completion(&row->signaled);
-	row->state = CAM_SYNC_STATE_ACTIVE;
+	if (row->state != CAM_SYNC_STATE_INVALID) {
+		reinit_completion(&row->signaled);
+	} else {
+		init_completion(&row->signaled);
+		row->state = CAM_SYNC_STATE_ACTIVE;
+	}
 	row->remaining = 0;
 	row->uid = 0;
 	row->sync_manager_idx = sync_manager_idx;
@@ -492,6 +496,8 @@ int cam_sync_reinit_object(struct sync_table_row *table, uint32_t sync_var)
 
 	row->state = CAM_SYNC_STATE_ACTIVE;
 	row->uid = sync_uid;
+	reinit_completion(&row->signaled);
+	atomic_set(&row->ref_cnt, 0);
 	INIT_LIST_HEAD(&row->callback_list);
 	INIT_LIST_HEAD(&row->parents_list);
 	INIT_LIST_HEAD(&row->children_list);
