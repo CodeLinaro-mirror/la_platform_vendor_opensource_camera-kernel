@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_IFE_HW_MGR_H_
@@ -263,18 +263,24 @@ struct cam_ife_mgr_bw_data {
  * ctx_in_use:            indicates if context is active
  * ctx_idx:               index of this context
  * bw_data:               contains data for BW usage calculation
+ * num_in_ports:          number of context input ports
+ * in_ports:              context input ports
+ * unpacker_fmt:          IFE input unpacker for offline isp
  * is_offline:            indicates if context is used for offline processing
  *
  */
 struct cam_ife_hw_mgr_ctx {
-	struct cam_ife_hw_concrete_ctx *concr_ctx;
-	struct cam_ife_hw_mgr          *hw_mgr;
-	cam_hw_event_cb_func            event_cb[CAM_ISP_HW_EVENT_MAX];
-	void                           *cb_priv;
-	uint32_t                        ctx_in_use;
-	uint32_t                        ctx_idx;
-	struct cam_ife_mgr_bw_data      bw_data;
-	bool                            is_offline;
+	struct cam_ife_hw_concrete_ctx         *concr_ctx;
+	struct cam_ife_hw_mgr                  *hw_mgr;
+	cam_hw_event_cb_func                    event_cb[CAM_ISP_HW_EVENT_MAX];
+	void                                   *cb_priv;
+	uint32_t                                ctx_in_use;
+	uint32_t                                ctx_idx;
+	struct cam_ife_mgr_bw_data              bw_data;
+	uint32_t                                num_in_ports;
+	struct cam_isp_in_port_generic_info    *in_ports;
+	uint32_t                                unpacker_fmt;
+	bool                                    is_offline;
 };
 
 
@@ -636,6 +642,12 @@ enum cam_isp_irq_inject_common_param_pos {
  * @input_queue:           input request queue for offline processing
  * @in_proc_queue:         currently processed requests queuse
  * @starting_offline_cnt:  number of offline HWs that are currently starting
+ * @offline_clk:           offline ife clock
+ * @offline_sfe_clk:       offline sfe clock
+ * @max_clk_threshold:     Peak sfe clock
+ * @nom_clk_threshold:     nominal sfe clock
+ * @min_clk_threshold:     Min sfe clock
+ * @offline_reconfig:      offline ISP need to reconfigure or not
  */
 struct cam_ife_hw_mgr {
 	struct cam_isp_hw_mgr          mgr_common;
@@ -673,13 +685,14 @@ struct cam_ife_hw_mgr {
 	struct cam_ife_offline_hw        acquired_hw_pool[CAM_CTX_MAX];
 	struct cam_ife_mgr_offline_in_queue   input_queue;
 	struct cam_ife_mgr_offline_in_queue   in_proc_queue;
-	uint32_t   starting_offline_cnt;
+	uint32_t                         starting_offline_cnt;
 	uint32_t                         offline_clk;
 	uint32_t                         offline_sfe_clk;
 	uint32_t                         max_clk_threshold;
 	uint32_t                         nom_clk_threshold;
 	uint32_t                         min_clk_threshold;
 	uint32_t                         bytes_per_clk;
+	bool                             offline_reconfig;
 };
 
 /**
@@ -774,4 +787,5 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl,
 void cam_ife_hw_mgr_deinit(void);
 int cam_ife_mgr_config_hw(void *hw_mgr_priv, void *config_hw_args);
 int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv, void *prepare_hw_update_args);
+int cam_ife_mgr_update_offline_ife_out(struct cam_ife_hw_mgr_ctx *ife_ctx);
 #endif /* _CAM_IFE_HW_MGR_H_ */

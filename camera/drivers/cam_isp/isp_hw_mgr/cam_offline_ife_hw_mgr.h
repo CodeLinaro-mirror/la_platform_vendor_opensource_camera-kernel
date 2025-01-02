@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_OFFLINE_IFE_HW_MGR_H_
@@ -25,5 +25,7 @@ int cam_offline_ife_mgr_enqueue_offline_config(void *hw_mgr_priv,
 	void *config_hw_args);
 int cam_offline_ife_mgr_required_hw(void *hw_mgr_priv, bool stop);
 int cam_offline_ife_mgr_check_start_processing(void *hw_mgr_priv,
+	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx);
+int cam_offline_find_reconfig_required(void *hw_mgr_priv,
 	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx);
 #endif /* _CAM_OFFLINE_IFE_HW_MGR_H_*/

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 
@@ -945,16 +945,19 @@ static int cam_vfe_bus_ver3_acquire_wm(
 	enum cam_vfe_bus_ver3_vfe_out_type      vfe_out_res_id,
 	enum cam_vfe_bus_plane_type             plane,
 	struct cam_isp_resource_node           *wm_res,
-	enum cam_vfe_bus_ver3_comp_grp_type   *comp_grp_id)
+	enum cam_vfe_bus_ver3_comp_grp_type   *comp_grp_id,
+	bool update_only)
 {
 	int32_t wm_idx = 0, rc;
 	struct cam_vfe_bus_ver3_wm_resource_data  *rsrc_data = NULL;
 	char wm_mode[50] = {'\0'};
 
-	if (wm_res->res_state != CAM_ISP_RESOURCE_STATE_AVAILABLE) {
-		CAM_ERR(CAM_ISP, "VFE:%u WM:%d not available state:%d",
-			wm_res->hw_intf->hw_idx, wm_idx, wm_res->res_state);
-		return -EALREADY;
+	if (!update_only) {
+		if (wm_res->res_state != CAM_ISP_RESOURCE_STATE_AVAILABLE) {
+			CAM_ERR(CAM_ISP, "VFE:%u WM:%d not available state:%d",
+				wm_res->hw_intf->hw_idx, wm_idx, wm_res->res_state);
+			return -EALREADY;
+		}
 	}
 
 	rsrc_data = wm_res->res_priv;
@@ -1511,7 +1514,8 @@ static int cam_vfe_bus_ver3_acquire_comp_grp(
 	uint32_t                             is_dual,
 	uint32_t                             is_master,
 	struct cam_isp_resource_node        *comp_grp,
-	struct cam_vfe_bus_ver3_comp_grp_acquire_args *comp_acq_args)
+	struct cam_vfe_bus_ver3_comp_grp_acquire_args *comp_acq_args,
+	bool                                 update_only)
 {
 	int rc = 0;
 	struct cam_vfe_bus_ver3_comp_grp_data  *rsrc_data = comp_grp->res_priv;
@@ -1532,7 +1536,7 @@ static int cam_vfe_bus_ver3_acquire_comp_grp(
 	} else {
 		rsrc_data = comp_grp->res_priv;
 		/* Do not support runtime change in composite mask */
-		if (comp_grp->res_state ==
+		if (!update_only && comp_grp->res_state ==
 			CAM_ISP_RESOURCE_STATE_STREAMING) {
 			CAM_ERR(CAM_ISP, "VFE:%u Invalid State %d comp_grp:%u",
 				rsrc_data->common_data->core_index, comp_grp->res_state,
@@ -1544,7 +1548,8 @@ static int cam_vfe_bus_ver3_acquire_comp_grp(
 	CAM_DBG(CAM_ISP, "Acquire VFE:%u comp_grp:%u",
 		rsrc_data->common_data->core_index, rsrc_data->comp_grp_type);
 
-	rsrc_data->acquire_dev_cnt++;
+	if (!update_only)
+		rsrc_data->acquire_dev_cnt++;
 	rsrc_data->composite_mask |= comp_acq_args->composite_mask;
 
 	return rc;
@@ -1815,8 +1820,8 @@ static int cam_vfe_bus_ver3_get_secure_mode(void *priv, void *cmd_args,
 	return 0;
 }
 
-static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
-	uint32_t args_size)
+static int cam_vfe_bus_ver3_update_acquire_vfe_out(void *bus_priv, void *acquire_args,
+	uint32_t args_size, bool update_only)
 {
 	int                                     rc = -ENODEV;
 	int                                     i;
@@ -1859,7 +1864,8 @@ static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
 
 	rsrc_node = &ver3_bus_priv->vfe_out[outmap_index];
 	rsrc_data = rsrc_node->res_priv;
-	if (rsrc_node->res_state != CAM_ISP_RESOURCE_STATE_AVAILABLE) {
+	if (!update_only &&
+		rsrc_node->res_state != CAM_ISP_RESOURCE_STATE_AVAILABLE) {
 		if ((rsrc_data->mc_based || rsrc_data->cntxt_cfg_except) &&
 			out_acquire_args->use_hw_ctxt &&
 			!(rsrc_data->dst_hw_ctxt_id_mask &
@@ -1951,7 +1957,8 @@ static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
 			vfe_out_res_id,
 			i,
 			&rsrc_data->wm_res[i],
-			&comp_acq_args.comp_grp_id);
+			&comp_acq_args.comp_grp_id,
+			update_only);
 		if (rc) {
 			CAM_ERR(CAM_ISP,
 				"Failed to acquire WM VFE:%u out_type:%d rc:%d",
@@ -1961,14 +1968,14 @@ static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
 		}
 	}
 
-
 	/* Acquire composite group using COMP GRP ID */
 	rc = cam_vfe_bus_ver3_acquire_comp_grp(ver3_bus_priv,
 		acq_args->tasklet,
 		out_acquire_args->is_dual,
 		out_acquire_args->is_master,
 		rsrc_data->comp_grp,
-		&comp_acq_args);
+		&comp_acq_args,
+		update_only);
 	if (rc) {
 		CAM_ERR(CAM_ISP,
 			"Failed to acquire comp_grp VFE:%u out_typp:%d rc:%d",
@@ -1979,8 +1986,8 @@ static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
 
 	rsrc_data->is_dual = out_acquire_args->is_dual;
 	rsrc_data->is_master = out_acquire_args->is_master;
-
-	rsrc_node->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
+	if (!update_only)
+		rsrc_node->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
 	out_acquire_args->rsrc_node = rsrc_node;
 	out_acquire_args->comp_grp_id = comp_acq_args.comp_grp_id;
 
@@ -1994,6 +2001,13 @@ release_wm:
 
 end:
 	return rc;
+}
+
+static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv,
+	void *acquire_args, uint32_t args_size)
+{
+	return cam_vfe_bus_ver3_update_acquire_vfe_out(bus_priv, acquire_args,
+			args_size, false);
 }
 
 static int cam_vfe_bus_ver3_release_vfe_out(void *bus_priv, void *release_args,
@@ -4463,6 +4477,10 @@ static int cam_vfe_bus_ver3_process_cmd(
 	}
 
 	switch (cmd_type) {
+	case CAM_ISP_HW_CMD_WM_UPDATE:
+		rc = cam_vfe_bus_ver3_update_acquire_vfe_out(priv, cmd_args,
+				arg_size, true);
+		break;
 	case CAM_ISP_HW_CMD_GET_BUF_UPDATE:
 		rc = cam_vfe_bus_ver3_update_wm(priv, cmd_args, arg_size);
 		break;

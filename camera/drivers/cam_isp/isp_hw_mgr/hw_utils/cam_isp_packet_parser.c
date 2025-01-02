@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <media/cam_defs.h>
@@ -1017,6 +1017,7 @@ static int cam_isp_add_io_buffers_util(
 	bus_port_update.io_cfg    = io_cfg;
 	bus_port_update.frame_header = 0;
 	bus_port_update.fh_enabled = false;
+	bus_port_update.unpacker_fmt =  buf_info->unpacker_fmt;
 
 	for (plane_id = 0; plane_id < CAM_PACKET_MAX_PLANES; plane_id++)
 		bus_port_update.image_buf_offset[plane_id] = 0;
