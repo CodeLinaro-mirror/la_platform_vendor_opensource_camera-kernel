@@ -49,6 +49,13 @@ static struct cam_sfe_top_common_reg_offset  sfe_lite_690_top_commong_reg  = {
 	},
 };
 
+static struct cam_sfe_path_common_reg_data sfe_690_rd_top_reg_data = {
+	.sof_irq_mask                  = 0x1,
+	.eof_irq_mask                  = 0x2,
+	.subscribe_irq_mask            = 0x6,
+};
+
+
 static struct cam_sfe_top_common_reg_data sfe_lite_690_top_common_reg_data = {
 	.top_debug_cfg_en              = 0x1,
 };
@@ -56,6 +63,11 @@ static struct cam_sfe_top_common_reg_data sfe_lite_690_top_common_reg_data = {
 static struct cam_sfe_top_hw_info sfe_lite_690_top_hw_info = {
 	.common_reg = &sfe_lite_690_top_commong_reg,
 	.common_reg_data = &sfe_lite_690_top_common_reg_data,
+	.rd_top_reg_data = &sfe_690_rd_top_reg_data,
+	.num_inputs = 1,
+	.input_type = {
+		CAM_SFE_RD_VER_1_0,
+	},
 	.num_clc_module  = 2,
 	.clc_dbg_mod_info = &sfe_lite_690_clc_dbg_module_info,
 };
@@ -165,6 +177,7 @@ static struct cam_sfe_bus_rd_hw_info sfe_lite_690_bus_rd_hw_info = {
 	.sys_cache_default_val  = 0x20,
 	.irq_err_mask           = 0x9,
 	.constraint_error_info  = &sfe_lite_690_bus_rd_constraint_error_info,
+	.rd_only                = true,
 };
 
 static struct cam_irq_register_set sfe_lite_690_top_irq_reg_set[1] = {

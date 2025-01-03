@@ -2641,6 +2641,7 @@ static int cam_ife_hw_mgr_acquire_res_sfe_out(
 
 		switch (sfe_res_iterator->res_id) {
 		case CAM_ISP_HW_SFE_IN_PIX:
+		case CAM_ISP_HW_SFE_IN_RD:
 			rc = cam_ife_hw_mgr_acquire_res_sfe_out_pix(ife_ctx,
 				sfe_res_iterator, in_port);
 			break;
@@ -3382,6 +3383,7 @@ static int cam_ife_hw_mgr_acquire_sfe_bus_rd(
 
 	sfe_rd_res->hw_res[CAM_ISP_HW_SPLIT_LEFT] = sfe_acquire.sfe_rd.rsrc_node;
 	c_ctx->left_hw_idx = hw_intf->hw_idx;
+	c_ctx->sfe_rd_only = sfe_acquire.sfe_rd.sfe_rd_only;
 
 	CAM_DBG(CAM_ISP,
 		"SFE RD left [%u] acquired success for path: %u is_dual: %d res: %s res_id: 0x%x ctx_idx: %u",
@@ -4801,7 +4803,10 @@ static int cam_ife_hw_mgr_acquire_offline_res_sfe(
 	sfe_acquire.sfe_in.cdm_ops = c_ctx->cdm_ops;
 	sfe_acquire.sfe_in.in_port = in_port;
 	sfe_acquire.sfe_in.is_offline = c_ctx->flags.is_offline;
-	sfe_acquire.sfe_in.res_id = CAM_ISP_HW_SFE_IN_PIX;
+	if (c_ctx->sfe_rd_only)
+		sfe_acquire.sfe_in.res_id = CAM_ISP_HW_SFE_IN_RD;
+	else
+		sfe_acquire.sfe_in.res_id = CAM_ISP_HW_SFE_IN_PIX;
 
 	hw_intf = ife_hw_mgr->sfe_devices[
 		sfe_bus_rd_res->hw_res[i]->hw_intf->hw_idx]->hw_intf;
@@ -6618,7 +6623,8 @@ static int cam_isp_classify_vote_info(
 		}
 	} else {
 		if (is_sfe_shdr ||
-			(hw_mgr_res->res_id == CAM_ISP_HW_SFE_IN_PIX)) {
+			(hw_mgr_res->res_id == CAM_ISP_HW_SFE_IN_PIX) ||
+			(hw_mgr_res->res_id == CAM_ISP_HW_SFE_IN_RD)) {
 			if ((split_idx == CAM_ISP_HW_SPLIT_LEFT) &&
 				(!(*nrdi_l_bw_updated))) {
 				for (i = 0; i < bw_config->num_paths; i++) {
@@ -10174,7 +10180,8 @@ static int cam_isp_blob_sfe_clock_update(
 			if (!hw_mgr_res->hw_res[i])
 				continue;
 
-			if (hw_mgr_res->res_id == CAM_ISP_HW_SFE_IN_PIX) {
+			if ((hw_mgr_res->res_id == CAM_ISP_HW_SFE_IN_PIX) ||
+				(hw_mgr_res->res_id == CAM_ISP_HW_SFE_IN_RD)) {
 				if (i == CAM_ISP_HW_SPLIT_LEFT) {
 					if (l_clk_updated)
 						continue;
