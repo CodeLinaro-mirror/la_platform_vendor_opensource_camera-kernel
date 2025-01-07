@@ -9212,7 +9212,8 @@ static void cam_isp_update_fastpath_result_queue(void *data,
 	isp_ctx->ul_fp_results[wr_idx].status = BATCH_PACKET_RESULT_SUCCESS;
 	atomic_set(&isp_ctx->ul_fp_params.write_idx, INC_VAL(wr_idx, 1, MAX_IO_PACKETS));
 	complete(&isp_ctx->ul_fp_params.fast_path_buf_done);
-	trace_cam_ul_fastpath_bufdone("UL_Bufdone", ctx->ctx_id, isp_ctx->sof_timestamp_val);
+	trace_cam_ul_fastpath_bufdone("UL_Bufdone", ctx->ctx_id, isp_ctx->sof_timestamp_val,
+		ctx->link_hdl);
 	spin_unlock(&isp_ctx->ul_fp_params.fast_path_lock);
 }
 
@@ -9239,7 +9240,7 @@ static void __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 	response_buffers[idx].boot_timestamp = boot_timestamp;
 	response_buffers[idx].num_buffer = num_out;
 	trace_cam_ul_fastpath_retrieve("UL_Retrieve", ctx->ctx_id,
-		response_buffers[idx].setting_id, timestamp);
+		response_buffers[idx].setting_id, timestamp, ctx->link_hdl);
 	CAM_DBG(CAM_ISP,
 		"UL_Retrieve ctx: %u settings_id: %u timestamp: 0x%llx num_buffer: %u",
 		ctx->ctx_id, response_buffers[idx].setting_id,

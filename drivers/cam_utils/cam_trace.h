@@ -270,42 +270,47 @@ TRACE_EVENT(cam_apply_req,
 );
 
 TRACE_EVENT(cam_ul_fastpath_bufdone,
-	TP_PROTO(const char *entity, uint32_t id, uint64_t ts),
-	TP_ARGS(entity, id, ts),
+	TP_PROTO(const char *entity, uint32_t id, uint64_t ts, int32_t link_hdl),
+	TP_ARGS(entity, id, ts, link_hdl),
 	TP_STRUCT__entry(
 		__string(entity, entity)
 		__field(uint32_t, id)
 		__field(uint64_t, ts)
+		__field(int32_t, link_hdl)
 	),
 	TP_fast_assign(
 		__assign_str(entity, entity);
 		__entry->id = id;
 		__entry->ts = ts;
+		__entry->link_hdl = link_hdl;
 	),
 	TP_printk(
-		"%8s: Ctx=%u ts=0x%x",
-			__get_str(entity), __entry->id, __entry->ts
+		"%8s: Ctx=%u ts=0x%x  link_hdl=0x%x",
+			__get_str(entity), __entry->id, __entry->ts, __entry->link_hdl
 	)
 );
 
 TRACE_EVENT(cam_ul_fastpath_retrieve,
-	TP_PROTO(const char *entity, uint32_t id, uint32_t setting, uint64_t ts),
-	TP_ARGS(entity, id, setting, ts),
+	TP_PROTO(const char *entity, uint32_t id, uint32_t setting, uint64_t ts, int32_t link_hdl),
+	TP_ARGS(entity, id, setting, ts, link_hdl),
 	TP_STRUCT__entry(
 		__string(entity, entity)
 		__field(uint32_t, id)
 		__field(uint32_t, setting)
 		__field(uint64_t, ts)
+		__field(int32_t, link_hdl)
 	),
 	TP_fast_assign(
 		__assign_str(entity, entity);
 		__entry->id = id;
 		__entry->setting = setting;
 		__entry->ts = ts;
+		__entry->link_hdl = link_hdl;
 	),
 	TP_printk(
-		"%8s: Ctx=%u setting=%u ts=0x%x",
-			__get_str(entity), __entry->id, __entry->setting, __entry->ts
+		"%8s: Ctx=%u setting=%u ts=0x%x  link_hdl=0x%x",
+			__get_str(entity), __entry->id, __entry->setting, __entry->ts,
+			__entry->link_hdl
 	)
 );
 
