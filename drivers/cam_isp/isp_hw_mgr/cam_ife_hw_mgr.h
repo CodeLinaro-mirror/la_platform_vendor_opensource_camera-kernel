@@ -279,6 +279,25 @@ struct cam_isp_scratch_buf_mem {
 	int32_t         handle;
 };
 
+/*
+ * struct cam_isp_res_scratch_buf_info - Primary port scratch buf config info
+ *
+ * @res_id :      res_id of the primary port
+ * @stride:       Stride array for scratch buf
+ * @slice_height: Slice_height array for scratch buf
+ * @meta_size:    UBWC metadata plane size array for scratch buf
+ * @io_addr:      io_addr array for scratch buf
+ * @config_done:  To indicate if scratch buf config done
+ */
+struct cam_isp_res_scratch_buf_info {
+	uint32_t   res_id;
+	uint32_t   stride[CAM_PACKET_MAX_PLANES];
+	uint32_t   slice_height[CAM_PACKET_MAX_PLANES];
+	uint32_t   meta_size[CAM_PACKET_MAX_PLANES];
+	dma_addr_t io_addr[CAM_PACKET_MAX_PLANES];
+	bool       config_done;
+};
+
 /**
  * struct cam_ife_hw_mgr_ctx - IFE HW manager Context object
  *
@@ -354,6 +373,8 @@ struct cam_isp_scratch_buf_mem {
  * @primary_port_info:      Primary port configs array
  * @primary_port_cfg_done:  Primary port config exists for this stream
  * @ul_io_packet:           IO packet for UL path
+ * @primary_port_scratch_buf_info: Primary port scratch buf info
+ * @num_primary_port_scratch_bufs: Number of primary port scratch bufs
  */
 struct cam_ife_hw_mgr_ctx {
 	struct list_head                     list;
@@ -430,9 +451,11 @@ struct cam_ife_hw_mgr_ctx {
 	bool                                 settingid_check;
 	struct cam_isp_scratch_buf_mem       scratch_buf_info;
 	uint32_t                             num_primary_ports;
-	struct cam_isp_primary_port_info    *primary_port_info;
+	struct cam_isp_primary_port_info    *primary_port_info[CAM_IFE_HW_PRIMARY_PORT_MAX];
 	bool                                 primary_port_cfg_done;
 	struct cam_packet                   *ul_io_packet;
+	struct cam_isp_res_scratch_buf_info *primary_port_scratch_buf_info;
+	uint32_t                             num_primary_port_scratch_bufs;
 };
 
 /**

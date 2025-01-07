@@ -8639,8 +8639,11 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	ife_ctx->crop_update_entry.len = 0;
 	ife_ctx->num_primary_ports = 0;
 	ife_ctx->primary_port_cfg_done = false;
-	ife_ctx->primary_port_info =  NULL;
 	ife_ctx->flags.skip_reg_dump_buf_put = false;
+	ife_ctx->num_primary_port_scratch_bufs = 0;
+	ife_ctx->primary_port_scratch_buf_info = NULL;
+	for (i = 0; i < CAM_IFE_HW_PRIMARY_PORT_MAX; i++)
+		ife_ctx->primary_port_info[i] = NULL;
 
 	acquire_hw_info =
 		(struct cam_isp_acquire_hw_info *)acquire_args->acquire_info;
@@ -10343,8 +10346,17 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 
 	if (!stop_isp->is_internal_stop) {
 		ctx->primary_port_cfg_done = false;
-		kfree(ctx->primary_port_info);
-		ctx->primary_port_info = NULL;
+		for (i = 0; i < CAM_IFE_HW_PRIMARY_PORT_MAX; i++) {
+			if (!ctx->primary_port_info[i])
+				continue;
+
+			kfree(ctx->primary_port_info[i]->linked_ports);
+			ctx->primary_port_info[i]->linked_ports = NULL;
+			kfree(ctx->primary_port_info[i]);
+			ctx->primary_port_info[i] = NULL;
+		}
+		kfree(ctx->primary_port_scratch_buf_info);
+		ctx->primary_port_scratch_buf_info = NULL;
 	}
 
 	/* Set the csid halt command */
@@ -14008,11 +14020,14 @@ static int cam_isp_blob_ife_process_primary_port_configs(
 	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx,
 	struct cam_isp_primary_port_config *port_config)
 {
-	int i, rc = 0, res_id;
+	int i, j, rc = 0, res_id;
+	uint32_t *linked_ports;
 	struct cam_isp_hw_mgr_res *isp_out_res;
 	struct cam_isp_resource_node *isp_res;
 	struct cam_isp_primary_port_grp_info *grp_info = NULL;
 	struct cam_isp_hw_get_cmd_update cmd_update;
+	int out_port;
+
 
 	if (unlikely(hw_mgr_ctx->primary_port_cfg_done)) {
 		CAM_ERR(CAM_ISP,
@@ -14029,18 +14044,12 @@ static int cam_isp_blob_ife_process_primary_port_configs(
 		return -EINVAL;
 	}
 
-	if (unlikely(port_config->num_ports == 0xffffffff)) {
+	if (unlikely(port_config->num_ports > CAM_IFE_HW_PRIMARY_PORT_MAX)) {
 		CAM_ERR(CAM_ISP,
 			"Invalid number of ports for primary port blob num_ports: %u ctx: %u",
 			port_config->num_ports, hw_mgr_ctx->ctx_index);
 		return -EINVAL;
 	}
-
-	hw_mgr_ctx->primary_port_info = kcalloc(port_config->num_ports,
-		sizeof(struct cam_isp_primary_port_info), GFP_KERNEL);
-
-	if (!hw_mgr_ctx->primary_port_info)
-		return -ENOMEM;
 
 	CAM_DBG(CAM_ISP,
 		"Num_ports: %u in ctx: %u single_primary: %s",
@@ -14053,31 +14062,33 @@ static int cam_isp_blob_ife_process_primary_port_configs(
 
 		if (cam_ife_hw_mgr_is_virtual_rdi_res(grp_info->res_id) &&
 			hw_mgr_ctx->flags.per_port_en) {
-			int32_t out_port;
-
 			out_port = cam_ife_hw_mgr_get_virtual_mapping_out_port(hw_mgr_ctx,
 				grp_info->res_id, true);
 			if (out_port < 0) {
 				CAM_ERR(CAM_ISP,
-					"ctx_idx:%d Failed vrdi mapping out_res:%d",
+					"ctx: %u Failed vrdi mapping out_res: 0x%x",
 					hw_mgr_ctx->ctx_index, grp_info->res_id);
-				goto err;
+				rc = -EINVAL;
+				goto free_mem;
 			}
 			res_id = out_port & 0xFF;
 		}
 
 		if (res_id >= max_ife_out_res) {
-			CAM_ERR(CAM_ISP, "Invalid resource ID: 0x%x max supported: %u",
-				grp_info->res_id, max_ife_out_res);
-			goto err;
+			CAM_ERR(CAM_ISP, "ctx: %u Invalid resource ID: 0x%x max supported: %u",
+				hw_mgr_ctx->ctx_index, grp_info->res_id, max_ife_out_res);
+			rc = -EINVAL;
+			goto free_mem;
 		}
 
 		isp_out_res = &hw_mgr_ctx->res_list_ife_out[res_id];
 		isp_res = isp_out_res->hw_res[0];
 		if (!isp_res) {
 			CAM_ERR(CAM_ISP,
-				"Left resource invalid for out resource: 0x%x", grp_info->res_id);
-			goto err;
+				"ctx: %u Left resource invalid for out resource: 0x%x",
+				hw_mgr_ctx->ctx_index, grp_info->res_id);
+			rc = -EINVAL;
+			goto free_mem;
 		}
 
 		cmd_update.res = isp_res;
@@ -14088,29 +14099,210 @@ static int cam_isp_blob_ife_process_primary_port_configs(
 			sizeof(struct cam_isp_hw_get_cmd_update));
 		if (rc) {
 			CAM_ERR(CAM_ISP,
-				"Primary port config failed for res_type :%d ctx: %u rc: %d",
+				"Primary port config failed for res_type : 0x%x ctx: %u rc: %d",
 				grp_info->res_id, hw_mgr_ctx->ctx_index, rc);
-			goto err;
+			goto free_mem;
 		}
 
-		hw_mgr_ctx->primary_port_info[hw_mgr_ctx->num_primary_ports].res_id =
-			grp_info->res_id;
-		hw_mgr_ctx->num_primary_ports++;
-		CAM_DBG(CAM_ISP, "Primary port: 0x%x configured in ctx: %u",
-			grp_info->res_id, hw_mgr_ctx->ctx_index);
+		hw_mgr_ctx->primary_port_info[hw_mgr_ctx->num_primary_ports] =
+			kvzalloc(sizeof(struct cam_isp_primary_port_info), GFP_KERNEL);
+		if (!hw_mgr_ctx->primary_port_info[hw_mgr_ctx->num_primary_ports]) {
+			CAM_ERR(CAM_ISP,
+				"primary_port_info alloc failed for index: %u res_type: 0x%x ctx: %u",
+				hw_mgr_ctx->num_primary_ports, grp_info->res_id,
+				hw_mgr_ctx->ctx_index);
+			rc = -ENOMEM;
+			goto free_mem;
+		}
 
-		if (port_config->single_primary_for_all)
+		hw_mgr_ctx->primary_port_info[hw_mgr_ctx->num_primary_ports]->res_id =
+			grp_info->res_id;
+		CAM_DBG(CAM_ISP, "Primary port: 0x%x configured in ctx: %u num_linked_ports: %u",
+			grp_info->res_id, hw_mgr_ctx->ctx_index, grp_info->num_grps);
+
+		if (port_config->single_primary_for_all) {
+			hw_mgr_ctx->num_primary_ports++;
 			break;
+		}
+
+		hw_mgr_ctx->primary_port_info[hw_mgr_ctx->num_primary_ports]->num_linked_ports =
+			grp_info->num_grps;
+		linked_ports = hw_mgr_ctx->primary_port_info
+			[hw_mgr_ctx->num_primary_ports]->linked_ports;
+		linked_ports = kvzalloc((grp_info->num_grps * sizeof(uint32_t)), GFP_KERNEL);
+		if (!linked_ports) {
+			CAM_ERR(CAM_ISP,
+				"linked_ports alloc failed for index: %u res_type: 0x%x ctx: %u",
+				hw_mgr_ctx->num_primary_ports, grp_info->res_id,
+				hw_mgr_ctx->ctx_index);
+			rc = -ENOMEM;
+			goto free_mem;
+		}
+
+		for (j = 0; j < grp_info->num_grps; j++) {
+			linked_ports[j] = grp_info->comp_grps[j];
+			CAM_DBG(CAM_ISP, "j: %d linked_port: 0x%x", j, linked_ports[j]);
+		}
+		hw_mgr_ctx->num_primary_ports++;
 	}
 
 	hw_mgr_ctx->primary_port_cfg_done = true;
 	return rc;
 
-err:
-	rc = -EINVAL;
-	kfree(hw_mgr_ctx->primary_port_info);
-	hw_mgr_ctx->primary_port_info = NULL;
+free_mem:
+	for (i = 0; i < CAM_IFE_HW_PRIMARY_PORT_MAX; i++) {
+		if (!hw_mgr_ctx->primary_port_info[i])
+			continue;
+
+		kfree(hw_mgr_ctx->primary_port_info[i]->linked_ports);
+		hw_mgr_ctx->primary_port_info[i]->linked_ports = NULL;
+		kfree(hw_mgr_ctx->primary_port_info[i]);
+		hw_mgr_ctx->primary_port_info[i] = NULL;
+	}
 	hw_mgr_ctx->num_primary_ports = 0;
+
+	return rc;
+}
+
+static int cam_isp_primary_port_scratch_buf_update_util(
+	struct cam_isp_primary_port_scratch_buf_info *buf_info,
+	struct cam_isp_res_scratch_buf_info *primary_port_scratch_buf_info, bool is_port_secure)
+{
+	int        rc = 0, mmu_hdl;
+	bool       is_buf_secure;
+	size_t     size;
+	uint32_t   plane_id;
+	dma_addr_t *io_addr;
+
+	for (plane_id = 0; plane_id < CAM_PACKET_MAX_PLANES; plane_id++) {
+		if (!buf_info->plane_cfg[plane_id].mem_handle)
+			break;
+
+		is_buf_secure = cam_mem_is_secure_buf(buf_info->plane_cfg[plane_id].mem_handle);
+		if (is_port_secure != is_buf_secure) {
+			CAM_ERR(CAM_ISP,
+				"Invalid mem_handle: 0x%x is_port_secure: %u is_buf_secure: %u",
+				buf_info->plane_cfg[plane_id].mem_handle, is_port_secure,
+				is_buf_secure);
+			rc = -EINVAL;
+			goto end;
+		}
+
+		if (is_buf_secure)
+			mmu_hdl = g_ife_hw_mgr.mgr_common.img_iommu_hdl_secure;
+		else
+			mmu_hdl = g_ife_hw_mgr.mgr_common.img_iommu_hdl;
+
+		io_addr = &primary_port_scratch_buf_info->io_addr[plane_id];
+		rc = cam_mem_get_io_buf(buf_info->plane_cfg[plane_id].mem_handle, mmu_hdl,
+			io_addr, &size, NULL);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "no scratch buf addr for res: 0x%x plane_id: %u",
+				buf_info->res_id, plane_id);
+			rc = -ENOMEM;
+			goto end;
+		}
+
+		*io_addr += buf_info->plane_cfg[plane_id].offset;
+		primary_port_scratch_buf_info->stride[plane_id] =
+			buf_info->plane_cfg[plane_id].stride;
+		primary_port_scratch_buf_info->slice_height[plane_id] =
+			buf_info->plane_cfg[plane_id].slice_height;
+		primary_port_scratch_buf_info->meta_size[plane_id] =
+			buf_info->plane_cfg[plane_id].meta_size;
+		CAM_DBG(CAM_ISP,
+			"mmu_hdl: 0x%x size: %d plane_id: %u stride: 0x%x slice_height: 0x%x io_addr: 0x%x ubwc_meta_size: 0x%x",
+			mmu_hdl, (int)size, plane_id, buf_info->plane_cfg[plane_id].stride,
+			buf_info->plane_cfg[plane_id].slice_height, *io_addr,
+			buf_info->plane_cfg[plane_id].meta_size);
+	}
+
+	if (!plane_id) {
+		CAM_ERR(CAM_ISP, "No valid planes for res: 0x%x",
+			primary_port_scratch_buf_info->res_id);
+		rc = -EINVAL;
+		return rc;
+	}
+
+end:
+	return rc;
+}
+
+static int cam_isp_blob_ife_process_primary_port_scratch_buf_configs(
+	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx,
+	struct cam_isp_primary_port_scratch_buf_config *scratch_buf_config)
+{
+	int      rc = 0, i, res_id;
+	uint32_t scratch_buf_idx;
+	struct cam_isp_res_scratch_buf_info          *primary_port_scratch_buf_info;
+	struct cam_isp_primary_port_scratch_buf_info *buf_info;
+	struct cam_isp_hw_mgr_res *ife_out_res;
+	int out_port;
+
+	hw_mgr_ctx->primary_port_scratch_buf_info = kvzalloc(
+		(scratch_buf_config->num_scratch_bufs *
+		sizeof(struct cam_isp_res_scratch_buf_info)), GFP_KERNEL);
+	if (!hw_mgr_ctx->primary_port_scratch_buf_info) {
+		CAM_ERR(CAM_ISP, "Alloc failed for primary_port_scratch_buf_info ctx: %u",
+			hw_mgr_ctx->ctx_index);
+		return -ENOMEM;
+	}
+
+	CAM_DBG(CAM_ISP, "num_primary_port_scratch_bufs: %u in ctx: %u",
+		scratch_buf_config->num_scratch_bufs, hw_mgr_ctx->ctx_index);
+
+	for (i = 0; i < scratch_buf_config->num_scratch_bufs; i++) {
+		buf_info = &scratch_buf_config->scratch_buf_info[i];
+		res_id = buf_info->res_id & 0xFF;
+
+		if (cam_ife_hw_mgr_is_virtual_rdi_res(buf_info->res_id) &&
+			hw_mgr_ctx->flags.per_port_en) {
+			out_port = cam_ife_hw_mgr_get_virtual_mapping_out_port(hw_mgr_ctx,
+				buf_info->res_id, true);
+			if (out_port < 0) {
+				CAM_ERR(CAM_ISP,
+					"ctx: %u Failed vrdi mapping out_res: 0x%x",
+					hw_mgr_ctx->ctx_index, buf_info->res_id);
+				rc = -EINVAL;
+				goto err;
+			}
+			res_id = out_port & 0xFF;
+		}
+
+		if (res_id >= max_ife_out_res) {
+			CAM_ERR(CAM_ISP, "ctx: %u Invalid resource ID: 0x%x max supported: %u",
+				hw_mgr_ctx->ctx_index, buf_info->res_id, max_ife_out_res);
+			rc = -EINVAL;
+			goto err;
+		}
+
+		scratch_buf_idx = hw_mgr_ctx->num_primary_port_scratch_bufs;
+		primary_port_scratch_buf_info =
+			&hw_mgr_ctx->primary_port_scratch_buf_info[scratch_buf_idx];
+		primary_port_scratch_buf_info->res_id = buf_info->res_id;
+		CAM_DBG(CAM_ISP, "primary_port res_id: 0x%x",
+			primary_port_scratch_buf_info->res_id);
+		ife_out_res = &hw_mgr_ctx->res_list_ife_out[res_id];
+		rc = cam_isp_primary_port_scratch_buf_update_util(buf_info,
+			primary_port_scratch_buf_info, ife_out_res->is_secure);
+		if (rc) {
+			CAM_ERR(CAM_ISP,
+				"ctx: %u scratch buf update failed for primary port: 0x%x",
+				hw_mgr_ctx->ctx_index, primary_port_scratch_buf_info->res_id);
+			rc = -EINVAL;
+			goto err;
+		}
+
+		primary_port_scratch_buf_info->config_done = true;
+		hw_mgr_ctx->num_primary_port_scratch_bufs++;
+	}
+
+	return rc;
+
+err:
+	kfree(hw_mgr_ctx->primary_port_scratch_buf_info);
+	hw_mgr_ctx->primary_port_scratch_buf_info = NULL;
+	hw_mgr_ctx->num_primary_port_scratch_bufs = 0;
 
 	return rc;
 }
@@ -14953,14 +15145,17 @@ free_mem:
 			((port_config->num_ports) * sizeof(struct cam_isp_primary_port_grp_info));
 
 		if (prepare_hw_data->packet_opcode_type != CAM_ISP_PACKET_INIT_DEV) {
-			CAM_ERR(CAM_ISP, "Master port config only supported for INIT packet");
+			CAM_ERR(CAM_ISP,
+				"Master port config only supported for INIT packet in ctx: %u",
+				ife_mgr_ctx->ctx_index);
 			return -EINVAL;
 		}
 
 		if ((blob_size < expected_size) || !port_config->num_ports) {
 			CAM_ERR(CAM_ISP,
-				"Invalid params for master port expected size: %zu actual size: %zu total_ports: %u",
-				expected_size, blob_size, port_config->num_ports);
+				"ctx: %u Invalid params for master port expected size: %zu actual size: %zu total_ports: %u",
+				ife_mgr_ctx->ctx_index, expected_size, blob_size,
+				port_config->num_ports);
 			return -EINVAL;
 		}
 
@@ -14974,6 +15169,47 @@ free_mem:
 		rc = cam_isp_blob_ife_process_primary_port_configs(ife_mgr_ctx, port_config);
 		if (rc)
 			CAM_ERR(CAM_ISP, "Failed to process master port in ctx: %u",
+				ife_mgr_ctx->ctx_index);
+	}
+		break;
+	case CAM_ISP_GENERIC_BLOB_TYPE_PRIMARY_SCRATCH_BUF_CFG: {
+		size_t expected_size = 0;
+		struct cam_isp_primary_port_scratch_buf_config *buf_config;
+		struct cam_isp_prepare_hw_update_data *prepare_hw_data;
+
+		prepare_hw_data = (struct cam_isp_prepare_hw_update_data *)prepare->priv;
+		buf_config = (struct cam_isp_primary_port_scratch_buf_config *)blob_data;
+		expected_size = sizeof(struct cam_isp_primary_port_scratch_buf_config) +
+			((buf_config->num_scratch_bufs) *
+			sizeof(struct cam_isp_primary_port_scratch_buf_info));
+
+		if (prepare_hw_data->packet_opcode_type != CAM_ISP_PACKET_INIT_DEV) {
+			CAM_ERR(CAM_ISP,
+				"Primary port scratch buf config only supported for INIT packet in ctx: %u",
+				ife_mgr_ctx->ctx_index);
+			return -EINVAL;
+		}
+
+		if ((blob_size < expected_size) || !buf_config->num_scratch_bufs) {
+			CAM_ERR(CAM_ISP,
+				"Invalid params for primary port scratch buf cfg in ctx: %u expected size: %zu actual size: %zu num_scratch_bufs: %u",
+				ife_mgr_ctx->ctx_index, expected_size, blob_size,
+				buf_config->num_scratch_bufs);
+			return -EINVAL;
+		}
+
+		if (blob_info->base_info->split_id != CAM_ISP_HW_SPLIT_LEFT) {
+			CAM_ERR(CAM_ISP,
+				"Primary port scratch buf config supported only on primary IFE ctx: %u",
+				ife_mgr_ctx->ctx_index);
+			return -EINVAL;
+		}
+
+		rc = cam_isp_blob_ife_process_primary_port_scratch_buf_configs(ife_mgr_ctx,
+			buf_config);
+		if (rc)
+			CAM_ERR(CAM_ISP,
+				"Failed to process primary port scratch buf configs in ctx: %u",
 				ife_mgr_ctx->ctx_index);
 	}
 		break;
@@ -16237,7 +16473,7 @@ int cam_ife_hw_mgr_prepare_ul_io(void *hw_mgr_priv,
 				ctx->base[i].idx,
 				ctx->flags.per_port_en,
 				ctx->common.virtual_rdi_mapping_cb,
-				ctx->primary_port_info[0].res_id);
+				ctx->primary_port_info[0]->res_id);
 			break;
 		}
 	}
@@ -16255,13 +16491,19 @@ static int cam_ife_hw_mgr_check_if_primary_port_has_buffer(
 {
 	int i, j, rc = 0;
 	bool found;
+	bool buf_found;
 	uint32_t remain_size = 0, io_cfg_used_bytes = 0;
 	uint32_t *cpu_addr = NULL;
+	uint32_t plane_id;
 	struct cam_isp_hw_mgr_res *hw_mgr_res;
 	struct cam_isp_resource_node *hw_res;
 	struct cam_isp_prepare_hw_update_data *prepare_hw_data;
 	struct cam_isp_hw_get_cmd_update update_buf = {0};
 	struct cam_isp_hw_get_wm_update wm_update = {0};
+	struct cam_buf_io_cfg io_cfg = {0};
+	dma_addr_t io_addr[CAM_PACKET_MAX_PLANES];
+	struct cam_hw_fence_map_entry *map_entries;
+	struct cam_isp_res_scratch_buf_info *scratch_buf_info;
 
 	if (prepare->num_hw_update_entries + 1 >=
 		prepare->max_hw_update_entries) {
@@ -16272,13 +16514,13 @@ static int cam_ife_hw_mgr_check_if_primary_port_has_buffer(
 	}
 
 	prepare_hw_data = (struct cam_isp_prepare_hw_update_data *)prepare->priv;
-	wm_update.en_virtual_frame = true;
 
+	memset(io_addr, 0, sizeof(io_addr));
 	for (i = 0; i < ctx->num_primary_ports; i++) {
 		found = false;
 
 		for (j = 0; j < prepare->num_out_map_entries; j++) {
-			if (ctx->primary_port_info[i].res_id ==
+			if (ctx->primary_port_info[i]->res_id ==
 				prepare->out_map_entries[j].resource_handle) {
 				found = true;
 				prepare_hw_data->primary_port_entry_index = j;
@@ -16286,70 +16528,101 @@ static int cam_ife_hw_mgr_check_if_primary_port_has_buffer(
 			}
 		}
 
-		if (!found) {
-			struct cam_hw_fence_map_entry *map_entries;
+		if (found)
+			continue;
 
-			if (prepare->num_out_map_entries >= prepare->max_out_map_entries) {
-				CAM_ERR(CAM_ISP,
-					"Out map entries maxed out ctx: %u", ctx->ctx_index);
-				rc = -EINVAL;
-				return rc;
-			}
-
-			hw_mgr_res = &ctx->res_list_ife_out[
-				ctx->primary_port_info[i].res_id & 0xFF];
-
-			/* Pick only left */
-			hw_res = hw_mgr_res->hw_res[0];
-			if ((kmd_buf_info->used_bytes + io_cfg_used_bytes) < kmd_buf_info->size) {
-				remain_size = kmd_buf_info->size -
-					(kmd_buf_info->used_bytes + io_cfg_used_bytes);
-			} else {
-				CAM_ERR(CAM_ISP,
-					"No free memory to add master virtual config req: %lld ctx: %u",
-					 prepare->packet->header.request_id, ctx->ctx_index);
-				rc = -ENOMEM;
-				return rc;
-			}
-
-			cpu_addr = kmd_buf_info->cpu_addr +
-				kmd_buf_info->used_bytes / 4 + io_cfg_used_bytes / 4;
-			update_buf.res = hw_res;
-			update_buf.cmd_type = CAM_ISP_HW_CMD_GET_BUF_UPDATE;
-			update_buf.cmd.cmd_buf_addr = cpu_addr;
-			update_buf.wm_update = &wm_update;
-			update_buf.cmd.size = remain_size;
-			update_buf.wm_update = &wm_update;
-
-			rc = hw_res->hw_intf->hw_ops.process_cmd(
-				hw_res->hw_intf->hw_priv,
-				CAM_ISP_HW_CMD_GET_BUF_UPDATE, &update_buf,
-				sizeof(struct cam_isp_hw_get_cmd_update));
-			if (rc) {
-				CAM_ERR(CAM_ISP,
-					"Failed to configure virtual frame for res: 0x%x rc: %d",
-					hw_res->res_id, rc);
-				return rc;
-			}
-
-			CAM_DBG(CAM_ISP,
-				"Virtual frame enabled for master_port: 0x%x in req: %lld on ctx: %u",
-				ctx->primary_port_info[i].res_id,
-				prepare->packet->header.request_id, ctx->ctx_index);
-
-			io_cfg_used_bytes += update_buf.cmd.used_bytes;
-			map_entries = &prepare->out_map_entries[prepare->num_out_map_entries];
-			map_entries->resource_handle = ctx->primary_port_info[i].res_id;
-			map_entries->virtual_frame_enabled = true;
-
-			/* Virtual frame configured for address 0x0 */
-			map_entries->image_buf_addr[0] = 0x0;
-			prepare_hw_data->primary_port_entry_index = j;
-
-			/* Zero is an invalid sync_id */
-			map_entries->sync_id = 0x0;
-			prepare->num_out_map_entries++;
+		if (prepare->num_out_map_entries >= prepare->max_out_map_entries) {
+			CAM_ERR(CAM_ISP, "Out map entries maxed out ctx: %u", ctx->ctx_index);
+			rc = -EINVAL;
+			return rc;
 		}
+
+		buf_found = false;
+		for (j = 0; j < ctx->num_primary_port_scratch_bufs; j++) {
+			scratch_buf_info = &ctx->primary_port_scratch_buf_info[j];
+			if (scratch_buf_info && scratch_buf_info->config_done &&
+				(ctx->primary_port_info[i]->res_id == scratch_buf_info->res_id)) {
+				buf_found = true;
+				break;
+			}
+		}
+
+		if (!buf_found) {
+			CAM_ERR(CAM_ISP,
+				"scratch buf info not updated for primary port: 0x%x req: %lld ctx: %u",
+				ctx->primary_port_info[i]->res_id,
+				prepare->packet->header.request_id, ctx->ctx_index);
+			rc = -EINVAL;
+			return rc;
+		}
+
+		for (plane_id = 0; plane_id < CAM_PACKET_MAX_PLANES; plane_id++) {
+			if (!scratch_buf_info->io_addr[plane_id])
+				continue;
+
+			io_addr[plane_id] = scratch_buf_info->io_addr[plane_id];
+			io_cfg.planes[plane_id].plane_stride = scratch_buf_info->stride[plane_id];
+			io_cfg.planes[plane_id].slice_height =
+				scratch_buf_info->slice_height[plane_id];
+			io_cfg.planes[plane_id].meta_size = scratch_buf_info->meta_size[plane_id];
+			wm_update.num_buf++;
+		}
+		wm_update.image_buf = io_addr;
+		wm_update.io_cfg = &io_cfg;
+
+		hw_mgr_res = &ctx->res_list_ife_out[ctx->primary_port_info[i]->res_id & 0xFF];
+
+		/* Pick only left */
+		hw_res = hw_mgr_res->hw_res[0];
+		if ((kmd_buf_info->used_bytes + io_cfg_used_bytes) < kmd_buf_info->size) {
+			remain_size = kmd_buf_info->size -
+				(kmd_buf_info->used_bytes + io_cfg_used_bytes);
+		} else {
+			CAM_ERR(CAM_ISP,
+				"No free memory to add master virtual config req: %lld ctx: %u",
+				prepare->packet->header.request_id, ctx->ctx_index);
+			rc = -ENOMEM;
+			return rc;
+		}
+
+		cpu_addr = kmd_buf_info->cpu_addr +
+			kmd_buf_info->used_bytes / 4 + io_cfg_used_bytes / 4;
+		update_buf.res = hw_res;
+		update_buf.cmd_type = CAM_ISP_HW_CMD_GET_BUF_UPDATE;
+		update_buf.cmd.cmd_buf_addr = cpu_addr;
+		update_buf.cmd.size = remain_size;
+		update_buf.wm_update = &wm_update;
+
+		rc = hw_res->hw_intf->hw_ops.process_cmd(hw_res->hw_intf->hw_priv,
+			CAM_ISP_HW_CMD_GET_BUF_UPDATE, &update_buf,
+			sizeof(struct cam_isp_hw_get_cmd_update));
+		if (rc) {
+			CAM_ERR(CAM_ISP,
+				"Failed to configure virtual frame for res: 0x%x rc: %d",
+				hw_res->res_id, rc);
+			return rc;
+		}
+
+		CAM_DBG(CAM_ISP,
+			"Updated wm with scratch buf config primary_port: 0x%x in req: %lld on ctx: %u",
+			ctx->primary_port_info[i]->res_id, prepare->packet->header.request_id,
+			ctx->ctx_index);
+
+		io_cfg_used_bytes += update_buf.cmd.used_bytes;
+		map_entries = &prepare->out_map_entries[prepare->num_out_map_entries];
+		map_entries->resource_handle = ctx->primary_port_info[i]->res_id;
+		map_entries->primary_scratch_buf_enabled = true;
+
+		for (plane_id = 0; plane_id < CAM_PACKET_MAX_PLANES; plane_id++) {
+			if (!io_addr[plane_id])
+				continue;
+			map_entries->image_buf_addr[plane_id] = io_addr[plane_id];
+		}
+		prepare_hw_data->primary_port_entry_index = j;
+
+		/* Zero is an invalid sync_id */
+		map_entries->sync_id = 0x0;
+		prepare->num_out_map_entries++;
 	}
 
 	if (io_cfg_used_bytes)
@@ -17813,15 +18086,56 @@ static int cam_ife_hw_mgr_scratch_buf_cfg(
 static int cam_ife_mgr_get_primary_port_info(
 	struct cam_ife_hw_mgr_ctx *ctx, struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
 {
+	int i;
+
 	isp_hw_cmd_args->u.primary_port_info.use_primary_port_config = false;
 
 	if (ctx->primary_port_cfg_done) {
 		isp_hw_cmd_args->u.primary_port_info.use_primary_port_config = true;
 		isp_hw_cmd_args->u.primary_port_info.num_ports = ctx->num_primary_ports;
-		isp_hw_cmd_args->u.primary_port_info.primary_port_cfg = ctx->primary_port_info;
+		for (i = 0; i < ctx->num_primary_ports; i++)
+			isp_hw_cmd_args->u.primary_port_info.primary_port_cfg[i] =
+				ctx->primary_port_info[i];
 	}
 
 	return 0;
+}
+
+static int cam_ife_mgr_get_last_consumed_addr_info(
+	struct cam_ife_hw_mgr_ctx *ctx, struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
+{
+	int rc = 0, res_id;
+	struct cam_isp_hw_mgr_res *isp_out_res;
+	struct cam_isp_resource_node *isp_res;
+	struct cam_isp_last_consumed_addr_info *last_consumed_addr_info;
+
+	last_consumed_addr_info = (struct cam_isp_last_consumed_addr_info *)
+		isp_hw_cmd_args->cmd_data;
+
+	res_id = last_consumed_addr_info->res_info[0].res_id & 0xFF;
+	isp_out_res = &ctx->res_list_ife_out[res_id];
+	isp_res = isp_out_res->hw_res[0];
+	if (!isp_res) {
+		CAM_ERR(CAM_ISP, "ctx: %u Left resource invalid for out resource: 0x%x",
+			ctx->ctx_index, last_consumed_addr_info->res_info[0].res_id);
+		goto err;
+	}
+
+	rc = isp_res->hw_intf->hw_ops.process_cmd(
+		isp_res->hw_intf->hw_priv,
+		CAM_ISP_HW_CMD_LAST_CONSUMED_ADDR_INFO,
+		last_consumed_addr_info, sizeof(last_consumed_addr_info));
+	if (rc) {
+		CAM_ERR(CAM_ISP,
+			"Getting last consumed addr info failed for ctx: %u rc: %d",
+			ctx->ctx_index, rc);
+		goto err;
+	}
+
+	return rc;
+err:
+	rc = -EINVAL;
+	return rc;
 }
 
 static int cam_ife_mgr_set_fast_path_notifier(
@@ -17840,7 +18154,7 @@ static int cam_ife_mgr_set_fast_path_notifier(
 	notifier_cfg.data = isp_hw_cmd_args->cmd_data;
 	notifier_cfg.handler_cb = isp_hw_cmd_args->u.fastpath_result_handler;
 
-	out_port = hw_mgr_ctx->primary_port_info[0].res_id;
+	out_port = hw_mgr_ctx->primary_port_info[0]->res_id;
 	res_id = out_port & 0xFF;
 
 	if (cam_ife_hw_mgr_is_virtual_rdi_res(out_port) && hw_mgr_ctx->flags.per_port_en) {
@@ -18036,6 +18350,12 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			break;
 		case CAM_ISP_HW_MGR_FAST_RESULT_NOTIFIER_CFG:
 			rc = cam_ife_mgr_set_fast_path_notifier(ctx, isp_hw_cmd_args);
+			break;
+		case CAM_ISP_HW_MGR_GET_LAST_CONSUMED_ADDR_INFO:
+			rc = cam_ife_mgr_get_last_consumed_addr_info(ctx, isp_hw_cmd_args);
+			break;
+		case CAM_ISP_HW_MGR_GET_MAX_IFE_OUT_RES:
+			isp_hw_cmd_args->u.max_ife_out_res = max_ife_out_res;
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "Invalid HW mgr command:0x%x",

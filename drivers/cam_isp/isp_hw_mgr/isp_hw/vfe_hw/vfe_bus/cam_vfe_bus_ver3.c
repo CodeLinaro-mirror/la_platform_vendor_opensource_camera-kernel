@@ -1867,6 +1867,7 @@ static int cam_vfe_bus_ver3_handle_comp_done_bottom_half(
 	struct cam_isp_resource_node          *comp_grp = vfe_out->comp_grp;
 	struct cam_vfe_bus_irq_evt_payload    *evt_payload = evt_payload_priv;
 	struct cam_vfe_bus_ver3_comp_grp_data *rsrc_data = comp_grp->res_priv;
+	struct cam_vfe_bus_ver3_priv          *bus_priv = NULL;
 	uint32_t                              *cam_ife_irq_regs;
 	uint32_t                               status_0;
 
@@ -1893,7 +1894,11 @@ static int cam_vfe_bus_ver3_handle_comp_done_bottom_half(
 		rsrc_data->common_data->core_index, rsrc_data->comp_grp_type,
 		status_0, rc);
 
-	*comp_mask = rsrc_data->composite_mask;
+	bus_priv = vfe_out->bus_priv;
+	if (bus_priv->common_data.buf_done_evt_control && vfe_out->primary_port_en)
+		*comp_mask = (1ULL << vfe_out->out_type);
+	else
+		*comp_mask = rsrc_data->composite_mask;
 
 	return rc;
 }
@@ -3483,72 +3488,6 @@ static int cam_vfe_bus_ver3_config_wm(void *priv, void *cmd_args,
 	return 0;
 }
 
-static int cam_vfe_bus_ver3_update_wm_for_virtual_frame(
-	struct cam_isp_hw_get_cmd_update *update_buf,
-	struct cam_vfe_bus_ver3_vfe_out_data *vfe_out_data)
-{
-	int i, j, rc = 0;
-	uint32_t *reg_val_pair;
-	uint32_t num_regval_pairs = 0, en_cfg = 0, size;
-	struct cam_cdm_utils_ops *cdm_util_ops;
-	struct cam_vfe_bus_ver3_wm_resource_data *wm_data = NULL;
-
-	mutex_lock(&vfe_out_data->common_data->bus_mutex);
-	cdm_util_ops = vfe_out_data->cdm_util_ops;
-	reg_val_pair = &vfe_out_data->common_data->io_buf_update[0];
-
-	for (i = 0, j = 0; i < vfe_out_data->num_wm; i++) {
-		if (j >= (MAX_REG_VAL_PAIR_SIZE - MAX_BUF_UPDATE_REG_NUM * 2)) {
-			CAM_ERR(CAM_ISP, "reg_val_pair %d exceeds the array limit %zu",
-				j, MAX_REG_VAL_PAIR_SIZE);
-			rc = -ENOMEM;
-			goto end;
-		}
-
-		wm_data = vfe_out_data->wm_res[i].res_priv;
-		en_cfg = wm_data->en_cfg | BIT(vfe_out_data->common_data->virtual_frame_en_shift);
-
-		/*
-		 * Trigger a dummy entry into bus addr FIFO,
-		 * since virtual frame is enabled addr is dropped
-		 */
-		CAM_VFE_ADD_REG_VAL_PAIR(reg_val_pair, j,
-			wm_data->hw_regs->image_addr, 0x0);
-		CAM_VFE_ADD_REG_VAL_PAIR(reg_val_pair, j,
-			wm_data->hw_regs->cfg, en_cfg);
-	}
-
-	num_regval_pairs = j / 2;
-	if (num_regval_pairs) {
-		size = cdm_util_ops->cdm_required_size_reg_random(
-			num_regval_pairs);
-
-		/* cdm util returns dwords, need to convert to bytes */
-		if ((size * 4) > update_buf->cmd.size) {
-			CAM_ERR(CAM_ISP,
-				"Failed! Buf size:%d insufficient, expected size:%d",
-				update_buf->cmd.size, size);
-			rc = -ENOMEM;
-			goto end;
-		}
-
-		cdm_util_ops->cdm_write_regrandom(
-			update_buf->cmd.cmd_buf_addr,
-			num_regval_pairs, reg_val_pair);
-
-		/* cdm util returns dwords, need to convert to bytes */
-		update_buf->cmd.used_bytes = size * 4;
-	} else {
-		CAM_DBG(CAM_ISP, "No reg val pairs updated for out_type: %u num_wms: %u",
-			vfe_out_data->out_type, vfe_out_data->num_wm);
-		update_buf->cmd.used_bytes = 0;
-	}
-
-end:
-	mutex_unlock(&vfe_out_data->common_data->bus_mutex);
-	return rc;
-}
-
 static int cam_vfe_bus_ver3_update_wm(void *priv, void *cmd_args,
 	uint32_t arg_size)
 {
@@ -3576,10 +3515,6 @@ static int cam_vfe_bus_ver3_update_wm(void *priv, void *cmd_args,
 		CAM_ERR(CAM_ISP, "Invalid data");
 		return -EINVAL;
 	}
-
-	/* Virtual Frame Programming */
-	if (update_buf->wm_update->en_virtual_frame)
-		return cam_vfe_bus_ver3_update_wm_for_virtual_frame(update_buf, vfe_out_data);
 
 	cdm_util_ops = vfe_out_data->cdm_util_ops;
 	if ((update_buf->wm_update->num_buf != vfe_out_data->num_wm) &&
@@ -4393,7 +4328,6 @@ static int cam_vfe_bus_ver3_update_primary_port_config(
 	return 0;
 }
 
-
 static int cam_vfe_bus_ver3_update_res_wm(
 	struct cam_vfe_bus_ver3_priv           *ver3_bus_priv,
 	struct cam_vfe_hw_vfe_out_acquire_args *out_acq_args,
@@ -5168,6 +5102,20 @@ static int cam_vfe_bus_ver3_process_cmd(
 			vfe_out_data->fastpath_notifier.handler_cb = notifier_cfg->handler_cb;
 			rc = 0;
 		}
+	}
+		break;
+	case CAM_ISP_HW_CMD_LAST_CONSUMED_ADDR_INFO: {
+		int32_t i;
+		struct cam_isp_last_consumed_addr_info *addr_info;
+		struct cam_isp_res_last_consumed_addr  *res_info;
+
+		bus_priv = (struct cam_vfe_bus_ver3_priv *)priv;
+		addr_info = (struct cam_isp_last_consumed_addr_info *)cmd_args;
+		res_info = addr_info->res_info;
+		for (i = 0; i < addr_info->num_res; i++)
+			res_info[i].last_consumed_addr = cam_vfe_bus_ver3_get_last_consumed_addr(
+			     bus_priv, res_info[i].res_id);
+		rc = 0;
 	}
 		break;
 	default:

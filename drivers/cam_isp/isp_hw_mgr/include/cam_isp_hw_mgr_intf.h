@@ -62,6 +62,9 @@
  */
 #define CAM_ISP_SFE_CTX_CFG_MAX                 40
 
+/* Maximum number of primary ports */
+#define CAM_IFE_HW_PRIMARY_PORT_MAX 16
+
 /* ctx get virtual rdi mapping callback function type */
 typedef int (*cam_hw_get_virtual_rdi_mapping_cb_func)(void *context,
 	uint32_t out_port, bool is_virtual_rdi);
@@ -482,6 +485,8 @@ enum cam_isp_hw_mgr_command {
 	CAM_ISP_HW_MGR_UPDATE_SCRATCH_BUF_CFG,
 	CAM_ISP_HW_MGR_GET_PRIMARY_PORT_INFO,
 	CAM_ISP_HW_MGR_FAST_RESULT_NOTIFIER_CFG,
+	CAM_ISP_HW_MGR_GET_LAST_CONSUMED_ADDR_INFO,
+	CAM_ISP_HW_MGR_GET_MAX_IFE_OUT_RES,
 	CAM_ISP_HW_MGR_CMD_MAX,
 };
 
@@ -523,6 +528,7 @@ enum cam_isp_ctx_type {
  * @foveation_en:          Flag to indicate if foveation is enabled
  * @settingbuf_res_id:     Resource ID of setting ID buffer
  * @scratch_buf_kva:       KMD VA of scratch buffer
+ * @max_ife_out_res:       Maximum IFE OUT resources
  */
 struct cam_isp_hw_cmd_args {
 	uint32_t                          cmd_type;
@@ -553,7 +559,7 @@ struct cam_isp_hw_cmd_args {
 		} path_mask;
 		struct {
 			uint32_t                num_ports;
-			void                   *primary_port_cfg;
+			void                   *primary_port_cfg[CAM_IFE_HW_PRIMARY_PORT_MAX];
 			bool                    use_primary_port_config;
 		} primary_port_info;
 		uint64_t                      dropped_ife_req;
@@ -566,6 +572,7 @@ struct cam_isp_hw_cmd_args {
 			uint32_t                      settingbuf_res_id;
 			uintptr_t                     scratch_buf_kva;
 		} fov_info;
+		uint32_t                      max_ife_out_res;
 	} u;
 };
 
@@ -615,10 +622,34 @@ struct cam_isp_lcr_rdi_cfg_args {
 
 /** struct cam_isp_primary_port_info - Primary port config info
  *
- * @res_id : res_id of the primary/leading port
+ * @res_id :          res_id of the primary/leading port
+ * @num_linked_ports: Number of ports associated with primary port
+ * @linked_ports:     Associated ports res id array
  */
 struct cam_isp_primary_port_info {
-	uint32_t res_id;
+	uint32_t  res_id;
+	uint32_t  num_linked_ports;
+	uint32_t *linked_ports;
+};
+
+/** struct cam_isp_res_last_consumed_addr - last consumed addr per resource
+ *
+ * @res_id :            Resource id
+ * @last_consumed_addr: Last consumed address
+ */
+struct cam_isp_res_last_consumed_addr {
+	uint32_t  res_id;
+	uint32_t  last_consumed_addr;
+};
+
+/** struct cam_isp_last_consumed_addr_info - last consumed addr info
+ *
+ * @num_res:  Number of resources
+ * @res_info: Resource info array
+ */
+struct cam_isp_last_consumed_addr_info {
+	uint32_t  num_res;
+	struct cam_isp_res_last_consumed_addr *res_info;
 };
 
 /**
