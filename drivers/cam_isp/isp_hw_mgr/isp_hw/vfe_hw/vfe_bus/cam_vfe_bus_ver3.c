@@ -3633,7 +3633,7 @@ static int cam_vfe_bus_ver3_update_wm(void *priv, void *cmd_args,
 
 		if (!(wm_data->en_cfg & (0x3 << 16))) {
 			CAM_VFE_ADD_REG_VAL_PAIR(reg_val_pair, j,
-				wm_data->hw_regs->image_cfg_1, wm_data->h_init);
+				wm_data->hw_regs->image_cfg_1, wm_data->h_init + io_cfg->planes[i].h_init);
 			CAM_DBG(CAM_ISP, "WM:%d h_init 0x%X",
 				wm_data->index, reg_val_pair[j-1]);
 		}
