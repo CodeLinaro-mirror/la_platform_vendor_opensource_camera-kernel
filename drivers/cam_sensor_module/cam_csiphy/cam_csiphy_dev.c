@@ -326,6 +326,8 @@ static int cam_csiphy_component_bind(struct device *dev,
 		new_csiphy_dev->csiphy_info[i].lane_assign = 0;
 		new_csiphy_dev->csiphy_info[i].lane_enable = 0;
 		new_csiphy_dev->csiphy_info[i].mipi_flags = 0;
+		new_csiphy_dev->lanes_assigned[i].lane_assign = -1;
+		new_csiphy_dev->lanes_assigned[i].lane_assign_cnt = 0;
 	}
 
 	new_csiphy_dev->ops.get_dev_info = NULL;
