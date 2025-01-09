@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -10346,6 +10346,7 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 
 	if (!stop_isp->is_internal_stop) {
 		ctx->primary_port_cfg_done = false;
+		ctx->num_primary_ports = 0;
 		for (i = 0; i < CAM_IFE_HW_PRIMARY_PORT_MAX; i++) {
 			if (!ctx->primary_port_info[i])
 				continue;
@@ -10357,6 +10358,7 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 		}
 		kfree(ctx->primary_port_scratch_buf_info);
 		ctx->primary_port_scratch_buf_info = NULL;
+		ctx->num_primary_port_scratch_bufs = 0;
 	}
 
 	/* Set the csid halt command */
