@@ -304,6 +304,13 @@ static int cam_tpg_component_bind(struct device *dev,
 	mutex_init(&tpg_dev->mutex);
 	tpg_dev->tpg_subdev.pdev = pdev;
 	tpg_dev->state = CAM_TPG_STATE_INIT;
+
+	rc = cam_tpg_hw_layer_init(tpg_dev, dev);
+	if (rc < 0) {
+		CAM_ERR(CAM_TPG, "Hw layer init failed");
+		goto bind_error_exit;
+	}
+
 	rc = tpg_subdev_init(tpg_dev, dev);
 	if (rc < 0) {
 		CAM_ERR(CAM_TPG, "subdev init failed");
@@ -322,11 +329,6 @@ static int cam_tpg_component_bind(struct device *dev,
 		goto release_subdev;
 	}
 	tpg_crm_intf_init(tpg_dev);
-	rc = cam_tpg_hw_layer_init(tpg_dev, dev);
-	if (rc < 0) {
-		CAM_ERR(CAM_TPG, "Hw layer init failed");
-		goto release_subdev;
-	}
 
 	platform_set_drvdata(pdev, tpg_dev);
 
