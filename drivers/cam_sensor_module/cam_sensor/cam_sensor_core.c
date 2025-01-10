@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -1161,7 +1161,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			goto free_power_settings;
 		}
 
-		if (s_ctrl->is_aon_user) {
+		if (s_ctrl->aon_camera_id != NOT_AON_CAM) {
 			CAM_DBG(CAM_SENSOR,
 				"Setup for Main Camera with csiphy index: %d",
 				s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY]);
@@ -1218,7 +1218,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			}
 		}
 
-		if (s_ctrl->is_aon_user) {
+		if (s_ctrl->aon_camera_id != NOT_AON_CAM) {
 			CAM_DBG(CAM_SENSOR,
 				"Setup for AON FW with csiphy index: %d",
 				s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY]);

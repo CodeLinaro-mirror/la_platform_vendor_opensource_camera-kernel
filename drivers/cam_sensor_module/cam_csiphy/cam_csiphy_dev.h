@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_CSIPHY_DEV_H_
@@ -99,7 +99,7 @@ enum cam_csiphy_state {
  * @mclk_sel_mask      : MCLK select mask.
  */
 struct cam_csiphy_aon_sel_params_t {
-	uint32_t aon_cam_sel_offset;
+	uint32_t aon_cam_sel_offset[MAX_AON_CAM];
 	uint32_t cam_sel_mask;
 	uint32_t mclk_sel_mask;
 };

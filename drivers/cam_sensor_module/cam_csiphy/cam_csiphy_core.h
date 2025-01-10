@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2018, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_CSIPHY_CORE_H_
@@ -84,11 +84,12 @@ void cam_csiphy_update_auxiliary_mask(struct csiphy_device *csiphy_dev);
 int cam_csiphy_dump_status_reg(struct csiphy_device *csiphy_dev);
 
 /**
- * @phy_idx    : To acquire the correct PHY hw to do the operation with
+ * @phy_idx         : To acquire the correct PHY hw to do the operation with
+ * @aon_camera_id   : AON Camera ID
  *
  * This API provides Utility/helper function to register AON Hw supprot for
  * correct PHY hw.
  *
  */
-int cam_csiphy_util_update_aon_registration(uint32_t phy_idx, bool is_aon_user);
+int cam_csiphy_util_update_aon_registration(uint32_t phy_idx, uint8_t aon_camera_id);
 #endif /* _CAM_CSIPHY_CORE_H_ */
