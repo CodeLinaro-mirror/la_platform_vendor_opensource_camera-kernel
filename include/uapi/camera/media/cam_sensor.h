@@ -60,6 +60,10 @@ enum camera_sensor_cmd_type {
     CAMERA_SENSOR_FLASH_CMD_TYPE_WIDGET,
     CAMERA_SENSOR_CMD_TYPE_RD_DATA,
     CAMERA_SENSOR_FLASH_CMD_TYPE_INIT_FIRE,
+    CAMERA_SENSOR_IRLED_CMD_TYPE_INIT_INFO,
+    CAMERA_SENSOR_IRLED_CMD_TYPE_FIRE_INFO,
+    CAMERA_SENSOR_IRCUT_CMD_TYPE_ON,
+    CAMERA_SENSOR_IRCUT_CMD_TYPE_OFF,
     CAMERA_SENSOR_CMD_TYPE_MAX,
 };
 
@@ -859,6 +863,20 @@ struct tpg_illumination_control {
     uint16_t g_gain;
     uint16_t b_gain;
     uint32_t reserved[4];
+} __attribute__((packed));
+
+/**
+ * struct cam_irled_init : Init command for the irled
+ * @irled_type  :    irled hw type
+ * @reserved
+ * @cmd_type    :    command buffer type
+ */
+
+struct cam_irled_init {
+    __u32    irled_type;
+    __u8     reserved;
+    __u8     cmd_type;
+    __u16    reserved1;
 } __attribute__((packed));
 
 /**
