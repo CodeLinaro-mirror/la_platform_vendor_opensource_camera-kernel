@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CPASTOP_V634_100_H_
@@ -621,6 +621,38 @@ static struct cam_cpas_hw_errata_wa_list cam634_cpas100_errata_wa_list = {
 	},
 };
 
+static struct cam_cpas_hw_clk_gate_info
+	cam634_cpas100_clk_core_en_info[] = {
+	{
+		.core_clk_en_addr = 0x200,
+		.core_en_value = 0x3,
+	},
+	{
+		.core_clk_en_addr = 0x204,
+		.core_en_value = 0x3,
+	},
+	{ },
+	{ },
+	{
+		.core_clk_en_addr = 0x210,
+		.core_en_value = 0x3,
+	},
+	{
+		.core_clk_en_addr = 0x214,
+		.core_en_value = 0x3,
+	},
+	{ },
+	{ },
+	{
+		.core_clk_en_addr = 0x220,
+		.core_en_value = 0x3,
+	},
+	{
+		.core_clk_en_addr = 0x224,
+		.core_en_value = 0x3,
+	},
+};
+
 static struct cam_camnoc_info cam634_cpas100_camnoc_info = {
 	.specific = &cam_cpas_v634_100_camnoc_specific[0],
 	.specific_size = ARRAY_SIZE(cam_cpas_v634_100_camnoc_specific),
@@ -629,6 +661,8 @@ static struct cam_camnoc_info cam634_cpas100_camnoc_info = {
 	.irq_err_size = ARRAY_SIZE(cam_cpas_v634_100_irq_err),
 	.err_logger = &cam634_cpas100_err_logger_offsets,
 	.errata_wa_list = &cam634_cpas100_errata_wa_list,
+	.ife_core_clk_list = &cam634_cpas100_clk_core_en_info[0],
+	.ife_core_clk_list_size = ARRAY_SIZE(cam634_cpas100_clk_core_en_info),
 };
 
 static struct cam_cpas_camnoc_qchannel cam634_cpas100_qchannel_info = {
