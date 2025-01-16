@@ -67,7 +67,7 @@ static uint32_t blob_type_hw_cmd_map[CAM_ISP_GENERIC_BLOB_TYPE_MAX] = {
 
 static struct cam_ife_hw_mgr g_ife_hw_mgr;
 static struct cam_ife_hw_mgr_sensor_grp_cfg  g_ife_sns_grp_cfg;
-static uint32_t g_num_ife, g_num_ife_lite, g_num_ife_virt;
+static uint32_t g_num_ife, g_num_ife_lite, g_num_ife_virt, g_max_ife_idx;
 static uint32_t max_ife_out_res;
 
 static int cam_isp_blob_ife_clock_update(
@@ -4267,6 +4267,8 @@ static inline void cam_ife_mgr_count_ife(void)
 
 	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
 		if (g_ife_hw_mgr.ife_devices[i]) {
+			if (g_max_ife_idx < i)
+				g_max_ife_idx = i;
 			if (g_ife_hw_mgr.ife_dev_caps[i].is_lite)
 				g_num_ife_lite++;
 			else if (g_ife_hw_mgr.ife_dev_caps[i].is_virtual)
@@ -4275,8 +4277,8 @@ static inline void cam_ife_mgr_count_ife(void)
 				g_num_ife++;
 		}
 	}
-	CAM_DBG(CAM_ISP, "counted %d IFE and %d IFE lite %d VIFE", g_num_ife,
-			g_num_ife_lite, g_num_ife_virt);
+	CAM_DBG(CAM_ISP, "counted %d IFE and %d IFE lite %d VIFE max ife %d",
+		g_num_ife, g_num_ife_lite, g_num_ife_virt, g_max_ife_idx);
 }
 
 static int cam_convert_rdi_out_res_id_to_src(int res_id)
@@ -7478,10 +7480,11 @@ static int cam_get_ife_hw_idx(int hw_idx)
 {
 	if (hw_idx < g_num_ife)
 		return hw_idx;
-	else if (hw_idx < g_num_ife + g_num_ife_lite)
+	else if (hw_idx <= g_max_ife_idx)
 		return (hw_idx - g_num_ife);
 
-	CAM_ERR(CAM_ISP, "hw idx %d out-of-bounds", hw_idx);
+	CAM_ERR(CAM_ISP, "hw idx %d out-of-bounds g_max_ife_idx %d",
+		hw_idx, g_max_ife_idx);
 	return 0;
 }
 
@@ -7497,7 +7500,7 @@ static int cam_ife_hw_mgr_set_secure_port_info(
 	phy_id = cam_ife_mgr_get_phy_id(ife_ctx->res_list_ife_in.res_id);
 	hw_id = cam_get_ife_hw_idx(ife_ctx->left_hw_idx);
 	ife_hw_type = cam_convert_hw_idx_to_ife_hw_type(
-			ife_ctx->left_hw_idx, g_num_ife, g_num_ife_lite);
+			ife_ctx->left_hw_idx, g_num_ife, g_max_ife_idx);
 	hw_type = cam_convert_hw_id_to_secure_cam_hw_type(ife_hw_type);
 
 	if (cam_ife_mgr_is_tpg(ife_ctx->res_list_ife_in.res_id)) {
