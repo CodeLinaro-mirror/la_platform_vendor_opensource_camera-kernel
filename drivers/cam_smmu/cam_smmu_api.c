@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -16,7 +16,6 @@
 #include <linux/workqueue.h>
 #include <linux/genalloc.h>
 #include <linux/debugfs.h>
-#include <linux/mem-buf.h>
 
 #include <soc/qcom/secure_buffer.h>
 
@@ -3594,9 +3593,8 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 	mapping_info->attach = attach;
 	mapping_info->table = table;
 
-	if (IS_CSF25(iommu_cb_set.csf_version.arch_ver,
-		iommu_cb_set.csf_version.max_ver))
-		mem_buf_dma_buf_get_memparcel_hdl(dmabuf, &smmu_proxy_buf_hdl);
+	cam_mem_buf_dma_buf_get_memparcel_hdl(dmabuf, &smmu_proxy_buf_hdl,
+		&iommu_cb_set.csf_version);
 
 	CAM_DBG(CAM_SMMU,
 		"idx=%d, ion_fd=%d, i_ino=%lu, dev=%pOFfp, paddr=0x%llx, len=%zu buf pxy hdl 0x%",

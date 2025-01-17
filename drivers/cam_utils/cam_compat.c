@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-mapping.h>
 #include <linux/of_address.h>
 #include <linux/slab.h>
 #include <linux/fdtable.h>
+#include <linux/mem-buf.h>
 
 #include "cam_compat.h"
 #include "cam_debug_util.h"
@@ -955,3 +956,14 @@ int cam_sensor_i2c_driver_remove(struct i2c_client *client)
 	return 0;
 }
 #endif
+
+int cam_mem_buf_dma_buf_get_memparcel_hdl(struct dma_buf *dmabuf,
+	uint32_t *smmu_proxy_buf_hdl, struct cam_csf_version *csf_version)
+{
+#ifdef CONFIG_SECURE_CAMERA_25
+	if (IS_CSF25(csf_version->arch_ver,
+		csf_version->max_ver))
+		return mem_buf_dma_buf_get_memparcel_hdl(dmabuf, smmu_proxy_buf_hdl);
+#endif
+	return 0;
+}
