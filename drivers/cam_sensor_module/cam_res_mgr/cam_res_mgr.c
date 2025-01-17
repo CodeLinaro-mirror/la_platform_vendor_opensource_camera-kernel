@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/init.h>
@@ -771,7 +771,7 @@ static int cam_res_mgr_parse_dt_shared_gpio(
 	dt->num_shared_gpio = of_gpio_named_count(of_node, "gpios-shared");
 	if (dt->num_shared_gpio <=  0) {
 		CAM_DBG(CAM_RES, "Cannot find any shared gpios");
-		return -EINVAL;
+		return -ENODEV;
 	}
 
 	if (dt->num_shared_gpio >= MAX_SHARED_GPIO_SIZE) {
