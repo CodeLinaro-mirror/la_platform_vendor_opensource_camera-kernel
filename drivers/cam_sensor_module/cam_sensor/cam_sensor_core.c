@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -286,6 +286,57 @@ static int32_t cam_sensor_generic_blob_handler(void *user_data,
 		break;
 	}
 
+	return rc;
+}
+
+static int cam_sensor_delete_perframe_settings(struct cam_sensor_ctrl_t *s_ctrl,
+	uint64_t req_id)
+{
+	int rc = 0, i = 0;
+	uint64_t top = 0, del_req_id = 0;
+	struct i2c_settings_array *i2c_set = NULL;
+
+	i2c_set = s_ctrl->i2c_data.per_frame;
+	for (i = 0; i < MAX_PER_FRAME_ARRAY; i++) {
+		if ((req_id >=
+			i2c_set[i].request_id) &&
+			(top <
+			i2c_set[i].request_id) &&
+			(i2c_set[i].is_settings_valid
+				== 1)) {
+			del_req_id = top;
+			top = i2c_set[i].request_id;
+		}
+	}
+
+	if (top < req_id) {
+		if ((((top % MAX_PER_FRAME_ARRAY) - (req_id %
+			MAX_PER_FRAME_ARRAY)) >= BATCH_SIZE_MAX) ||
+			(((top % MAX_PER_FRAME_ARRAY) - (req_id %
+			MAX_PER_FRAME_ARRAY)) <= -BATCH_SIZE_MAX))
+			del_req_id = req_id;
+	}
+
+	if (!del_req_id)
+		return rc;
+
+	CAM_DBG(CAM_SENSOR, "slot[%d] top: %llu, del_req_id:%llu",
+		s_ctrl->soc_info.index,  top, del_req_id);
+
+	for (i = 0; i < MAX_PER_FRAME_ARRAY; i++) {
+		if ((del_req_id >
+			 i2c_set[i].request_id) && (
+			 i2c_set[i].is_settings_valid
+				== 1)) {
+			i2c_set[i].request_id = 0;
+			rc = delete_request(
+				&(i2c_set[i]));
+			if (rc < 0)
+				CAM_ERR(CAM_SENSOR,
+					"Delete request Fail:%lld rc:%d",
+					del_req_id, rc);
+		}
+	}
 	return rc;
 }
 
@@ -1945,7 +1996,7 @@ static int cam_sensor_apply_settings_no_crm(
 							s_ctrl->soc_info.index,
 							s_ctrl->last_applied_req);
 			}
-		} else {
+		} else if (latest_nop_req_id > 0) {
 			s_ctrl->last_applied_req = latest_nop_req_id;
 			notify->last_apply_req = latest_nop_req_id;
 			CAM_INFO(CAM_SENSOR,
@@ -1953,6 +2004,19 @@ static int cam_sensor_apply_settings_no_crm(
 					s_ctrl->soc_info.index,
 					sensor_req_id,
 					latest_nop_req_id);
+			rc = cam_sensor_delete_perframe_settings(s_ctrl, latest_nop_req_id);
+			if (rc) {
+				CAM_ERR(CAM_SENSOR,
+					"slot[%d] req[%lld] failed clear previous req, err:%d",
+					s_ctrl->soc_info.index,
+					latest_nop_req_id,
+					rc);
+			}
+		} else {
+			CAM_WARN(CAM_SENSOR,
+					"slot[%d] Cannot find valid setting id and nop id for sensor apply %d",
+					s_ctrl->soc_info.index,
+					sensor_req_id);
 		}
 	} else {
 		/* This is a no skip case */
@@ -2261,8 +2325,7 @@ int cam_sensor_power_down(struct cam_sensor_ctrl_t *s_ctrl)
 int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 	uint64_t req_id, enum cam_sensor_packet_opcodes opcode)
 {
-	int rc = 0, offset, i;
-	uint64_t top = 0, del_req_id = 0;
+	int rc = 0, offset;
 	struct i2c_settings_array *i2c_set = NULL;
 	struct i2c_settings_list *i2c_list;
 
@@ -2368,46 +2431,13 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 		}
 
 		if (!s_ctrl->is_setting_id_valid) {
-			/* Change the logic dynamically */
-			for (i = 0; i < MAX_PER_FRAME_ARRAY; i++) {
-				if ((req_id >=
-					i2c_set[i].request_id) &&
-					(top <
-					i2c_set[i].request_id) &&
-					(i2c_set[i].is_settings_valid
-						== 1)) {
-					del_req_id = top;
-					top = i2c_set[i].request_id;
-				}
-			}
-
-			if (top < req_id) {
-				if ((((top % MAX_PER_FRAME_ARRAY) - (req_id %
-					MAX_PER_FRAME_ARRAY)) >= BATCH_SIZE_MAX) ||
-					(((top % MAX_PER_FRAME_ARRAY) - (req_id %
-					MAX_PER_FRAME_ARRAY)) <= -BATCH_SIZE_MAX))
-					del_req_id = req_id;
-			}
-		}
-
-		if (!del_req_id)
-			return rc;
-
-		CAM_DBG(CAM_SENSOR, "top: %llu, del_req_id:%llu",
-			top, del_req_id);
-
-		for (i = 0; i < MAX_PER_FRAME_ARRAY; i++) {
-			if ((del_req_id >
-				 i2c_set[i].request_id) && (
-				 i2c_set[i].is_settings_valid
-					== 1)) {
-				i2c_set[i].request_id = 0;
-				rc = delete_request(
-					&(i2c_set[i]));
-				if (rc < 0)
-					CAM_ERR(CAM_SENSOR,
-						"Delete request Fail:%lld rc:%d",
-						del_req_id, rc);
+			rc = cam_sensor_delete_perframe_settings(s_ctrl, req_id);
+			if (rc) {
+				CAM_ERR(CAM_SENSOR,
+					"slot[%d] req[%lld] failed clear previous req, err:%d",
+					s_ctrl->soc_info.index,
+					req_id,
+					rc);
 			}
 		}
 	}
