@@ -14,7 +14,7 @@
 #include "cam_sync.h"
 #include "cam_debug_util.h"
 
-#define CAM_SYNX_MAX_OBJS 256
+#define CAM_SYNX_MAX_OBJS  512
 #define CAM_SYNX_OBJ_NAME_LEN 64
 #define CAM_SYNX_TABLE_SZ (CAM_SYNX_MAX_OBJS / CAM_GENERIC_MONITOR_TABLE_ENTRY_SZ)
 
