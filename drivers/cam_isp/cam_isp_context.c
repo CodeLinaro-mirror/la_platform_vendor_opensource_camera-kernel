@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -3228,7 +3228,7 @@ static int cam_isp_context_last_consumed_addr_check(struct cam_isp_context *ctx_
 	if (ctx_isp->skip_addr_check) {
 		ctx_isp->skip_addr_check = false;
 		CAM_WARN(CAM_ISP,
-			"Skip last consumed addr check in case of frame drop for req_id: %lld ctx: %u",
+			"Skip last consumed addr check in case of frame drop or intermittent flush for req_id: %lld ctx: %u",
 			req->request_id, ctx->ctx_id);
 		goto end;
 	}
@@ -6026,7 +6026,8 @@ static int __cam_isp_ctx_flush_req(struct cam_context *ctx,
 	list_for_each_entry_safe(req, req_temp, &flush_list, list) {
 		req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 		for (i = 0; i < req_isp->num_fence_map_out; i++) {
-			if (req_isp->fence_map_out[i].sync_id != -1) {
+			if (req_isp->fence_map_out[i].sync_id != -1 &&
+				!req_isp->fence_map_out[i].primary_scratch_buf_enabled) {
 				CAM_DBG(CAM_ISP, "Flush req 0x%llx, fence %d ctx:%u",
 					req->request_id,
 					req_isp->fence_map_out[i].sync_id, ctx->ctx_id);
@@ -6259,6 +6260,13 @@ static int __cam_isp_ctx_flush_req_in_top_state(
 
 		CAM_INFO(CAM_ISP, "Stop HW complete. Reset HW next.");
 		CAM_DBG(CAM_ISP, "Flush wait and active lists");
+
+		/*
+		 * Skip last consumed address check incase of intermittent flush if primary
+		 * port is enabled.
+		 */
+		if (ctx_isp->num_primary_ports)
+			ctx_isp->skip_addr_check = true;
 
 		if (ctx->ctx_crm_intf && ctx->ctx_crm_intf->notify_timer) {
 			timer.link_hdl = ctx->link_hdl;
@@ -10015,10 +10023,12 @@ static int __cam_isp_ctx_query_primary_port_info(
 		for (i = 0; i < isp_ctx->num_primary_ports; i++) {
 			isp_ctx->primary_port_info[i] = (struct cam_isp_primary_port_info *)
 				isp_hw_cmd_args.u.primary_port_info.primary_port_cfg[i];
+
 			if (IS_ERR_OR_NULL(isp_ctx->primary_port_info[i])) {
 				CAM_ERR(CAM_ISP,
-					"Primary port info invalid for ctx: %u link: 0x%x with rc: %d",
-					ctx->ctx_id, ctx->link_hdl, rc);
+					"Primary port info is invalid for ctx: %u link: 0x%x with err: %d",
+					ctx->ctx_id, ctx->link_hdl,
+					PTR_ERR(isp_ctx->primary_port_info[i]));
 				rc = -EINVAL;
 				goto end;
 			}
