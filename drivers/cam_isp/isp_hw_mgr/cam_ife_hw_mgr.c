@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -17236,6 +17236,7 @@ static void cam_ife_mgr_dump_pf_data(
 	uint32_t                           *resource_type;
 	bool                               *ctx_found;
 	int                                 i, j;
+	bool reg_dump_need = true;
 
 	ctx = (struct cam_ife_hw_mgr_ctx *)hw_cmd_args->ctxt_to_hw_map;
 
@@ -17283,11 +17284,15 @@ static void cam_ife_mgr_dump_pf_data(
 			break;
 	}
 
-	if (g_ife_hw_mgr.hw_pid_support && (i == ctx->num_base || !*ctx_found))
+	if (g_ife_hw_mgr.hw_pid_support && (i == ctx->num_base || !*ctx_found)) {
 		CAM_INFO(CAM_ISP,
 			"This context does not cause pf:pid:%d ctx_id:%d",
 			hw_cmd_args->u.pf_args.pid, ctx->ctx_index);
-	cam_ife_mgr_pf_dump(ctx->pf_info.out_port_id, ctx);
+		reg_dump_need = false;
+	}
+
+	if (reg_dump_need)
+		cam_ife_mgr_pf_dump(ctx->pf_info.out_port_id, ctx);
 
 outportlog:
 	if (ctx->flags.is_ul_path)
