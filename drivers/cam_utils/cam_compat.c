@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-mapping.h>
@@ -134,7 +134,7 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 		struct smci_object client_env, sc_object;
 		struct tc_driver_sensor_info params = {0};
 
-		if (offset >= CSIPHY_MAX_INSTANCES_PER_PHY) {
+		if (offset >= csiphy_dev->session_max_device_support) {
 			CAM_ERR(CAM_CSIPHY, "Invalid CSIPHY offset");
 			return -EINVAL;
 		}
