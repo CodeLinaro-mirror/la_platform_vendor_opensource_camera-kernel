@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_MEM_MGR_H_
@@ -17,6 +17,8 @@
 #endif
 #include <media/cam_req_mgr.h>
 #include "cam_mem_mgr_api.h"
+
+#define MEM_OWNER_DESC_SIZE 100
 
 /* Enum for possible mem mgr states */
 enum cam_mem_mgr_state {
@@ -34,6 +36,15 @@ enum cam_mem_mgr_allocator {
 enum cam_smmu_mapping_client {
 	CAM_SMMU_MAPPING_USER,
 	CAM_SMMU_MAPPING_KERNEL,
+};
+
+/*Enum for heap memory trace support */
+enum cam_mem_trace_cmd {
+	CAM_MEM_TRACE_OVERVIEW,
+	CAM_MEM_TRACE_FULL_QUERY,
+	CAM_MEM_TRACE_SEDENTARY_QUERY,
+	CAM_MEM_TRACE_MASS_MEM_QUERY,
+	CAM_MEM_TRACE_MAX
 };
 
 #ifdef CONFIG_CAM_PRESIL
@@ -78,6 +89,71 @@ enum cam_dma_heap_type {
 	CAM_SVM_HEAP_DEVICE,
 	CAM_SVM_HEAP_SESSION,
 	CAM_HEAP_MAX,
+};
+
+/**
+ * struct cam_mem_heap_trace
+ *
+ * @trace_list:           List to hold headers of allocated heap memories.
+ * @record_page_list:     List to hold pages which record the life cycles for
+ *                        massive heap memories.
+ * @lock:                 Spin lock to protect lists and total_trace_mem.
+ * @total_trace_mem:      Total bytes of allocated heap memories.
+ * @page_count:           Count to limit the max num of record pages.
+ * @trace_premise:        Premise to enable the memory trace.
+ */
+struct cam_mem_heap_trace {
+	struct list_head trace_list;
+	struct list_head record_page_list;
+	spinlock_t lock;
+	size_t total_trace_mem;
+	uint32_t page_count;
+	bool trace_premise;
+};
+
+/**
+ * struct cam_mem_trace_header
+ *
+ * @magic:     Magic number to prevent illegal memory access
+ * @list:      List member used to append this node to a memory list
+ * @size:      Size of allocated memory
+ * @flags:     GFP flags (GFP_KERNEL, GFP_DMA, GFP_ATOMIC etc)
+ * @mem_owner: owner to which allocated memory belongs
+ * @vaddr_ptr: Kernel virtual address of allocated memory
+ * @timestamp: Timestamp of memory allocation. Got via ktime_get
+ */
+struct cam_mem_trace_header {
+	uint32_t         magic;
+	struct list_head list;
+	size_t           size;
+	gfp_t            flags;
+	char             mem_owner[MEM_OWNER_DESC_SIZE];
+	void            *vaddr_ptr;
+	ktime_t          timestamp;
+};
+
+/**
+ * struct cam_mem_trace_footer
+ *
+ * @magic:  Magic number to prevent illegal memory access
+ */
+struct cam_mem_trace_footer {
+	uint32_t         magic;
+};
+
+/**
+ * struct cam_mem_trace_record_page
+ *
+ * @list:   List member used to append this node to a memory list
+ * @size:   Size of the record page
+ * @offset: Write offset of the record page
+ * @full:   Flag to indicate if the record page is full
+ */
+struct cam_mem_trace_record_page {
+	struct list_head list;
+	size_t           size;
+	size_t           offset;
+	bool             full;
 };
 
 /**

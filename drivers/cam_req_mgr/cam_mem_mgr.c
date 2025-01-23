@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -11,6 +11,8 @@
 #include <linux/dma-buf.h>
 #include <linux/version.h>
 #include <linux/debugfs.h>
+#include <linux/timekeeping.h>
+#include <linux/spinlock.h>
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
 #include <linux/mem-buf.h>
 #include <soc/qcom/secure_buffer.h>
@@ -25,8 +27,39 @@
 #include "cam_common_util.h"
 #include "cam_presil_hw_access.h"
 #include "cam_mem_mgr_api.h"
+#include "cam_req_mgr_debug.h"
 
 #define CAM_MEM_SHARED_BUFFER_PAD_4K (4 * 1024)
+
+#define MEM_TRACE_MAGIC      0x179621
+#define RECORD_PAGE_SIZE     8192
+#define MEM_TRACE_USAGE_STRING                                                     \
+	"Usage:\n"                                                                     \
+	"$DEBUGFS_NODE : /sys/kernel/debug/camera/memmgr/mem_trace\n"                  \
+	"+-----------------------------------+---------------------------------+\n"   \
+	"|Print usage or get output info     |cat $DEBUGFS_NODE                |\n"   \
+	"+-----------------------------------+---------------------------------+\n"   \
+	"|Enable the heap memory trace       |echo enable > $DEBUGFS_NODE      |\n"   \
+	"+-----------------------------------+---------------------------------+\n"   \
+	"|Disable the heap memory trace      |echo disable > $DEBUGFS_NODE     |\n"   \
+	"+-----------------------------------+---------------------------------+\n"   \
+	"|Get allocated memory overview      |echo 0 > $DEBUGFS_NODE           |\n"   \
+	"+-----------------------------------+---------------------------------+\n"   \
+	"|Print all allocated heap mem       |echo 1 > $DEBUGFS_NODE           |\n"   \
+	"+-----------------------------------+---------------------------------+\n"   \
+	"|Print threshold based sedentary mem|echo 2 $THRESHOLD > $DEBUGFS_NODE|\n"   \
+	"+-----------------------------------+---------------------------------+\n"   \
+	"|Print records of massive memories  |echo 3 > $DEBUGFS_NODE           |\n"   \
+	"+-----------------------------------+---------------------------------+\n\n" \
+	"#For enable/disable cmds - kill camera provider to effect the cmd.\n\n"
+
+static uint mass_mem_threshold = 20480;
+module_param(mass_mem_threshold, uint, 0644);
+MODULE_PARM_DESC(mass_mem_threshold,
+	"Threshold to define massive memory whose life cycle will get recorded while free");
+
+bool mem_trace_en;
+static struct cam_mem_heap_trace g_trace;
 
 static struct cam_mem_table tbl;
 static atomic_t cam_mem_mgr_state = ATOMIC_INIT(CAM_MEM_MGR_UNINITIALIZED);
@@ -205,6 +238,453 @@ static int cam_mem_util_unmap_cpu_va(struct dma_buf *dmabuf,
 	return rc;
 }
 
+inline void cam_mem_trace_init(void)
+{
+	spin_lock_init(&g_trace.lock);
+	INIT_LIST_HEAD(&g_trace.trace_list);
+	INIT_LIST_HEAD(&g_trace.record_page_list);
+	g_trace.total_trace_mem = 0;
+	g_trace.page_count = 0;
+	g_trace.trace_premise = false;
+	mem_trace_en = false;
+}
+
+static void cam_mem_trace_reset(void)
+{
+	struct cam_mem_trace_header *trace_header, *trace_header_tmp;
+	struct cam_mem_trace_record_page *page_header, *page_header_tmp;
+
+	g_trace.total_trace_mem = 0;
+	g_trace.page_count = 0;
+	g_trace.trace_premise = false;
+
+	list_for_each_entry_safe(page_header, page_header_tmp,
+		&g_trace.record_page_list, list) {
+		list_del_init(&page_header->list);
+		cam_mem_trace_free(page_header);
+	}
+
+	list_for_each_entry_safe(trace_header, trace_header_tmp,
+		&g_trace.trace_list, list)
+		list_del_init(&trace_header->list);
+}
+
+void *cam_mem_trace_alloc(size_t size, gfp_t gfp_flags,
+	const char *owner, int line)
+{
+	size_t alloc_sz;
+	unsigned long flags;
+	void *header_kva, *mem_kva;
+	struct cam_mem_trace_header *trace_header;
+	struct cam_mem_trace_footer *trace_footer;
+
+	alloc_sz = size + sizeof(struct cam_mem_trace_header)
+		+ sizeof(struct cam_mem_trace_footer);
+	header_kva = kvzalloc(alloc_sz, gfp_flags);
+	if (!header_kva) {
+		CAM_ERR(CAM_MEM, "Failed to alloc mem with size: %lu bytes", size);
+		return NULL;
+	}
+
+	mem_kva = header_kva + sizeof(struct cam_mem_trace_header);
+
+	trace_header = (struct cam_mem_trace_header *)header_kva;
+	trace_header->magic = MEM_TRACE_MAGIC;
+	trace_header->size = size;
+	trace_header->flags = gfp_flags;
+	trace_header->vaddr_ptr = mem_kva;
+	trace_header->timestamp = ktime_get();
+	if (owner)
+		snprintf(trace_header->mem_owner, MEM_OWNER_DESC_SIZE,
+			"%s[%d]", owner, line);
+
+	trace_footer = (struct cam_mem_trace_footer *)(mem_kva + size);
+	trace_footer->magic = MEM_TRACE_MAGIC;
+
+	INIT_LIST_HEAD(&trace_header->list);
+
+	spin_lock_irqsave(&g_trace.lock, flags);
+	list_add_tail(&trace_header->list, &g_trace.trace_list);
+	g_trace.total_trace_mem += alloc_sz;
+	spin_unlock_irqrestore(&g_trace.lock, flags);
+
+	return mem_kva;
+}
+EXPORT_SYMBOL_GPL(cam_mem_trace_alloc);
+
+static inline char *cam_mem_trace_get_gfp_type(gfp_t flags)
+{
+	switch (flags) {
+	case GFP_KERNEL:
+		return "(GFP_KERNEL)";
+	case GFP_ATOMIC:
+		return "(GFP_ATOMIC)";
+	case GFP_DMA:
+		return "(GFP_DMA)";
+	case GFP_USER:
+		return "(GFP_USER)";
+	default:
+		return "";
+	}
+}
+
+static int cam_mem_trace_new_record_page(void)
+{
+	unsigned long flags;
+	struct cam_mem_trace_record_page *old_page, *new_page;
+
+	/*
+	 * Limit the number of record pages to 20 and override the
+	 * oldest page when it reaches the max.
+	 */
+	if (!list_empty(&g_trace.record_page_list) && g_trace.page_count >= 20) {
+		old_page = list_first_entry(&g_trace.record_page_list,
+			struct cam_mem_trace_record_page, list);
+		list_del_init(&old_page->list);
+		CAM_MEM_FREE(old_page);
+		g_trace.page_count -= 1;
+	}
+
+	new_page = (struct cam_mem_trace_record_page *)
+		CAM_MEM_ZALLOC(RECORD_PAGE_SIZE, GFP_KERNEL);
+	if (!new_page)
+		return -ENOMEM;
+
+	new_page->size = RECORD_PAGE_SIZE;
+	new_page->offset = sizeof(struct cam_mem_trace_record_page);
+	new_page->full = false;
+	INIT_LIST_HEAD(&new_page->list);
+	spin_lock_irqsave(&g_trace.lock, flags);
+	list_add_tail(&new_page->list, &g_trace.record_page_list);
+	spin_unlock_irqrestore(&g_trace.lock, flags);
+	g_trace.page_count += 1;
+
+	return 0;
+}
+
+void cam_mem_trace_record_mass_mem(
+	struct cam_mem_trace_header *trace_header)
+{
+	ktime_t now;
+	bool need_new_page = false;
+	size_t remain_sz, line_len;
+	uint64_t kept_time_ms;
+	unsigned long flags;
+	struct cam_mem_trace_record_page *page_header;
+	char line_buf[256];
+	char kept_time_str[8];
+
+	now = ktime_get();
+	kept_time_ms = (now - trace_header->timestamp) / 1000000;
+
+	if (kept_time_ms >= 1000)
+		scnprintf(kept_time_str, 8, "%llds", kept_time_ms / 1000);
+	else
+		scnprintf(kept_time_str, 8, "%lldms", kept_time_ms);
+
+again:
+	if (list_empty(&g_trace.record_page_list) || need_new_page) {
+		cam_mem_trace_new_record_page();
+		need_new_page = false;
+	}
+
+	spin_lock_irqsave(&g_trace.lock, flags);
+
+	list_for_each_entry(page_header, &g_trace.record_page_list, list) {
+		if (page_header->full)
+			continue;
+
+		memset(line_buf, 0, 256);
+
+		line_len = scnprintf(line_buf, 256,
+			"Released mem: owner %s, size %lu bytes, flags %#x%s, kept_time %s$",
+			trace_header->mem_owner, trace_header->size,
+			trace_header->flags,
+			cam_mem_trace_get_gfp_type(trace_header->flags),
+			kept_time_str);
+
+		remain_sz = page_header->size - page_header->offset;
+		if (remain_sz < line_len) {
+			page_header->full = true;
+			need_new_page = true;
+			spin_unlock_irqrestore(&g_trace.lock, flags);
+			goto again;
+		}
+
+		/* Write the life record of released massive mem to the record page */
+		strlcat((char *)page_header + page_header->offset, line_buf, remain_sz);
+		page_header->offset += line_len;
+
+		break;
+	}
+
+	spin_unlock_irqrestore(&g_trace.lock, flags);
+}
+
+void cam_mem_trace_free(const void *vaddr_ptr)
+{
+	int header_magic, footer_magic;
+	unsigned long flags;
+	void *header_kva, *footer_kva;
+	struct cam_mem_trace_header *trace_header;
+
+	if (!vaddr_ptr)
+		return;
+
+	header_kva = (void *)vaddr_ptr - sizeof(struct cam_mem_trace_header);
+	header_magic = *(int *)header_kva;
+	if (header_magic != MEM_TRACE_MAGIC) {
+		CAM_WARN(CAM_MEM,
+			"No header magic detected, likely memory corruption");
+		kvfree(vaddr_ptr);
+		return;
+	}
+
+	trace_header = (struct cam_mem_trace_header *)header_kva;
+
+	footer_kva = (void *)vaddr_ptr + trace_header->size;
+	footer_magic = *(int *)footer_kva;
+	if (unlikely(footer_magic != MEM_TRACE_MAGIC))
+		CAM_WARN(CAM_MEM, "Memory overflow likely happened at %s",
+			trace_header->mem_owner);
+
+	if (mem_trace_en && (trace_header->size >= mass_mem_threshold))
+		cam_mem_trace_record_mass_mem(trace_header);
+
+	spin_lock_irqsave(&g_trace.lock, flags);
+	if (list_empty(&g_trace.trace_list)) {
+		spin_unlock_irqrestore(&g_trace.lock, flags);
+		CAM_WARN(CAM_MEM, "Empty memory trace list. Fallback to kvfree.");
+		kvfree(vaddr_ptr);
+		return;
+	}
+
+	list_del_init(&trace_header->list);
+	g_trace.total_trace_mem -= (trace_header->size
+		+ sizeof(struct cam_mem_trace_header)
+		+ sizeof(struct cam_mem_trace_footer));
+	spin_unlock_irqrestore(&g_trace.lock, flags);
+
+	kvfree(header_kva);
+}
+EXPORT_SYMBOL_GPL(cam_mem_trace_free);
+
+void *memdup_user_trace(const void __user *src, size_t len,
+	const char *owner, int line)
+{
+	void *p;
+
+	p = cam_mem_trace_alloc(len, GFP_USER | __GFP_NOWARN, owner, line);
+	if (!p)
+		return ERR_PTR(-ENOMEM);
+
+	if (copy_from_user(p, src, len)) {
+		kfree(p);
+		return ERR_PTR(-EFAULT);
+	}
+
+	return p;
+}
+EXPORT_SYMBOL_GPL(memdup_user_trace);
+
+static void cam_mem_trace_overview(void)
+{
+	int i;
+	unsigned long flags;
+	size_t total_dma_mem = 0;
+
+	for (i = 1; i < CAM_MEM_BUFQ_MAX; i++) {
+		if (tbl.bufq[i].active && tbl.bufq[i].is_internal)
+			total_dma_mem += tbl.bufq[i].len;
+	}
+
+	spin_lock_irqsave(&g_trace.lock, flags);
+	CAM_INFO(CAM_MEM, "Total heap mem: %zu bytes, total dma mem: %zu bytes",
+		g_trace.total_trace_mem, total_dma_mem);
+	spin_unlock_irqrestore(&g_trace.lock, flags);
+
+	/* To make sure above printing is delivered immediately */
+	CAM_INFO(CAM_MEM, "");
+}
+
+static void cam_mem_trace_query(uint64_t threshold)
+{
+	bool output = false;
+	ktime_t now;
+	uint64_t kept_time_ms;
+	size_t len = 0, remain_len, line_len;
+	unsigned long flags;
+	struct cam_mem_trace_header *trace_header;
+	char kept_time_str[8];
+	char line_buf[256];
+	char log_buf[512] = {'\0'};
+
+	now = ktime_get();
+
+	spin_lock_irqsave(&g_trace.lock, flags);
+	if (list_empty(&g_trace.trace_list)) {
+		spin_unlock_irqrestore(&g_trace.lock, flags);
+		CAM_WARN(CAM_MEM, "Empty memory trace list");
+		return;
+	}
+
+	list_for_each_entry(trace_header, &g_trace.trace_list, list) {
+		kept_time_ms = (now - trace_header->timestamp) / 1000000;
+		if (kept_time_ms >= 1000)
+			scnprintf(kept_time_str, 8, "%llds", kept_time_ms / 1000);
+		else
+			scnprintf(kept_time_str, 8, "%lldms", kept_time_ms);
+
+		if (kept_time_ms >= (threshold * 1000)) {
+			if (!output)
+				output = true;
+
+			memset(line_buf, '\0', 256);
+			line_len = scnprintf(line_buf, 256,
+				"Mem owner %s, size %lu bytes, flags %#x%s, kept_time %s",
+				trace_header->mem_owner, trace_header->size,
+				trace_header->flags,
+				cam_mem_trace_get_gfp_type(trace_header->flags),
+				kept_time_str);
+
+			remain_len = 512 - len;
+			if (remain_len < line_len) {
+				CAM_INFO(CAM_MEM, "%s", log_buf);
+				memset(log_buf, '\0', 512);
+				len = 0;
+			}
+
+			CAM_INFO_BUF(CAM_MEM, log_buf, 512, &len, "%s", line_buf);
+		}
+	}
+	spin_unlock_irqrestore(&g_trace.lock, flags);
+
+	if (log_buf[0] != '\0')
+		CAM_INFO(CAM_MEM, "%s", log_buf);
+
+	if (!output)
+		CAM_INFO(CAM_MEM, "No allocated mem kept >= %llds", threshold);
+}
+
+static void cam_mem_trace_query_mass_mem(void)
+{
+	ktime_t now;
+	char *page, *token = NULL;
+	uint64_t kept_time_sec;
+	unsigned long flags;
+	struct cam_mem_trace_header *trace_header;
+	struct cam_mem_trace_record_page *page_header;
+	char buf[RECORD_PAGE_SIZE];
+	char *buf_ptr;
+
+	now = ktime_get();
+
+	spin_lock_irqsave(&g_trace.lock, flags);
+
+	list_for_each_entry(page_header, &g_trace.record_page_list, list) {
+		page = (char *)page_header +
+			sizeof(struct cam_mem_trace_record_page);
+
+		memset(buf, '\0', RECORD_PAGE_SIZE);
+		memcpy(buf, page, RECORD_PAGE_SIZE);
+		buf_ptr = buf;
+
+		token = strsep(&buf_ptr, "$");
+		while (token != NULL) {
+			CAM_INFO(CAM_MEM, "%s", token);
+			token = strsep(&buf_ptr, "$");
+		}
+	}
+
+	list_for_each_entry(trace_header, &g_trace.trace_list, list) {
+		kept_time_sec = (now - trace_header->timestamp) / 1000000000;
+		if (trace_header->size > mass_mem_threshold)
+			CAM_INFO(CAM_MEM,
+				"In-use mem: owner %s, size %lu bytes, flags %#x%s, kept_time %llds\n",
+				trace_header->mem_owner, trace_header->size,
+				trace_header->flags,
+				cam_mem_trace_get_gfp_type(trace_header->flags),
+				kept_time_sec);
+	}
+
+	spin_unlock_irqrestore(&g_trace.lock, flags);
+}
+
+static ssize_t cam_mem_trace_read(struct file *file,
+	char __user *ubuf, size_t size, loff_t *ppos)
+{
+	int count = 0, offset;
+	char display_buf[2048] = {'\0'};
+
+	offset = scnprintf(display_buf, 2048, "\nHeap mem trace is %s\n\n",
+		mem_trace_en ? "enabled" : "disabled");
+	strlcat(display_buf, MEM_TRACE_USAGE_STRING, 2048 - offset);
+
+	count = simple_read_from_buffer(ubuf, size, ppos,
+		display_buf, strlen(display_buf));
+
+	return count;
+}
+
+static ssize_t cam_mem_trace_write(struct file *file,
+	const char __user *ubuf, size_t size, loff_t *ppos)
+{
+	char buf[64] = {'\0'};
+	char *buf_ptr, *token;
+	uint32_t cmd, param = 0;
+
+	if (copy_from_user(buf, ubuf, sizeof(buf)))
+		return -EFAULT;
+
+	buf_ptr = buf;
+	token = strsep(&buf_ptr, " ");
+
+	if (!token)
+		CAM_WARN(CAM_MEM, "Empty input");
+	else if (strnstr(token, "enable", 6))
+		g_trace.trace_premise = true;
+	else if (strnstr(token, "disable", 7))
+		g_trace.trace_premise = false;
+	else if (kstrtou32(token, 0, &cmd) == 0)
+		goto query;
+	else
+		CAM_WARN(CAM_MEM, "Invalid input : %s", token);
+
+	return size;
+
+query:
+	switch (cmd) {
+	case CAM_MEM_TRACE_OVERVIEW:
+		cam_mem_trace_overview();
+		break;
+	case CAM_MEM_TRACE_SEDENTARY_QUERY:
+		token = buf_ptr;
+		if (!token || kstrtou32(token, 0, &param) != 0 || param == 0) {
+			CAM_INFO(CAM_MEM,
+				"Params err: No threshold to query sedentary mem");
+			return size;
+		}
+		fallthrough;
+	case CAM_MEM_TRACE_FULL_QUERY:
+		cam_mem_trace_query((uint64_t)param);
+		break;
+	case CAM_MEM_TRACE_MASS_MEM_QUERY:
+		cam_mem_trace_query_mass_mem();
+		break;
+	default:
+		CAM_INFO(CAM_MEM, "Unsupported param %s", token);
+	}
+
+	return size;
+}
+
+static const struct file_operations cam_mem_trace = {
+	.owner = THIS_MODULE,
+	.open  = simple_open,
+	.read  = cam_mem_trace_read,
+	.write = cam_mem_trace_write,
+};
+
 static int cam_mem_mgr_create_debug_fs(void)
 {
 	int rc = 0;
@@ -227,6 +707,10 @@ static int cam_mem_mgr_create_debug_fs(void)
 
 	debugfs_create_bool("override_cpu_access_dir", 0644, g_cam_mem_mgr_debug.dentry,
 		&g_cam_mem_mgr_debug.override_cpu_access_dir);
+
+	debugfs_create_file("mem_trace", 0644, g_cam_mem_mgr_debug.dentry,
+		NULL, &cam_mem_trace);
+
 end:
 	return rc;
 }
@@ -2110,6 +2594,10 @@ void cam_mem_mgr_deinit(void)
 
 	mutex_unlock(&tbl.m_lock);
 	mutex_destroy(&tbl.m_lock);
+
+	mem_trace_en = g_trace.trace_premise ? true : false;
+	if (!mem_trace_en)
+		cam_mem_trace_reset();
 }
 
 static void cam_mem_util_unmap_dummy(struct kref *kref)

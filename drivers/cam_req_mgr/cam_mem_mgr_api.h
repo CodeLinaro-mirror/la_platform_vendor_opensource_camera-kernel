@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_MEM_MGR_API_H_
@@ -9,6 +9,8 @@
 
 #include <media/cam_req_mgr.h>
 #include "cam_smmu_api.h"
+
+extern bool mem_trace_en;
 
 /**
  * CAM_MEM_ALLOC : Allocates memory without initializing it to zero.
@@ -34,7 +36,9 @@
  * be present.
  */
 #define CAM_MEM_ZALLOC(size, flags) \
-	kvzalloc(size, flags)
+	(mem_trace_en ? \
+	cam_mem_trace_alloc(size, flags, __func__, __LINE__) :\
+	kvzalloc(size, flags))
 
 /**
  * CAM_MEM_ZALLOC_ARRAY : Allocates memory for array and zero initialises it.
@@ -48,7 +52,9 @@
  * be present.
  */
 #define CAM_MEM_ZALLOC_ARRAY(count, size, flags) \
-	kvcalloc(count, size, flags)
+	(mem_trace_en ? \
+	CAM_MEM_ZALLOC(count * size, flags) :\
+	kvcalloc(count, size, flags))
 
 /**
  * CAM_MEM_FREE : Frees memory without initializing it to zero.
@@ -56,7 +62,9 @@
  * @addr    : address of data object to be freed
  */
 #define CAM_MEM_FREE(addr) \
-	kvfree(addr)
+	(mem_trace_en ? \
+	cam_mem_trace_free(addr) :\
+	kvfree(addr))
 
 /**
  * CAM_MEM_ZFREE : Frees memory and zero initialize it.
@@ -67,8 +75,19 @@
 #define CAM_MEM_ZFREE(addr, size) \
 	if (likely(!ZERO_OR_NULL_PTR(addr))) { \
 		memset((void *)addr, 0x0,  size); \
+		mem_trace_en ? \
+		cam_mem_trace_free(addr) :\
 		kvfree(addr); \
 	}
+
+/**
+ * CAM_MEMDUP_USER : Allocates memory and copy from userspace
+ * see memdup_user in linux kernel
+ */
+#define CAM_MEMDUP_USER(src, len) \
+	(mem_trace_en ? \
+	memdup_user_trace(src, len, __func__, __LINE__) :\
+	memdup_user(src, len))
 
 /**
  * struct cam_mem_mgr_request_desc
@@ -204,5 +223,38 @@ int cam_mem_mgr_free_memory_region(struct cam_mem_mgr_memory_desc *inp);
  * @return dmabuf .
  */
 struct dma_buf * cam_mem_mgr_get_dma_buf(int fd);
+
+/**
+ * @brief: Initialize the memory trace variables
+ */
+void cam_mem_trace_init(void);
+
+/**
+ * @brief: Allocate a new memory and add it to trace list
+ *
+ * @size: Size of allocated memory
+ * @flag: GFP flags (GFP_KERNEL, GFP_DMA, GFP_ATOMIC etc)
+ * @owner: Owner to which allocated memory belongs
+ * @line: Exact allocated line of the owner
+ *
+ * @return None
+ */
+void *cam_mem_trace_alloc(size_t size, gfp_t flags,
+	const char *owner, int line);
+
+/**
+ * @brief: Free a allocated memory and delete it from trace list
+ *
+ * @vaddr_ptr: Kernel virtual address of allocated memory
+ *
+ * @return None
+ */
+void cam_mem_trace_free(const void *vaddr_ptr);
+
+/**
+ * @brief: Traced version of memdup_user
+ */
+void *memdup_user_trace(const void __user *src, size_t len,
+	const char *owner, int line);
 
 #endif /* _CAM_MEM_MGR_API_H_ */
