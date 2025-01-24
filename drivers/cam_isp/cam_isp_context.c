@@ -3414,7 +3414,7 @@ static int __cam_isp_ctx_reg_upd_in_applied_state(
 	}
 	req = list_first_entry(&ctx->wait_req_list,
 			struct cam_ctx_request, list);
-	if (ctx_isp->num_primary_ports && (req->request_id > 1)) {
+	if (!ctx_isp->ul_path_en && ctx_isp->num_primary_ports && (req->request_id > 1)) {
 		rc = cam_isp_context_last_consumed_addr_check(ctx_isp);
 		if (rc) {
 			CAM_ERR(CAM_ISP,
