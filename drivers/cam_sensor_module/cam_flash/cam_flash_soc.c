@@ -369,9 +369,7 @@ int cam_flash_get_dt_data(struct cam_flash_ctrl *fctrl,
 			"cam_flash_get_pmic_source_info failed rc %d", rc);
 		goto free_soc_private;
 	}
-#endif
-
-#if IS_ENABLED(CONFIG_LEDS_QCOM_FLASH)
+#elif IS_ENABLED(CONFIG_LEDS_QCOM_FLASH)
 	rc = cam_get_led_source_node_info(of_node, fctrl, soc_info->soc_private);
 	if (rc) {
 		CAM_ERR(CAM_FLASH,
@@ -379,8 +377,8 @@ int cam_flash_get_dt_data(struct cam_flash_ctrl *fctrl,
 		goto free_soc_private;
 	}
 #else
-	CAM_ERR(CAM_FLASH,
-		"FATAL: CONFIG_LEDS_QCOM_FLASH is not Defined");
+	CAM_ERR(CAM_FLASH, "Flash Not supported");
+	rc = -EOPNOTSUPP;
 	goto free_soc_private;
 #endif
 	return rc;
