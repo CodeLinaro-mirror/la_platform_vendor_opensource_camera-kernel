@@ -4093,8 +4093,12 @@ static enum cam_ife_pix_path_res_id
 	case CAM_ISP_SFE_OUT_RES_RDI_3:
 		path_id = CAM_IFE_PIX_PATH_RES_RDI_3;
 		break;
+	case CAM_ISP_IFE_OUT_RES_RDI_4:
 	case CAM_ISP_SFE_OUT_RES_RDI_4:
 		path_id = CAM_IFE_PIX_PATH_RES_RDI_4;
+		break;
+	case CAM_ISP_IFE_OUT_RES_RDI_5:
+		path_id = CAM_IFE_PIX_PATH_RES_RDI_5;
 		break;
 	default:
 		path_id = CAM_IFE_PIX_PATH_RES_MAX;
