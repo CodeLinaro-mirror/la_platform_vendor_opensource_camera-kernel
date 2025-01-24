@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -51,6 +51,7 @@ static void cam_cci_flush_queue(struct cci_device *cci_dev,
 		&cci_dev->soc_info;
 	void __iomem *base = soc_info->reg_map[0].mem_base;
 
+	reinit_completion(&cci_dev->cci_master_info[master].reset_complete);
 	cam_io_w_mb(1 << master, base + CCI_HALT_REQ_ADDR);
 	rc = wait_for_completion_timeout(
 		&cci_dev->cci_master_info[master].reset_complete, CCI_TIMEOUT);
@@ -312,6 +313,7 @@ static int32_t cam_cci_wait_report_cmd(struct cci_device *cci_dev,
 		&cci_dev->cci_master_info[master].lock_q[queue], flags);
 	atomic_set(&cci_dev->cci_master_info[master].q_free[queue], 1);
 	atomic_set(&cci_dev->cci_master_info[master].done_pending[queue], 1);
+	reinit_completion(&cci_dev->cci_master_info[master].report_q[queue]);
 	spin_unlock_irqrestore(
 		&cci_dev->cci_master_info[master].lock_q[queue], flags);
 	cam_io_w_mb(reg_val, base +
@@ -1607,15 +1609,30 @@ static int32_t cam_cci_i2c_write(struct v4l2_subdev *sd,
 	int32_t rc = 0;
 	struct cci_device *cci_dev;
 	enum cci_i2c_master_t master;
+	enum i2c_freq_mode i2c_freq_mode;
 
 	cci_dev = v4l2_get_subdevdata(sd);
-
+	if (!cci_dev || !c_ctrl) {
+                CAM_ERR(CAM_CCI, "failed: invalid params %pK %pK",
+                        cci_dev, c_ctrl);
+                rc = -EINVAL;
+                return rc;
+        }
 	if (cci_dev->cci_state != CCI_STATE_ENABLED) {
 		CAM_ERR(CAM_CCI, "invalid cci state %d",
 			cci_dev->cci_state);
 		return -EINVAL;
 	}
 	master = c_ctrl->cci_info->cci_i2c_master;
+	if (master >= MASTER_MAX || master < 0) {
+                CAM_ERR(CAM_CCI, "Invalid I2C master addr");
+                return -EINVAL;
+        }
+	i2c_freq_mode = c_ctrl->cci_info->i2c_freq_mode;
+	if ((i2c_freq_mode >= I2C_MAX_MODES) || (i2c_freq_mode < 0)) {
+		CAM_ERR(CAM_CCI, "invalid i2c_freq_mode = %d", i2c_freq_mode);
+		return -EINVAL;
+        }
 	CAM_DBG(CAM_CCI, "set param sid 0x%x retries %d id_map %d",
 		c_ctrl->cci_info->sid, c_ctrl->cci_info->retries,
 		c_ctrl->cci_info->id_map);
@@ -1782,17 +1799,19 @@ static void cam_cci_write_async_helper(struct work_struct *work)
 	cci_dev = write_async->cci_dev;
 	i2c_msg = &write_async->c_ctrl.cfg.cci_i2c_write_cfg;
 	master = write_async->c_ctrl.cci_info->cci_i2c_master;
-	cci_master_info = &cci_dev->cci_master_info[master];
+	if (master < NUM_MASTERS ){
+	    cci_master_info = &cci_dev->cci_master_info[master];
 
-	mutex_lock(&cci_master_info->mutex_q[write_async->queue]);
-	rc = cam_cci_i2c_write(&(cci_dev->v4l2_dev_str.sd),
-		&write_async->c_ctrl, write_async->queue, write_async->sync_en);
-	mutex_unlock(&cci_master_info->mutex_q[write_async->queue]);
-	if (rc < 0)
-		CAM_ERR(CAM_CCI, "failed rc: %d", rc);
+	    mutex_lock(&cci_master_info->mutex_q[write_async->queue]);
+	    rc = cam_cci_i2c_write(&(cci_dev->v4l2_dev_str.sd),
+	            &write_async->c_ctrl, write_async->queue, write_async->sync_en);
+	    mutex_unlock(&cci_master_info->mutex_q[write_async->queue]);
+	    if (rc < 0)
+	        CAM_ERR(CAM_CCI, "failed rc: %d", rc);
 
-	kfree(write_async->c_ctrl.cfg.cci_i2c_write_cfg.reg_setting);
-	kfree(write_async);
+	    kfree(write_async->c_ctrl.cfg.cci_i2c_write_cfg.reg_setting);
+	    kfree(write_async);
+	}
 }
 
 static int32_t cam_cci_i2c_write_async(struct v4l2_subdev *sd,
@@ -1908,6 +1927,7 @@ static int32_t cam_cci_read_bytes(struct v4l2_subdev *sd,
 	 * THRESHOLD irq's, we reinit the threshold wait before
 	 * we load the burst read cmd.
 	 */
+	reinit_completion(&cci_dev->cci_master_info[master].rd_done);
 	reinit_completion(&cci_dev->cci_master_info[master].th_complete);
 	reinit_completion(&cci_dev->cci_master_info[master].reset_complete);
 
