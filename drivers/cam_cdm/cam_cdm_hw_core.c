@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -1215,8 +1215,10 @@ static int cam_hw_cdm_work(void *priv, void *data)
 	int i, fifo_idx;
 	struct cam_cdm_bl_cb_request_entry *tnode = NULL;
 	struct cam_cdm_bl_cb_request_entry *node = NULL;
+	struct list_head notify_request_list;
 	unsigned long flag;
 
+	INIT_LIST_HEAD(&notify_request_list);
 	payload = (struct cam_cdm_work_payload *) data;
 	if (!payload) {
 		CAM_ERR(CAM_CDM, "NULL payload");
@@ -1288,13 +1290,8 @@ static int cam_hw_cdm_work(void *priv, void *data)
 				core->bl_fifo[fifo_idx].bl_tag_reuse = false;
 				if (node->request_type ==
 					CAM_HW_CDM_BL_CB_CLIENT) {
-					spin_unlock_irqrestore(
-						&core->bl_fifo[fifo_idx].fifo_hw_lock, flag);
-					cam_cdm_notify_clients(cdm_hw,
-					CAM_CDM_CB_STATUS_BL_SUCCESS,
-					(void *)node);
-					spin_lock_irqsave(
-						&core->bl_fifo[fifo_idx].fifo_hw_lock, flag);
+					list_del_init(&node->entry);
+					list_add_tail(&node->entry, &notify_request_list);
 				} else if (node->request_type ==
 					CAM_HW_CDM_BL_CB_INTERNAL) {
 					CAM_ERR(CAM_CDM,
@@ -1302,14 +1299,8 @@ static int cam_hw_cdm_work(void *priv, void *data)
 						node,
 						node->request_type);
 				}
-				list_del_init(&node->entry);
-				if (node->bl_tag == payload->irq_data) {
-					kfree(node);
-					node = NULL;
+				if (node->bl_tag == payload->irq_data)
 					break;
-				}
-				kfree(node);
-				node = NULL;
 			}
 		}
 
@@ -1321,13 +1312,8 @@ static int cam_hw_cdm_work(void *priv, void *data)
 				entry) {
 				if (node->request_type ==
 					CAM_HW_CDM_BL_CB_CLIENT) {
-					spin_unlock_irqrestore(
-						&core->bl_fifo[fifo_idx].fifo_hw_lock, flag);
-					cam_cdm_notify_clients(cdm_hw,
-					CAM_CDM_CB_STATUS_BL_SUCCESS,
-					(void *)node);
-					spin_lock_irqsave(
-						&core->bl_fifo[fifo_idx].fifo_hw_lock, flag);
+					list_del_init(&node->entry);
+					list_add_tail(&node->entry, &notify_request_list);
 				} else if (node->request_type ==
 					CAM_HW_CDM_BL_CB_INTERNAL) {
 					CAM_ERR(CAM_CDM,
@@ -1335,14 +1321,8 @@ static int cam_hw_cdm_work(void *priv, void *data)
 						node,
 						node->request_type);
 				}
-				list_del_init(&node->entry);
-				if (node->bl_tag == payload->irq_data) {
-					kfree(node);
-					node = NULL;
+				if (node->bl_tag == payload->irq_data)
 					break;
-				}
-				kfree(node);
-				node = NULL;
 			}
 		} else {
 			CAM_INFO(CAM_CDM,
@@ -1351,6 +1331,14 @@ static int cam_hw_cdm_work(void *priv, void *data)
 		}
 end:
 		spin_unlock_irqrestore(&core->bl_fifo[fifo_idx].fifo_hw_lock, flag);
+		list_for_each_entry_safe(node, tnode, &notify_request_list, entry) {
+			cam_cdm_notify_clients(cdm_hw,
+				CAM_CDM_CB_STATUS_BL_SUCCESS,
+				(void *)node);
+			list_del_init(&node->entry);
+			kfree(node);
+			node = NULL;
+		}
 		mutex_unlock(&core->bl_fifo[payload->fifo_idx]
 			.fifo_lock);
 		mutex_unlock(&cdm_hw->hw_mutex);
