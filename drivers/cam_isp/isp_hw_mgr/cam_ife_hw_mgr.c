@@ -11231,6 +11231,11 @@ static int cam_ife_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 				CAM_IFE_CSID_SET_CSID_DEBUG,
 				&g_ife_hw_mgr.debug_cfg.csid_debug,
 				sizeof(g_ife_hw_mgr.debug_cfg.csid_debug));
+			rc = g_ife_hw_mgr.csid_devices[i]->hw_ops.process_cmd(
+				g_ife_hw_mgr.csid_devices[i]->hw_priv,
+				CAM_IFE_CSID_SET_CSID_RX_CAPTURE_VC_DT_RST,
+				&g_ife_hw_mgr.debug_cfg.csid_rx_capture_vc_dt_rst,
+				sizeof(g_ife_hw_mgr.debug_cfg.csid_rx_capture_vc_dt_rst));
 		}
 	}
 
@@ -20361,6 +20366,25 @@ DEFINE_DEBUGFS_ATTRIBUTE(cam_ife_sfe_sensor_diag_debug,
 	cam_ife_get_sfe_sensor_diag_debug,
 	cam_ife_set_sfe_sensor_diag_debug, "%16llu");
 
+static int cam_ife_set_csid_rx_capture_vc_dt_rst(void *data, u64 val)
+{
+	g_ife_hw_mgr.debug_cfg.csid_rx_capture_vc_dt_rst = val;
+	CAM_DBG(CAM_ISP, "Set CSID rx capture vc/dt/rst_stobes value :%lld", val);
+	return 0;
+}
+
+static int cam_ife_get_csid_rx_capture_vc_dt_rst(void *data, u64 *val)
+{
+	*val = g_ife_hw_mgr.debug_cfg.csid_rx_capture_vc_dt_rst;
+	CAM_DBG(CAM_ISP, "Get CSID Dyn vc/dt cap value :%lld",
+		g_ife_hw_mgr.debug_cfg.csid_rx_capture_vc_dt_rst);
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(ife_csid_rx_capture_vc_dt_rst,
+	cam_ife_get_csid_rx_capture_vc_dt_rst,
+	cam_ife_set_csid_rx_capture_vc_dt_rst, "%16llu");
+
 static int cam_ife_hw_mgr_debug_register(void)
 {
 	int rc = 0;
@@ -20405,6 +20429,9 @@ static int cam_ife_hw_mgr_debug_register(void)
 	debugfs_create_bool("disable_line_based_mode", 0644,
 		g_ife_hw_mgr.debug_cfg.dentry,
 		&g_ife_hw_mgr.debug_cfg.disable_line_based_mode);
+	debugfs_create_file("ife_csid_rx_capture_vc_dt_rst", 0644,
+		g_ife_hw_mgr.debug_cfg.dentry, NULL, &ife_csid_rx_capture_vc_dt_rst);
+
 end:
 	g_ife_hw_mgr.debug_cfg.enable_csid_recovery = 1;
 	return rc;
