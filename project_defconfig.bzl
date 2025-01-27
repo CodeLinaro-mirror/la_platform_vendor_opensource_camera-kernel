@@ -19,6 +19,7 @@ project_configs = select({
         "CONFIG_SPECTRA_SECURE_CAMNOC_REG_UPDATE=y",
     ],
     ":seraph": [],
+    ":neo61": [],
 })
 
 def get_project_defconfig(target, variant):

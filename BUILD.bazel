@@ -168,3 +168,7 @@ config_setting(
     name = "seraph",
     flag_values = {":project_name": "seraph"},
 )
+config_setting(
+    name = "neo61",
+    flag_values = {":project_name": "neo61"},
+)
