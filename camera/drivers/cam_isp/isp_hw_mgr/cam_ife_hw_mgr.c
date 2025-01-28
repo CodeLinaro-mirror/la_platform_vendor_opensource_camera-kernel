@@ -2287,7 +2287,8 @@ int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 					"ctx_idx: %u i = %d, vfe_out_res_id = %d, out_port: %d",
 					c_ctx->ctx_index, i, vfe_out_res_id, out_port->res_type);
 				continue;
-			}
+			} else
+				res_id = out_port->res_type & 0xFF;
 		}
 
 		vfe_acquire.vfe_out.cdm_ops = c_ctx->cdm_ops;
@@ -2343,7 +2344,6 @@ int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 		goto err;
 	}
 
-	c_ctx->vfe_out_map[res_id] = c_ctx->num_acq_vfe_out;
 	if (per_port_acquire)
 		ife_out_res =
 		&g_ife_sns_grp_cfg.grp_cfg[grp_index]->res_list_ife_out[vfe_out_res_id & 0xFF];
@@ -2357,6 +2357,7 @@ int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 	if (per_port_acquire) {
 		ife_out_res->linked = false;
 	} else {
+		c_ctx->vfe_out_map[res_id] = c_ctx->num_acq_vfe_out;
 		ife_src_res->num_children++;
 		c_ctx->num_acq_vfe_out++;
 	}
@@ -4554,14 +4555,25 @@ int cam_ife_hw_mgr_acquire_res_ife_csid_rdi(
 	bool                                 per_port_acquire)
 {
 	int                                    rc = 0;
-	int                                    i;
+	int                                    i, j;
 	struct cam_isp_out_port_generic_info  *out_port = NULL;
 	struct cam_ife_hw_concrete_ctx        *c_ctx = ife_ctx->concr_ctx;
 	enum cam_ife_pix_path_res_id           res_id = CAM_IFE_PIX_PATH_RES_MAX;
 	uint32_t                               out_res_count = 0;
+	uint32_t                               rdi_yuv_conversion_stream_cnt = 0;
+	struct cam_ife_hw_mgr_stream_grp_config *grp_cfg;
 
 	if (in_port->per_port_en && (index != CAM_IFE_STREAM_GRP_INDEX_NONE)) {
-		out_res_count = g_ife_sns_grp_cfg.grp_cfg[index]->rdi_stream_cfg_cnt;
+		out_res_count = (g_ife_sns_grp_cfg.grp_cfg[index]->rdi_stream_cfg_cnt -
+			g_ife_sns_grp_cfg.grp_cfg[index]->rdi_yuv_conversion_stream_cnt);
+
+		rdi_yuv_conversion_stream_cnt =
+			g_ife_sns_grp_cfg.grp_cfg[index]->rdi_yuv_conversion_stream_cnt;
+
+		grp_cfg = g_ife_sns_grp_cfg.grp_cfg[index];
+
+		CAM_DBG(CAM_ISP, "rdi_yuv_conversion_stream_cnt:%d out_res_count:%d",
+			rdi_yuv_conversion_stream_cnt, out_res_count);
 	} else {
 		out_res_count = in_port->num_out_res;
 	}
@@ -4576,8 +4588,19 @@ int cam_ife_hw_mgr_acquire_res_ife_csid_rdi(
 			continue;
 		} else {
 			res_id = CAM_IFE_PIX_PATH_RES_RDI_0 + i;
+			if (res_id >= CAM_IFE_PIX_PATH_RES_RDI_3 &&
+				res_id <= CAM_IFE_PIX_PATH_RES_RDI_5) {
+				res_id = CAM_IFE_PIX_PATH_RES_RDI_1 + i;
+
+				if (res_id == CAM_IFE_PIX_PATH_RES_RDI_5) {
+					CAM_ERR(CAM_ISP, "Unsupported Usecase");
+					rc = -EINVAL;
+					break;
+				}
+			}
 		}
 
+		CAM_DBG(CAM_ISP, "Acquire Ctx: %u Res %d", c_ctx->ctx_index, res_id);
 		rc  = cam_ife_hw_mgr_acquire_csid_rdi_util(ife_ctx,
 				in_port, res_id, out_port,
 				index);
@@ -4587,6 +4610,28 @@ int cam_ife_hw_mgr_acquire_res_ife_csid_rdi(
 			break;
 		}
 		*acquired_rdi_res |= BIT(res_id);
+	}
+
+	if (per_port_acquire) {
+		if (rdi_yuv_conversion_stream_cnt) {
+			for (i = 0; i < rdi_yuv_conversion_stream_cnt; i++) {
+				res_id = CAM_IFE_PIX_PATH_RES_RDI_3 + i;
+				if (res_id > CAM_IFE_PIX_PATH_RES_RDI_3)
+					res_id = CAM_IFE_PIX_PATH_RES_RDI_5;
+
+				CAM_DBG(CAM_ISP, "Acquire Ctx: %u Res %d",
+					c_ctx->ctx_index, res_id);
+				rc  = cam_ife_hw_mgr_acquire_csid_rdi_util(ife_ctx,
+						in_port, res_id, out_port,
+						index);
+				if (rc) {
+					CAM_ERR(CAM_ISP, "Ctx: %u Res %d acquire failed rc %d",
+						c_ctx->ctx_index, res_id, rc);
+					break;
+				}
+				*acquired_rdi_res |= BIT(res_id);
+			}
+		}
 	}
 
 	CAM_DBG(CAM_ISP, "Ctx: %u  rdi: %d", c_ctx->ctx_index, res_id);
@@ -5460,7 +5505,7 @@ static int cam_ife_mgr_acquire_hw_for_ctx(
 	if (in_port->per_port_en && c_ctx->ctx_type == CAM_IFE_CTX_TYPE_NONE &&
 		!(bool)in_port->usage_type) {
 		rc = cam_ife_hw_mgr_acquire_res_stream_grp(ife_ctx, in_port,
-			acquired_hw_id, acquired_hw_path, crop_enable);
+			acquired_hw_id, acquired_hw_path, acquired_rdi_res, crop_enable);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Can not support per port feature");
 			goto err;

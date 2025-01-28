@@ -53,7 +53,7 @@ int cam_ife_hw_mgr_update_vc_dt_stream_grp(struct cam_isp_hw_mgr_res *isp_res, i
 
 int cam_ife_hw_mgr_acquire_res_stream_grp(struct cam_ife_hw_mgr_ctx *ife_ctx,
 		struct cam_isp_in_port_generic_info *in_port, uint32_t *acquired_hw_id,
-		uint32_t *acquired_hw_path,	bool crop_enable);
+		uint32_t *acquired_hw_path, uint32_t *acquired_rdi_res, bool crop_enable);
 
 int cam_ife_mgr_hw_validate_vc_dt_stream_grp(struct cam_isp_in_port_generic_info *in_port,
 		uint32_t vc, uint32_t dt);

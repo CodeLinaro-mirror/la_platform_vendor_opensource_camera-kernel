@@ -329,8 +329,8 @@ static int cam_vfe_top_ver4_enable_irq(
 {
 	struct cam_isp_resource_node   *vfe_res;
 	struct cam_vfe_mux_ver4_data   *rsrc_data;
-	int                             rc = 0;
-	struct cam_csid_res_irq_info   *irq_args;
+	int                             i, rc = 0;
+	struct cam_vfe_res_irq_info    *irq_args;
 	uint32_t                        err_irq_mask[CAM_IFE_IRQ_REGISTERS_MAX];
 
 	if (!res_irq_mask) {
@@ -338,62 +338,64 @@ static int cam_vfe_top_ver4_enable_irq(
 		return -EINVAL;
 	}
 
-	irq_args = (struct cam_csid_res_irq_info *)res_irq_mask;
-	vfe_res = *irq_args->node_res;
+	irq_args = (struct cam_vfe_res_irq_info *)res_irq_mask;
+	for (i = 0; i < irq_args->num_res; i++) {
+		vfe_res = irq_args->node_res[i];
 
-	if (vfe_res->res_state != CAM_ISP_RESOURCE_STATE_STREAMING) {
-		/* possible reason can be irqs are already disabled */
-		CAM_DBG(CAM_ISP, "Error, Invalid camif res res_state:%d",
-			vfe_res->res_state);
-		return 0;
-	}
-
-	rsrc_data = (struct cam_vfe_mux_ver4_data *)vfe_res->res_priv;
-
-	/* Perport works with csid only.
-	 * No need to subscribe frame irq at ife side, it is already taken care from csid
-	 */
-	err_irq_mask[CAM_IFE_IRQ_CAMIF_REG_STATUS0] = rsrc_data->reg_data->error_irq_mask;
-
-	if (!vfe_res->is_per_port_acquire && !rsrc_data->irq_err_handle &&
-		!vfe_res->is_per_port_start) {
-		rsrc_data->irq_err_handle = cam_irq_controller_subscribe_irq(
-			rsrc_data->vfe_irq_controller,
-			CAM_IRQ_PRIORITY_0,
-			err_irq_mask,
-			vfe_res,
-			cam_vfe_ver4_err_irq_top_half,
-			vfe_res->bottom_half_handler,
-			vfe_res->tasklet_info,
-			&tasklet_bh_api,
-			CAM_IRQ_EVT_GROUP_0);
-
-		if (rsrc_data->irq_err_handle < 1) {
-			CAM_ERR(CAM_ISP, "VFE:%u Error IRQ handle subscribe failure",
-				vfe_res->hw_intf->hw_idx);
-			rc = -ENOMEM;
-			rsrc_data->irq_err_handle = 0;
+		if (vfe_res->res_state != CAM_ISP_RESOURCE_STATE_STREAMING) {
+			/* possible reason can be irqs are already disabled */
+			CAM_DBG(CAM_ISP, "Error, Invalid camif res res_state:%d",
+				vfe_res->res_state);
+			return 0;
 		}
-	} else {
-		if (rsrc_data->irq_err_handle) {
-			rc = cam_irq_controller_update_irq(
-				rsrc_data->vfe_irq_controller,
-				rsrc_data->irq_err_handle,
-				irq_args->enable_irq,
-				err_irq_mask);
 
-			if (rc) {
-				CAM_ERR(CAM_ISP, "Error IRQ handle update failure");
+		rsrc_data = (struct cam_vfe_mux_ver4_data *)vfe_res->res_priv;
+
+		/* Perport works with csid only.
+		 * No need to subscribe frame irq at ife side, it is already taken care from csid
+		 */
+		err_irq_mask[CAM_IFE_IRQ_CAMIF_REG_STATUS0] = rsrc_data->reg_data->error_irq_mask;
+
+		if (!vfe_res->is_per_port_acquire && !rsrc_data->irq_err_handle &&
+			!vfe_res->is_per_port_start) {
+			rsrc_data->irq_err_handle = cam_irq_controller_subscribe_irq(
+				rsrc_data->vfe_irq_controller,
+				CAM_IRQ_PRIORITY_0,
+				err_irq_mask,
+				vfe_res,
+				cam_vfe_ver4_err_irq_top_half,
+				vfe_res->bottom_half_handler,
+				vfe_res->tasklet_info,
+				&tasklet_bh_api,
+				CAM_IRQ_EVT_GROUP_0);
+
+			if (rsrc_data->irq_err_handle < 1) {
+				CAM_ERR(CAM_ISP, "VFE:%u Error IRQ handle subscribe failure",
+					vfe_res->hw_intf->hw_idx);
 				rc = -ENOMEM;
+				rsrc_data->irq_err_handle = 0;
 			}
 		} else {
-			CAM_ERR(CAM_ISP, "Frame IRQ Err handle not found");
-		}
-	}
+			if (rsrc_data->irq_err_handle) {
+				rc = cam_irq_controller_update_irq(
+					rsrc_data->vfe_irq_controller,
+					rsrc_data->irq_err_handle,
+					irq_args->enable_irq,
+					err_irq_mask);
 
-	CAM_DBG(CAM_ISP, "VFE:%d Res: %s irq enable update done err_irq_mask:0x%x",
-		vfe_res->hw_intf->hw_idx,
-		vfe_res->res_name, err_irq_mask[CAM_IFE_IRQ_CAMIF_REG_STATUS0]);
+				if (rc) {
+					CAM_ERR(CAM_ISP, "Error IRQ handle update failure");
+					rc = -ENOMEM;
+				}
+			} else {
+				CAM_ERR(CAM_ISP, "Frame IRQ Err handle not found");
+			}
+		}
+
+		CAM_DBG(CAM_ISP, "VFE:%d Res: %s irq enable update done err_irq_mask:0x%x",
+			vfe_res->hw_intf->hw_idx,
+			vfe_res->res_name, err_irq_mask[CAM_IFE_IRQ_CAMIF_REG_STATUS0]);
+		}
 
 	return rc;
 }
