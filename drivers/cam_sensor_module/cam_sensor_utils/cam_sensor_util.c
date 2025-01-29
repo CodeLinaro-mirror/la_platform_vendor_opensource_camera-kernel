@@ -65,6 +65,26 @@ int32_t cam_sensor_util_get_current_qtimer_ns(uint64_t *qtime_ns)
 	return rc;
 }
 
+int32_t delete_i2c_event_settings(struct i2c_settings_array *i2c_array)
+{
+	struct i2c_settings_list *i2c_list = NULL, *i2c_next = NULL;
+	int32_t rc = 0;
+
+	if (i2c_array == NULL) {
+		CAM_ERR(CAM_SENSOR, "FATAL:: Invalid argument");
+		return -EINVAL;
+	}
+	list_for_each_entry_safe(i2c_list, i2c_next,
+		&(i2c_array->list_head), list) {
+		kvfree(i2c_list->i2c_settings.reg_setting);
+		list_del(&(i2c_list->list));
+		kvfree(i2c_list);
+	}
+	i2c_array->is_settings_valid = 0;
+
+	return rc;
+}
+
 int32_t delete_request(struct i2c_settings_array *i2c_array)
 {
 	struct i2c_settings_list *i2c_list = NULL, *i2c_next = NULL;
@@ -74,7 +94,6 @@ int32_t delete_request(struct i2c_settings_array *i2c_array)
 		CAM_ERR(CAM_SENSOR, "FATAL:: Invalid argument");
 		return -EINVAL;
 	}
-
 	list_for_each_entry_safe(i2c_list, i2c_next,
 		&(i2c_array->list_head), list) {
 		kvfree(i2c_list->i2c_settings.reg_setting);
