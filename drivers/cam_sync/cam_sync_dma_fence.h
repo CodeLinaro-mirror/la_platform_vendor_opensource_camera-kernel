@@ -13,6 +13,7 @@
 
 #include "cam_sync.h"
 #include "cam_debug_util.h"
+#include "cam_compat.h"
 
 #define CAM_DMA_FENCE_MAX_FENCES  128
 #define CAM_DMA_FENCE_NAME_LEN    128

@@ -91,11 +91,12 @@ static int __cam_synx_obj_release(int32_t row_idx)
 	spin_lock_bh(&g_cam_synx_obj_dev->row_spinlocks[row_idx]);
 	row = &g_cam_synx_obj_dev->rows[row_idx];
 
-	if (row->state == CAM_SYNX_OBJ_STATE_ACTIVE && NULL != row->session_hdl) {
+	if (row->state == CAM_SYNX_OBJ_STATE_ACTIVE && (row->session_hdl == NULL)) {
 		CAM_WARN(CAM_SYNX,
 			"Unsignaled synx obj being released name: %s synx_obj:%d",
 			row->name, row->synx_obj);
-		synx_signal(g_cam_synx_obj_dev->session_handle, row->synx_obj,
+		synx_signal(g_cam_synx_obj_dev->session_handle,
+			row->synx_obj,
 			SYNX_STATE_SIGNALED_CANCEL);
 	}
 
@@ -103,7 +104,7 @@ static int __cam_synx_obj_release(int32_t row_idx)
 		"Releasing synx_obj: %d[%s] row_idx: %u",
 		row->synx_obj, row->name, row_idx);
 
-	synx_release(g_cam_synx_obj_dev->session_handle,
+	synx_release((row->session_hdl ? row->session_hdl : g_cam_synx_obj_dev->session_handle),
 		row->synx_obj);
 
 	/* deinit row */
@@ -769,8 +770,8 @@ void cam_synx_obj_close(void)
 		/* Signal and release the synx obj */
 		if (row->state != CAM_SYNX_OBJ_STATE_SIGNALED)
 			__cam_synx_signal_util(NULL, row->synx_obj, SYNX_STATE_SIGNALED_CANCEL);
-		synx_release(g_cam_synx_obj_dev->session_handle,
-			row->synx_obj);
+		synx_release((row->session_hdl ? row->session_hdl :
+			g_cam_synx_obj_dev->session_handle), row->synx_obj);
 
 		memset(row, 0, sizeof(struct cam_synx_obj_row));
 		clear_bit(i, g_cam_synx_obj_dev->bitmap);

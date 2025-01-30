@@ -240,8 +240,6 @@ static int cam_sync_util_release_synx_dma(int32_t sync_obj)
 
 		list_for_each_entry_safe(ext_fence_info, tmp, &row->ext_fences, list) {
 			if (ext_fence_info->dma_fence_info.is_valid) {
-				cam_dma_fence_get_put_ref(false,
-					ext_fence_info->dma_fence_info.dma_fence_row_idx);
 				release_params.use_row_idx = true;
 				release_params.u.dma_row_idx =
 					ext_fence_info->dma_fence_info.dma_fence_row_idx;

@@ -629,6 +629,7 @@ static int __cam_dma_fence_release(int32_t dma_row_idx)
 
 	/* putref on dma fence */
 	dma_fence_put(dma_fence);
+	cam_close_fd(current->files, row->fd);
 
 	/* deinit row */
 	memset(row, 0, sizeof(struct cam_dma_fence_row));
