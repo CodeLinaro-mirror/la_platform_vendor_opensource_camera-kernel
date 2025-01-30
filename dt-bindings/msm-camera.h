@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __MSM_CAMERA_H
@@ -102,6 +102,12 @@
 #define CCI_MASTER_0         0
 #define CCI_MASTER_1         1
 #define CCI_MASTER_MAX       2
+
+/* AON Camera IDs*/
+#define AON_CAM1             0
+#define AON_CAM2             1
+#define MAX_AON_CAM          2
+#define NOT_AON_CAM          255
 
 /* Port index for BW voting */
 #define CAM_CPAS_PORT_AXI_PORT    0

@@ -1212,7 +1212,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			goto free_power_settings;
 		}
 
-		if (s_ctrl->is_aon_user) {
+		if (s_ctrl->aon_camera_id != NOT_AON_CAM) {
 			CAM_DBG(CAM_SENSOR,
 				"Setup for Main Camera with csiphy index: %d",
 				s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY]);
@@ -1269,7 +1269,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			}
 		}
 
-		if (s_ctrl->is_aon_user) {
+		if (s_ctrl->aon_camera_id != NOT_AON_CAM) {
 			CAM_DBG(CAM_SENSOR,
 				"Setup for AON FW with csiphy index: %d",
 				s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY]);

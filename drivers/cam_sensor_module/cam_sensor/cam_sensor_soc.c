@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -248,16 +248,9 @@ static int32_t cam_sensor_driver_get_dt_data(struct cam_sensor_ctrl_t *s_ctrl)
 		sensordata->pos_yaw = 360;
 	}
 
-	if (!of_property_read_bool(of_node, "aon-user")) {
-		CAM_DBG(CAM_SENSOR,
-			"SENSOR cell_idx: %d not use for AON usecase",
-			s_ctrl->soc_info.index);
-		s_ctrl->is_aon_user = false;
-	} else {
-		CAM_DBG(CAM_SENSOR,
-			"SENSOR cell_idx: %d is user for AON usecase",
-			s_ctrl->soc_info.index);
-		s_ctrl->is_aon_user = true;
+	if (of_property_read_u8(of_node, "aon-camera-id", &s_ctrl->aon_camera_id)) {
+		CAM_DBG(CAM_SENSOR, "cell_idx: %d is not used for AON usecase", soc_info->index);
+		s_ctrl->aon_camera_id = NOT_AON_CAM;
 	}
 
 	if (of_property_read_bool(of_node, "hw_no_io_ops")) {
@@ -283,7 +276,7 @@ static int32_t cam_sensor_driver_get_dt_data(struct cam_sensor_ctrl_t *s_ctrl)
 
 	rc = cam_sensor_util_aon_registration(
 		s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY],
-		s_ctrl->is_aon_user);
+		s_ctrl->aon_camera_id);
 	if (rc) {
 		CAM_ERR(CAM_SENSOR, "Aon registration failed, rc: %d", rc);
 		goto FREE_SENSOR_DATA;

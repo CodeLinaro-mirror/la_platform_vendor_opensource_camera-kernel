@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_SENSOR_DEV_H_
@@ -114,7 +114,7 @@ struct cam_sensor_dev_res_info {
  * @last_flush_req: Last request to flush
  * @pipeline_delay: Sensor pipeline delay
  * @sensor_name: Sensor name
- * @is_aon_user: To determine whether sensor is AON user or not
+ * @aon_camera_id: AON Camera ID associated with this sensor
  * @hw_no_ops: To determine whether HW operations need to be disabled
  * @sof_notify_handler: handler for sof notification
  * @en_perframe_reg_dump: enable perframe register dump flag
@@ -158,7 +158,7 @@ struct cam_sensor_ctrl_t {
 	uint16_t                       pipeline_delay;
 	char                           sensor_name[
 		CAM_SENSOR_NAME_MAX_SIZE];
-	bool                           is_aon_user;
+	uint8_t                        aon_camera_id;
 	bool                           hw_no_io_ops;
 	bool                           hw_no_ops;
 	bool                           hw_no_probe_pw_ops;

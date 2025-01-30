@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_CSIPHY_2_1_3_HWREG_H_
@@ -10,7 +10,8 @@
 #include "../cam_csiphy_dev.h"
 
 struct cam_csiphy_aon_sel_params_t aon_cam_select_params_2_1_3 = {
-	.aon_cam_sel_offset = 0x01E0,
+	.aon_cam_sel_offset[0] = 0x01E0,
+	.aon_cam_sel_offset[1] = 0,
 	.cam_sel_mask = BIT(0),
 	.mclk_sel_mask = BIT(8),
 };
