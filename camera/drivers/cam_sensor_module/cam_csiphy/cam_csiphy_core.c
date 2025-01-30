@@ -330,6 +330,7 @@ void cam_csiphy_query_cap(struct csiphy_device *csiphy_dev,
 	csiphy_cap->slot_info = soc_info->index;
 	csiphy_cap->version = csiphy_dev->hw_version;
 	csiphy_cap->clk_lane = csiphy_dev->clk_lane;
+	csiphy_cap->reserved = csiphy_dev->is_aggregator_rx;
 }
 
 int cam_csiphy_dump_status_reg(struct csiphy_device *csiphy_dev)
@@ -1579,6 +1580,10 @@ void cam_csiphy_shutdown(struct csiphy_device *csiphy_dev)
 	}
 
 	csiphy_dev->ref_count = 0;
+	for (i = 0; i < csiphy_dev->session_max_device_support; i++) {
+		csiphy_dev->lanes_assigned[i].lane_assign = -1;
+		csiphy_dev->lanes_assigned[i].lane_assign_cnt = 0;
+	}
 	csiphy_dev->lanes_enabled = 0x0;
 	csiphy_dev->acquire_count = 0;
 	csiphy_dev->start_dev_count = 0;
@@ -1660,6 +1665,15 @@ static void cam_csiphy_update_lane_assign_info(
 {
 	int i = 0;
 
+	CAM_DBG(CAM_CSIPHY,
+		"acquire_cnt: %d phy_idx: %d offset: %d lane_assign: 0x%x, lanes_enabled: 0x%x max_dev_support: %d",
+		csiphy->acquire_count,
+		csiphy->soc_info.index,
+		index,
+		csiphy->csiphy_info[index].lane_assign,
+		csiphy->lanes_enabled,
+		csiphy->session_max_device_support);
+
 	if (enable) {
 		for (i = 0; i < csiphy->session_max_device_support; i++) {
 			if (csiphy->lanes_assigned[i].lane_assign
@@ -1684,7 +1698,7 @@ static void cam_csiphy_update_lane_assign_info(
 				== csiphy->csiphy_info[index].lane_assign) {
 				csiphy->lanes_assigned[i].lane_assign_cnt--;
 				if (csiphy->lanes_assigned[i].lane_assign_cnt == 0) {
-					csiphy->lanes_assigned[i].lane_assign = 0;
+					csiphy->lanes_assigned[i].lane_assign = -1;
 					cam_csiphy_update_lane_selection(csiphy, index, false);
 				}
 				break;
@@ -1692,11 +1706,17 @@ static void cam_csiphy_update_lane_assign_info(
 		}
 	}
 
-	CAM_DBG(CAM_CSIPHY,
-		"lane_assign_cnt: 0%d, lane_assign: 0x%x, lanes_enabled: 0x%x",
-		csiphy->lanes_assigned[i].lane_assign_cnt,
-		csiphy->lanes_assigned[i].lane_assign,
-		csiphy->lanes_enabled);
+
+	if (i < csiphy->session_max_device_support && i >= 0) {
+		CAM_DBG(CAM_CSIPHY,
+			"lane_assign_cnt: 0%d, lane_assign: 0x%x, lanes_enabled: 0x%x",
+			csiphy->lanes_assigned[i].lane_assign_cnt,
+			csiphy->lanes_assigned[i].lane_assign,
+			csiphy->lanes_enabled);
+	} else {
+		CAM_ERR(CAM_CSIPHY,
+			"Array out of bounds: > i: %d", i);
+	}
 }
 
 static int __csiphy_cpas_configure_for_main_or_aon(
@@ -2167,7 +2187,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			csiphy_dev->combo_mode);
 		if ((csiphy_dev->csiphy_state == CAM_CSIPHY_START) &&
 			(csiphy_dev->combo_mode == 0) &&
-			(csiphy_dev->acquire_count > 0)) {
+			(csiphy_dev->acquire_count > 0) && (csiphy_dev->is_aggregator_rx == 0)) {
 			CAM_ERR(CAM_CSIPHY,
 				"NonComboMode does not support multiple acquire: Acquire_count: %d",
 				csiphy_dev->acquire_count);
@@ -2359,16 +2379,9 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 
 		param = &csiphy_dev->csiphy_info[offset];
 
+		cam_csiphy_update_lane_assign_info(csiphy_dev, offset, false);
+
 		if (--csiphy_dev->start_dev_count) {
-			if (csiphy_dev->is_aggregator_rx) {
-				cam_csiphy_update_lane_assign_info(csiphy_dev, offset, false);
-				CAM_INFO(CAM_CSIPHY,
-					"CAM_STOP_PHYDEV: %d dev_cnt: %u, slot: %d",
-					soc_info->index,
-					csiphy_dev->start_dev_count,
-					offset);
-				goto release_mutex;
-			}
 #ifdef CONFIG_SECURE_CAMERA
 			if (param->secure_mode)
 				cam_csiphy_program_secure_mode(csiphy_dev,
@@ -2376,8 +2389,6 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 #endif
 			param->secure_mode = CAM_SECURE_MODE_NON_SECURE;
 			param->csiphy_cpas_cp_reg_mask = 0;
-
-			cam_csiphy_update_lane_selection(csiphy_dev, offset, false);
 
 			if (soc_info->is_clk_drv_en && param->use_hw_client_voting) {
 				rc = cam_soc_util_set_src_clk_rate(soc_info, param->conn_csid_idx,
@@ -2601,9 +2612,10 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			goto release_mutex;
 		}
 
+		cam_csiphy_update_lane_assign_info(csiphy_dev, offset, true);
+
 		if (csiphy_dev->start_dev_count) {
 			if (csiphy_dev->is_aggregator_rx) {
-				cam_csiphy_update_lane_assign_info(csiphy_dev, offset, true);
 				if ((csiphy_dev->lanes_enabled
 					& csiphy_dev->csiphy_info[offset].lane_enable)
 					== csiphy_dev->csiphy_info[offset].lane_enable) {
