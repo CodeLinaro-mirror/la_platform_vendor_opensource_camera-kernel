@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #if !defined(_CAM_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
@@ -285,7 +285,7 @@ TRACE_EVENT(cam_ul_fastpath_bufdone,
 		__entry->link_hdl = link_hdl;
 	),
 	TP_printk(
-		"%8s: Ctx=%u ts=0x%x  link_hdl=0x%x",
+		"%8s: Ctx=%u ts=%llu  link_hdl=0x%x",
 			__get_str(entity), __entry->id, __entry->ts, __entry->link_hdl
 	)
 );
@@ -308,7 +308,7 @@ TRACE_EVENT(cam_ul_fastpath_retrieve,
 		__entry->link_hdl = link_hdl;
 	),
 	TP_printk(
-		"%8s: Ctx=%u setting=%u ts=0x%x  link_hdl=0x%x",
+		"%8s: Ctx=%u setting=%u ts=%llu  link_hdl=0x%x",
 			__get_str(entity), __entry->id, __entry->setting, __entry->ts,
 			__entry->link_hdl
 	)
