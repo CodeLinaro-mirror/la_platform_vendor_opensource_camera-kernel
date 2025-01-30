@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_COMPAT_H_
@@ -145,5 +145,8 @@ int cam_smmu_fetch_csf_version(struct cam_csf_version *csf_version);
 unsigned long cam_update_dma_map_attributes(unsigned long attr);
 
 size_t cam_align_dma_buf_size(size_t len);
+
+int cam_mem_buf_dma_buf_get_memparcel_hdl(struct dma_buf *dmabuf,
+	uint32_t *smmu_proxy_buf_hdl, struct cam_csf_version *csf_version);
 
 #endif /* _CAM_COMPAT_H_ */
