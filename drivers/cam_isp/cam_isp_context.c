@@ -10183,6 +10183,7 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 	struct cam_isp_ctx_req          *req_isp = NULL;
 	struct cam_isp_context          *ctx_isp =
 		(struct cam_isp_context *) ctx->ctx_priv;
+	struct cam_req_mgr_no_crm_notify_device notify_dev = {0};
 
 	if (cmd->session_handle != ctx->session_hdl ||
 		cmd->dev_handle != ctx->dev_hdl) {
@@ -10247,6 +10248,14 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 	start_isp.hw_config.priv  = &req_isp->hw_update_data;
 
 	req_isp->applied_crop_req_id = 0;
+
+	notify_dev.link_hdl = ctx->link_hdl;
+	notify_dev.dev_hdl = ctx->dev_hdl;
+	notify_dev.command = CAM_SUBDEV_MESSAGE_GET_SENSOR_PD;
+	notify_dev.data = &ctx_isp->sensor_pd;
+
+	if (ctx->ctx_crm_intf->no_crm_notify_dev(CAM_REQ_MGR_DEVICE_SENSOR, &notify_dev))
+		CAM_ERR(CAM_ISP, "Failed to get sensor pd ctx %d", ctx->ctx_id);
 
 	ctx_isp->last_applied_req_id = req->request_id;
 

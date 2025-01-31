@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2018,2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_SENSOR_CORE_H_
@@ -106,6 +106,14 @@ int cam_sensor_no_crm_pause_apply(
  */
 int cam_sensor_no_crm_add_req(int32_t dev_hdl, struct cam_packet *packet,
 	struct port_pattern_period *port_enable_pattern_period);
+
+/**
+ * @notify_dev: Callback to notify dev to process cmd
+ *
+ * This API request dev to process requested command
+ */
+int cam_sensor_no_crm_notify_dev(uint32_t dev_hdl,
+	struct cam_req_mgr_no_crm_notify_device *notify_subdev);
 
 /**
  * @add: Add request to the per frame queue

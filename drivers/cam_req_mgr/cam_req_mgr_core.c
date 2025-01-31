@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -4218,7 +4218,7 @@ static int cam_req_mgr_no_crm_notify_devices(u32 device_id_mask,
 
 		/* send notification for device id mask devices */
 		if (dev->dev_info.dev_id  & device_id_mask) {
-			if (!dev->no_crm_ops->notify_dev) {
+			if (!dev->no_crm_ops || !dev->no_crm_ops->notify_dev) {
 				CAM_ERR(CAM_CRM,
 				"Failed notify sub device  for \"%s\" device_id 0x%x",
 				dev->dev_info.name, device_id_mask);
