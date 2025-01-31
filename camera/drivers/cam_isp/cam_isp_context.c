@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -1126,6 +1126,7 @@ static int __cam_isp_ctx_enqueue_init_request(
 	struct cam_isp_prepare_hw_update_data *hw_update_data;
 	struct cam_isp_fcg_config_info        *fcg_info_old;
 	struct cam_isp_fcg_config_info        *fcg_info_new;
+	struct cam_kmd_buf_info *kmd_buff_old = NULL;
 
 	spin_lock_bh(&ctx->lock);
 	if (list_empty(&ctx->pending_req_list)) {
@@ -1181,6 +1182,9 @@ static int __cam_isp_ctx_enqueue_init_request(
 			memcpy(&req_old->pf_data, &req->pf_data,
 				sizeof(struct cam_hw_mgr_pf_request_info));
 
+			kmd_buff_old = &(req_isp_old->hw_update_data.kmd_cmd_buff_info);
+			cam_mem_put_kref(kmd_buff_old->handle);
+
 			if (req_isp_new->hw_update_data.num_reg_dump_buf) {
 				req_update_new = &req_isp_new->hw_update_data;
 				req_update_old = &req_isp_old->hw_update_data;
@@ -1235,7 +1239,7 @@ static int __cam_isp_ctx_enqueue_init_request(
 			req_old->request_id = req->request_id;
 			list_splice_init(&req->buf_tracker, &req_old->buf_tracker);
 
-			__cam_isp_ctx_move_req_to_free_list(ctx, req);
+			list_add_tail(&req->list, &ctx->free_req_list);
 		}
 	} else {
 		CAM_WARN(CAM_ISP,
