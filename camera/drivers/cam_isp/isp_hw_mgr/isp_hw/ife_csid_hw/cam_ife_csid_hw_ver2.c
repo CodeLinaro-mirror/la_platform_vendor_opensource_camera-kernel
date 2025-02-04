@@ -156,6 +156,7 @@ static void cam_ife_csid_ver2_print_camif_timestamps(
 		case CAM_IFE_PIX_PATH_RES_RDI_2:
 		case CAM_IFE_PIX_PATH_RES_RDI_3:
 		case CAM_IFE_PIX_PATH_RES_RDI_4:
+		case CAM_IFE_PIX_PATH_RES_RDI_5:
 			if (path_cfg->handle_camif_irq &&
 				res->is_rdi_primary_res)
 				found = true;
@@ -1547,7 +1548,7 @@ void cam_ife_csid_hw_ver2_rdi_line_buffer_conflict_handler(
 
 	memset(log_buf, 0x0, sizeof(uint8_t) * CAM_IFE_CSID_LOG_BUF_LEN);
 
-	for (i = CAM_IFE_PIX_PATH_RES_RDI_0; i < CAM_IFE_PIX_PATH_RES_RDI_4;
+	for (i = CAM_IFE_PIX_PATH_RES_RDI_0; i <= CAM_IFE_PIX_PATH_RES_RDI_5;
 		i++) {
 		path_reg = csid_reg->path_reg[i - CAM_IFE_PIX_PATH_RES_RDI_0];
 
@@ -3013,6 +3014,7 @@ static int cam_ife_csid_hw_ver2_config_path_data(
 	case CAM_IFE_PIX_PATH_RES_RDI_2:
 	case CAM_IFE_PIX_PATH_RES_RDI_3:
 	case CAM_IFE_PIX_PATH_RES_RDI_4:
+	case CAM_IFE_PIX_PATH_RES_RDI_5:
 		path_cfg->csid_out_unpack_msb = cam_ife_csid_hw_ver2_need_unpack_mipi(csid_hw,
 			reserve, path_reg, path_cfg->out_format);
 
@@ -3168,6 +3170,7 @@ static int cam_ife_csid_ver_config_camif(
 	case CAM_IFE_PIX_PATH_RES_RDI_2:
 	case CAM_IFE_PIX_PATH_RES_RDI_3:
 	case CAM_IFE_PIX_PATH_RES_RDI_4:
+	case CAM_IFE_PIX_PATH_RES_RDI_5:
 		path_cfg->epoch_cfg = (path_cfg->end_line  - path_cfg->start_line) *
 			csid_reg->cmn_reg->epoch_factor / 100;
 
@@ -3963,6 +3966,7 @@ cam_ife_csid_ver2_get_path_bh(int res_id)
 	case CAM_IFE_PIX_PATH_RES_RDI_2:
 	case CAM_IFE_PIX_PATH_RES_RDI_3:
 	case CAM_IFE_PIX_PATH_RES_RDI_4:
+	case CAM_IFE_PIX_PATH_RES_RDI_5:
 		return cam_ife_csid_ver2_rdi_bottom_half;
 	case CAM_IFE_PIX_PATH_RES_IPP:
 		return cam_ife_csid_ver2_ipp_bottom_half;
@@ -4421,6 +4425,7 @@ static int cam_ife_csid_ver2_enable_path(
 	case CAM_IFE_PIX_PATH_RES_RDI_2:
 	case CAM_IFE_PIX_PATH_RES_RDI_3:
 	case CAM_IFE_PIX_PATH_RES_RDI_4:
+	case CAM_IFE_PIX_PATH_RES_RDI_5:
 		if (csid_hw->flags.offline_mode)
 			return 0;
 		break;
@@ -5333,6 +5338,7 @@ int cam_ife_csid_ver2_deinit_hw(void *hw_priv,
 	case CAM_IFE_PIX_PATH_RES_RDI_2:
 	case CAM_IFE_PIX_PATH_RES_RDI_3:
 	case CAM_IFE_PIX_PATH_RES_RDI_4:
+	case CAM_IFE_PIX_PATH_RES_RDI_5:
 		rc = cam_ife_csid_ver2_disable_path(true, csid_hw, res);
 		break;
 	default:
@@ -5516,6 +5522,7 @@ int cam_ife_csid_ver2_start(void *hw_priv, void *args,
 		case CAM_IFE_PIX_PATH_RES_RDI_2:
 		case CAM_IFE_PIX_PATH_RES_RDI_3:
 		case CAM_IFE_PIX_PATH_RES_RDI_4:
+		case CAM_IFE_PIX_PATH_RES_RDI_5:
 			rc = cam_ife_csid_ver2_program_rdi_path(csid_hw, res, &rup_aup_mask);
 			if (rc)
 				goto end;
@@ -6892,6 +6899,11 @@ static int cam_ife_csid_ver2_irq_inject(
 	case CAM_ISP_CSID_PATH_RDI4_REG: {
 		irq_set_addr =
 			csid_reg->path_reg[CAM_IFE_PIX_PATH_RES_RDI_4]->irq_set_addr;
+		break;
+	}
+	case CAM_ISP_CSID_PATH_RDI5_REG: {
+		irq_set_addr =
+			csid_reg->path_reg[CAM_IFE_PIX_PATH_RES_RDI_5]->irq_set_addr;
 		break;
 	}
 	default:
