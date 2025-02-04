@@ -74,6 +74,15 @@ struct cam_fw_alloc_info {
 	uint64_t       fw_hdl;
 };
 
+/* Unblock compilation if target kernel does not support camnoc reg update through HYP */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
+#define QCOM_SCM_CAMERA_MAX_QOS_CNT 20
+struct qcom_scm_camera_qos {
+	u32 offset;
+	u32 val;
+};
+#endif
+
 int cam_reserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length);
 void cam_unreserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length);
 void cam_cpastop_scm_write(struct cam_cpas_hw_errata_wa *errata_wa);
