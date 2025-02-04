@@ -253,25 +253,118 @@ int cam_offline_ife_mgr_check_start_processing(void *hw_mgr_priv,
 	return rc;
 }
 
+static uint32_t cam_offline_ife_mgr_clk_to_bw(uint32_t clk, uint32_t bpc)
+{
+	return clk * bpc;
+}
+
+static uint32_t cam_offline_ife_mgr_bw_to_clk(uint32_t bw, uint32_t bpc)
+{
+	return bw / bpc;
+}
+
+static uint32_t cam_offline_ife_mgr_calc_bw(struct cam_ife_mgr_bw_data *bw_data)
+{
+	uint32_t bw;
+
+	bw = bw_data->width * bw_data->height * bw_data->framerate;
+	switch (bw_data->format) {
+	case CAM_FORMAT_MIPI_RAW_8:
+		break;
+	case CAM_FORMAT_MIPI_RAW_10:
+		bw = 5 * (bw / 4);
+		break;
+	case CAM_FORMAT_MIPI_RAW_12:
+	case CAM_FORMAT_MIPI_RAW_14:
+		bw = 3 * (bw / 2);
+		break;
+	case CAM_FORMAT_MIPI_RAW_20:
+		bw = 5 * (bw / 2);
+		break;
+	case CAM_FORMAT_MIPI_RAW_16:
+	case CAM_FORMAT_PLAIN16_8:
+	case CAM_FORMAT_PLAIN16_10:
+	case CAM_FORMAT_PLAIN16_12:
+	case CAM_FORMAT_PLAIN16_14:
+	case CAM_FORMAT_PLAIN16_16:
+		bw *= 2;
+		break;
+	default:
+		CAM_ERR(CAM_ISP, "Unsupported format %d", bw_data->format);
+		break;
+	}
+	return bw;
+}
+
 int cam_offline_ife_mgr_required_hw(void *hw_mgr_priv, bool stop)
 {
 	struct cam_ife_hw_mgr          *ife_hw_mgr = hw_mgr_priv;
+	uint32_t                        max_bw, current_bw;
+	uint64_t                        total_bw;
+	uint64_t                        nom_bw_per_hw;
+	uint64_t                        max_bw_per_hw;
+
 	int i, cnt, req_hw;
 
+	nom_bw_per_hw = cam_offline_ife_mgr_clk_to_bw(ife_hw_mgr->nom_clk_threshold,
+				ife_hw_mgr->bytes_per_clk);
+	max_bw_per_hw = cam_offline_ife_mgr_clk_to_bw(ife_hw_mgr->max_clk_threshold,
+				ife_hw_mgr->bytes_per_clk);
+
+	total_bw = 0;
+	max_bw = 0;
 	cnt = 0;
 	for (i = 0; i < CAM_CTX_MAX; i++) {
 		if (ife_hw_mgr->virt_ctx_pool[i].ctx_in_use &&
-				ife_hw_mgr->virt_ctx_pool[i].is_offline)
+				ife_hw_mgr->virt_ctx_pool[i].is_offline) {
+			current_bw = cam_offline_ife_mgr_calc_bw(
+				&ife_hw_mgr->virt_ctx_pool[i].bw_data);
+			if (current_bw > max_bw)
+				max_bw = current_bw;
+			total_bw += current_bw;
 			cnt++;
+		}
 	}
 
 	/* If only one context presents - we need to stop all HW*/
 	if ((stop) && (cnt == 1))
 		return 0;
 
-	req_hw = (cnt + 1) / 2;
-	CAM_DBG(CAM_ISP, "Currently needed %d IFEs for offline processing",
-			req_hw);
-	return req_hw > CAM_MAX_OFFLINE_HW ?
-		CAM_MAX_OFFLINE_HW : req_hw;
+	if (max_bw < nom_bw_per_hw)
+		req_hw = (uint32_t)((total_bw + nom_bw_per_hw - 1) /
+				nom_bw_per_hw);
+	else {
+		req_hw = (uint32_t)((total_bw + max_bw_per_hw - 1) /
+				max_bw_per_hw);
+	}
+
+	if (req_hw > CAM_MAX_OFFLINE_HW)
+		req_hw = CAM_MAX_OFFLINE_HW;
+
+	if (total_bw / req_hw > max_bw)
+		ife_hw_mgr->offline_clk =
+			cam_offline_ife_mgr_bw_to_clk(total_bw / req_hw,
+				ife_hw_mgr->bytes_per_clk);
+	else
+		ife_hw_mgr->offline_clk =
+			cam_offline_ife_mgr_bw_to_clk(max_bw,
+				ife_hw_mgr->bytes_per_clk);
+
+	if (ife_hw_mgr->offline_clk > ife_hw_mgr->max_clk_threshold)
+		ife_hw_mgr->offline_clk = ife_hw_mgr->max_clk_threshold;
+	else if (ife_hw_mgr->offline_clk < ife_hw_mgr->min_clk_threshold)
+		ife_hw_mgr->offline_clk = ife_hw_mgr->min_clk_threshold;
+
+	/*
+	 * make the offline SFE clock rate follow offline IFE clock
+	 */
+	ife_hw_mgr->offline_sfe_clk  = ife_hw_mgr->offline_clk;
+
+	CAM_DBG(CAM_ISP,
+			"Offline starting %d, CTXs %d, BW: %u needed %d IFEs @ :clk %d sfe clk %d",
+			stop, cnt, total_bw,
+			req_hw, ife_hw_mgr->offline_clk,
+			ife_hw_mgr->offline_sfe_clk);
+
+	return req_hw;
 }

@@ -238,16 +238,32 @@ struct cam_ife_cdm_user_data {
 	uint64_t                                  request_id;
 };
 
+/**
+ * struct cam_ife_mgr_bw_data - contain data to calc bandwidth for context
+ *
+ * @format:                    image format
+ * @width:                     image width
+ * @height:                    image height
+ * @framerate:                 framerate
+ *
+ */
+struct cam_ife_mgr_bw_data {
+	uint32_t format;
+	uint32_t width;
+	uint32_t height;
+	uint32_t framerate;
+};
+
 /* struct cam_ife_hw_mgr_ctx - IFE HW manager Context object
  *
  * concr_ctx:             HW Context currently used from this manager context
  * hw_mgr:                IFE hw mgr which owns this context
  * event_cb:              event callbacks
- * @mini_dump_cb          Callback for mini dump
  * cb_priv:               event callbacks data
  * ctx_in_use:            indicates if context is active
- * is_offline:            indicates if context is used for offline processing
  * ctx_idx:               index of this context
+ * bw_data:               contains data for BW usage calculation
+ * is_offline:            indicates if context is used for offline processing
  *
  */
 struct cam_ife_hw_mgr_ctx {
@@ -256,9 +272,9 @@ struct cam_ife_hw_mgr_ctx {
 	cam_hw_event_cb_func            event_cb[CAM_ISP_HW_EVENT_MAX];
 	void                           *cb_priv;
 	uint32_t                        ctx_in_use;
-	bool                            is_offline;
 	uint32_t                        ctx_idx;
-	struct completion               stop_done_complete;
+	struct cam_ife_mgr_bw_data      bw_data;
+	bool                            is_offline;
 };
 
 
@@ -362,6 +378,8 @@ struct cam_isp_comp_record_query {
  * @is_hw_ctx_acq:          If acquire for ife ctx is having hw ctx acquired
  * @acq_hw_ctxt_src_dst_map: Src to dst hw ctxt map for acquired pixel paths
  * @ctx_state               Indicates context state
+ * @offline_clk             IFE Clock value to be configured for offline processing
+ * @offline_sfe_clk         SFE Clock value to be configured for offline processing
  *
  */
 
@@ -442,6 +460,8 @@ struct cam_ife_hw_concrete_ctx {
 	bool                                 waiting_start;
 	uint32_t                             start_ctx_idx;
 	bool                                 sfe_rd_only;
+	uint32_t                             offline_clk;
+	uint32_t                             offline_sfe_clk;
 };
 
 /**
@@ -654,6 +674,12 @@ struct cam_ife_hw_mgr {
 	struct cam_ife_mgr_offline_in_queue   input_queue;
 	struct cam_ife_mgr_offline_in_queue   in_proc_queue;
 	uint32_t   starting_offline_cnt;
+	uint32_t                         offline_clk;
+	uint32_t                         offline_sfe_clk;
+	uint32_t                         max_clk_threshold;
+	uint32_t                         nom_clk_threshold;
+	uint32_t                         min_clk_threshold;
+	uint32_t                         bytes_per_clk;
 };
 
 /**
