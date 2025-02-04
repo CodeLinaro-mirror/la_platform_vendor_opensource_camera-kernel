@@ -6132,15 +6132,19 @@ static int cam_isp_ctx_flush_affected_ctx_req_list(
 static inline void __cam_isp_ctx_ul_fastpath_reset_result_queue(
 	struct cam_isp_context *ctx_isp)
 {
+	unsigned long flags;
+
 	if (!ctx_isp->ul_path_en)
 		return;
 
+	spin_lock_irqsave(&ctx_isp->ul_fp_params.fast_path_lock, flags);
 	reinit_completion(&ctx_isp->ul_fp_params.fast_path_buf_done);
 	atomic_set(&ctx_isp->ul_fp_params.read_idx, 0x0);
 	atomic_set(&ctx_isp->ul_fp_params.write_idx, 0x0);
 
 	memset(ctx_isp->ul_fp_results, 0x0,
 		sizeof(struct cam_isp_context_ul_fp_results) * MAX_IO_PACKETS);
+	spin_unlock_irqrestore(&ctx_isp->ul_fp_params.fast_path_lock, flags);
 }
 
 static int cam_isp_ctx_flush_all_affected_ctx_stream_grp(
@@ -8013,6 +8017,7 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 	struct cam_isp_context *ctx_isp =
 		(struct cam_isp_context *) ctx->ctx_priv;
 	struct cam_req_mgr_flush_request flush_req;
+	unsigned long flags;
 	int i;
 
 	if (ctx_isp->hw_ctx) {
@@ -8070,8 +8075,10 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 	__cam_isp_ctx_free_mem_hw_entries(ctx);
 	cam_req_mgr_worker_destroy(&ctx_isp->worker);
 	ctx->state = CAM_CTX_ACQUIRED;
+	spin_lock_irqsave(&ctx_isp->ul_fp_params.fast_path_lock, flags);
 	kfree(ctx_isp->ul_fp_results);
 	ctx_isp->ul_fp_results = NULL;
+	spin_unlock_irqrestore(&ctx_isp->ul_fp_params.fast_path_lock, flags);
 	ctx_isp->ul_path_en = false;
 	kfree(ctx_isp->addr_info->res_info);
 	ctx_isp->addr_info->res_info = NULL;
@@ -9342,6 +9349,10 @@ static void cam_isp_update_fastpath_result_queue(void *data,
 	ctx = (struct cam_context *)isp_ctx->base;
 
 	spin_lock(&isp_ctx->ul_fp_params.fast_path_lock);
+	if (isp_ctx->ul_fp_results == NULL) {
+		CAM_ERR(CAM_ISP, "result queue is deleted for ctx %d", isp_ctx->base->ctx_id);
+		goto end;
+	}
 	wr_idx = atomic_read(&isp_ctx->ul_fp_params.write_idx);
 	isp_ctx->ul_fp_results[wr_idx].last_consumed_addr = value;
 	isp_ctx->ul_fp_results[wr_idx].timestamp = isp_ctx->sof_timestamp_val;
@@ -9351,6 +9362,7 @@ static void cam_isp_update_fastpath_result_queue(void *data,
 	complete(&isp_ctx->ul_fp_params.fast_path_buf_done);
 	trace_cam_ul_fastpath_bufdone("UL_Bufdone", ctx->ctx_id, isp_ctx->sof_timestamp_val,
 		ctx->link_hdl);
+end:
 	spin_unlock(&isp_ctx->ul_fp_params.fast_path_lock);
 }
 
