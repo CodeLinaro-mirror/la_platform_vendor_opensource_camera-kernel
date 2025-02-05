@@ -567,8 +567,10 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 		csiphy_dev->ctrl_reg->csiphy_2ph_reg = csiphy_2ph_v2_2_0_reg;
 		csiphy_dev->ctrl_reg->csiphy_2ph_combo_mode_reg = csiphy_2ph_v2_2_0_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_3ph_reg = csiphy_3ph_v2_2_0_reg;
-		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg = NULL;
-		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg = NULL;
+		csiphy_dev->ctrl_reg->csiphy_2l2ph_1l3ph_mode_reg =
+			csiphy_v2_2_0_2l2ph_1l3ph_combo_mode_reg;
+		csiphy_dev->ctrl_reg->csiphy_1l2ph_2l3ph_mode_reg =
+			csiphy_v2_2_0_1l2ph_2l3ph_combo_mode_reg;
 		csiphy_dev->ctrl_reg->csiphy_irq_reg = csiphy_irq_reg_2_2_0;
 		csiphy_dev->ctrl_reg->csiphy_common_reg = csiphy_common_reg_2_2_0;
 		csiphy_dev->ctrl_reg->csiphy_reset_enter_regs = csiphy_reset_enter_reg_2_2_0;
