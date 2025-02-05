@@ -43,6 +43,7 @@ enum cam_smmu_mapping_client {
  * @kmdvaddr:    Kernel virtual address
  * @active:      state of the buffer
  * @is_imported: Flag indicating if buffer is imported from an FD in user space
+ * @idx_lock:           spinlock for buffer
  */
 struct cam_mem_buf_queue {
 	struct dma_buf *dma_buf;
@@ -58,6 +59,7 @@ struct cam_mem_buf_queue {
 	uintptr_t kmdvaddr;
 	bool active;
 	bool is_imported;
+	spinlock_t idx_lock;
 };
 
 /**
