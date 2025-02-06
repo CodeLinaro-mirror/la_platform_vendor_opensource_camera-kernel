@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_ISP_HW_H_
@@ -261,6 +261,7 @@ enum cam_isp_hw_cmd_type {
 	CAM_ISP_HW_CMD_BUS_WM_DISABLE,
 	CAM_ISP_HW_CMD_BUFFER_ALIGNMENT_UPDATE,
 	CAM_ISP_HW_CMD_GET_CLK_THRESHOLDS,
+	CAM_ISP_HW_CMD_WM_UPDATE,
 	CAM_ISP_HW_CMD_MAX,
 };
 
@@ -420,6 +421,7 @@ struct cam_isp_hw_cmd_buf_update {
  * @ stride:           stride of scratch buffer
  * @ slice_height:     slice height of scratch buffer
  * @ io_cfg:           IO buffer config information sent from UMD
+ * @ unpacker_fmt:     input unpacker format
  *
  */
 struct cam_isp_hw_get_wm_update {
@@ -434,6 +436,7 @@ struct cam_isp_hw_get_wm_update {
 	uint32_t                        stride;
 	uint32_t                        slice_height;
 	struct cam_buf_io_cfg          *io_cfg;
+	uint32_t                        unpacker_fmt;
 };
 
 /*

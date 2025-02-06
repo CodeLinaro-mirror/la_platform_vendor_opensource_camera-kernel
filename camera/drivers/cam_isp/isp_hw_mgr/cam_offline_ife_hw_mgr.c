@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -144,7 +144,7 @@ int cam_offline_ife_mgr_check_start_processing(void *hw_mgr_priv,
 	struct cam_ife_hw_mgr_ctx             *run_hw_mgr_ctx;
 	struct cam_ife_hw_mgr                 *ife_hw_mgr        = hw_mgr_priv;
 	struct cam_ife_hw_concrete_ctx        *c_ctx = NULL;
-	int i, rc = 0;
+	int rc = 0;
 	uint32_t state;
 	bool found = false;
 	bool is_init_pkt;
@@ -241,6 +241,9 @@ int cam_offline_ife_mgr_check_start_processing(void *hw_mgr_priv,
 			c_ctx->served_ctx_w = 1 - c_ctx->served_ctx_w;
 			c_ctx->served_ctx_id[c_ctx->served_ctx_w] =
 							run_hw_mgr_ctx->ctx_idx;
+			if (ife_hw_mgr->offline_reconfig)
+				cam_ife_mgr_update_offline_ife_out(run_hw_mgr_ctx);
+
 			rc = cam_ife_mgr_prepare_hw_update(hw_mgr_priv,
 					&c_elem->prepare);
 			c_elem->cfg.num_hw_update_entries =
@@ -294,6 +297,57 @@ static uint32_t cam_offline_ife_mgr_calc_bw(struct cam_ife_mgr_bw_data *bw_data)
 		break;
 	}
 	return bw;
+}
+
+int cam_offline_validate_config(
+	struct cam_isp_in_port_generic_info   *curr_in_port,
+	struct cam_isp_in_port_generic_info   *prev_in_port)
+{
+	struct cam_isp_out_port_generic_info  *curr_out_port;
+	struct cam_isp_out_port_generic_info  *prev_out_port;
+	bool reconfig = false;
+	int i;
+
+	for (i = 0; i < curr_in_port->num_out_res; i++) {
+		curr_out_port = &curr_in_port->data[i];
+		prev_out_port = &prev_in_port->data[i];
+		if (curr_out_port->res_type == prev_out_port->res_type) {
+			if ((curr_out_port->width != prev_out_port->width) &&
+				(curr_out_port->height != prev_out_port->height)) {
+			      reconfig = true;
+			      break;
+			}
+		} else {
+			reconfig = true;
+			break;
+		}
+	}
+	return reconfig;
+}
+
+int cam_offline_find_reconfig_required(void *hw_mgr_priv,
+	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx)
+{
+	struct cam_ife_hw_mgr_ctx             *offline_hw_mgr_ctx;
+	struct cam_ife_hw_mgr                 *ife_hw_mgr = hw_mgr_priv;
+	bool reconfig = false;
+	int i, j;
+
+	for (i = 0; i < CAM_CTX_MAX; i++) {
+		if (ife_hw_mgr->virt_ctx_pool[i].is_offline &&
+			ife_hw_mgr->virt_ctx_pool[i].ctx_in_use) {
+			offline_hw_mgr_ctx = &ife_hw_mgr->virt_ctx_pool[i];
+			for (j = 0; j < hw_mgr_ctx->num_in_ports; j++) {
+				if (cam_offline_validate_config(&hw_mgr_ctx->in_ports[j],
+					&offline_hw_mgr_ctx->in_ports[j])) {
+					CAM_DBG(CAM_ISP,"Offline ISP reconfig required ctx %d",
+						offline_hw_mgr_ctx->ctx_idx);
+					return true;
+				}
+			}
+		}
+	}
+	return reconfig;
 }
 
 int cam_offline_ife_mgr_required_hw(void *hw_mgr_priv, bool stop)
