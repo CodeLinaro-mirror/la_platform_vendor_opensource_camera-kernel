@@ -2144,7 +2144,7 @@ static int __cam_isp_ctx_handle_buf_done_for_request(
 		}
 
 		if (!req_isp->bubble_detected) {
-			trace_cam_buf_done("ISP", ctx, req);
+			trace_cam_buf_done("ISP", ctx, req, done->global_timestamp);
 			CAM_DBG(CAM_ISP,
 				"Sync with success: req %lld res 0x%x fd 0x%x, ctx %u",
 				req->request_id,
@@ -2166,7 +2166,7 @@ static int __cam_isp_ctx_handle_buf_done_for_request(
 				CAM_DBG(CAM_ISP, "Sync failed with rc = %d",
 					 rc);
 		} else if (!req_isp->bubble_report) {
-			trace_cam_isp_buf_done("ISP", ctx, req->request_id,
+			trace_cam_isp_buf_done("ISP", "failure due to bubble", ctx, req->request_id,
 				req_isp->fence_map_out[j].resource_handle);
 			CAM_DBG(CAM_ISP,
 				"Sync with failure: req %lld res 0x%x fd 0x%x, ctx %u",
@@ -2494,7 +2494,7 @@ end:
 static void __cam_isp_ctx_handle_buf_done_util(
 	bool defer_buf_done, uint32_t bubble_state,
 	uint32_t map_entry_idx, struct cam_ctx_request *req,
-	struct cam_isp_context *ctx_isp)
+	struct cam_isp_context *ctx_isp, uint64_t global_timer)
 {
 	struct cam_isp_ctx_req *req_isp =
 		(struct cam_isp_ctx_req *)req->req_priv;
@@ -2525,11 +2525,11 @@ static void __cam_isp_ctx_handle_buf_done_util(
 			req_isp->fence_map_out[map_entry_idx].resource_handle,
 			req_isp->fence_map_out[map_entry_idx].sync_id);
 	} else if (!req_isp->bubble_detected) {
-		trace_cam_buf_done("ISP", ctx, req);
+		trace_cam_buf_done("ISP", ctx, req, global_timer);
 		__cam_isp_ctx_handle_fence_signaling_util(true, map_entry_idx, ctx_isp, req);
 		req_isp->num_acked++;
 	} else if (!req_isp->bubble_report) {
-		trace_cam_isp_buf_done("ISP", ctx, req->request_id,
+		trace_cam_isp_buf_done("ISP", "failure due to bubble", ctx, req->request_id,
 			req_isp->fence_map_out[map_entry_idx].resource_handle);
 		__cam_isp_ctx_handle_fence_signaling_util(false, map_entry_idx, ctx_isp, req);
 		req_isp->num_acked++;
@@ -2555,7 +2555,7 @@ static void __cam_isp_ctx_handle_buf_done_util(
 static int __cam_isp_ctx_handle_buf_done_for_remaining_ports(
 	bool defer_buf_done, uint32_t bubble_state, uint32_t primary_port_res_hdl,
 	struct cam_ctx_request *req,
-	struct cam_isp_context *ctx_isp)
+	struct cam_isp_context *ctx_isp, uint64_t global_timer)
 {
 	int i, j;
 	struct cam_context *ctx = ctx_isp->base;
@@ -2575,7 +2575,7 @@ static int __cam_isp_ctx_handle_buf_done_for_remaining_ports(
 				continue;
 
 			__cam_isp_ctx_handle_buf_done_util(defer_buf_done, bubble_state, j, req,
-				ctx_isp);
+				ctx_isp, global_timer);
 		}
 		return 0;
 	}
@@ -2610,7 +2610,8 @@ static int __cam_isp_ctx_handle_buf_done_for_remaining_ports(
 				linked_ports[i], req->request_id, ctx->ctx_id);
 			return -EINVAL;
 		}
-		__cam_isp_ctx_handle_buf_done_util(defer_buf_done, bubble_state, j, req, ctx_isp);
+		__cam_isp_ctx_handle_buf_done_util(defer_buf_done, bubble_state, j,
+			req, ctx_isp, global_timer);
 	}
 
 	return 0;
@@ -2702,7 +2703,12 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 		req_isp->buf_done_tracker |=
 			BIT_ULL(req_isp->fence_map_out[j].resource_handle & 0xFF);
 
-		__cam_isp_ctx_handle_buf_done_util(defer_buf_done, bubble_state, j, req, ctx_isp);
+		CAM_DBG(CAM_ISP, "ctx_id %llu request_id %llu port_id 0x%x global_timer %llu",
+			ctx->ctx_id, req->request_id, done->resource_handle[i],
+			done->global_timestamp);
+
+		__cam_isp_ctx_handle_buf_done_util(defer_buf_done, bubble_state, j, req, ctx_isp,
+			done->global_timestamp);
 		if (defer_buf_done || (req_isp->bubble_detected && req_isp->bubble_report))
 			continue;
 
@@ -2724,7 +2730,7 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 		if (ctx_isp->num_primary_ports) {
 			rc = __cam_isp_ctx_handle_buf_done_for_remaining_ports(defer_buf_done,
 				bubble_state, req_isp->fence_map_out[j].resource_handle, req,
-				ctx_isp);
+				ctx_isp, done->global_timestamp);
 			if (rc) {
 				CAM_ERR(CAM_ISP,
 					"Buf done failed for remaining ports associated to primary_port: 0x%x req_id: %lld ctx_id: %d rc: %d",
@@ -10802,8 +10808,8 @@ static int __cam_isp_ctx_reset_and_recover(
 	if (ctx_isp->frame_drop) {
 		for (i = 0; i < req_isp->num_fence_map_out && !ctx_isp->ul_path_en; i++) {
 			if (req_isp->fence_map_out[i].sync_id != -1) {
-				trace_cam_isp_buf_done("ISP", ctx, req->request_id,
-					req_isp->fence_map_out[i].resource_handle);
+				trace_cam_isp_buf_done("ISP", "failure due to bubble", ctx,
+					req->request_id, req_isp->fence_map_out[i].resource_handle);
 				memset(&param, 0, sizeof(param));
 				param.sync_obj = req_isp->fence_map_out[i].sync_id;
 				param.status = CAM_SYNC_STATE_SIGNALED_ERROR;

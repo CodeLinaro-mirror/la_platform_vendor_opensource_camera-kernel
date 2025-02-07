@@ -404,7 +404,7 @@ struct cam_isp_hw_epoch_event_data {
  * @resource_handle:       Resource handle array
  * @last_consumed_addr:    Last consumed addr
  * @timestamp:             Timestamp for the buf done event
- *
+ * @global_timestamp:      Global timestamp for the buf done event
  */
 struct cam_isp_hw_done_event_data {
 	uint32_t             num_handles;
@@ -413,6 +413,7 @@ struct cam_isp_hw_done_event_data {
 	uint32_t             last_consumed_addr[
 				CAM_NUM_OUT_PER_COMP_IRQ_MAX];
 	uint64_t       timestamp;
+	uint64_t             global_timestamp;
 };
 
 /**

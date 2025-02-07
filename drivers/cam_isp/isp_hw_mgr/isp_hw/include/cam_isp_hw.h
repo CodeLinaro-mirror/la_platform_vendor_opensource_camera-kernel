@@ -345,6 +345,7 @@ struct cam_isp_hw_compdone_event_info {
  * @reg_val:           Any critical register value captured during irq handling
  * @hw_type:           Hw Type sending the event
  * @in_core_idx:       Input core type if CSID error evt
+ * @global_timestamp   Global timestamp for buf done event
  * @event_data:        Any additional data specific to this event
  *
  */
@@ -356,6 +357,7 @@ struct cam_isp_hw_event_info {
 	uint32_t                       reg_val;
 	uint32_t                       hw_type;
 	uint32_t                       in_core_idx;
+	uint64_t                       global_timestamp;
 	void                          *event_data;
 };
 

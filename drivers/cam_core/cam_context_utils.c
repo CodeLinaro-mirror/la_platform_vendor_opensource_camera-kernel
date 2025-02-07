@@ -193,8 +193,8 @@ int cam_context_buf_done_from_hw(struct cam_context *ctx,
 	}
 	req = list_first_entry(&ctx->active_req_list,
 		struct cam_ctx_request, list);
-
-	trace_cam_buf_done("UTILS", ctx, req);
+	/* Passing global timer value as 0 becase many drivers using this api */
+	trace_cam_buf_done("UTILS", ctx, req, 0);
 
 	if (done->request_id != req->request_id) {
 		CAM_ERR(CAM_CTXT,

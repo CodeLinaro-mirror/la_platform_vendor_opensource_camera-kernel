@@ -131,12 +131,19 @@ static int cam_vfe_request_platform_resource(
 	irq_handler_t vfe_irq_handler, void *irq_data)
 {
 	int rc = 0;
+	struct cam_cpas_global_timer_info g_timer = {0};
 
 	rc = cam_soc_util_request_platform_resource(soc_info, vfe_irq_handler,
 		irq_data);
 	if (rc)
 		CAM_ERR(CAM_ISP,
 			"Error! Request platform resource failed rc=%d", rc);
+
+	rc = cam_cpas_get_global_timer_info(&g_timer);
+	if (rc != 0)
+		CAM_ERR(CAM_ISP, "Failed to get global timer info");
+	else
+		soc_info->global_timer_mem_base = g_timer.mem_base;
 
 	return rc;
 }

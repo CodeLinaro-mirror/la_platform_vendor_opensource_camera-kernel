@@ -383,6 +383,7 @@ struct cam_vfe_top_irq_evt_payload {
  * @irq_reg_val:             IRQ and Error register values, read when IRQ was
  *                           handled
  * @error_type:              Identify different errors
+ * @global_timestamp         global timestamp for buf done event
  * @ts:                      Timestamp
  */
 struct cam_vfe_bus_irq_evt_payload {
@@ -394,6 +395,7 @@ struct cam_vfe_bus_irq_evt_payload {
 	uint32_t                    image_size_violation_status;
 	uint32_t                    evt_id;
 	uint32_t                    irq_reg_val[CAM_IFE_BUS_IRQ_REGISTERS_MAX];
+	uint64_t                    global_timestamp;
 	struct cam_isp_timestamp    ts;
 };
 
