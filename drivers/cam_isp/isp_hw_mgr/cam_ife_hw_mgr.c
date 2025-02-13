@@ -11344,13 +11344,17 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 					if (g_ife_sns_grp_cfg.grp_cfg[i]->stream_on_cnt ==
 						0) {
 						rc = cam_ife_hw_mgr_release_hw_for_ctx(ctx, i);
-						g_ife_sns_grp_cfg.grp_cfg[i]->hw_ctx_cnt--;
 					}
+					g_ife_sns_grp_cfg.grp_cfg[i]->hw_ctx_cnt--;
 					cam_ife_hw_mgr_free_hw_ctx(ctx);
 					per_port_feature_enable = true;
 					mutex_unlock(&g_ife_sns_grp_cfg.grp_cfg[i]->lock);
-					if (!g_ife_sns_grp_cfg.grp_cfg[i]->hw_ctx_cnt)
+					if (!g_ife_sns_grp_cfg.grp_cfg[i]->hw_ctx_cnt) {
+						CAM_DBG(CAM_ISP,
+							"Clear sensor stream info grp index:%d ctx id:%d",
+							i, ctx->ctx_index);
 						cam_ife_mgr_clear_sensor_stream_cfg_grp(i);
+					}
 					break;
 				}
 			}

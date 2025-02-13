@@ -1380,7 +1380,7 @@ void cam_csiphy_shutdown(struct csiphy_device *csiphy_dev)
 	}
 
 	for (i = 0; i < csiphy_dev->session_max_device_support; i++) {
-		csiphy_dev->lanes_assigned[i].lane_assign = 0;
+		csiphy_dev->lanes_assigned[i].lane_assign = -1;
 		csiphy_dev->lanes_assigned[i].lane_assign_cnt = 0;
 	}
 
@@ -1519,7 +1519,7 @@ static void cam_csiphy_update_lane_assign_info(
 				== csiphy->csiphy_info[index].lane_assign) {
 				csiphy->lanes_assigned[i].lane_assign_cnt--;
 				if (csiphy->lanes_assigned[i].lane_assign_cnt == 0) {
-					csiphy->lanes_assigned[i].lane_assign = 0;
+					csiphy->lanes_assigned[i].lane_assign = -1;
 					cam_csiphy_update_lane(csiphy, index, false);
 				}
 				break;
@@ -2182,24 +2182,6 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 		cam_csiphy_update_lane_assign_info(csiphy_dev, offset, false);
 
 		if (--csiphy_dev->start_dev_count) {
-			if (csiphy_dev->is_aggregator_rx) {
-				if (csiphy_dev->csiphy_info[offset].secure_mode)
-					cam_csiphy_program_secure_mode(
-						csiphy_dev,
-						CAM_SECURE_MODE_NON_SECURE, offset, false);
-
-				csiphy_dev->csiphy_info[offset].secure_mode =
-					CAM_SECURE_MODE_NON_SECURE;
-				csiphy_dev->csiphy_info[offset].csiphy_cpas_cp_reg_mask
-					= 0;
-				CAM_INFO(CAM_CSIPHY,
-					"CAM_STOP_PHYDEV: %d dev_cnt: %u, slot: %d",
-					soc_info->index,
-					csiphy_dev->start_dev_count,
-					offset);
-				goto release_mutex;
-			}
-
 			if (csiphy_dev->csiphy_info[offset].secure_mode)
 				cam_csiphy_program_secure_mode(
 					csiphy_dev,
@@ -2209,8 +2191,6 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 				CAM_SECURE_MODE_NON_SECURE;
 			csiphy_dev->csiphy_info[offset].csiphy_cpas_cp_reg_mask
 				= 0;
-
-			cam_csiphy_update_lane(csiphy_dev, offset, false);
 
 			CAM_INFO(CAM_CSIPHY,
 				"CAM_STOP_PHYDEV: %d, Type: %s, dev_cnt: %u, slot: %d, Datarate: %llu, Settletime: %llu",
@@ -2388,51 +2368,6 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 		cam_csiphy_update_lane_assign_info(csiphy_dev, offset, true);
 
 		if (csiphy_dev->start_dev_count) {
-			if ((csiphy_dev->is_aggregator_rx) &&
-				((csiphy_dev->lanes_enabled
-				& csiphy_dev->csiphy_info[offset].lane_enable)
-				== csiphy_dev->csiphy_info[offset].lane_enable)) {
-				if ((csiphy_dev->csiphy_info[offset].secure_mode == 1) &&
-						(!cam_cpas_is_feature_supported(
-						CAM_CPAS_SECURE_CAMERA_ENABLE,
-						CAM_CPAS_HW_IDX_ANY, NULL))) {
-						CAM_ERR(CAM_CSIPHY,
-							"sec_cam: camera fuse bit not set");
-						goto release_mutex;
-				}
-
-				if ((csiphy_dev->csiphy_info[offset].secure_mode == 1) &&
-					(cam_csiphy_program_secure_mode(csiphy_dev,
-					CAM_SECURE_MODE_SECURE, offset, false) < 0)) {
-					csiphy_dev->csiphy_info[offset]
-						.secure_mode =
-						CAM_SECURE_MODE_NON_SECURE;
-					CAM_ERR(CAM_CSIPHY,
-						"sec_cam: notify failed: rc: %d",
-						rc);
-					goto release_mutex;
-				}
-				csiphy_dev->start_dev_count++;
-				CAM_INFO(CAM_CSIPHY,
-					"CAM_START_PHYDEV: %d dev_cnt: %u, slot: %d",
-					soc_info->index,
-					csiphy_dev->start_dev_count,
-					offset);
-				goto release_mutex;
-			}
-
-			clk_vote_level =
-				csiphy_dev->ctrl_reg->getclockvoting(
-					csiphy_dev, offset);
-			rc = cam_soc_util_set_clk_rate_level(
-				&csiphy_dev->soc_info, clk_vote_level, false);
-			if (rc) {
-				CAM_WARN(CAM_CSIPHY,
-					"Failed to set the clk_rate level: %d",
-					clk_vote_level);
-				rc = 0;
-			}
-
 			if (csiphy_dev->csiphy_info[offset].secure_mode == 1) {
 				if (!cam_cpas_is_feature_supported(
 					CAM_CPAS_SECURE_CAMERA_ENABLE,
@@ -2453,6 +2388,30 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 						rc);
 					goto release_mutex;
 				}
+			}
+			if ((csiphy_dev->is_aggregator_rx) &&
+				((csiphy_dev->lanes_enabled
+				& csiphy_dev->csiphy_info[offset].lane_enable)
+				== csiphy_dev->csiphy_info[offset].lane_enable)) {
+				csiphy_dev->start_dev_count++;
+				CAM_INFO(CAM_CSIPHY,
+					"CAM_START_PHYDEV: %d dev_cnt: %u, slot: %d",
+					soc_info->index,
+					csiphy_dev->start_dev_count,
+					offset);
+				goto release_mutex;
+			}
+
+			clk_vote_level =
+				csiphy_dev->ctrl_reg->getclockvoting(
+					csiphy_dev, offset);
+			rc = cam_soc_util_set_clk_rate_level(
+				&csiphy_dev->soc_info, clk_vote_level, false);
+			if (rc) {
+				CAM_WARN(CAM_CSIPHY,
+					"Failed to set the clk_rate level: %d",
+					clk_vote_level);
+				rc = 0;
 			}
 
 			if (csiphy_dev->csiphy_info[offset].csiphy_3phase) {
