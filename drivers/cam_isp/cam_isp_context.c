@@ -5166,6 +5166,7 @@ static int cam_isp_ctx_reapply_iq_config(struct cam_context *ctx, struct cam_ctx
 	struct cam_hw_config_args cfg = {0};
 	struct cam_isp_ctx_req *req_isp;
 	int rc;
+	uint64_t crop_settings_id = 0;
 
 	req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 
@@ -5190,10 +5191,21 @@ static int cam_isp_ctx_reapply_iq_config(struct cam_context *ctx, struct cam_ctx
 
 	atomic_set(&ctx_isp->apply_in_progress, 1);
 
+	if (ctx_isp->fast_crop_en) {
+		rc = ctx->ctx_crm_intf->fast_crop_sync_utility(ctx->session_hdl, req->request_id,
+			&crop_settings_id);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "ctx:%u req:%lld get crop settings failure", ctx->ctx_id,
+				req->request_id);
+			return rc;
+		}
+		cfg.crop_settings_id = crop_settings_id;
+	}
+
 	CAM_DBG(CAM_ISP,
-		"ctx:%u req:%lld reapply_type:%d wait_for_request_apply:%d",
+		"ctx:%u req:%lld reapply_type:%d wait_for_request_apply:%d crop_settings_id:%lld",
 		ctx->ctx_id, req->request_id, cfg.reapply_type,
-		cfg.wait_for_request_apply);
+		cfg.wait_for_request_apply, cfg.crop_settings_id);
 
 	rc = ctx->hw_mgr_intf->hw_config(ctx->hw_mgr_intf->hw_mgr_priv, &cfg);
 	if (!rc) {
@@ -5503,6 +5515,7 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 	struct cam_isp_context          *ctx_isp = NULL;
 	struct cam_hw_config_args        cfg = {0};
 	unsigned long                    flags;
+	uint64_t crop_settings_id = 0;
 
 	ctx_isp = (struct cam_isp_context *) ctx->ctx_priv;
 
@@ -5632,6 +5645,17 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 
 	atomic_set(&ctx_isp->apply_in_progress, 1);
 
+	if (ctx_isp->fast_crop_en) {
+		rc = ctx->ctx_crm_intf->fast_crop_sync_utility(ctx->session_hdl, req->request_id,
+			&crop_settings_id);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "ctx:%u req:%lld get crop settings failure", ctx->ctx_id,
+				req->request_id);
+			return rc;
+		}
+		cfg.crop_settings_id = crop_settings_id;
+	}
+
 	rc = ctx->hw_mgr_intf->hw_config(ctx->hw_mgr_intf->hw_mgr_priv, &cfg);
 	if (!rc) {
 		mutex_lock(&ctx_isp->isp_mutex);
@@ -5650,9 +5674,10 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 		list_add_tail(&req->list, &ctx->wait_req_list);
 		ctx_isp->waitlist_req_cnt++;
 		CAM_DBG(CAM_ISP,
-			"new substate Substate[%s], applied req %lld waitlist_req_cnt:%d ctx:%u",
+			"new substate Substate[%s], applied req %lld waitlist_req_cnt:%d ctx:%u crop_settings_id: %lld",
 			__cam_isp_ctx_substate_val_to_type(next_state),
-			ctx_isp->last_applied_req_id, ctx_isp->waitlist_req_cnt, ctx->ctx_id);
+			ctx_isp->last_applied_req_id, ctx_isp->waitlist_req_cnt, ctx->ctx_id,
+			cfg.crop_settings_id);
 		mutex_unlock(&ctx_isp->isp_mutex);
 		__cam_isp_ctx_update_state_monitor_array(ctx_isp,
 			CAM_ISP_STATE_CHANGE_TRIGGER_APPLIED,
@@ -8109,6 +8134,7 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 	ctx_isp->ul_fp_results = NULL;
 	spin_unlock_irqrestore(&ctx_isp->ul_fp_params.fast_path_lock, flags);
 	ctx_isp->ul_path_en = false;
+	ctx_isp->fast_crop_en = false;
 	kfree(ctx_isp->addr_info->res_info);
 	ctx_isp->addr_info->res_info = NULL;
 	kfree(ctx_isp->addr_info);
@@ -9621,6 +9647,8 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 		goto free_res;
 	}
 
+	ctx_isp->fast_crop_en =
+		(param.op_flags & CAM_IFE_CTX_FAST_CROP_EN);
 	ctx_isp->ul_path_en =
 		(param.op_flags & CAM_IFE_CTX_UL_PATH);
 	memset(&ctx_isp->ul_data, 0, sizeof(ctx_isp->ul_data));

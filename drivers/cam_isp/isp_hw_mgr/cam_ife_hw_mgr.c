@@ -2136,12 +2136,13 @@ static void cam_ife_hw_mgr_print_acquire_info(
 	CAM_CONVERT_TIMESTAMP_FORMAT(hw_mgr_ctx->ts, hrs, min, sec, ms);
 
 	CAM_INFO(CAM_ISP,
-		"%llu:%llu:%llu.%llu Acquired %s with [%u pix] [%u pd] [%u rdi] ports for ctx:%u per_port_enabled :%d sensor:%d ul: %d",
+		"%llu:%llu:%llu.%llu Acquired %s with [%u pix] [%u pd] [%u rdi] ports for ctx:%u per_port_enabled :%d sensor:%d ul: %d fast_crop_en: %d",
 		hrs, min, sec, ms,
 		log_info,
 		num_pix_port, num_pd_port, num_rdi_port,
 		hw_mgr_ctx->ctx_index, hw_mgr_ctx->flags.per_port_en,
-		hw_mgr_ctx->sensor_id, hw_mgr_ctx->flags.is_ul_path);
+		hw_mgr_ctx->sensor_id, hw_mgr_ctx->flags.is_ul_path,
+		hw_mgr_ctx->flags.fast_crop_en);
 
 	return;
 
@@ -7894,6 +7895,10 @@ static int cam_ife_mgr_acquire_hw_for_ctx(
 	if ((in_port->ul_path_mode) && (!ife_ctx->flags.is_ul_path))
 		ife_ctx->flags.is_ul_path = true;
 
+	/* Update fast crop flag for the given in_port once */
+	if ((in_port->fast_crop_en) && (!ife_ctx->flags.fast_crop_en))
+		ife_ctx->flags.fast_crop_en = true;
+
 	/* get root node resource */
 	rc = cam_ife_hw_mgr_acquire_res_root(ife_ctx, in_port);
 	if (rc) {
@@ -8268,6 +8273,7 @@ static inline void cam_ife_mgr_acquire_get_feature_flag_params(
 	in_port->aeb_mode                 = in->feature_flag & CAM_ISP_AEB_MODE_EN;
 	in_port->independent_crm_mode     = in->feature_flag & CAM_ISP_INDEPENDENT_CRM;
 	in_port->slave_metadata_en        = FALSE;
+	in_port->fast_crop_en             = in->feature_flag & CAM_ISP_FAST_CROP;
 }
 
 static inline void cam_ife_mgr_acquire_get_feature_flag_params_v3(
@@ -8284,6 +8290,7 @@ static inline void cam_ife_mgr_acquire_get_feature_flag_params_v3(
 	in_port->slave_metadata_en        = in->feature_flag & CAM_ISP_SLAVE_METADATA_EN;
 	in_port->ul_path_mode             = in->feature_flag & CAM_ISP_UL_PATH;
 	in_port->is_lite_grouping         = in->feature_flag & CAM_ISP_IFE_LITE_GROUPING_EN;
+	in_port->fast_crop_en             = in->feature_flag & CAM_ISP_FAST_CROP;
 }
 
 static bool cam_ife_mgr_hw_validate_vc_dt_pxl_path(
@@ -9023,6 +9030,9 @@ out:
 
 	if (ife_ctx->flags.is_ul_path)
 		acquire_args->op_flags |= CAM_IFE_CTX_UL_PATH;
+
+	if (ife_ctx->flags.fast_crop_en)
+		acquire_args->op_flags |= CAM_IFE_CTX_FAST_CROP_EN;
 
 	ife_ctx->flags.ctx_in_use = true;
 	ife_ctx->num_reg_dump_buf = 0;
@@ -9828,6 +9838,9 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 	struct cam_isp_prepare_hw_update_data *hw_update_data;
 	unsigned long rem_jiffies = 0;
 	bool is_genirq_required, cdm_hang_detect = false;
+	struct cam_isp_crop_setting_info *crop_setting = NULL;
+	struct cam_isp_crop_setting_block_info *block_info = NULL;
+	bool fast_crop_settings_avaliable = false;
 
 	if (!hw_mgr_priv || !config_hw_args) {
 		CAM_ERR(CAM_ISP,
@@ -9960,6 +9973,65 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 		return rc;
 	}
 
+	/* When fast crop enable and crop settings id avaliable need to apply */
+	if (ctx->flags.fast_crop_en && cfg->crop_settings_id) {
+		crop_setting =
+			(struct cam_isp_crop_setting_info *)(ctx->fast_crop_shared_buf_kmdvaddr +
+			ctx->fast_crop_shared_buf_info.offset);
+		if (!crop_setting) {
+			CAM_ERR(CAM_ISP, "ctx id:%d invalid crop settings", ctx->ctx_index);
+				rc = -EINVAL;
+				return rc;
+		}
+
+		/* Check if shared buffer has valid crop settings */
+		if (crop_setting->wr_idx >= 0) {
+			i = crop_setting->rd_idx;
+			do {
+				block_info = &crop_setting->setting_data_flex[i];
+				if (!block_info) {
+					CAM_ERR(CAM_ISP, "ctx id:%d invalid block info",
+						ctx->ctx_index);
+						rc = -EINVAL;
+						return rc;
+				}
+				if (block_info->setting_id == cfg->crop_settings_id) {
+					crop_setting->rd_idx = i;
+					fast_crop_settings_avaliable = true;
+					break;
+				}
+				i = (i + 1) % CAM_IFE_VALID_CROP_SETTINGS_MAX;
+			} while(i != crop_setting->wr_idx);
+			/* Check wr idx*/
+			if (!fast_crop_settings_avaliable) {
+				block_info = &crop_setting->setting_data_flex[i];
+					if (!block_info) {
+						CAM_ERR(CAM_ISP, "ctx id:%d invalid block info",
+							ctx->ctx_index);
+							rc = -EINVAL;
+							return rc;
+					}
+					if (block_info->setting_id == cfg->crop_settings_id) {
+						crop_setting->rd_idx = i;
+						fast_crop_settings_avaliable = true;
+				}
+			}
+			if (!fast_crop_settings_avaliable) {
+				CAM_ERR(CAM_ISP,
+					"ctx id:%d not found cfg settings id: %llu request id: %llu",
+					ctx->ctx_index, cfg->crop_settings_id, cfg->request_id);
+				rc = -EINVAL;
+				return rc;
+			}
+			CAM_DBG(CAM_ISP, "ctx id:%d rd_idx: %llu wr_idx: %llu settings_id: %llu",
+				ctx->ctx_index, crop_setting->rd_idx, crop_setting->wr_idx,
+				cfg->crop_settings_id);
+		} else {
+			CAM_WARN(CAM_ISP, "ctx id:%d there is no valid settings in shared buffer",
+				ctx->ctx_index);
+		}
+	}
+
 	CAM_DBG(CAM_ISP,
 		"Enter ctx id:%d num_hw_upd_entries %d request id: %llu",
 		ctx->ctx_index, cfg->num_hw_update_entries, cfg->request_id);
@@ -9977,10 +10049,28 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 		for (i = 0 ; i < cfg->num_hw_update_entries; i++) {
 			cmd = (cfg->hw_update_entries + i);
 
+			/* Append fast crop settings */
+			if ((fast_crop_settings_avaliable) && (cdm_cmd->cmd_arrary_count == 1)) {
+				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].bl_addr.mem_handle =
+					block_info->cmd_mem_hdl;
+				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset =
+					block_info->cmd_offset;
+				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].len = block_info->cmd_size;
+				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].arbitrate = false;
+				CAM_DBG(CAM_ISP,
+					"ctx id:%u append crop settings for request id: %llu, mem_handle:0x%x, len:%d offset:%d",
+					ctx->ctx_index, cfg->request_id,
+					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].bl_addr.mem_handle,
+					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].len,
+					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset);
+				cdm_cmd->cmd_arrary_count++;
+			}
+
 			/* Add to the second entry since the first one is change base cmd */
 			if ((ctx->latest_crop_update_req >= cfg->request_id) &&
 				(cdm_cmd->cmd_arrary_count == 1) &&
-				(ctx->crop_update_entry.len > 0)) {
+				(ctx->crop_update_entry.len > 0) &&
+				(!fast_crop_settings_avaliable)) {
 				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].bl_addr.mem_handle =
 					ctx->crop_update_entry.handle;
 				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset =
@@ -10676,6 +10766,10 @@ end:
 			cam_mem_put_cpu_buf(ctx->reg_dump_buf_desc[i].mem_handle);
 		ctx->num_reg_dump_buf = 0;
 	}
+
+	if (ctx->flags.fast_crop_en)
+		cam_mem_put_cpu_buf(ctx->fast_crop_shared_buf_info.mem_hdl);
+
 	ctx->flags.skip_reg_dump_buf_put = false;
 	ctx->flags.dump_on_error = false;
 	ctx->flags.dump_on_flush = false;
@@ -15485,6 +15579,55 @@ free_mem:
 			hw_fence_config, prepare);
 		if (rc)
 			CAM_ERR(CAM_ISP, "HW Fence update failed, rc: %d", rc);
+	}
+		break;
+	case CAM_ISP_GENERIC_BLOB_TYPE_FAST_CROP_CFG: {
+		struct cam_isp_fast_crop_shared_buffer_info *shared_buf_info;
+		struct cam_isp_prepare_hw_update_data *prepare_hw_data;
+		size_t len = 0;
+
+		prepare_hw_data = (struct cam_isp_prepare_hw_update_data *)prepare->priv;
+		shared_buf_info = (struct cam_isp_fast_crop_shared_buffer_info *)blob_data;
+
+		if (prepare_hw_data->packet_opcode_type != CAM_ISP_PACKET_INIT_DEV) {
+			CAM_ERR(CAM_ISP,
+				"Fast crop shared buf config only supported for INIT packet in ctx: %u",
+				ife_mgr_ctx->ctx_index);
+			return -EINVAL;
+		}
+
+		if (blob_size != sizeof(struct cam_isp_fast_crop_shared_buffer_info)) {
+			CAM_ERR(CAM_ISP, "Invalid blob size: %zu expected: %zu in ctx: %u",
+			blob_size, sizeof(struct cam_isp_fast_crop_shared_buffer_info),
+			ife_mgr_ctx->ctx_index);
+			return -EINVAL;
+		}
+
+		memcpy(&ife_mgr_ctx->fast_crop_shared_buf_info, shared_buf_info, blob_size);
+		rc = cam_mem_get_cpu_buf(ife_mgr_ctx->fast_crop_shared_buf_info.mem_hdl,
+			&ife_mgr_ctx->fast_crop_shared_buf_kmdvaddr, &len);
+		if (rc < 0) {
+			CAM_ERR(CAM_ISP, "ctx_idx: %u error in get cpu address %d",
+				ife_mgr_ctx->ctx_index, rc);
+			return -EINVAL;
+		}
+
+		if ((len < ife_mgr_ctx->fast_crop_shared_buf_info.offset) ||
+			(len < ife_mgr_ctx->fast_crop_shared_buf_info.size)) {
+			CAM_ERR(CAM_ISP,
+				"ctx_idx: %u invalid fast crop shared buf len: %zu, offset: %zu size: %zu",
+				ife_mgr_ctx->ctx_index, len,
+				ife_mgr_ctx->fast_crop_shared_buf_info.offset,
+				ife_mgr_ctx->fast_crop_shared_buf_info.size);
+				return -EINVAL;
+		}
+
+		CAM_DBG(CAM_ISP,
+			"Fast crop shared buf info mem_hdl: %x, offset: %zu, size: %zu ctx: %u",
+			ife_mgr_ctx->fast_crop_shared_buf_info.mem_hdl,
+			ife_mgr_ctx->fast_crop_shared_buf_info.offset,
+			ife_mgr_ctx->fast_crop_shared_buf_info.size,
+			ife_mgr_ctx->ctx_index);
 	}
 		break;
 	default:
