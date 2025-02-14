@@ -680,11 +680,12 @@ static int cam_sync_signal_synx_dma_fence_util_locked(int32_t sync_obj,
 	INIT_LIST_HEAD(&parents_list);
 	list_splice_init(&row->parents_list, &parents_list);
 
-	spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 	if (list_empty(&parents_list))
 		return 0;
 
+	spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 	cam_sync_signal_parent_util(param, &parents_list, time_stamp);
+	spin_lock_bh(&sync_dev->row_spinlocks[sync_obj]);
 
 	return rc;
 }
@@ -768,7 +769,7 @@ int cam_sync_signal(struct cam_sync_signal_param *param, struct cam_sync_timesta
 		CAM_ERR(CAM_SYNC,
 			"Error: Failed to signal sync_obj = %s[%d]",
 			row->name, sync_obj);
-
+	spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 
 	return 0;
 }
