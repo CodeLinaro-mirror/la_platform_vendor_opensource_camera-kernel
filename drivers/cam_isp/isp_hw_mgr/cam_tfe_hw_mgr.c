@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -4427,7 +4427,7 @@ static int cam_isp_tfe_blob_hfr_update(
 		hw_mgr_res = &ctx->res_list_tfe_out[ctx->tfe_out_map[res_id_out]];
 
 		if (!hw_mgr_res->hw_res[blob_info->base_info->split_id])
-			return 0;
+			continue;
 
 		hw_intf = cam_tfe_hw_mgr_get_hw_intf(blob_info->base_info, ctx);
 		rc = cam_isp_add_cmd_buf_update(

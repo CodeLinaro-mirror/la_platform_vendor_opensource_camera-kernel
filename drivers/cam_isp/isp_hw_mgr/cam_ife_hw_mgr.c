@@ -5339,6 +5339,28 @@ static inline int cam_ife_mgr_hw_check_in_res_type(
 	}
 }
 
+static void cam_ife_mgr_acquire_get_fe_unpacker_fmt(
+	struct cam_isp_in_port_info_v2      *in,
+	struct cam_isp_in_port_generic_info *in_port)
+{
+	int i = 0;
+
+	if (cam_ife_hw_mgr_is_sfe_rd_res(in_port->sfe_in_path_type)) {
+		for (i = 0; i < in_port->num_out_res; i++) {
+			if (in_port->data[i].res_type >= CAM_ISP_SFE_OUT_RES_RDI_0 &&
+				in_port->data[i].res_type < CAM_ISP_SFE_OUT_RES_RDI_4) {
+				in_port->fe_unpacker_fmt  = in_port->data[i].format;
+				CAM_DBG(CAM_ISP, "fe_unpacker_fmt = %d sfe rd 0x%x sfe out 0x%x",
+					in_port->fe_unpacker_fmt, in_port->sfe_in_path_type,
+					in_port->data[i].res_type);
+				break;
+			}
+		}
+	} else {
+		in_port->fe_unpacker_fmt =  in->format & CAM_IFE_DECODE_FORMAT_MASK;
+	}
+}
+
 static inline void cam_ife_mgr_acquire_get_feature_flag_params_v3(
 	struct cam_isp_in_port_info_v3      *in,
 	struct cam_isp_in_port_generic_info *in_port)
@@ -5520,12 +5542,6 @@ static int cam_ife_mgr_acquire_get_unified_structure_v2(
 	in_port->num_out_res              =  in->num_out_res;
 	in_port->sfe_in_path_type         =  (in->sfe_in_path_type & 0xFFFF);
 	in_port->sfe_ife_enable           =  in->sfe_in_path_type >> 16;
-	/*
-	 * Different formats are not supported for fetch engine use-cases
-	 * Use vc0 format [LSB 8 bits], if the input formats are different for each VC
-	 * fail the acquire
-	 */
-	in_port->fe_unpacker_fmt          =  in->format & CAM_IFE_DECODE_FORMAT_MASK;
 
 	cam_ife_mgr_acquire_get_feature_flag_params(in, in_port);
 
@@ -5547,6 +5563,14 @@ static int cam_ife_mgr_acquire_get_unified_structure_v2(
 		in_port->data[i].secure_mode  = in->data[i].secure_mode;
 	}
 
+	/*
+	 * Different formats are not supported for fetch engine use-cases
+	 * Use vc0 format [LSB 8 bits], if the input formats are different for each VC
+	 * fail the acquire
+	 */
+	cam_ife_mgr_acquire_get_fe_unpacker_fmt(in, in_port);
+	CAM_DBG(CAM_ISP, "fe_unpacker_fmt %d, in_port->sfe_in_path_type %d",
+		in_port->fe_unpacker_fmt, in_port->sfe_in_path_type);
 	return 0;
 
 err:
