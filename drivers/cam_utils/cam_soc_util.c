@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -1324,11 +1324,15 @@ int cam_soc_util_clk_enable_default(struct cam_hw_soc_info *soc_info,
 	enum cam_vote_level          apply_level;
 	unsigned long                applied_clk_rate;
 
-	if ((soc_info->num_clk == 0) ||
-		(soc_info->num_clk >= CAM_SOC_MAX_CLK)) {
+	if (soc_info->num_clk >= CAM_SOC_MAX_CLK) {
 		CAM_ERR(CAM_UTIL, "Invalid number of clock %d",
 			soc_info->num_clk);
 		return -EINVAL;
+	}
+
+	if (!soc_info->num_clk) {
+		CAM_ERR(CAM_UTIL, "No clock supported");
+		return rc;
 	}
 
 	rc = cam_soc_util_get_clk_level_to_apply(soc_info, clk_level,
