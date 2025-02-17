@@ -384,10 +384,9 @@ const static struct component_ops cam_sensor_component_ops = {
 	.unbind = cam_sensor_component_unbind,
 };
 
-static int cam_sensor_platform_remove(struct platform_device *pdev)
+static void cam_sensor_platform_remove(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &cam_sensor_component_ops);
-	return 0;
 }
 
 int cam_sensor_i2c_driver_remove_common(struct i2c_client *client)

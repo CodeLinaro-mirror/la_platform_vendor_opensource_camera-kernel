@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/init.h>
 #include <linux/module.h>
@@ -236,7 +236,7 @@ fail_exit:
 	return ret;
 }
 
-static int hdmi_bdg_irq_handler_remove(struct platform_device *pdev)
+static void hdmi_bdg_irq_handler_remove(struct platform_device *pdev)
 {
 	gpio_free(hdmi_bdg_irq_gpio);
 	disable_irq(hdmi_bdg_irq);
@@ -246,7 +246,6 @@ static int hdmi_bdg_irq_handler_remove(struct platform_device *pdev)
 	device_destroy(hdmi_bdg_irq_handler_class, hdmi_bdg_irq_handler_dev);
 	class_destroy(hdmi_bdg_irq_handler_class);
 	unregister_chrdev_region(hdmi_bdg_irq_handler_dev, 1);
-	return 0;
 }
 
 struct platform_driver hdmi_bdg_irq_handler_driver = {

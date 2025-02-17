@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -284,10 +284,9 @@ static int cam_icp_probe(struct platform_device *pdev)
 	return rc;
 }
 
-static int cam_icp_remove(struct platform_device *pdev)
+static void cam_icp_remove(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &cam_icp_component_ops);
-	return 0;
 }
 
 struct platform_driver cam_icp_driver = {

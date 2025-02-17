@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_sensor_spi.h"
@@ -127,7 +127,7 @@ static int32_t cam_spi_tx_helper(struct camera_io_master *client,
 		ctx = tx;
 	} else {
 		txr = len;
-		vaddr_tx = vmalloc(txr);
+		vaddr_tx = kvmalloc(txr, GFP_KERNEL);
 		if (!vaddr_tx) {
 			CAM_ERR(CAM_SENSOR,
 				 "Fail to allocate Memory: len: %u", txr);
@@ -142,10 +142,10 @@ static int32_t cam_spi_tx_helper(struct camera_io_master *client,
 			crx = rx;
 		} else {
 			rxr = len;
-			vaddr_rx = vmalloc(rxr);
+			vaddr_rx = kvmalloc(rxr, GFP_KERNEL);
 			if (!vaddr_rx) {
 				if (!tx)
-					vfree(vaddr_tx);
+					kvfree(vaddr_tx);
 				CAM_ERR(CAM_SENSOR,
 					"Fail to allocate memory: len: %u",
 					rxr);
@@ -172,11 +172,11 @@ static int32_t cam_spi_tx_helper(struct camera_io_master *client,
 
 out:
 	if (!tx) {
-		vfree(vaddr_tx);
+		kvfree(vaddr_tx);
 		vaddr_tx = NULL;
 	}
 	if (!rx) {
-		vfree(vaddr_rx);
+		kvfree(vaddr_rx);
 		vaddr_rx = NULL;
 	}
 	return rc;

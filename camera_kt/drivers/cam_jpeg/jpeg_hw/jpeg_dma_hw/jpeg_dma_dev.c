@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -217,10 +218,9 @@ const static struct component_ops cam_jpeg_dma_component_ops = {
 	.unbind = cam_jpeg_dma_component_unbind,
 };
 
-static int cam_jpeg_dma_remove(struct platform_device *pdev)
+static void cam_jpeg_dma_remove(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &cam_jpeg_dma_component_ops);
-	return 0;
 }
 
 static int cam_jpeg_dma_probe(struct platform_device *pdev)

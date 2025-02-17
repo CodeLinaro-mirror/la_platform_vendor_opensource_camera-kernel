@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_IFE_CSID_DEV_H_
@@ -10,7 +10,7 @@
 #include "cam_isp_hw.h"
 
 int cam_ife_csid_probe(struct platform_device *pdev);
-int cam_ife_csid_remove(struct platform_device *pdev);
+void cam_ife_csid_remove(struct platform_device *pdev);
 
 /**
  * @brief : API to register CSID hw to platform framework.

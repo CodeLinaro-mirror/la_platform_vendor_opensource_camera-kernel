@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -437,7 +437,6 @@ end:
 EXPORT_SYMBOL(cam_mem_mgr_cache_ops);
 
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
-
 #define CAM_MAX_VMIDS 4
 
 static void cam_mem_mgr_put_dma_heaps(void)

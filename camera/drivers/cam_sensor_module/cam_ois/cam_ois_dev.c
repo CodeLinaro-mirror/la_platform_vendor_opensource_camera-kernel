@@ -477,10 +477,9 @@ int cam_ois_i2c_driver_remove_common(struct i2c_client *client)
 	return 0;
 }
 
-static int cam_ois_platform_driver_remove(struct platform_device *pdev)
+static void cam_ois_platform_driver_remove(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &cam_ois_component_ops);
-	return 0;
 }
 
 static const struct of_device_id cam_ois_dt_match[] = {

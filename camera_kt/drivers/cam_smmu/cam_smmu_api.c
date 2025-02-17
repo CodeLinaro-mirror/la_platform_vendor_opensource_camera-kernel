@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -4240,7 +4240,7 @@ static int cam_smmu_probe(struct platform_device *pdev)
 	return rc;
 }
 
-static int cam_smmu_remove(struct platform_device *pdev)
+static void cam_smmu_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 
@@ -4257,10 +4257,7 @@ static int cam_smmu_remove(struct platform_device *pdev)
 		component_del(&pdev->dev, &cam_smmu_fw_dev_component_ops);
 	} else {
 		CAM_ERR(CAM_SMMU, "Unrecognized child device: %s", pdev->name);
-		return -ENODEV;
 	}
-
-	return 0;
 }
 
 struct platform_driver cam_smmu_driver = {

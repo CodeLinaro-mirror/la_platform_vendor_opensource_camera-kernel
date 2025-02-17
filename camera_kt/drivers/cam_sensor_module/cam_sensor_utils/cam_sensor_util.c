@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -34,7 +34,7 @@ static struct i2c_settings_list*
 		return NULL;
 
 	tmp->i2c_settings.reg_setting = (struct cam_sensor_i2c_reg_array *)
-		vzalloc(size * sizeof(struct cam_sensor_i2c_reg_array));
+		kvzalloc(size * sizeof(struct cam_sensor_i2c_reg_array), GFP_KERNEL);
 	if (tmp->i2c_settings.reg_setting == NULL) {
 		list_del(&(tmp->list));
 		kfree(tmp);
@@ -101,7 +101,7 @@ int32_t delete_request(struct i2c_settings_array *i2c_array)
 
 	list_for_each_entry_safe(i2c_list, i2c_next,
 		&(i2c_array->list_head), list) {
-		vfree(i2c_list->i2c_settings.reg_setting);
+		kvfree(i2c_list->i2c_settings.reg_setting);
 		list_del(&(i2c_list->list));
 		kfree(i2c_list);
 	}

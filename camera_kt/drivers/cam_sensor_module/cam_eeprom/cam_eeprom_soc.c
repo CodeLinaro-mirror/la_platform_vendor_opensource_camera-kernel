@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -128,7 +129,7 @@ int cam_eeprom_parse_dt_memory_map(struct device_node *node,
 		return rc;
 	}
 
-	map = vzalloc((sizeof(*map) * data->num_map));
+	map = kvzalloc((sizeof(*map) * data->num_map), GFP_KERNEL);
 	if (!map) {
 		rc = -ENOMEM;
 		return rc;
@@ -177,7 +178,7 @@ int cam_eeprom_parse_dt_memory_map(struct device_node *node,
 		data->num_data += map[i].mem.valid_size;
 	}
 
-	data->mapdata = vzalloc(data->num_data);
+	data->mapdata = kvzalloc(data->num_data, GFP_KERNEL);
 	if (!data->mapdata) {
 		rc = -ENOMEM;
 		goto ERROR;
@@ -185,7 +186,7 @@ int cam_eeprom_parse_dt_memory_map(struct device_node *node,
 	return rc;
 
 ERROR:
-	vfree(data->map);
+	kvfree(data->map);
 	memset(data, 0, sizeof(*data));
 	return rc;
 }

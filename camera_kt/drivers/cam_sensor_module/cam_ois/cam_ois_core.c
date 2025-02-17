@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -395,7 +395,7 @@ static int cam_ois_fw_download(struct cam_ois_ctrl_t *o_ctrl)
 	i2c_reg_setting.size = total_bytes;
 	i2c_reg_setting.delay = 0;
 	fw_size = (sizeof(struct cam_sensor_i2c_reg_array) * total_bytes);
-	vaddr = vmalloc(fw_size);
+	vaddr = kvmalloc(fw_size, GFP_KERNEL);
 	if (!vaddr) {
 		CAM_ERR(CAM_OIS,
 			"Failed in allocating i2c_array: fw_size: %u", fw_size);
@@ -421,7 +421,7 @@ static int cam_ois_fw_download(struct cam_ois_ctrl_t *o_ctrl)
 		CAM_ERR(CAM_OIS, "OIS FW download failed %d", rc);
 		goto release_firmware;
 	}
-	vfree(vaddr);
+	kvfree(vaddr);
 	vaddr = NULL;
 	fw_size = 0;
 	release_firmware(fw);
@@ -438,7 +438,7 @@ static int cam_ois_fw_download(struct cam_ois_ctrl_t *o_ctrl)
 	i2c_reg_setting.size = total_bytes;
 	i2c_reg_setting.delay = 0;
 	fw_size = (sizeof(struct cam_sensor_i2c_reg_array) * total_bytes);
-	vaddr = vmalloc(fw_size);
+	vaddr = kvmalloc(fw_size, GFP_KERNEL);
 	if (!vaddr) {
 		CAM_ERR(CAM_OIS,
 			"Failed in allocating i2c_array: fw_size: %u", fw_size);
@@ -464,7 +464,7 @@ static int cam_ois_fw_download(struct cam_ois_ctrl_t *o_ctrl)
 		CAM_ERR(CAM_OIS, "OIS FW download failed %d", rc);
 
 release_firmware:
-	vfree(vaddr);
+	kvfree(vaddr);
 	vaddr = NULL;
 	fw_size = 0;
 	release_firmware(fw);

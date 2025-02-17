@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -897,10 +897,9 @@ static int cam_ir_led_platform_probe(struct platform_device *pdev)
 	return rc;
 }
 
-static int cam_ir_led_platform_remove(struct platform_device *pdev)
+static void cam_ir_led_platform_remove(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &cam_ir_led_component_ops);
-	return 0;
 }
 
 static struct cam_ir_led_table cam_pmic_ir_led_table = {
