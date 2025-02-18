@@ -21,7 +21,7 @@ modules: cam_generated_h
 
 headers_install:
 	echo "Processing target $@"
-	IN_DIR=$(HEADERS_DIR)/include/uapi/camera/media/ OUT_DIR=sanitized_headers/camera/media/ bash sanitize_uapi.sh
+	KERNEL_SCRIPT=$(KERNEL_SRC) IN_DIR=$(HEADERS_DIR)/include/uapi/camera/media/ OUT_DIR=sanitized_headers/camera/media/ bash scripts/sanitize_uapi.sh
 
 %:
 	echo "Processing glob target $@"
