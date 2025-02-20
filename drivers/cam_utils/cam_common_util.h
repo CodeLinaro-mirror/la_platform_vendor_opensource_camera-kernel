@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_COMMON_UTIL_H_
@@ -32,6 +33,14 @@
 	}                                                                      \
 })
 
+#define CAM_CONVERT_TIMESTAMP_FORMAT(ts, hrs, min, sec, ms)                                  \
+({                                                                                           \
+	uint64_t tmp = ((ts).tv_sec);                                                        \
+	(ms) = ((ts).tv_nsec) / 1000000;                                                     \
+	(sec) = do_div(tmp, 60);                                                             \
+	(min) = do_div(tmp, 60);                                                             \
+	(hrs) = do_div(tmp, 24);                                                             \
+})
 
 /**
  * cam_common_util_get_string_index()
