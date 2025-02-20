@@ -42,6 +42,7 @@ struct csiphy_reg_t csiphy_reset_exit_reg_2_2_0[] = {
 	{0x1000, 0x00, 0x0A, CSIPHY_2PH_COMBO_REGS},
 	{0x1000, 0x0E, 0x0A, CSIPHY_3PH_REGS},
 	{0x1000, 0x08, 0x0A, CSIPHY_2PH_3PH_COMBO_REGS},
+	{0x1000, 0x0C, 0x00, CSIPHY_3PH_COMBO_REGS},
 };
 
 struct csiphy_reg_t csiphy_irq_reg_2_2_0[] = {
