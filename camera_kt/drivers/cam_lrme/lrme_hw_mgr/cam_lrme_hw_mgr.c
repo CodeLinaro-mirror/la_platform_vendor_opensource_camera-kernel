@@ -539,11 +539,11 @@ static int cam_lrme_mgr_cb(void *data,
 	frame_req = cb_args->frame_req;
 
 	if (cb_args->cb_type & CAM_LRME_CB_PUT_FRAME) {
+		memset(frame_req, 0x0, sizeof(*frame_req));
+		INIT_LIST_HEAD(&frame_req->frame_list);
 		cam_lrme_mgr_util_put_frame_req(&hw_mgr->frame_free_list,
 				frame_req,
 				&hw_mgr->free_req_lock, true);
-		memset(frame_req, 0x0, sizeof(*frame_req));
-		INIT_LIST_HEAD(&frame_req->frame_list);
 		cb_args->cb_type &= ~CAM_LRME_CB_PUT_FRAME;
 		frame_req = NULL;
 	}
@@ -582,11 +582,11 @@ static int cam_lrme_mgr_cb(void *data,
 	} else {
 		CAM_ERR(CAM_LRME, "No cb function");
 	}
+	memset(frame_req, 0x0, sizeof(*frame_req));
+	INIT_LIST_HEAD(&frame_req->frame_list);
 	cam_lrme_mgr_util_put_frame_req(&hw_mgr->frame_free_list,
 				frame_req,
 				&hw_mgr->free_req_lock, true);
-	memset(frame_req, 0x0, sizeof(*frame_req));
-	INIT_LIST_HEAD(&frame_req->frame_list);
 
 	rc = cam_lrme_mgr_util_schedule_frame_req(hw_mgr, hw_device);
 

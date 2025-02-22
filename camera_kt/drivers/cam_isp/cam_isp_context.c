@@ -451,7 +451,6 @@ static int __cam_isp_ctx_enqueue_init_request(
 	struct cam_isp_prepare_hw_update_data *req_update_old;
 	struct cam_isp_prepare_hw_update_data *req_update_new;
 	struct cam_isp_prepare_hw_update_data *hw_update_data;
-	struct cam_kmd_buf_info *kmd_buff_old = NULL;
 
 	spin_lock_bh(&ctx->lock);
 	if (list_empty(&ctx->pending_req_list)) {
@@ -506,9 +505,6 @@ static int __cam_isp_ctx_enqueue_init_request(
 			memcpy(&req_old->pf_data, &req->pf_data,
 				sizeof(struct cam_hw_mgr_dump_pf_data));
 
-			kmd_buff_old = &(req_isp_old->hw_update_data.kmd_cmd_buff_info);
-			cam_mem_put_kref(kmd_buff_old->handle);
-
 			if (req_isp_new->hw_update_data.num_reg_dump_buf) {
 				req_update_new = &req_isp_new->hw_update_data;
 				req_update_old = &req_isp_old->hw_update_data;
@@ -528,7 +524,8 @@ static int __cam_isp_ctx_enqueue_init_request(
 				hw_update_data->frame_header_cpu_addr;
 
 			req_old->request_id = req->request_id;
-			list_add_tail(&req->list, &ctx->free_req_list);
+
+			__cam_isp_ctx_move_req_to_free_list(ctx, req);
 		}
 	} else {
 		CAM_WARN(CAM_ISP,
