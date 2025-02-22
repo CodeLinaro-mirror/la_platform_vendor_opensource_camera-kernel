@@ -682,7 +682,7 @@ static bool cam_ife_hw_mgr_check_grp_cfg(
 {
 	int i;
 	struct cam_ife_hw_mgr_stream_grp_config  *grp_cfg;
-	bool rc = true;
+	bool rc = false;
 
 	for (i = 0; i < CAM_ISP_STREAM_GROUP_CFG_MAX; i++) {
 		if (!g_ife_sns_grp_cfg.grp_cfg[i])
@@ -798,7 +798,7 @@ int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 
 	for (i = 0; i < sensor_grp_config->num_grp_cfg; i++) {
 		stream_grp_cfg = &sensor_grp_config->stream_grp_cfg[i];
-		if (stream_grp_cfg->stream_cfg_cnt >= CAM_ISP_STREAM_CFG_MAX) {
+		if (stream_grp_cfg->stream_cfg_cnt > CAM_ISP_STREAM_CFG_MAX) {
 			CAM_ERR(CAM_ISP,
 				"stream config count %d exceed max supported value %d for stream_grp_cfg idx:%d",
 				stream_grp_cfg->stream_cfg_cnt, CAM_ISP_STREAM_CFG_MAX, i);
@@ -838,11 +838,6 @@ int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 				&grp_cfg->res_pool[j].list,
 				&grp_cfg->free_res_list);
 		}
-	}
-
-	for (i = 0; i < sensor_grp_config->num_grp_cfg; i++) {
-		stream_grp_cfg = &sensor_grp_config->stream_grp_cfg[i];
-		grp_cfg = g_ife_sns_grp_cfg.grp_cfg[i];
 
 		grp_cfg->res_type     = stream_grp_cfg->res_type;
 		grp_cfg->lane_type    = stream_grp_cfg->lane_type;
@@ -888,7 +883,7 @@ int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 					goto err;
 			}
 			grp_cfg->stream_cfg_cnt++;
-			if (grp_cfg->stream_cfg_cnt >= CAM_ISP_STREAM_CFG_MAX) {
+			if (grp_cfg->stream_cfg_cnt > CAM_ISP_STREAM_CFG_MAX) {
 				CAM_ERR(CAM_ISP,
 					"stream config count exceed max supported value");
 				rc = -EFAULT;
