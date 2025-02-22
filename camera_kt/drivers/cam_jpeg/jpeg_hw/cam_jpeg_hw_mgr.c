@@ -714,7 +714,7 @@ static int cam_jpeg_mgr_config_hw(void *hw_mgr_priv, void *config_hw_args)
 		p_cfg_req->hw_cfg_args.hw_update_entries,
 		p_cfg_req->hw_cfg_args.num_hw_update_entries);
 
-	list_add_tail(&p_cfg_req->list, &hw_mgr->hw_config_req_list);
+	cam_jpeg_mgr_move_req_to_free_list(p_cfg_req);
 	mutex_unlock(&hw_mgr->hw_mgr_mutex);
 
 	task_data->data = (void *)(uintptr_t)p_cfg_req->dev_type;
