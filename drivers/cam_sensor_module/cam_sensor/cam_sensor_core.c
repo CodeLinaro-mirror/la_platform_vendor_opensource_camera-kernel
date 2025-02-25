@@ -2128,6 +2128,28 @@ int cam_sensor_no_crm_resume_apply(
 	return rc;
 }
 
+int cam_sensor_no_crm_notify_dev(uint32_t dev_hdl,
+	struct cam_req_mgr_no_crm_notify_device *notify_subdev)
+{
+	int rc = 0;
+	struct cam_sensor_ctrl_t *s_ctrl = NULL;
+	uint16_t *p_delay = NULL;
+
+	s_ctrl = (struct cam_sensor_ctrl_t *)
+		cam_get_device_priv(notify_subdev->dev_hdl);
+
+	if (!s_ctrl) {
+		CAM_ERR(CAM_SENSOR, "Device data is NULL");
+		return -EINVAL;
+	}
+
+	CAM_DBG(CAM_SENSOR, "dev hdl %x cmd %d", dev_hdl, notify_subdev->command);
+	p_delay = (uint16_t *)notify_subdev->data;
+	*p_delay = s_ctrl->pipeline_delay;
+
+	return rc;
+}
+
 int cam_sensor_no_crm_add_req(
 	int32_t dev_hdl,
 	struct cam_packet *packet,
