@@ -2151,6 +2151,13 @@ static int cam_tfe_csid_release(void *hw_priv,
 		csid_hw->hw_intf->hw_idx, res->res_type, res->res_id);
 
 	path_data = (struct cam_tfe_csid_path_cfg *)res->res_priv;
+	if (path_data->cid >= CAM_TFE_CSID_CID_MAX) {
+		CAM_ERR(CAM_ISP, "CSID:%d Invalid cid:%d",
+				csid_hw->hw_intf->hw_idx, path_data->cid);
+		rc = -EINVAL;
+		goto end;
+	}
+
 	if (csid_hw->cid_res[path_data->cid].cnt)
 		csid_hw->cid_res[path_data->cid].cnt--;
 
