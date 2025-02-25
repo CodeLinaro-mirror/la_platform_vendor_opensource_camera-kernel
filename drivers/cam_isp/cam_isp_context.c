@@ -9445,8 +9445,6 @@ static int __cam_isp_ctx_ul_fastpath_retrieve_result_util(
 	struct cam_ctx_request *req, *req_tmp;
 	struct cam_isp_ctx_req *req_isp;
 
-	mutex_lock(&isp_ctx->isp_mutex);
-
 	if (list_empty(&ctx->active_req_list)) {
 		/* Check in wait list */
 		if (!list_empty(&ctx->wait_req_list)) {
@@ -9534,7 +9532,6 @@ static int __cam_isp_ctx_ul_fastpath_retrieve_result_util(
 		last_consumed_addr, ctx->ctx_id, ctx->link_hdl);
 
 end:
-	mutex_unlock(&isp_ctx->isp_mutex);
 	return rc;
 }
 
@@ -10137,6 +10134,7 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 		return -ETIME;
 	}
 
+	mutex_lock(&isp_ctx->isp_mutex);
 	spin_lock_irqsave(&isp_ctx->ul_fp_params.fast_path_lock, flags);
 	wr_idx = atomic_read(&isp_ctx->ul_fp_params.write_idx);
 	rd_idx = atomic_read(&isp_ctx->ul_fp_params.read_idx);
@@ -10147,6 +10145,7 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 		CAM_ERR(CAM_ISP,
 			"No results to process in ctx: %u on link: 0x%x",
 			ctx->ctx_id, ctx->link_hdl);
+		mutex_unlock(&isp_ctx->isp_mutex);
 		return -EAGAIN;
 	}
 
@@ -10187,6 +10186,7 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 	atomic_set(&isp_ctx->ul_fp_params.read_idx, rd_idx);
 
 	*num_responses = result_idx;
+	mutex_unlock(&isp_ctx->isp_mutex);
 	return 0;
 }
 
