@@ -240,8 +240,10 @@ static int cam_csiphy_component_bind(struct device *dev,
 		&csiphy_subdev_intern_ops;
 	new_csiphy_dev->v4l2_dev_str.ops =
 		&csiphy_subdev_ops;
-	strlcpy(new_csiphy_dev->device_name, CAMX_CSIPHY_DEV_NAME,
-		sizeof(new_csiphy_dev->device_name));
+	snprintf(new_csiphy_dev->device_name,
+				CAM_CTX_DEV_NAME_MAX_LENGTH,
+				"%s%d", CAMX_CSIPHY_DEV_NAME,
+				new_csiphy_dev->soc_info.index);
 	new_csiphy_dev->v4l2_dev_str.name =
 		new_csiphy_dev->device_name;
 	new_csiphy_dev->v4l2_dev_str.sd_flags =

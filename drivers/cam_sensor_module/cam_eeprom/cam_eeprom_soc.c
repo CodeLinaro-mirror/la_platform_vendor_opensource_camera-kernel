@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -12,6 +13,7 @@
 
 #include "cam_eeprom_soc.h"
 #include "cam_debug_util.h"
+#include "cam_common_util.h"
 
 #define cam_eeprom_spi_parse_cmd(spi_dev, name, out)          \
 	{                                                     \

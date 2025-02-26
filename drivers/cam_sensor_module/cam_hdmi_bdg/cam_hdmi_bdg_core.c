@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/module.h>
 #include <linux/firmware.h>
@@ -1003,6 +1004,7 @@ int cam_hdmi_bdg_set_cam_ctrl(struct cam_sensor_ctrl_t *s_ctrl)
 	}
 	return rc;
 }
+EXPORT_SYMBOL(cam_hdmi_bdg_set_cam_ctrl);
 
 void cam_hdmi_bdg_unset_cam_ctrl(void)
 {

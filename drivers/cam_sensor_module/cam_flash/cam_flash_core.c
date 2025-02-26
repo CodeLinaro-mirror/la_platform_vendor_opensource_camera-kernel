@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023,2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -1874,8 +1874,17 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 
 int cam_flash_publish_dev_info(struct cam_req_mgr_device_info *info)
 {
+	struct cam_flash_ctrl *fctrl;
+
+	fctrl = (struct cam_flash_ctrl *)cam_get_device_priv(info->dev_hdl);
+	if (!fctrl) {
+		CAM_ERR(CAM_FLASH, " Device data is NULL");
+		return -EINVAL;
+	}
+
 	info->dev_id = CAM_REQ_MGR_DEVICE_FLASH;
-	strlcpy(info->name, CAM_FLASH_NAME, sizeof(info->name));
+	snprintf(info->name, sizeof(info->name), "%s(camera-flash%u)",
+		CAM_FLASH_NAME, fctrl->soc_info.index);
 	info->p_delay = CAM_FLASH_PIPELINE_DELAY;
 	info->trigger = CAM_TRIGGER_POINT_SOF;
 	return 0;
