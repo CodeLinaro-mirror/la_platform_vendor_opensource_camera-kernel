@@ -7,7 +7,11 @@ endif
 
 # Include Architecture configurations
 ifeq ($(CONFIG_ARCH_PINEAPPLE), y)
+ifeq ($(CONFIG_ARCH_QTI_VM), y)
+include $(CAMERA_KERNEL_ROOT)/config/pineapple_tuivm.mk
+else
 include $(CAMERA_KERNEL_ROOT)/config/pineapple.mk
+endif
 endif
 
 ifeq ($(CONFIG_ARCH_KALAMA), y)
@@ -58,8 +62,8 @@ ifeq ($(CONFIG_ARCH_CAPE), y)
 include $(CAMERA_KERNEL_ROOT)/config/cape.mk
 endif
 
-ifeq ($(CONFIG_ARCH_PARROT), y)
-include $(CAMERA_KERNEL_ROOT)/config/parrot.mk
+ifeq ($(CONFIG_ARCH_MALABAR), y)
+include $(CAMERA_KERNEL_ROOT)/config/malabar.mk
 endif
 
 ifdef ($(KBUILD_EXTRA_CONFIGS))
@@ -68,6 +72,7 @@ endif
 
 # List of all camera-kernel headers
 cam_include_dirs := $(shell dirname `find $(CAMERA_KERNEL_ROOT) -name '*.h'` | uniq)
+cam_include_dirs += $(shell dirname `find $(CAMERA_KERNEL_ROOT)/common -name '*.h'` | uniq)
 
 # Include UAPI headers
 USERINCLUDE +=                              \
