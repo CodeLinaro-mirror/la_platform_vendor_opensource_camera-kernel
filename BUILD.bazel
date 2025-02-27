@@ -8,7 +8,7 @@ load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
 
 ddk_headers(
     name = "camera_uapi_headers",
-    hdrs = glob(["include/uapi/**/*.h"]),
+    hdrs = glob(["include/uapi/camera/**/*.h"]),
     includes = [
         "include/uapi/camera",
         "include/uapi/camera/media",
@@ -113,6 +113,54 @@ ddk_headers(
     ],
 )
 
+genrule(
+    name = "camera_banner_header",
+    srcs = [],
+    outs = ["cam_generated.h"],
+    cmd = """
+      {
+        printf '#define CAMERA_COMPILE_TIME "%s"\n' "$$(date)"
+        printf '#define CAMERA_COMPILE_BY "%s"\n' "$$(whoami)"
+        printf '#define CAMERA_COMPILE_HOST "%s"\n' "$$(uname -n)"
+      } > "$@"
+    """
+)
+
+ddk_headers(
+    name = "camera_banner",
+    hdrs = [":camera_banner_header"],
+)
+
 load(":camera_modules.bzl", "define_camera_module")
 
 define_camera_module()
+
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+string_flag(
+    name = "project_name",
+    build_setting_default = "none",
+)
+config_setting(
+    name = "no_project",
+    flag_values = {":project_name": "none"},
+)
+config_setting(
+    name = "pineapple",
+    flag_values = {":project_name": "pineapple"},
+)
+config_setting(
+    name = "lahaina",
+    flag_values = {":project_name": "lahaina"},
+)
+config_setting(
+    name = "canoe",
+    flag_values = {":project_name": "canoe"},
+)
+config_setting(
+    name = "sun",
+    flag_values = {":project_name": "sun"},
+)
+config_setting(
+    name = "malabar",
+    flag_values = {":project_name": "malabar"},
+)
