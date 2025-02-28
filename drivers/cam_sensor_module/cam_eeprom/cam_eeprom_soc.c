@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of.h>
@@ -9,6 +10,7 @@
 #include <cam_sensor_util.h>
 #include <cam_sensor_io.h>
 #include <cam_req_mgr_util.h>
+#include <linux/vmalloc.h>
 
 #include "cam_eeprom_soc.h"
 #include "cam_debug_util.h"
