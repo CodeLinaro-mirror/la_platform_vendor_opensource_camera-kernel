@@ -74,3 +74,4 @@ release_soc_res:
 	cam_soc_util_release_platform_resource(soc_info);
 	return rc;
 }
+EXPORT_SYMBOL(cam_ir_led_get_dt_data);

@@ -106,6 +106,7 @@ def _define_module(target, variant):
             "drivers/cam_cdm/cam_cdm_core_common.c",
             "drivers/cam_cdm/cam_cdm_virtual_core.c",
             "drivers/cam_cdm/cam_cdm_hw_core.c",
+            "drivers/camera_main.c",
         ],
         conditional_srcs = {
             "CONFIG_QCOM_CX_IPEAK": {
@@ -216,6 +217,12 @@ def _define_module(target, variant):
                     "drivers/cam_sensor_module/cam_flash/cam_flash_soc.c",
                     "drivers/cam_sensor_module/cam_hdmi_bdg/cam_hdmi_bdg_core.c",
                     "drivers/cam_sensor_module/cam_dp_bdg/cam_dp_bdg_core.c",
+                    "drivers/cam_sensor_module/cam_hdmi_bdg/cam_hdmi_bdg_dev.c",
+                    "drivers/cam_sensor_module/cam_dp_bdg/cam_dp_bdg_dev.c",
+                    "drivers/cam_sensor_module/cam_ir_led/cam_ir_led_dev.c",
+                    "drivers/cam_sensor_module/cam_ir_led/cam_ir_led_core.c",
+                    "drivers/cam_sensor_module/cam_ir_led/cam_ir_led_soc.c",
+
                 ],
             },
             "CONFIG_SPECTRA_CUSTOM": {

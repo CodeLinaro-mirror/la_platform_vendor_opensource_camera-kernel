@@ -7,7 +7,7 @@
 #ifndef _CAM_TOP_TPG_H_
 #define _CAM_TOP_TPG_H_
 
-void cam_top_tpg_init_module(void);
+int cam_top_tpg_init_module(void);
 void cam_top_tpg_exit_module(void);
 
 #endif /*_CAM_TOP_TPG_H_ */

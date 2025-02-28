@@ -125,6 +125,7 @@ __builtin_choose_expr(((module_id) == CAM_DMA_FENCE), "CAM-DMA-FENCE",      \
 __builtin_choose_expr(((module_id) == CAM_SENSOR_UTIL), "CAM-SENSOR-UTIL",      \
 __builtin_choose_expr(((module_id) == CAM_SYNX), "CAM-SYNX",                \
 __builtin_choose_expr(((module_id) == CAM_IO_DUMP), "CAM-IO-DUMP",          \
+__builtin_choose_expr(((module_id) == CAM_IO_DUMP), "CAM_IR_LED",          \
 "CAMERA"))))))))))))))))))))))))))))))))))))))
 
 enum cam_log_print_type {

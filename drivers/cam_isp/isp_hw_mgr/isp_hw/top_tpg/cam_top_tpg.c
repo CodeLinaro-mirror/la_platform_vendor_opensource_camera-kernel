@@ -41,9 +41,9 @@ struct platform_driver cam_top_tpg_driver = {
 	},
 };
 
-void cam_top_tpg_init_module(void)
+int cam_top_tpg_init_module(void)
 {
-	 platform_driver_register(&cam_top_tpg_driver);
+	return platform_driver_register(&cam_top_tpg_driver);
 }
 
 void cam_top_tpg_exit_module(void)
