@@ -14,7 +14,6 @@
 #include <linux/list_sort.h>
 #include <linux/spi/spi.h>
 #include <linux/firmware/qcom/qcom_scm.h>
-#include <linux/firmware/qcom/qcom_scm_addon.h>
 
 #include "cam_csiphy_dev.h"
 #include "cam_cpastop_hw.h"
