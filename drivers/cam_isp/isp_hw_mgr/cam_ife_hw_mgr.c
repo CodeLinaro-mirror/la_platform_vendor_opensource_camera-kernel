@@ -3811,7 +3811,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_pixel(
 	}
 
 	for (i = 0; i < num_out_res; i++) {
-		if (!in_port->ipp_count) {
+		if (!in_port->ipp_count && !in_port->ppp_count) {
 			out_port = &in_port->data[0];
 			res_type = CAM_ISP_IFE_OUT_RES_BASE + i;
 		} else {
