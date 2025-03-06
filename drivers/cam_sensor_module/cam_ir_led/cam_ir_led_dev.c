@@ -30,6 +30,8 @@
 #define PCA963X_MODE2         0x11
 
 static int32_t cam_ir_cut_on(struct cam_ir_led_ctrl *ictrl);
+static int32_t cam_i2c_ir_led_off(struct cam_ir_led_ctrl *ictrl);
+static int32_t cam_pmic_ir_cut_off(struct cam_ir_led_ctrl *ictrl);
 
 static struct cam_ir_led_table cam_pmic_ir_led_table;
 static struct cam_ir_led_table cam_gpio_ir_led_table;
@@ -173,15 +175,30 @@ static int32_t cam_pmic_ir_led_on(
 static int32_t cam_pmic_ir_cut_off(struct cam_ir_led_ctrl *ictrl)
 {
 	int32_t rc = 0;
-	CAM_DBG(CAM_IR_LED, "Enter");
+	CAM_DBG(CAM_IR_LED, "Enter cam_pmic_ir_cut_off");
 
 	rc = gpio_direction_input(
 		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[0].gpio);
 	if (rc)
 		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
 
-	CAM_INFO(CAM_IR_LED, "CAM_IR_CUT_PACKET_OPCODE_OFF_Output_GPIO_1:%d",
+	CAM_INFO(CAM_IR_LED, "CAM_IR_CUT_PACKET_OPCODE_OFF_Output_GPIO_0:%d   1",
 		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[0].gpio);
+	rc = gpio_direction_output(
+		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[0].gpio,
+		1);
+	if (rc) {
+		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
+		return rc;
+	}
+	rc = gpio_direction_output(
+		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[1].gpio,
+		0);
+	if (rc) {
+		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
+		return rc;
+	}
+	msleep(CAM_IR_MSLEEP_VALUE);
 	rc = gpio_direction_output(
 		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[0].gpio,
 		0);
@@ -189,16 +206,8 @@ static int32_t cam_pmic_ir_cut_off(struct cam_ir_led_ctrl *ictrl)
 		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
 		return rc;
 	}
-	CAM_INFO(CAM_IR_LED, "CAM_IR_CUT_PACKET_OPCODE_OFF_Output_GPIO_2:%d",
+	CAM_INFO(CAM_IR_LED, "sleep CAM_IR_CUT_PACKET_OPCODE_OFF_Output_GPIO_1:%d    0",
 		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[1].gpio);
-	rc = gpio_direction_output(
-		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[1].gpio,
-		1);
-	if (rc) {
-		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
-		return rc;
-	}
-	msleep(CAM_IR_MSLEEP_VALUE);
 	rc = gpio_direction_output(
 		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[1].gpio,
 		0);
@@ -214,11 +223,19 @@ static int32_t cam_pmic_ir_cut_on(
 	struct cam_ir_led_set_on_off *ir_led_data)
 {
     int32_t rc = 0;
-    CAM_DBG(CAM_IR_LED, "Enter");
+    CAM_DBG(CAM_IR_LED, "Enter cam_pmic_ir_cut_on, ictrl->ir_led_state:%d", ictrl->ir_led_state);
 
     if (ictrl->ir_led_state == CAM_IR_LED_STATE_ON) {
         if (ictrl->pwm_dev)
             pwm_disable(ictrl->pwm_dev);
+    }
+
+    rc = gpio_direction_output(
+            ictrl->soc_info.gpio_data->cam_gpio_common_tbl[0].gpio,
+            0);
+    if (rc) {
+        CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
+        return rc;
     }
 
     rc = gpio_direction_output(
@@ -231,7 +248,16 @@ static int32_t cam_pmic_ir_cut_on(
     msleep(CAM_IR_MSLEEP_VALUE);
     rc = gpio_direction_output(
             ictrl->soc_info.gpio_data->cam_gpio_common_tbl[0].gpio,
-            1);
+            0);
+    if (rc) {
+        CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
+        return rc;
+    }
+	CAM_DBG(CAM_IR_LED, "sleep CAM_IR_CUT_PACKET_OPCODE_ON_Output_GPIO_1:%d   1",
+		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[1].gpio);
+    rc = gpio_direction_output(
+            ictrl->soc_info.gpio_data->cam_gpio_common_tbl[1].gpio,
+            0);
     if (rc) {
         CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
         return rc;
@@ -245,14 +271,30 @@ static int32_t cam_ir_cut_on(struct cam_ir_led_ctrl *ictrl)
 
 	rc = gpio_direction_output(
 		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[0].gpio,
-			1);
+		0);
 	if (rc) {
 		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
 		return rc;
 	}
+
+	rc = gpio_direction_output(
+		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[1].gpio,
+		1);
+	if (rc) {
+		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
+		return rc;
+	}
+
 	msleep(CAM_IR_MSLEEP_VALUE);
 	rc = gpio_direction_output(
 		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[0].gpio,
+		0);
+	if (rc) {
+		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
+		return rc;
+	}
+	rc = gpio_direction_output(
+		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[1].gpio,
 		0);
 	if (rc) {
 		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
@@ -268,8 +310,7 @@ static int32_t cam_i2c_ir_led_off(struct cam_ir_led_ctrl *ictrl)
 	uint32_t ledout_addr = PCA963X_LEDOUT_REG;
 	uint32_t ledout;
 
-	CAM_DBG(CAM_IR_LED, "Enter");
-
+	CAM_DBG(CAM_IR_LED, "Enter IRLED_OFF");
 	ledout = i2c_smbus_read_byte_data(ictrl->io_master_info.client, ledout_addr);
 
 	rc = i2c_smbus_write_byte_data(ictrl->io_master_info.client,
@@ -285,37 +326,6 @@ static int32_t cam_i2c_ir_led_off(struct cam_ir_led_ctrl *ictrl)
 			PCA963X_MODE1_REG, BIT(4));
 	}
 
-	rc = gpio_direction_input(
-		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[0].gpio);
-	if (rc)
-		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
-
-	CAM_INFO(CAM_IR_LED, "CAM_IR_CUT_PACKET_OPCODE_OFF_Output_GPIO_1:%d",
-		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[0].gpio);
-	rc = gpio_direction_output(
-		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[0].gpio,
-		0);
-	if (rc) {
-		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
-		return rc;
-	}
-	CAM_INFO(CAM_IR_LED, "CAM_IR_CUT_PACKET_OPCODE_OFF_Output_GPIO_2:%d",
-		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[1].gpio);
-	rc = gpio_direction_output(
-		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[1].gpio,
-		1);
-	if (rc) {
-		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
-		return rc;
-	}
-	msleep(CAM_IR_MSLEEP_VALUE);
-	rc = gpio_direction_output(
-		ictrl->soc_info.gpio_data->cam_gpio_common_tbl[1].gpio,
-		0);
-	if (rc) {
-		CAM_ERR(CAM_IR_LED, "gpio operation failed(%d)", rc);
-		return rc;
-	}
 	return rc;
 }
 
@@ -329,8 +339,7 @@ static int32_t cam_i2c_ir_led_on(
 	uint8_t mask = PCA963X_LED0_MASK;
 	uint8_t brightness = ir_led_data->brightness;
 
-	CAM_INFO(CAM_IR_LED, "Enter IRLED_ON");
-
+        CAM_INFO(CAM_IR_LED, "Enter IRLED_ON");
 	ledout = i2c_smbus_read_byte_data(ictrl->io_master_info.client, ledout_addr);
 
 	switch (brightness) {
@@ -376,19 +385,6 @@ static int32_t cam_i2c_ir_led_on(
 	}
 
 	return ret;
-}
-
-static int32_t cam_i2c_ir_cut_on(
-	struct cam_ir_led_ctrl *ictrl,
-	struct cam_ir_led_set_on_off *ir_led_data)
-{
-	CAM_INFO(CAM_IR_LED, "Enter IRCUT ON");
-
-	if (ictrl->ir_led_state == CAM_IR_LED_STATE_ON) {
-		cam_i2c_ir_led_off(ictrl);
-	}
-
-	return cam_ir_cut_on(ictrl);
 }
 
 static int32_t cam_ir_led_handle_init(
@@ -437,7 +433,7 @@ static int32_t cam_ir_led_config(struct cam_ir_led_ctrl *ictrl,
 	struct cam_ir_led_set_on_off *cam_ir_led_info = NULL;
 
 	if (!ictrl || !arg) {
-		CAM_ERR(CAM_IR_LED, "ictrl/arg is NULL");
+		CAM_ERR(CAM_IR_LED, "enter cam_ir_led_config");
 		return -EINVAL;
 	}
 	/* getting CSL Packet */
@@ -496,22 +492,22 @@ static int32_t cam_ir_led_config(struct cam_ir_led_ctrl *ictrl,
 		}
 		break;
 	case CAM_IR_LED_PACKET_OPCODE_OFF:
-		if (ictrl->ir_led_state != CAM_IR_LED_STATE_ON) {
-			CAM_DBG(CAM_IR_LED,
-				"IRLED_OFF NA, Already OFF, state:%d",
-				ictrl->ir_led_state);
-			return 0;
-		}
+		if (ictrl->func_tbl->camera_ir_cut_off != NULL)
+			rc = ictrl->func_tbl->camera_ir_cut_off(ictrl);
+
 		if (ictrl->func_tbl->camera_ir_led_off != NULL) {
+			if (ictrl->ir_led_state != CAM_IR_LED_STATE_ON) {
+				CAM_DBG(CAM_IR_LED,
+					"IRLED_OFF NA, Already OFF, state:%d",
+					ictrl->ir_led_state);
+				return 0;
+			}
 			rc = ictrl->func_tbl->camera_ir_led_off(ictrl);
 			if (rc < 0) {
 				CAM_ERR(CAM_IR_LED,
 					"Fail to turn irled OFF rc=%d", rc);
 				return rc;
 			}
-
-			if (ictrl->func_tbl->camera_ir_cut_off != NULL)
-				rc = ictrl->func_tbl->camera_ir_cut_off(ictrl);
 
 			ictrl->ir_led_state = CAM_IR_LED_STATE_OFF;
 		}
@@ -935,7 +931,7 @@ static struct cam_ir_led_table cam_i2c_ir_led_table = {
 		.camera_ir_led_off = &cam_i2c_ir_led_off,
 		.camera_ir_led_on = &cam_i2c_ir_led_on,
 		.camera_ir_cut_off = &cam_pmic_ir_cut_off,
-		.camera_ir_cut_on = &cam_i2c_ir_cut_on,
+		.camera_ir_cut_on = &cam_pmic_ir_cut_on,
 	},
 };
 

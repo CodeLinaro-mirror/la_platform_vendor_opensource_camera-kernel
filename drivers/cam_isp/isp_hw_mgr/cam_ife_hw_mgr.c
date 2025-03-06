@@ -6174,7 +6174,9 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		break;
 	case CAM_ISP_GENERIC_BLOB_TYPE_BW_CONFIG: {
 		struct cam_isp_bw_config    *bw_config;
+		struct cam_isp_bw_config    *bw_config_u;
 		struct cam_isp_prepare_hw_update_data   *prepare_hw_data;
+		size_t bw_config_size;
 
 		CAM_WARN_RATE_LIMIT_CUSTOM(CAM_PERF, 300, 1,
 			"Deprecated Blob TYPE_BW_CONFIG");
@@ -6183,11 +6185,26 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 			return -EINVAL;
 		}
 
-		bw_config = (struct cam_isp_bw_config *)blob_data;
+		bw_config_u = (struct cam_isp_bw_config *)blob_data;
 
-		if (bw_config->num_rdi > CAM_IFE_RDI_NUM_MAX) {
-			CAM_ERR(CAM_ISP, "Invalid num_rdi %u in bw config",
+		if (bw_config_u->num_rdi > CAM_IFE_RDI_NUM_MAX || !bw_config_u->num_rdi) {
+			CAM_ERR(CAM_ISP, "Invalid num_rdi %u in bw config, ctx_idx: %u",
+				bw_config_u->num_rdi, ife_mgr_ctx->ctx_index);
+			return -EINVAL;
+		}
+
+		bw_config_size = sizeof(struct cam_isp_bw_config) + ((bw_config_u->num_rdi-1)*
+					sizeof(struct cam_isp_bw_vote));
+
+		rc = cam_common_mem_kdup((void **)&bw_config, bw_config_u, bw_config_size);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "Alloc and copy request bw_config failed");
+			return rc;
+		}
+		if (bw_config_u->num_rdi != bw_config->num_rdi) {
+			CAM_ERR(CAM_ISP, "num_rdi changed,userspace:%d, kernel:%d", bw_config_u->num_rdi,
 				bw_config->num_rdi);
+			cam_common_mem_free(bw_config);
 			return -EINVAL;
 		}
 
@@ -6200,6 +6217,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 					"Max size exceeded in bw config num_rdi:%u size per port:%lu",
 					bw_config->num_rdi,
 					sizeof(struct cam_isp_bw_vote));
+				cam_common_mem_free(bw_config);
 				return -EINVAL;
 			}
 		}
@@ -6212,6 +6230,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 				blob_size, sizeof(struct cam_isp_bw_config) +
 				(bw_config->num_rdi - 1) *
 				sizeof(struct cam_isp_bw_vote));
+			cam_common_mem_free(bw_config);
 			return -EINVAL;
 		}
 
@@ -6219,6 +6238,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 			(bw_config->usage_type >= CAM_IFE_HW_NUM_MAX)) {
 			CAM_ERR(CAM_ISP, "Invalid inputs usage type %d",
 				bw_config->usage_type);
+			cam_common_mem_free(bw_config);
 			return -EINVAL;
 		}
 
@@ -6229,11 +6249,13 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 			bw_config, sizeof(prepare_hw_data->bw_config[0]));
 		prepare_hw_data->bw_config_version = CAM_ISP_BW_CONFIG_V1;
 		prepare_hw_data->bw_config_valid[bw_config->usage_type] = true;
+		cam_common_mem_free(bw_config);
 	}
 		break;
 	case CAM_ISP_GENERIC_BLOB_TYPE_BW_CONFIG_V2: {
 		size_t bw_config_size = 0;
 		struct cam_isp_bw_config_v2    *bw_config;
+		struct cam_isp_bw_config_v2    *bw_config_u;
 		struct cam_isp_prepare_hw_update_data   *prepare_hw_data;
 
 		if (blob_size < sizeof(struct cam_isp_bw_config_v2)) {
@@ -6241,12 +6263,28 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 			return -EINVAL;
 		}
 
-		bw_config = (struct cam_isp_bw_config_v2 *)blob_data;
+		bw_config_u = (struct cam_isp_bw_config_v2 *)blob_data;
 
-		if (bw_config->num_paths > CAM_ISP_MAX_PER_PATH_VOTES ||
-			!bw_config->num_paths) {
-			CAM_ERR(CAM_ISP, "Invalid num paths %d",
-				bw_config->num_paths);
+		if (bw_config_u->num_paths > CAM_ISP_MAX_PER_PATH_VOTES ||
+			!bw_config_u->num_paths) {
+			CAM_ERR(CAM_ISP, "Invalid num paths %d ctx_idx: %u",
+				bw_config_u->num_paths, ife_mgr_ctx->ctx_index);
+			return -EINVAL;
+		}
+
+		bw_config_size = sizeof(struct cam_isp_bw_config_v2) + ((bw_config_u->num_paths-1)*
+					sizeof(struct cam_axi_per_path_bw_vote));
+
+		rc = cam_common_mem_kdup((void **)&bw_config, bw_config_u, bw_config_size);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "Alloc and copy request bw_config failed");
+			return rc;
+		}
+
+		if (bw_config_u->num_paths != bw_config->num_paths) {
+			CAM_ERR(CAM_ISP, "num_paths changed,userspace:%d, kernel:%d", bw_config_u->num_paths,
+					bw_config->num_paths);
+			cam_common_mem_free(bw_config);
 			return -EINVAL;
 		}
 
@@ -6261,6 +6299,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 					bw_config->num_paths - 1,
 					sizeof(
 					struct cam_axi_per_path_bw_vote));
+				cam_common_mem_free(bw_config);
 				return -EINVAL;
 			}
 		}
@@ -6274,6 +6313,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 				blob_size, bw_config->num_paths,
 				sizeof(struct cam_isp_bw_config_v2),
 				sizeof(struct cam_axi_per_path_bw_vote));
+			cam_common_mem_free(bw_config);
 			return -EINVAL;
 		}
 
@@ -6281,6 +6321,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 			(bw_config->usage_type >= CAM_IFE_HW_NUM_MAX)) {
 			CAM_ERR(CAM_ISP, "Invalid inputs usage type %d",
 				bw_config->usage_type);
+			cam_common_mem_free(bw_config);
 			return -EINVAL;
 		}
 
@@ -6298,6 +6339,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 
 		prepare_hw_data->bw_config_version = CAM_ISP_BW_CONFIG_V2;
 		prepare_hw_data->bw_config_valid[bw_config->usage_type] = true;
+		cam_common_mem_free(bw_config);
 	}
 		break;
 	case CAM_ISP_GENERIC_BLOB_TYPE_UBWC_CONFIG: {
@@ -6663,7 +6705,6 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 
 	struct cam_ife_hw_mgr_ctx               *ctx;
 	struct cam_ife_hw_mgr                   *hw_mgr;
-	struct cam_kmd_buf_info                  kmd_buf;
 	uint32_t                                 i;
 	bool                                     fill_fence = true;
 	bool                                     frame_header_enable = false;
@@ -6692,12 +6733,13 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 		return rc;
 
 	/* Pre parse the packet*/
-	rc = cam_packet_util_get_kmd_buffer(prepare->packet, &kmd_buf);
+	rc = cam_packet_util_get_kmd_buffer(prepare->packet,
+			&prepare_hw_data->kmd_cmd_buff_info);
 	if (rc)
 		return rc;
 
 	if (ctx->custom_config & CAM_IFE_CUSTOM_CFG_FRAME_HEADER_TS) {
-		rc = cam_ife_mgr_util_insert_frame_header(&kmd_buf,
+		rc = cam_ife_mgr_util_insert_frame_header(&prepare_hw_data->kmd_cmd_buff_info,
 			prepare_hw_data);
 		if (rc)
 			return rc;
@@ -6745,7 +6787,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 			change_base_info.cdm_id = ctx->cdm_id;
 			rc = cam_isp_add_change_base(prepare,
 				&ctx->res_list_ife_src,
-				&change_base_info, &kmd_buf);
+				&change_base_info, &prepare_hw_data->kmd_cmd_buff_info);
 			if (rc) {
 				CAM_ERR(CAM_ISP,
 				"Failed in change base i=%d, idx=%d, rc=%d",
@@ -6755,7 +6797,8 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 		}
 		/* get command buffers */
 		if (ctx->base[i].split_id != CAM_ISP_HW_SPLIT_MAX) {
-			rc = cam_isp_add_command_buffers(prepare, &kmd_buf,
+			rc = cam_isp_add_command_buffers(prepare,
+				&prepare_hw_data->kmd_cmd_buff_info,
 				&ctx->base[i],
 				cam_isp_packet_generic_blob_handler,
 				ctx->res_list_ife_out, max_ife_out_res);
@@ -6781,7 +6824,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 			hw_mgr->mgr_common.img_iommu_hdl,
 			hw_mgr->mgr_common.img_iommu_hdl_secure,
 			prepare, ctx->base[i].idx,
-			&kmd_buf, ctx->res_list_ife_out,
+			&prepare_hw_data->kmd_cmd_buff_info, ctx->res_list_ife_out,
 			&ctx->res_list_ife_in_rd,
 			max_ife_out_res, fill_fence,
 			&frame_header_info);
@@ -6871,7 +6914,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 		if (!ctx->internal_cdm) {
 			rc = cam_isp_add_change_base(prepare,
 				&ctx->res_list_ife_src,
-				&change_base_info, &kmd_buf);
+				&change_base_info, &prepare_hw_data->kmd_cmd_buff_info);
 
 			if (rc) {
 				CAM_ERR(CAM_ISP,
@@ -6882,7 +6925,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 		}
 		/*Add reg update */
 		rc = cam_isp_add_reg_update(prepare, &ctx->res_list_ife_src,
-			ctx->base[i].idx, &kmd_buf);
+			ctx->base[i].idx, &prepare_hw_data->kmd_cmd_buff_info);
 
 		if (rc) {
 			CAM_ERR(CAM_ISP,
@@ -6896,7 +6939,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 	if (prepare->num_out_map_entries && prepare->num_in_map_entries &&
 		ctx->is_offline) {
 		rc = cam_isp_add_go_cmd(prepare, &ctx->res_list_ife_in_rd,
-			ctx->base[i].idx, &kmd_buf);
+			ctx->base[i].idx, &prepare_hw_data->kmd_cmd_buff_info);
 		if (rc)
 			CAM_ERR(CAM_ISP,
 				"Add GO_CMD faled i: %d, idx: %d, rc: %d",
