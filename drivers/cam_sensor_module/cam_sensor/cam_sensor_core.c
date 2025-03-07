@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -14,7 +14,6 @@
 #include "cam_packet_util.h"
 #include "cam_hdmi_bdg_core.h"
 #include "cam_res_mgr_api.h"
-#include <soc/qcom/boot_stats.h>
 
 
 static int cam_sensor_update_req_mgr(
@@ -1061,7 +1060,6 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			s_ctrl->sensordata->slave_info.sensor_id,
 			s_ctrl->sensordata->slave_info.sensor_slave_addr,
 			s_ctrl->is_always_on);
-		place_marker("M - Hibernation: CAM_ACQUIRE_DEV Success");
 	}
 		break;
 	case CAM_RELEASE_DEV: {
@@ -1173,7 +1171,6 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			"CAM_START_DEV Success, sensor_id:0x%x,sensor_slave_addr:0x%x",
 			s_ctrl->sensordata->slave_info.sensor_id,
 			s_ctrl->sensordata->slave_info.sensor_slave_addr);
-		place_marker("M - Hibernation: Sensor Start dev success");
 	}
 		break;
 	case CAM_STOP_DEV: {

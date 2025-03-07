@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/uaccess.h>
@@ -1910,36 +1910,30 @@ static int cam_icp_hw_mgr_create_debugfs_entry(void)
 	/* Store parent inode for cleanup in caller */
 	icp_hw_mgr.dentry = dbgfileptr;
 
-	dbgfileptr = debugfs_create_bool("icp_pc", 0644, icp_hw_mgr.dentry,
+	debugfs_create_bool("icp_pc", 0644, icp_hw_mgr.dentry,
 		&icp_hw_mgr.icp_pc_flag);
 
-	dbgfileptr = debugfs_create_bool("ipe_bps_pc", 0644, icp_hw_mgr.dentry,
+	debugfs_create_bool("ipe_bps_pc", 0644, icp_hw_mgr.dentry,
 		&icp_hw_mgr.ipe_bps_pc_flag);
 
-	dbgfileptr = debugfs_create_file("icp_debug_clk", 0644,
+	debugfs_create_file("icp_debug_clk", 0644,
 		icp_hw_mgr.dentry, NULL, &cam_icp_debug_default_clk);
 
-	dbgfileptr = debugfs_create_bool("icp_jtag_debug", 0644,
+	debugfs_create_bool("icp_jtag_debug", 0644,
 		icp_hw_mgr.dentry, &icp_hw_mgr.icp_jtag_debug);
 
-	dbgfileptr = debugfs_create_file("icp_debug_type", 0644,
+	debugfs_create_file("icp_debug_type", 0644,
 		icp_hw_mgr.dentry, NULL, &cam_icp_debug_type_fs);
 
-	dbgfileptr = debugfs_create_file("icp_debug_lvl", 0644,
+	debugfs_create_file("icp_debug_lvl", 0644,
 		icp_hw_mgr.dentry, NULL, &cam_icp_debug_fs);
 
-	dbgfileptr = debugfs_create_file("icp_fw_dump_lvl", 0644,
+	debugfs_create_file("icp_fw_dump_lvl", 0644,
 		icp_hw_mgr.dentry, NULL, &cam_icp_debug_fw_dump);
 
-	dbgfileptr = debugfs_create_bool("disable_ubwc_comp", 0644,
+	debugfs_create_bool("disable_ubwc_comp", 0644,
 		icp_hw_mgr.dentry, &icp_hw_mgr.disable_ubwc_comp);
 
-	if (IS_ERR(dbgfileptr)) {
-		if (PTR_ERR(dbgfileptr) == -ENODEV)
-			CAM_WARN(CAM_ICP, "DebugFS not enabled in kernel!");
-		else
-			rc = PTR_ERR(dbgfileptr);
-	}
 end:
 	/* Set default hang dump lvl */
 	icp_hw_mgr.icp_fw_dump_lvl = HFI_FW_DUMP_ON_FAILURE;
@@ -4252,7 +4246,7 @@ static int cam_icp_mgr_process_cmd_desc(struct cam_icp_hw_mgr *hw_mgr,
 				((len - cmd_desc[i].offset) <
 				cmd_desc[i].size)){
 				CAM_ERR(CAM_ICP,
-					"Invalid offset, i: %d offset: %u len: %zu size: %zu",
+					"Invalid offset, i: %d offset: %u len: %zu size: %u",
 					i, cmd_desc[i].offset,
 					len, cmd_desc[i].size);
 				return -EINVAL;
@@ -5239,7 +5233,7 @@ hw_dump:
 	req_ts = ktime_to_timespec64(frm_process->submit_timestamp[i]);
 
 	if (diff < CAM_ICP_CTX_RESPONSE_TIME_THRESHOLD) {
-		CAM_INFO(CAM_ICP, "No Error req %lld %ld:%06ld %ld:%06ld",
+		CAM_INFO(CAM_ICP, "No Error req %lld %lld:%06ld %lld:%06ld",
 			dump_args->request_id,
 			req_ts.tv_sec,
 			req_ts.tv_nsec/NSEC_PER_USEC,
@@ -5248,7 +5242,7 @@ hw_dump:
 		return 0;
 	}
 
-	CAM_INFO(CAM_ICP, "Error req %lld %ld:%06ld %ld:%06ld",
+	CAM_INFO(CAM_ICP, "Error req %lld %lld:%06ld %lld:%06ld",
 		dump_args->request_id,
 		req_ts.tv_sec,
 		req_ts.tv_nsec/NSEC_PER_USEC,

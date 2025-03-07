@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/spi/spi.h>
@@ -349,10 +349,9 @@ static int32_t cam_lens_driver_spi_driver_probe(struct spi_device *spi)
 	return rc;
 }
 
-static int32_t cam_lens_driver_spi_driver_remove(struct spi_device *spi)
+static void cam_lens_driver_spi_driver_remove(struct spi_device *spi)
 {
 	component_del(&spi->dev, &cam_lens_driver_component_ops);
-	return 0;
 }
 
 static const struct of_device_id cam_lens_driver_dt_match[] = {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_actuator_dev.h"
@@ -160,8 +161,7 @@ static int cam_actuator_init_subdev(struct cam_actuator_ctrl_t *a_ctrl)
 	return rc;
 }
 
-static int32_t cam_actuator_driver_i2c_probe(struct i2c_client *client,
-	const struct i2c_device_id *id)
+static int32_t cam_actuator_driver_i2c_probe(struct i2c_client *client)
 {
 	int32_t                         rc = 0;
 	int32_t                         i = 0;
@@ -169,9 +169,9 @@ static int32_t cam_actuator_driver_i2c_probe(struct i2c_client *client,
 	struct cam_hw_soc_info          *soc_info = NULL;
 	struct cam_actuator_soc_private *soc_private = NULL;
 
-	if (client == NULL || id == NULL) {
-		CAM_ERR(CAM_ACTUATOR, "Invalid Args client: %pK id: %pK",
-			client, id);
+	if (client == NULL) {
+		CAM_ERR(CAM_ACTUATOR, "Invalid Args client: %pK",
+			client);
 		return -EINVAL;
 	}
 
@@ -392,7 +392,7 @@ static int32_t cam_actuator_platform_remove(
 	return 0;
 }
 
-static int32_t cam_actuator_driver_i2c_remove(struct i2c_client *client)
+void cam_actuator_driver_i2c_remove(struct i2c_client *client)
 {
 	struct cam_actuator_ctrl_t      *a_ctrl =
 		i2c_get_clientdata(client);
@@ -402,7 +402,6 @@ static int32_t cam_actuator_driver_i2c_remove(struct i2c_client *client)
 	/* Handle I2C Devices */
 	if (!a_ctrl) {
 		CAM_ERR(CAM_ACTUATOR, "Actuator device is NULL");
-		return -EINVAL;
 	}
 
 	CAM_INFO(CAM_ACTUATOR, "i2c remove invoked");
@@ -420,8 +419,6 @@ static int32_t cam_actuator_driver_i2c_remove(struct i2c_client *client)
 	a_ctrl->soc_info.soc_private = NULL;
 	v4l2_set_subdevdata(&a_ctrl->v4l2_dev_str.sd, NULL);
 	kfree(a_ctrl);
-
-	return 0;
 }
 
 static const struct of_device_id cam_actuator_driver_dt_match[] = {

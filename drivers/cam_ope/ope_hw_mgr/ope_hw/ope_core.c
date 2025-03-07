@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -251,7 +251,7 @@ enable_soc_resource_failed:
 	else
 		core_info->cpas_start = false;
 free_cpas_vote:
-	kzfree(cpas_vote);
+	cam_free_clear((void *)cpas_vote);
 	cpas_vote = NULL;
 end:
 	return rc;

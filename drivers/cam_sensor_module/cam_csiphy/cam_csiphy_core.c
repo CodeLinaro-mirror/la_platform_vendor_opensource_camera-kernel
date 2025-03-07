@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
 
-#include <dt-bindings/msm/msm-camera.h>
+#include <dt-bindings/msm-camera.h>
 
 #include "cam_compat.h"
 #include "cam_csiphy_core.h"
@@ -941,11 +941,12 @@ void cam_csiphy_shutdown(struct csiphy_device *csiphy_dev)
 		soc_info = &csiphy_dev->soc_info;
 
 		for (i = 0; i < csiphy_dev->acquire_count; i++) {
+#ifdef CONFIG_SPECTRA_SECURE
 			if (csiphy_dev->csiphy_info[i].secure_mode)
 				cam_csiphy_notify_secure_mode(
 					csiphy_dev,
 					CAM_SECURE_MODE_NON_SECURE, i);
-
+#endif
 			csiphy_dev->csiphy_info[i].secure_mode =
 				CAM_SECURE_MODE_NON_SECURE;
 
@@ -1305,10 +1306,12 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 		if (--csiphy_dev->start_dev_count) {
 			CAM_DBG(CAM_CSIPHY, "Stop Dev ref Cnt: %d",
 				csiphy_dev->start_dev_count);
+#ifdef CONFIG_SPECTRA_SECURE
 			if (csiphy_dev->csiphy_info[offset].secure_mode)
 				cam_csiphy_notify_secure_mode(
 					csiphy_dev,
 					CAM_SECURE_MODE_NON_SECURE, offset);
+#endif
 
 			csiphy_dev->csiphy_info[offset].secure_mode =
 				CAM_SECURE_MODE_NON_SECURE;
@@ -1319,10 +1322,12 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			goto release_mutex;
 		}
 
+#ifdef CONFIG_SPECTRA_SECURE
 		if (csiphy_dev->csiphy_info[offset].secure_mode)
 			cam_csiphy_notify_secure_mode(
 				csiphy_dev,
 				CAM_SECURE_MODE_NON_SECURE, offset);
+#endif
 
 		csiphy_dev->csiphy_info[offset].secure_mode =
 			CAM_SECURE_MODE_NON_SECURE;
@@ -1393,10 +1398,12 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			goto release_mutex;
 		}
 
+#ifdef CONFIG_SPECTRA_SECURE
 		if (csiphy_dev->csiphy_info[offset].secure_mode)
 			cam_csiphy_notify_secure_mode(
 				csiphy_dev,
 				CAM_SECURE_MODE_NON_SECURE, offset);
+#endif
 
 		csiphy_dev->csiphy_info[offset].secure_mode =
 			CAM_SECURE_MODE_NON_SECURE;
@@ -1522,6 +1529,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 					goto release_mutex;
 				}
 
+#ifdef CONFIG_SPECTRA_SECURE
 				rc = cam_csiphy_notify_secure_mode(csiphy_dev,
 					CAM_SECURE_MODE_SECURE, offset);
 				if (rc < 0) {
@@ -1533,6 +1541,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 						rc);
 					goto release_mutex;
 				}
+#endif
 			}
 
 			if (csiphy_dev->csiphy_info[offset].csiphy_3phase) {
@@ -1589,6 +1598,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 				goto release_mutex;
 			}
 
+#ifdef CONFIG_SPECTRA_SECURE
 			rc = cam_csiphy_notify_secure_mode(
 				csiphy_dev,
 				CAM_SECURE_MODE_SECURE, offset);
@@ -1598,6 +1608,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 				cam_cpas_stop(csiphy_dev->cpas_handle);
 				goto release_mutex;
 			}
+#endif
 		}
 
 		rc = cam_csiphy_enable_hw(csiphy_dev, offset);

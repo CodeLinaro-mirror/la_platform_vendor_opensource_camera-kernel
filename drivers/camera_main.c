@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/module.h>
 #include <linux/build_bug.h>
@@ -61,6 +61,7 @@
 #include "cam_tfe_dev.h"
 #include "cam_tfe_csid530.h"
 #include "cam_csid_ppi100.h"
+#include "cam_compat.h"
 #include "camera_main.h"
 
 struct camera_submodule_component {

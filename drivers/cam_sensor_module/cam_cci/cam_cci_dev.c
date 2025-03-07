@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_cci_dev.h"
@@ -420,27 +421,11 @@ static int cam_cci_create_debugfs_entry(struct cci_device *cci_dev)
 	}
 
 	if (cci_dev->soc_info.index == 0) {
-		dbgfileptr = debugfs_create_file("en_dump_cci0", 0644,
+		debugfs_create_file("en_dump_cci0", 0644,
 			debugfs_root, cci_dev, &cam_cci_debug);
-		if (IS_ERR(dbgfileptr)) {
-			if (PTR_ERR(dbgfileptr) == -ENODEV)
-				CAM_WARN(CAM_CCI, "DebugFS not enabled");
-			else {
-				rc = PTR_ERR(dbgfileptr);
-				goto end;
-			}
-		}
 	} else {
-		dbgfileptr = debugfs_create_file("en_dump_cci1", 0644,
+		debugfs_create_file("en_dump_cci1", 0644,
 			debugfs_root, cci_dev, &cam_cci_debug);
-		if (IS_ERR(dbgfileptr)) {
-			if (PTR_ERR(dbgfileptr) == -ENODEV)
-				CAM_WARN(CAM_CCI, "DebugFS not enabled");
-			else {
-				rc = PTR_ERR(dbgfileptr);
-				goto end;
-			}
-		}
 	}
 end:
 	return rc;

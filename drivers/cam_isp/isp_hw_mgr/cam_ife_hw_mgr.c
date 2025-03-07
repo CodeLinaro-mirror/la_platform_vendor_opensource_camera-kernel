@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -2817,7 +2817,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_bus_rd(
 	}
 
 	if (j == CAM_IFE_HW_NUM_MAX || !vfe_acquire.vfe_bus_rd.rsrc_node) {
-		CAM_ERR(CAM_ISP, "Failed to acquire BUS RD for LEFT", i);
+		CAM_ERR(CAM_ISP, "Failed to acquire BUS RD for LEFT %d", i);
 		goto put_res;
 	}
 
@@ -4739,7 +4739,7 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 		msecs_to_jiffies(10));
 	if (rem_jiffies == 0)
 		CAM_WARN(CAM_ISP,
-			"config done completion timeout for last applied req_id=%llu ctx_index %",
+			"config done completion timeout for last applied req_id=%llu ctx_index %d",
 			ctx->applied_req_id, ctx->ctx_index);
 
 	if (stop_isp->stop_only)
@@ -4757,6 +4757,7 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 	CAM_DBG(CAM_ISP,
 		"Stop success for ctx id:%d rc :%d", ctx->ctx_index, rc);
 
+#ifdef CONFIG_SPECTRA_SECURE
 	mutex_lock(&g_ife_hw_mgr.ctx_mutex);
 	if (!atomic_dec_return(&g_ife_hw_mgr.active_ctx_cnt)) {
 		rc = cam_ife_notify_safe_lut_scm(CAM_IFE_SAFE_DISABLE);
@@ -4767,6 +4768,7 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 		}
 	}
 	mutex_unlock(&g_ife_hw_mgr.ctx_mutex);
+#endif /* CONFIG_SPECTRA_SECURE */
 
 end:
 	return rc;
@@ -5005,6 +5007,7 @@ static int cam_ife_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 
 	ctx->init_done = true;
 
+#ifdef CONFIG_SPECTRA_SECURE
 	mutex_lock(&g_ife_hw_mgr.ctx_mutex);
 	if (!atomic_fetch_inc(&g_ife_hw_mgr.active_ctx_cnt)) {
 		rc = cam_ife_notify_safe_lut_scm(CAM_IFE_SAFE_ENABLE);
@@ -5017,6 +5020,7 @@ static int cam_ife_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 		}
 	}
 	mutex_unlock(&g_ife_hw_mgr.ctx_mutex);
+#endif
 
 	rc = cam_cdm_stream_on(ctx->cdm_handle);
 	if (rc) {
@@ -5156,9 +5160,11 @@ cdm_streamoff:
 	atomic_set(&ctx->cdm_power_on, CAM_CDM_POWER_STATE_OFF);
 
 //safe_disable:
+#ifdef CONFIG_SPECTRA_SECURE
 	cam_ife_notify_safe_lut_scm(CAM_IFE_SAFE_DISABLE);
 
 deinit_hw:
+#endif
 	cam_ife_hw_mgr_deinit_hw(hw_mgr_ctx);
 
 tasklet_stop:
@@ -6722,7 +6728,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 
 		if (blob_size < sizeof(struct cam_isp_csid_qcfa_config)) {
 			CAM_ERR(CAM_ISP,
-				"Invalid qcfa blob size %u expected %u",
+				"Invalid qcfa blob size %u expected %lu",
 				blob_size,
 				sizeof(struct cam_isp_csid_qcfa_config));
 			return -EINVAL;
@@ -6775,7 +6781,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		struct cam_isp_vfe_out_config *vfe_out_config;
 
 		if (blob_size < sizeof(struct cam_isp_vfe_out_config)) {
-			CAM_ERR(CAM_ISP, "Invalid blob size %u",
+			CAM_ERR(CAM_ISP, "Invalid blob size %u expected %lu",
 				blob_size,
 				sizeof(struct cam_isp_vfe_out_config));
 			return -EINVAL;
@@ -6786,7 +6792,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		if (vfe_out_config->num_ports > max_ife_out_res ||
 			vfe_out_config->num_ports == 0) {
 			CAM_ERR(CAM_ISP,
-				"Invalid num_ports:%u in vfe out config",
+				"Invalid num_ports:%u in vfe out config %u",
 				vfe_out_config->num_ports,
 				max_ife_out_res);
 			return -EINVAL;
@@ -6826,7 +6832,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 
 		if (blob_size < sizeof(struct cam_isp_csid_epd_config)) {
 			CAM_ERR(CAM_ISP,
-				"Invalid epd config blob size %u expected %u",
+				"Invalid epd config blob size %u expected %lu",
 				blob_size,
 				sizeof(struct cam_isp_csid_epd_config));
 			return -EINVAL;
@@ -6842,7 +6848,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		struct cam_isp_sensor_blanking_config  *sensor_blanking_config;
 
 		if (blob_size < sizeof(struct cam_isp_sensor_blanking_config)) {
-			CAM_ERR(CAM_ISP, "Invalid blob size %zu expected %zu",
+			CAM_ERR(CAM_ISP, "Invalid blob size %u expected %lu",
 				blob_size,
 				sizeof(struct cam_isp_sensor_blanking_config));
 			return -EINVAL;
@@ -6861,7 +6867,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		struct cam_isp_sensor_config *csid_dim_config;
 
 		if (blob_size < sizeof(struct cam_isp_sensor_config)) {
-			CAM_ERR(CAM_ISP, "Invalid blob size %zu expected %zu",
+			CAM_ERR(CAM_ISP, "Invalid blob size %u expected %lu",
 				blob_size,
 				sizeof(struct cam_isp_sensor_config));
 			return -EINVAL;
@@ -6880,7 +6886,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		struct cam_isp_tpg_core_config *tpg_config;
 
 		if (blob_size < sizeof(struct cam_isp_tpg_core_config)) {
-			CAM_ERR(CAM_ISP, "Invalid blob size %zu expected %zu",
+			CAM_ERR(CAM_ISP, "Invalid blob size %u expected %lu",
 				blob_size,
 				sizeof(struct cam_isp_tpg_core_config));
 			return -EINVAL;
@@ -8315,7 +8321,7 @@ static int cam_ife_hw_mgr_handle_csid_event(
 		if (cam_ife_hw_mgr_dump_hw_src_clock(event_info->hw_idx,
 			CAM_ISP_HW_TYPE_VFE))
 			CAM_ERR_RATE_LIMIT(CAM_ISP,
-				"VFE%d src_clk_rate dump failed");
+				"VFE src_clk_rate dump failed");
 		break;
 	default:
 		break;
@@ -8845,32 +8851,26 @@ static int cam_ife_hw_mgr_debug_register(void)
 	/* Store parent inode for cleanup in caller */
 	g_ife_hw_mgr.debug_cfg.dentry = dbgfileptr;
 
-	dbgfileptr = debugfs_create_file("ife_csid_debug", 0644,
+	debugfs_create_file("ife_csid_debug", 0644,
 		g_ife_hw_mgr.debug_cfg.dentry, NULL, &cam_ife_csid_debug);
-	dbgfileptr = debugfs_create_u32("enable_recovery", 0644,
+	debugfs_create_u32("enable_recovery", 0644,
 		g_ife_hw_mgr.debug_cfg.dentry,
 		&g_ife_hw_mgr.debug_cfg.enable_recovery);
-	dbgfileptr = debugfs_create_bool("enable_req_dump", 0644,
+	debugfs_create_bool("enable_req_dump", 0644,
 		g_ife_hw_mgr.debug_cfg.dentry,
 		&g_ife_hw_mgr.debug_cfg.enable_req_dump);
-	dbgfileptr = debugfs_create_u32("enable_csid_recovery", 0644,
+	debugfs_create_u32("enable_csid_recovery", 0644,
 		g_ife_hw_mgr.debug_cfg.dentry,
 		&g_ife_hw_mgr.debug_cfg.enable_csid_recovery);
-	dbgfileptr = debugfs_create_file("ife_camif_debug", 0644,
+	debugfs_create_file("ife_camif_debug", 0644,
 		g_ife_hw_mgr.debug_cfg.dentry, NULL, &cam_ife_camif_debug);
-	dbgfileptr = debugfs_create_bool("per_req_reg_dump", 0644,
+	debugfs_create_bool("per_req_reg_dump", 0644,
 		g_ife_hw_mgr.debug_cfg.dentry,
 		&g_ife_hw_mgr.debug_cfg.per_req_reg_dump);
-	dbgfileptr = debugfs_create_bool("disable_ubwc_comp", 0644,
+	debugfs_create_bool("disable_ubwc_comp", 0644,
 		g_ife_hw_mgr.debug_cfg.dentry,
 		&g_ife_hw_mgr.debug_cfg.disable_ubwc_comp);
 
-	if (IS_ERR(dbgfileptr)) {
-		if (PTR_ERR(dbgfileptr) == -ENODEV)
-			CAM_WARN(CAM_ISP, "DebugFS not enabled in kernel!");
-		else
-			rc = PTR_ERR(dbgfileptr);
-	}
 end:
 	g_ife_hw_mgr.debug_cfg.enable_recovery = 0;
 	return rc;
@@ -9535,8 +9535,7 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 					"Offline IFE thresholds max %d nom %d  min%d",
 					off_clk_thr.max_clk_threshold,
 					off_clk_thr.nom_clk_threshold,
-					off_clk_thr.min_clk_threshold,
-					off_clk_thr.bytes_per_clk);
+					off_clk_thr.min_clk_threshold);
 			}
 
 			if (j == 0) {

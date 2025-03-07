@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/timer.h>
@@ -120,7 +121,7 @@ static int cam_lrme_hw_dump(
 	req_ts = ktime_to_timespec64(req->submit_timestamp);
 
 	if (diff < CAM_LRME_RESPONSE_TIME_THRESHOLD) {
-		CAM_INFO(CAM_LRME, "No error req %lld %ld:%06ld %ld:%06ld",
+		CAM_INFO(CAM_LRME, "No error req %lld %lld:%06ld %lld:%06ld",
 			dump_args->request_id,
 			req_ts.tv_sec,
 			req_ts.tv_nsec/NSEC_PER_USEC,
@@ -130,7 +131,7 @@ static int cam_lrme_hw_dump(
 		return 0;
 	}
 
-	CAM_INFO(CAM_LRME, "Error req %lld %ld:%06ld %ld:%06ld",
+	CAM_INFO(CAM_LRME, "Error req %lld %lld:%06ld %lld:%06ld",
 		dump_args->request_id,
 		req_ts.tv_sec,
 		req_ts.tv_nsec/NSEC_PER_USEC,

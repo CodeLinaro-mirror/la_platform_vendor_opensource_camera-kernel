@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_MEM_MGR_H_
@@ -9,6 +9,9 @@
 
 #include <linux/mutex.h>
 #include <linux/dma-buf.h>
+#if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
+#include <linux/dma-heap.h>
+#endif
 #include <media/cam_req_mgr.h>
 #include "cam_mem_mgr_api.h"
 
@@ -92,6 +95,14 @@ struct cam_mem_table {
 	bool alloc_profile_enable;
 	size_t dbg_buf_idx;
 	bool force_cache_allocs;
+#if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
+	struct dma_heap *system_heap;
+	struct dma_heap *system_uncached_heap;
+	struct dma_heap *camera_heap;
+	struct dma_heap *camera_uncached_heap;
+	struct dma_heap *secure_display_heap;
+#endif
+
 };
 
 /**
@@ -143,5 +154,22 @@ int cam_mem_mgr_init(void);
  * @return None
  */
 void cam_mem_mgr_deinit(void);
+
+#if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
+/**
+ * @brief:  Releasing DMA Buf heaps
+ *
+ * @return None
+ */
+void cam_mem_mgr_put_dma_heaps(void);
+
+/**
+ * @brief:  Get DMA Buf heaps
+ *
+ * @return None
+ */
+int cam_mem_mgr_get_dma_heaps(void);
+#endif
+
 
 #endif /* _CAM_MEM_MGR_H_ */

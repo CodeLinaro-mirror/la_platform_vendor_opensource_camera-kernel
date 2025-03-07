@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/device.h>
@@ -126,7 +127,7 @@ static int cam_cpas_util_path_type_to_idx(uint32_t *path_data_type)
 		*path_data_type %= CAM_CPAS_MAX_GRAN_PATHS_PER_CLIENT;
 
 	if (*path_data_type >= CAM_CPAS_PATH_DATA_MAX) {
-		CAM_ERR(CAM_CPAS, "index Invalid: %d", path_data_type);
+		CAM_ERR(CAM_CPAS, "index Invalid: %p", path_data_type);
 		return -EINVAL;
 	}
 
