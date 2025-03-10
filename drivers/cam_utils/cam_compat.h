@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_COMPAT_H_
@@ -137,10 +137,6 @@ void cam_eeprom_spi_driver_remove(struct spi_device *sdev);
 #else
 static int32_t cam_eeprom_spi_driver_remove(struct spi_device *sdev);
 #endif
-
-#ifndef CONFIG_SPECTRA_KT
-int cam_smmu_fetch_csf_version(struct cam_csf_version *csf_version);
-#endif /* ifndef CONFIG_SPECTRA_KT */
 
 bool cam_secure_get_vfe_fd_port_config(void);
 unsigned long cam_update_dma_map_attributes(unsigned long attr);

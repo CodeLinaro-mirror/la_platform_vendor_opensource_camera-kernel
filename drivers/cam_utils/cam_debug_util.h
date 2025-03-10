@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023,2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_DEBUG_UTIL_H_
@@ -10,10 +10,6 @@
 #include <msm-camera.h>
 #include <linux/platform_device.h>
 #include "cam_trace.h"
-
-#ifndef CONFIG_SPECTRA_KT
-#include "cam_presil_hw_access.h"
-#endif // !CONFIG_SPECTRA_KT
 
 extern unsigned long long debug_mdl;
 extern unsigned int debug_type;
