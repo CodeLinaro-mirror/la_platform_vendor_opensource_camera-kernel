@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_CSID_HW_INTF_H_
@@ -67,16 +67,17 @@ enum cam_ife_csid_secondary_evt_type {
 
 /**
  * struct cam_ife_csid_hw_caps- get the CSID hw capability
- * @num_rdis:             number of rdis supported by CSID HW device
- * @num_pix:              number of pxl paths supported by CSID HW device
- * @num_ppp:              number of ppp paths supported by CSID HW device
- * @major_version :       major version
- * @minor_version:        minor version
- * @version_incr:         version increment
- * @is_lite:              is the ife_csid lite
- * @global_reset_en:      flag to indicate if global reset is enabled
- * @rup_en:               flag to indicate if rup is on csid side
- * @only_master_rup:      flag to indicate if only master RUP
+ * @num_rdis:              number of rdis supported by CSID HW device
+ * @num_pix:               number of pxl paths supported by CSID HW device
+ * @num_ppp:               number of ppp paths supported by CSID HW device
+ * @major_version :        major version
+ * @minor_version:         minor version
+ * @version_incr:          version increment
+ * @is_lite:               is the ife_csid lite
+ * @global_reset_en:       flag to indicate if global reset is enabled
+ * @rup_en:                flag to indicate if rup is on csid side
+ * @only_master_rup:       flag to indicate if only master RUP
+ * @camif_irq_support:     flag to indicate if CSID supports CAMIF irq
  */
 struct cam_ife_csid_hw_caps {
 	uint32_t      num_rdis;
@@ -89,6 +90,7 @@ struct cam_ife_csid_hw_caps {
 	bool          global_reset_en;
 	bool          rup_en;
 	bool          only_master_rup;
+	bool          camif_irq_support;
 };
 
 struct cam_isp_out_port_generic_info {
@@ -199,6 +201,7 @@ struct cam_csid_secondary_evt_config {
  *                       acquire lite
  * @sfe_en:              Flag to indicate if SFE is enabled
  * @use_wm_pack:         [OUT]Flag to indicate if WM packing is to be used for packing
+ * @handle_camif_irq:    Flag to indicate if CSID IRQ is enabled
  *
  */
 struct cam_csid_hw_reserve_resource_args {
@@ -225,6 +228,7 @@ struct cam_csid_hw_reserve_resource_args {
 	bool                                      can_use_lite;
 	bool                                      sfe_en;
 	bool                                      use_wm_pack;
+	bool                                      handle_camif_irq;
 };
 
 /**
