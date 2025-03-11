@@ -36,6 +36,8 @@ def _define_module(target, variant):
         ])
     if target == "seraph":
         deps.extend([
+		"//vendor/qcom/opensource/synx-kernel:synx_headers",
+		"//vendor/qcom/opensource/synx-kernel:{}_modules".format(tv),
 		"//vendor/qcom/opensource/dsp-kernel:{}_frpc-adsprpc".format(tv),
     ])
     if target == "neo-la":
