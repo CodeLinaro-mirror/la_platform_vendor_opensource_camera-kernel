@@ -10319,14 +10319,6 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 		CAM_DBG(CAM_REQ,
 			"Move pending req: %lld to free list(cnt: %d) ctx %u",
 			req->request_id, ctx_isp->active_req_cnt, ctx->ctx_id);
-	} else if ((ctx_isp->rdi_only_context || ctx_isp->rdi_stats_context) ||
-		!req_isp->num_fence_map_out) {
-		list_add_tail(&req->list, &ctx->wait_req_list);
-		ctx_isp->waitlist_req_cnt++;
-		CAM_DBG(CAM_REQ,
-			"Move pending req: %lld to wait list(cnt: %d) ctx %u waitlist_req_cnt:%d",
-			req->request_id, ctx_isp->active_req_cnt, ctx->ctx_id,
-			ctx_isp->waitlist_req_cnt);
 	} else {
 		list_add_tail(&req->list, &ctx->active_req_list);
 		ctx_isp->active_req_cnt++;
