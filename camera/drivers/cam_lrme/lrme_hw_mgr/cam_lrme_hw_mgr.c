@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -536,10 +536,10 @@ static int cam_lrme_mgr_cb(void *data,
 	frame_req = cb_args->frame_req;
 
 	if (cb_args->cb_type & CAM_LRME_CB_PUT_FRAME) {
-		cam_lrme_mgr_util_put_frame_req(&hw_mgr->frame_free_list,
-				frame_req, &hw_mgr->free_req_lock, true);
 		memset(frame_req, 0x0, sizeof(*frame_req));
 		INIT_LIST_HEAD(&frame_req->frame_list);
+		cam_lrme_mgr_util_put_frame_req(&hw_mgr->frame_free_list,
+				frame_req, &hw_mgr->free_req_lock, true);
 		cb_args->cb_type &= ~CAM_LRME_CB_PUT_FRAME;
 		frame_req = NULL;
 	}
@@ -579,11 +579,11 @@ static int cam_lrme_mgr_cb(void *data,
 		CAM_ERR(CAM_LRME, "No cb function");
 	}
 
+	memset(frame_req, 0x0, sizeof(*frame_req));
+	INIT_LIST_HEAD(&frame_req->frame_list);
 	cam_lrme_mgr_util_put_frame_req(&hw_mgr->frame_free_list,
 				&frame_req->frame_list,
 				&hw_mgr->free_req_lock, true);
-	memset(frame_req, 0x0, sizeof(*frame_req));
-	INIT_LIST_HEAD(&frame_req->frame_list);
 
 	rc = cam_lrme_mgr_util_schedule_frame_req(hw_mgr, hw_device);
 
@@ -755,9 +755,9 @@ static int cam_lrme_mgr_hw_flush(void *hw_mgr_priv, void *hw_flush_args)
 	req_list = (struct cam_lrme_frame_request **)args->flush_req_pending;
 	for (i = 0; i < args->num_req_pending; i++) {
 		frame_req = req_list[i];
+		memset(frame_req, 0x0, sizeof(*frame_req));
 		cam_lrme_mgr_util_put_frame_req(&hw_mgr->frame_free_list,
 			&frame_req->frame_list, &hw_mgr->free_req_lock, true);
-		memset(frame_req, 0x0, sizeof(*frame_req));
 	}
 
 	req_list = (struct cam_lrme_frame_request **)args->flush_req_active;
