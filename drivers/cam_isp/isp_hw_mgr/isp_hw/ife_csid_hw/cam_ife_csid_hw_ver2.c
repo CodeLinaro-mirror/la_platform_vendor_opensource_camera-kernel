@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/iopoll.h>
@@ -5577,10 +5577,12 @@ static int cam_ife_csid_ver2_update_res_data(struct cam_ife_csid_ver2_hw *csid_h
 	struct cam_csid_hw_reserve_resource_args  *reserve;
 	struct cam_ife_csid_ver2_path_cfg    *path_cfg;
 	struct cam_csid_resource_update      *res_update;
+	const struct cam_ife_csid_ver2_reg_info *csid_reg;
 	int rc = 0;
 
 	res_update = (struct cam_csid_resource_update *)reserve_args;
 	reserve = (struct cam_csid_hw_reserve_resource_args  *)res_update->csid_acquire;
+	csid_reg = (struct cam_ife_csid_ver2_reg_info *)csid_hw->core_info->csid_reg;
 
 	res = &csid_hw->path_res[reserve->res_id];
 	if (res->is_per_port_acquire != true) {
@@ -5680,6 +5682,7 @@ static int cam_ife_csid_ver2_update_res_data(struct cam_ife_csid_ver2_hw *csid_h
 	path_cfg->sfe_shdr = reserve->sfe_inline_shdr;
 	csid_hw->flags.offline_mode = reserve->is_offline;
 	path_cfg->handle_camif_irq = reserve->handle_camif_irq;
+	reserve->need_top_cfg = csid_reg->need_top_cfg;
 
 	CAM_DBG(CAM_ISP, "CSID[%u] Resource[id: %d name:%s] state %d cid %d",
 		csid_hw->hw_intf->hw_idx, reserve->res_id, res->res_name,
