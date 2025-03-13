@@ -80,6 +80,14 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 	uint32_t cmd_length, struct cam_sensor_power_ctrl_t *power_info,
 	size_t cmd_buf_len);
 
+int32_t cam_sensor_update_power_up_settings(void *cmd_buf,
+	uint32_t cmd_length, struct cam_sensor_power_ctrl_t *power_info,
+	size_t cmd_buf_len);
+
+int32_t cam_sensor_update_power_down_settings(void *cmd_buf,
+	uint32_t cmd_length, struct cam_sensor_power_ctrl_t *power_info,
+	size_t cmd_buf_len);
+
 int cam_sensor_bob_pwm_mode_switch(struct cam_hw_soc_info *soc_info,
 	int bob_reg_idx, bool flag);
 
