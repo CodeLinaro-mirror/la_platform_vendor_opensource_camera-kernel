@@ -919,13 +919,15 @@ static int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 		return PTR_ERR(sensor_grp_config);
 	}
 
+	mutex_lock(&g_ife_hw_mgr.ctx_mutex);
 	if (g_ife_sns_grp_cfg.num_grp_cfg > CAM_ISP_STREAM_GROUP_CFG_MAX ||
 		sensor_grp_config->num_grp_cfg == 0 ||
-		sensor_grp_config->num_grp_cfg >= CAM_ISP_STREAM_GROUP_CFG_MAX) {
+		sensor_grp_config->num_grp_cfg > CAM_ISP_STREAM_GROUP_CFG_MAX) {
 		CAM_ERR(CAM_ISP,
 			"invalid g_ife_sns_grp_cfg.num_grp_cfg:%d or sensor_grp_config->num_grp_cfg:%d",
 			g_ife_sns_grp_cfg.num_grp_cfg, sensor_grp_config->num_grp_cfg);
 		kfree(sensor_grp_config);
+		mutex_unlock(&g_ife_hw_mgr.ctx_mutex);
 		return rc;
 	}
 
@@ -935,6 +937,8 @@ static int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 			CAM_ERR(CAM_ISP,
 				"stream config count %d exceed max supported value %d for stream_grp_cfg idx:%d",
 				stream_grp_cfg->stream_cfg_cnt, CAM_ISP_STREAM_CFG_MAX, i);
+			kfree(sensor_grp_config);
+			mutex_unlock(&g_ife_hw_mgr.ctx_mutex);
 			return -EINVAL;
 		}
 
@@ -946,6 +950,7 @@ static int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 					"Invalid sensor group config data update request for stream_grp_cfg[%d]",
 					i);
 				kfree(sensor_grp_config);
+				mutex_unlock(&g_ife_hw_mgr.ctx_mutex);
 				return rc;
 			}
 		}
@@ -955,6 +960,7 @@ static int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 				"Failed to get free grp cfg for grp:%d sensor_grp_config->num_grp_cfg:%d g_ife_sns_grp_cfg.num_grp_cfg:%d",
 				i, sensor_grp_config->num_grp_cfg, g_ife_sns_grp_cfg.num_grp_cfg);
 			kfree(sensor_grp_config);
+			mutex_unlock(&g_ife_hw_mgr.ctx_mutex);
 			return PTR_ERR(grp_cfg);
 		}
 
@@ -1041,10 +1047,12 @@ static int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 	cam_ife_mgr_dump_sensor_grp_stream_cfg();
 
 	kfree(sensor_grp_config);
+	mutex_unlock(&g_ife_hw_mgr.ctx_mutex);
 	return rc;
 err:
 	cam_ife_mgr_handle_sensor_grp_cfg_update_fail(sensor_grp_config, i);
 	kfree(sensor_grp_config);
+	mutex_unlock(&g_ife_hw_mgr.ctx_mutex);
 	return rc;
 }
 
