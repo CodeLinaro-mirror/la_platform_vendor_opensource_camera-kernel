@@ -9162,18 +9162,20 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 
 	if (c_ctx->flags.per_port_en && !c_ctx->flags.is_dual) {
 		for (i = 0; i < g_ife_sns_grp_cfg.num_grp_cfg; i++) {
+			if (!g_ife_sns_grp_cfg.grp_cfg[i])
+				continue;
 			for (j = 0; j <
 				g_ife_sns_grp_cfg.grp_cfg[i]->stream_cfg_cnt; j++) {
 				if (c_ctx->sensor_id ==
 					g_ife_sns_grp_cfg.grp_cfg[i]->stream_cfg[j].sensor_id) {
 					mutex_lock(&g_ife_sns_grp_cfg.grp_cfg[i]->lock);
 					skip_deinit_hw = true;
+					g_ife_sns_grp_cfg.grp_cfg[i]->hw_ctx_cnt--;
 					if (g_ife_sns_grp_cfg.grp_cfg[i]->stream_on_cnt ==
 						0) {
 						rc =
 						cam_ife_hw_mgr_release_hw_for_ctx(hw_mgr_ctx, i);
 						skip_deinit_hw = false;
-						g_ife_sns_grp_cfg.grp_cfg[i]->hw_ctx_cnt--;
 					}
 					cam_ife_hw_mgr_free_hw_ctx(hw_mgr_ctx);
 					per_port_feature_enable = true;
