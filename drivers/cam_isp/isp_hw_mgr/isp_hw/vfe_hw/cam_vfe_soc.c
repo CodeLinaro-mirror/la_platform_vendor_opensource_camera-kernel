@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -94,6 +94,20 @@ static int cam_vfe_get_dt_properties(struct cam_hw_soc_info *soc_info)
 pid:
 	/* set some default values */
 	vfe_soc_private->num_pid = 0;
+
+	vfe_soc_private->is_grp_support = false;
+	if (vfe_soc_private->is_ife_lite) {
+		vfe_soc_private->group_id = (CAM_ISP_HW_MAX_GROUP_IDX - 1);
+		rc = of_property_read_u32(of_node, "group-id",
+			&vfe_soc_private->group_id);
+		if (rc) {
+			CAM_DBG(CAM_ISP, "Error reading group_id for core_idx: %u rc %d",
+				soc_info->index, rc);
+
+			rc = 0;
+		} else
+			vfe_soc_private->is_grp_support = true;
+	}
 
 	num_pid = of_property_count_u32_elems(pdev->dev.of_node, "cam_hw_pid");
 	CAM_DBG(CAM_CPAS, "vfe:%d pid count %d", soc_info->index, num_pid);

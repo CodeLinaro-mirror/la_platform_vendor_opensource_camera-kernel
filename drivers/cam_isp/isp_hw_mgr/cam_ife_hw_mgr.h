@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_IFE_HW_MGR_H_
@@ -486,6 +486,25 @@ struct cam_isp_sys_cache_info {
 	int32_t                         scid;
 };
 
+/*
+ * struct cam_ife_hw_mgr_grp_info:
+ *
+ * @Brief:                Sensor usage info for acquire
+ *
+ * @max_num_grp:          Max number of group supported
+ * @kmd_grp_mask:         Array of mask of grouped IFE LITE
+ * @curr_grp_mask:        Array of current mask of acquired IFE LITE
+ * @umd_grp_id:           Array of active groups
+ * @is_grp_support:       Flag to indiciate if hw support  grouping based on power domain
+ */
+struct cam_ife_hw_mgr_grp_info {
+	uint32_t          max_num_grp;
+	uint32_t          kmd_grp_mask[CAM_ISP_HW_MAX_GROUP_IDX];
+	uint32_t          curr_grp_mask[CAM_ISP_HW_MAX_GROUP_IDX];
+	uint32_t          umd_grp_id[CAM_ISP_HW_MAX_GROUP_IDX];
+	bool              is_grp_support;
+};
+
 /**
  * struct cam_ife_hw_mgr - IFE HW Manager
  *
@@ -502,6 +521,7 @@ struct cam_isp_sys_cache_info {
  * @ctx_pool:              context storage
  * @csid_hw_caps           csid hw capability stored per core
  * @ife_dev_caps           ife device capability per core
+ * @ife_lite_grp_info      Ife group information
  * @worker                 worker for IFE hw manager
  * @debug_cfg              debug configuration
  * @isp_bus_caps           Capability of underlying SFE/IFE bus HW
@@ -532,6 +552,7 @@ struct cam_ife_hw_mgr {
 	struct cam_ife_csid_hw_caps      csid_hw_caps[
 						CAM_IFE_CSID_HW_NUM_MAX];
 	struct cam_vfe_hw_get_hw_cap     ife_dev_caps[CAM_IFE_HW_NUM_MAX];
+	struct cam_ife_hw_mgr_grp_info   ife_lite_grp_info;
 	struct cam_req_mgr_core_worker   *worker;
 	struct cam_ife_hw_mgr_debug      debug_cfg;
 	struct cam_isp_bus_hw_caps       isp_bus_caps;

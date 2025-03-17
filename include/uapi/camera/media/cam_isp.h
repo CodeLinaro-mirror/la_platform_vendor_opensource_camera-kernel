@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_ISP_H__
@@ -204,6 +204,7 @@
 #define CAM_ISP_INDEPENDENT_CRM                BIT(8)
 #define CAM_ISP_SLAVE_METADATA_EN              BIT(9)
 #define CAM_ISP_UL_PATH                        BIT(10)
+#define CAM_ISP_IFE_LITE_GROUPING_EN           BIT(11)
 
 #define CAM_ISP_ACQUIRE_TYPE_NONE              0
 #define CAM_ISP_ACQUIRE_TYPE_VIRTUAL           1

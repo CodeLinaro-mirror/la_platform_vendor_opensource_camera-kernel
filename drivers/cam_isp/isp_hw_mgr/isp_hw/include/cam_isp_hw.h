@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_ISP_HW_H_
@@ -22,6 +22,9 @@
 #define CAM_ISP_HW_MAX_PID_VAL      4
 /* Maximum number of output ports that map to an architecture specific input path */
 #define CAM_ISP_HW_PATH_PORT_MAP_MAX    3
+
+/* Maximum number of ife lite power domain group */
+#define CAM_ISP_HW_MAX_GROUP_IDX  8
 
 /*
  * MAX len of ISP Resource Name

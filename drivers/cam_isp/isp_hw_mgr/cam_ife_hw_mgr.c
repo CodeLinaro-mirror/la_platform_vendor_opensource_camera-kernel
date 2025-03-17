@@ -109,6 +109,20 @@ static int cam_ife_mgr_csid_start_hw_stream_grp(int grp_cfg_index,
 
 static int cam_ife_mgr_enable_irq(struct cam_ife_hw_mgr_ctx *ctx, bool is_internal_start);
 
+static uint32_t cam_ife_utils_unset_msb(uint32_t hw_idx_mask)
+{
+	int msb_index = 0;
+
+	if (hw_idx_mask == 0)
+		return 0;
+
+	msb_index = (fls(hw_idx_mask) - 1);
+
+	hw_idx_mask &= ~(1 << msb_index);
+
+	return hw_idx_mask;
+}
+
 static int cam_ife_mgr_finish_clk_bw_update(
 	struct cam_ife_hw_mgr_ctx *ctx,
 	uint64_t request_id, bool skip_clk_data_rst)
@@ -5234,6 +5248,7 @@ static int cam_ife_hw_mgr_acquire_csid_hw(
 {
 	int i;
 	int rc = -EINVAL;
+	uint32_t acquire_idx = 0, start_idx = 0;
 	struct cam_hw_intf  *hw_intf;
 	struct cam_ife_hw_mgr *ife_hw_mgr;
 	struct cam_hw_info *hw_info;
@@ -5339,8 +5354,47 @@ static int cam_ife_hw_mgr_acquire_csid_hw(
 		}
 	}
 
-	for (i = (is_start_lower_idx) ? 0 : (CAM_IFE_CSID_HW_NUM_MAX - 1);
-		(is_start_lower_idx) ? (i < CAM_IFE_CSID_HW_NUM_MAX) : (i >= 0);
+	if (in_port->is_lite_grouping && ife_hw_mgr->ife_lite_grp_info.is_grp_support) {
+		for (i = ife_hw_mgr->ife_lite_grp_info.max_num_grp; i >= 0; i--) {
+
+			if (g_ife_hw_mgr.ife_lite_grp_info.kmd_grp_mask[i] ==
+				g_ife_hw_mgr.ife_lite_grp_info.curr_grp_mask[i]) {
+
+				acquire_idx = fls(g_ife_hw_mgr.ife_lite_grp_info.curr_grp_mask[i]);
+				if (acquire_idx)
+					acquire_idx--;
+				g_ife_hw_mgr.ife_lite_grp_info.curr_grp_mask[i] =
+					cam_ife_utils_unset_msb(
+					g_ife_hw_mgr.ife_lite_grp_info.curr_grp_mask[i]);
+				g_ife_hw_mgr.ife_lite_grp_info.umd_grp_id[i] = in_port->group_id;
+				break;
+			} else if ((g_ife_hw_mgr.ife_lite_grp_info.umd_grp_id[i] ==
+				in_port->group_id) &&
+				(g_ife_hw_mgr.ife_lite_grp_info.kmd_grp_mask[i] &
+				g_ife_hw_mgr.ife_lite_grp_info.curr_grp_mask[i])) {
+
+				acquire_idx = fls(g_ife_hw_mgr.ife_lite_grp_info.kmd_grp_mask[i] &
+						g_ife_hw_mgr.ife_lite_grp_info.curr_grp_mask[i]);
+				if (acquire_idx)
+					acquire_idx--;
+				g_ife_hw_mgr.ife_lite_grp_info.curr_grp_mask[i] =
+					cam_ife_utils_unset_msb(
+					g_ife_hw_mgr.ife_lite_grp_info.curr_grp_mask[i]);
+				break;
+			}
+
+			CAM_DBG(CAM_ISP,
+				"All ife lite in the kmd group %d for grp %d is acquired, try next group",
+				i, in_port->group_id);
+		}
+	}
+
+	start_idx = ((in_port->is_lite_grouping && ife_hw_mgr->ife_lite_grp_info.is_grp_support) ?
+			acquire_idx : ((is_start_lower_idx) ?
+			0 : (CAM_IFE_CSID_HW_NUM_MAX - 1)));
+
+	for (i = start_idx; (is_start_lower_idx) ?
+		(i < CAM_IFE_CSID_HW_NUM_MAX) : (i >= 0);
 		(is_start_lower_idx) ? i++ : i--) {
 		if (!ife_hw_mgr->csid_devices[i])
 			continue;
@@ -8171,6 +8225,7 @@ static inline void cam_ife_mgr_acquire_get_feature_flag_params_v3(
 	in_port->independent_crm_mode     = in->feature_flag & CAM_ISP_INDEPENDENT_CRM;
 	in_port->slave_metadata_en        = in->feature_flag & CAM_ISP_SLAVE_METADATA_EN;
 	in_port->ul_path_mode             = in->feature_flag & CAM_ISP_UL_PATH;
+	in_port->is_lite_grouping         = in->feature_flag & CAM_ISP_IFE_LITE_GROUPING_EN;
 }
 
 static bool cam_ife_mgr_hw_validate_vc_dt_pxl_path(
@@ -8475,6 +8530,10 @@ static int cam_ife_mgr_acquire_get_unified_structure_v3(
 	in_port->sensor_mode              =  in->sensor_mode;
 
 	cam_ife_mgr_acquire_get_feature_flag_params_v3(in, in_port);
+
+	if (in_port->is_lite_grouping)
+		in_port->group_id  = in->ife_res_1;
+
 	cam_ife_mgr_check_per_port_enable(in_port);
 	if (in_port->per_port_en) {
 		for (i = 0; i < CAM_ISP_STREAM_GROUP_CFG_MAX; i++) {
@@ -11688,7 +11747,9 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 	struct cam_hw_release_args       *release_args = release_hw_args;
 	struct cam_ife_hw_mgr            *hw_mgr       = hw_mgr_priv;
 	struct cam_ife_hw_mgr_ctx        *ctx;
-	uint32_t                          i, j;
+	struct cam_isp_hw_mgr_res        *hw_mgr_res = NULL;
+	struct cam_isp_resource_node     *hw_res = NULL;
+	uint32_t                          i, j, hw_idx = 0, grp_id = 0;
 	uint64_t                          ms, sec, min, hrs;
 	struct cam_req_mgr_core_worker    *worker_info;
 	bool                              per_port_feature_enable = false;
@@ -11738,6 +11799,22 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 
 	if (ctx->flags.init_done)
 		cam_ife_hw_mgr_deinit_hw(ctx);
+
+	if (!per_port_feature_enable && ctx->flags.is_lite_context) {
+		if (!list_empty(&ctx->res_list_ife_src)) {
+			hw_mgr_res = list_first_entry(&ctx->res_list_ife_src,
+				struct cam_isp_hw_mgr_res, list);
+			for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
+				hw_res = hw_mgr_res->hw_res[i];
+				if (hw_res && hw_res->hw_intf) {
+					hw_idx = hw_res->hw_intf->hw_idx;
+					break;
+				}
+			}
+		}
+		grp_id = g_ife_hw_mgr.ife_dev_caps[hw_idx].group_id;
+		g_ife_hw_mgr.ife_lite_grp_info.curr_grp_mask[grp_id] |= (1 << hw_idx);
+	}
 
 	/* we should called the stop hw before this already */
 	if (!per_port_feature_enable)
@@ -20122,6 +20199,7 @@ static int cam_ife_hw_mgr_sort_dev_with_caps(
 			ife_hw_mgr->csid_hw_caps[i].camif_irq_support;
 	}
 
+	ife_hw_mgr->ife_lite_grp_info.is_grp_support = false;
 	/* get caps for ife devices */
 	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
 		if (!ife_hw_mgr->ife_devices[i])
@@ -20141,6 +20219,17 @@ static int cam_ife_hw_mgr_sort_dev_with_caps(
 					sizeof(uint32_t));
 			}
 		}
+		ife_hw_mgr->ife_lite_grp_info.kmd_grp_mask[
+			ife_hw_mgr->ife_dev_caps[i].group_id] |= (1 << i);
+		ife_hw_mgr->ife_lite_grp_info.curr_grp_mask[
+			ife_hw_mgr->ife_dev_caps[i].group_id] |= (1 << i);
+		if (ife_hw_mgr->ife_dev_caps[i].group_id >
+			ife_hw_mgr->ife_lite_grp_info.max_num_grp)
+			ife_hw_mgr->ife_lite_grp_info.max_num_grp =
+			ife_hw_mgr->ife_dev_caps[i].group_id;
+		if (!ife_hw_mgr->ife_lite_grp_info.is_grp_support)
+			ife_hw_mgr->ife_lite_grp_info.is_grp_support =
+				ife_hw_mgr->ife_dev_caps[i].is_grp_support;
 	}
 
 	return 0;
