@@ -365,7 +365,6 @@ static void cam_sensor_component_unbind(struct device *dev,
 	mutex_lock(&(s_ctrl->cam_sensor_mutex));
 	cam_sensor_shutdown(s_ctrl);
 	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
-	cam_sensor_release_power_domain(s_ctrl);
 	cam_unregister_subdev(&(s_ctrl->v4l2_dev_str));
 	soc_info = &s_ctrl->soc_info;
 	for (i = 0; i < soc_info->num_clk; i++)
@@ -413,7 +412,6 @@ int cam_sensor_i2c_driver_remove_common(struct i2c_client *client)
 	mutex_lock(&(s_ctrl->cam_sensor_mutex));
 	cam_sensor_shutdown(s_ctrl);
 	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
-	cam_sensor_release_power_domain(s_ctrl);
 	rc = cam_unregister_subdev(&(s_ctrl->v4l2_dev_str));
 
 	if (rc)
