@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_MEM_MGR_H_
@@ -47,7 +47,6 @@ enum cam_smmu_mapping_client {
  * @smmu_mapping_client: Client buffer (User or kernel)
  * @urefcount:      Reference counter to track whether the buffer is
  *                  mapped and in use by umd
- * @idx_lock:           spinlock for buffer
  */
 struct cam_mem_buf_queue {
 	struct dma_buf *dma_buf;
@@ -68,7 +67,6 @@ struct cam_mem_buf_queue {
 	struct kref krefcount;
 	enum cam_smmu_mapping_client smmu_mapping_client;
 	struct kref urefcount;
-	spinlock_t idx_lock;
 };
 
 /**
