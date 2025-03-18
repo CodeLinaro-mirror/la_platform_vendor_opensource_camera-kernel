@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/kernel.h>
@@ -402,7 +402,7 @@ static int32_t cam_sensor_get_io_buffer(
 			io_cfg->direction);
 		rc = -EINVAL;
 	}
-	cam_mem_put_cpu_buf(io_cfg->mem_handle[0]);
+
 	return rc;
 }
 
@@ -2693,5 +2693,35 @@ void cam_sensor_utils_parse_pm_ctrl_flag(struct device_node *of_node,
 		(io_master_info->qup_client != NULL)) {
 		io_master_info->qup_client->pm_ctrl_client_enable =
 			of_property_read_bool(of_parent, "qcom,pm-ctrl-client");
+	}
+}
+
+int cam_sensor_util_add_read_buf_to_list(struct list_head *read_buf_list,
+	int32_t read_buffer_handle)
+{
+	struct cam_sensor_read_buf_list *tmp_buf;
+
+	tmp_buf = CAM_MEM_ZALLOC(sizeof(struct cam_sensor_read_buf_list), GFP_KERNEL);
+	if (!tmp_buf)
+		return -ENOMEM;
+
+	tmp_buf->read_buf_handle = read_buffer_handle;
+	list_add_tail(&(tmp_buf->list), read_buf_list);
+
+	return 0;
+}
+
+void cam_sensor_util_release_read_buf(struct list_head *read_buf_list)
+{
+	struct cam_sensor_read_buf_list *buf_list = NULL, *buf_next = NULL;
+
+	list_for_each_entry_safe(buf_list, buf_next,
+		read_buf_list, list) {
+		if (buf_list->read_buf_handle) {
+			cam_mem_put_cpu_buf(buf_list->read_buf_handle);
+		}
+
+		list_del(&(buf_list->list));
+		CAM_MEM_FREE(buf_list);
 	}
 }
