@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  */
 
@@ -5205,6 +5205,10 @@ static int cam_icp_process_stream_settings(
 	int timeout = 5000;
 	struct hfi_cmd_ipe_bps_map  *map_cmd;
 	struct hfi_cmd_ipebps_async *async_direct;
+
+	/* Skipping mem map/unmap cmds for LX7 since its not required */
+	if (icp_hw_mgr.icp_dev_intf->hw_type == CAM_ICP_DEV_LX7)
+		return 0;
 
 	map_cmd_size =
 		sizeof(struct hfi_cmd_ipe_bps_map) +

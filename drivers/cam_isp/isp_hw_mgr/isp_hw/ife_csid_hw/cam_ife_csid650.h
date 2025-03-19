@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_IFE_CSID_650_H_
@@ -173,11 +173,15 @@ static const struct cam_ife_csid_irq_desc cam_ife_csid_650_path_irq_desc[] = {
 	},
 	{
 		.bitmask = BIT(13),
+		.err_type = CAM_ISP_HW_ERROR_CSID_FRAME_SIZE,
 		.desc = "ERROR_PIX_COUNT",
+		.err_handler = cam_ife_csid_ver2_print_format_measure_info,
 	},
 	{
 		.bitmask = BIT(14),
+		.err_type = CAM_ISP_HW_ERROR_CSID_FRAME_SIZE,
 		.desc = "ERROR_LINE_COUNT",
+		.err_handler = cam_ife_csid_ver2_print_format_measure_info,
 	},
 	{
 		.bitmask = BIT(15),
@@ -197,6 +201,7 @@ static const struct cam_ife_csid_irq_desc cam_ife_csid_650_path_irq_desc[] = {
 	},
 	{
 		.bitmask = BIT(19),
+		.err_type = CAM_ISP_HW_ERROR_RECOVERY_OVERFLOW,
 		.desc = "OVERFLOW_RECOVERY: Back pressure/output fifo ovrfl",
 	},
 	{

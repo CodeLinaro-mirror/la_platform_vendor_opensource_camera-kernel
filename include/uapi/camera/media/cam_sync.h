@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_SYNC_H__
@@ -194,6 +194,15 @@
 
 /* Flag fields for cam_generic_fence_config */
 #define CAM_GENERIC_FENCE_FLAG_IS_GLOBAL_SYNX_OBJ BIT(0)
+
+/* Additional param index for cam_generic_fence_cmd_args */
+#define CAM_GENERIC_FENCE_CMD_FLAG_PARAM_INDEX     0x1
+
+/* Additional param field for cam_generic_fence_cmd_args */
+#define CAM_GENERIC_FENCE_CMD_IS_ONE_TO_MANY_MANY  0x1
+
+/* Flag fields for cam_generic_fence_one_to_many_input_info */
+#define CAM_GENERIC_FENCE_CMD_CREATE_PRIMARY_SYNC  0x1
 
 /**
  * struct cam_sync_ev_header - Event header for sync event notification
@@ -405,7 +414,7 @@ struct cam_sync_wait {
  *                    CAM_GENERIC_FENCE_TYPE_SYNC_OBJ in mask,
  *                    a new sync object would be returned in sync_obj linked to an
  *                    existing dma_fence_fd.
- * @sync_obj:         Sync object
+ * @sync_obj:         Sync object at L2 level as well
  * @dma_fence_fd:     DMA fence fd
  * @synx_obj:         Synx object
  * @reason_code:      Indicates if the operation was successful or not
@@ -498,6 +507,111 @@ struct cam_synx_obj_signal {
 };
 
 /**
+ * struct cam_generic_fence_create_associated_array - provides info on
+ *                    associated fences for one to many
+ *
+ *                    struct cam_generic_fence_config is reused here
+ *                    as child struct, the sync object in fence_cfg
+ *                    will be the same as the sync_obj here, if the
+ *                    ioctl lands for one to many, the expectation is
+ *                    one child sync to be created
+ *
+ *
+ * @version:                Struct version
+ * @num_fences_requested:   Number of fences that need to be processed at L2
+ *                          level, refers to the number of fence_cfg entries.
+ *                          If this field is null only sync object will be created
+ * @num_fences_processed:   Number of fences successfully processed at L2 level
+ * @sync_obj:               L1 sync object associated with different synx/dma's.
+ * @sync_obj_name:          L1 sync object name.
+ * @session_cookie:         This determines the synx session to be used for
+ *                          creating fences. session_cookie of 0 will use the default
+ *                          kernel session not associated with any HW fencing core
+ * @num_valid_params:       Valid number of params being used
+ * @valid_param_mask:       Mask to indicate the field types in params
+ * @params:                 Additional params
+ * @fence_info:             Variable length fence info input based on num_fences
+ */
+struct cam_generic_fence_create_associated_array {
+	__u32 version;
+	__u32 num_fences_requested;
+	__u32 num_fences_processed;
+	__s32 sync_obj;
+	char  sync_obj_name[64];
+	__u32 session_cookie;
+	__u32 num_valid_params;
+	__u32 valid_param_mask;
+	__s32 params[3];
+	struct cam_generic_fence_config fence_cfg[];
+};
+
+/**
+ * struct cam_generic_fence_one_to_many_input_info - provides info on
+ *                    fence batching for one to many, Userland can create one to
+ *                    many association of fences, as depicted below a merged primary
+ *                    sync is a merge of SYNC0, SYNC1, SYNC2 and so on. And each
+ *                    child SYNCn objects can have an array of DMA/SYNX objects
+ *                    associated to it. Userland can also skip creating the
+ *                    merged primary, and only create the individual sync objects
+ *
+ *                                        +---> DMA0/SYNX0
+ *                                        |
+ *                       +----> SYNC0 ----|
+ *                       |                |
+ *                       |                +---> DMA1/SYNX1
+ *                       |
+ *                       |                +---> DMA0/SYNX0
+ *         L0            |        L1      |                     L2
+ *                       |                |
+ * merged_primary_sync-->|----> SYNC1 ----|---> DMA1/SYNX1
+ *                       |                |
+ *                       |                |
+ *                       |                +---> DMA2/SYNX2
+ *                       |
+ *                       |
+ *                       |
+ *                       +----> SYNC2
+ *                       .
+ *                       .
+ *                       .
+ *                       .
+ *
+ * @version:                Struct version
+ * @num_fences_requested:   Number of fences that need to be processed at L1 level
+ *                          Refers to the number of entries in the associated
+ *                          array
+ * @num_fences_processed:   Number of fences successfully processed at L1 level
+ *                          If userland requests 5 fences to be created
+ *                          and it fails on the 3rd, num processed will be
+ *                          3. This can be used by userspace to clean
+ *                          partially batched fences
+ * @flags:                  To set any supported properties (create merged
+ *                          primary sync/....)
+ *                          possible flag - CAM_GENERIC_FENCE_CMD_CREATE_PRIMARY_SYNC
+ * @merged_primary_name:    Name of merged primary sync object (L0)
+ * @merged_primary_sync:    Merged primary sync (L0) associated with different
+ *                          child objects
+ * @num_valid_params:       Valid number of params being used
+ * @valid_param_mask:       Mask to indicate the field types in params
+ * @params:                 Additional params
+ * @payload:                Variable length fence associated info
+ *                          (struct cam_generic_fence_create_associated_array)
+ *                          based on num_fences_requested
+ */
+struct cam_generic_fence_one_to_many_input_info {
+	__u32 version;
+	__u32 num_fences_requested;
+	__u32 num_fences_processed;
+	__u32 flags;
+	char  merged_primary_name[64];
+	__s32 merged_primary_sync;
+	__u32 num_valid_params;
+	__u32 valid_param_mask;
+	__s32 params[3];
+	__u64 payload[];
+};
+
+/**
  * struct cam_generic_fence_input_info - Parent structure that
  *                    provides info on fence batching
  *
@@ -531,6 +645,8 @@ struct cam_generic_fence_input_info {
  *
  * @version:           Struct version
  * @fence_type:        Type of fence the ioctl cmd is for [dma/sync/synx]
+ *                     If flag is set for one to many association, fence_type
+ *                     for only sync is supported
  * @input_handle_type: Type of the fence input handle [user handle is expected]
  * @input_data_size:   Size of the data pointed to by input_handle
  * @input_handle:      Handle to the fence input data [create/signal/import...]
@@ -538,6 +654,8 @@ struct cam_generic_fence_input_info {
  * @num_valid_params:  Valid number of reserved params being used
  * @valid_param_mask:  Mask to indicate the field types in params
  * @params:            Additional params
+ *                     holds CAM_GENERIC_FENCE_CMD_IS_ONE_TO_MANY_MANY to
+ *                     indicate one to many create
  */
 struct cam_generic_fence_cmd_args {
 	__u32 version;

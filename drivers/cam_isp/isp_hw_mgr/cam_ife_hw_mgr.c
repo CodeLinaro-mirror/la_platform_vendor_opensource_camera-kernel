@@ -16314,7 +16314,6 @@ int cam_ife_mgr_prepare_ul_hw_update(void *hw_mgr_priv,
 
 	struct cam_ife_hw_mgr_ctx               *ctx;
 	struct cam_ife_hw_mgr                   *hw_mgr;
-	struct cam_kmd_buf_info                  kmd_buf;
 	uint32_t                                 i, num_ent, rup_num_ent;
 	struct cam_isp_prepare_hw_update_data   *prepare_hw_data;
 	struct cam_isp_cmd_buf_count             cmd_buf_count = {0};
@@ -16340,7 +16339,7 @@ int cam_ife_mgr_prepare_ul_hw_update(void *hw_mgr_priv,
 		return rc;
 
 	/* Pre parse the packet*/
-	rc = cam_packet_util_get_kmd_buffer(prepare->packet, &kmd_buf);
+	rc = cam_packet_util_get_kmd_buffer(prepare->packet, &prepare_hw_data->kmd_cmd_buff_info);
 	if (rc)
 		return rc;
 
@@ -16377,7 +16376,7 @@ int cam_ife_mgr_prepare_ul_hw_update(void *hw_mgr_priv,
 
 	for (i = 0; i < ctx->num_base; i++) {
 		rc = cam_ife_hw_mgr_update_cmd_buffer(ctx, prepare,
-			&kmd_buf, &cmd_buf_count, i, ul_data);
+			&prepare_hw_data->kmd_cmd_buff_info, &cmd_buf_count, i, ul_data);
 
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Add cmd buffer failed base_idx: %d hw_type %d",
