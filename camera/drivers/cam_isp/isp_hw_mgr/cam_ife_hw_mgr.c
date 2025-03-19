@@ -2403,7 +2403,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_pixel(
 	}
 
 	for (i = 0; i < num_out_res; i++) {
-		if (!in_port->ipp_count) {
+		if (!in_port->ipp_count && per_port_acquire) {
 			out_port = &in_port->data[0];
 			res_type = CAM_ISP_IFE_OUT_RES_BASE + i;
 		} else {
@@ -2536,6 +2536,9 @@ skip_get_ife_out_res:
 				vfe_acquire.vfe_out.comp_grp_id, c_ctx->ctx_index);
 		}
 
+		if (!per_port_acquire && !is_ife_out_in_list)
+				c_ctx->num_acq_vfe_out++;
+
 		if (!update_only) {
 			ife_out_res->res_type = CAM_ISP_RESOURCE_VFE_OUT;
 			ife_out_res->res_id = res_type;
@@ -2543,9 +2546,8 @@ skip_get_ife_out_res:
 				vfe_acquire.vfe_out.out_port_info->hw_context_id;
 			if (!per_port_acquire && !is_ife_out_in_list) {
 				ife_src_res->num_children++;
-				c_ctx->num_acq_vfe_out++;
 				CAM_DBG(CAM_ISP, "IFE SRC num_children = %d acq vfe out %d",
-					ife_src_res->num_children,c_ctx->num_acq_vfe_out);
+					ife_src_res->num_children, c_ctx->num_acq_vfe_out);
 			}
 		}
 	}
@@ -6341,7 +6343,6 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 		ife_mgr_ctx->in_ports[i].is_offline = c_ctx->is_offline;
 		rc = cam_ife_mgr_acquire_get_unified_structure(acquire_hw_info,
 			i, &input_size,  &ife_mgr_ctx->in_ports[i]);
-
 		if (rc < 0) {
 			CAM_ERR(CAM_ISP, "Failed in parsing: %d, ctx_idx: %u",
 				rc, c_ctx->ctx_index);
@@ -9269,6 +9270,15 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 		c_ctx->sof_cnt[i] = 0;
 		c_ctx->eof_cnt[i] = 0;
 		c_ctx->epoch_cnt[i] = 0;
+	}
+
+	if (hw_mgr_ctx->in_ports) {
+		for (i = 0; i < hw_mgr_ctx->num_in_ports; i++) {
+			kfree(hw_mgr_ctx->in_ports[i].data);
+			hw_mgr_ctx->in_ports[i].data = NULL;
+		}
+		kfree(hw_mgr_ctx->in_ports);
+		hw_mgr_ctx->in_ports = NULL;
 	}
 
 	cam_ife_mgr_free_cdm_cmd(&c_ctx->cdm_cmd);
