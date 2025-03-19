@@ -6,7 +6,9 @@
 #include <linux/soc/qcom/msm_hw_fence.h>
 
 #include "cam_sync_synx.h"
+#if IS_REACHABLE(CONFIG_ENABLE_SOCCP)
 #include <synx_extension_api.h>
+#endif
 
 /* Max IPCC signals are 64 per client, starting from 0 */
 #define HW_FENCE_MAX_IPCC_SIGNALS_PER_CLIENT 63
@@ -154,44 +156,6 @@ static int __cam_synx_obj_release_row(int32_t row_idx)
 	}
 
 	return __cam_synx_obj_release(row_idx);
-}
-
-enum synx_client_id cam_synx_map_camera_client_id_for_synx(
-	enum cam_sync_fencing_client_cores cam_client_id,
-	uint32_t signal_id)
-{
-	switch (cam_client_id) {
-	case CAM_SYNC_SYNX_CLIENT_ICP_0:
-		return SYNX_CLIENT_ICP_CTX0;
-	case CAM_SYNC_SYNX_CLIENT_ICP_1:
-		return SYNX_CLIENT_NATIVE;
-	case CAM_SYNC_HW_FENCE_CLIENT_IFE0_CTX0:
-		return (SYNX_CLIENT_HW_FENCE_IFE0_CTX0 + signal_id);
-	case CAM_SYNC_HW_FENCE_CLIENT_IFE1_CTX0:
-		return (SYNX_CLIENT_HW_FENCE_IFE1_CTX0 + signal_id);
-	case CAM_SYNC_HW_FENCE_CLIENT_IFE2_CTX0:
-		return (SYNX_CLIENT_HW_FENCE_IFE2_CTX0 + signal_id);
-	case CAM_SYNC_HW_FENCE_CLIENT_IFE3_CTX0:
-		return (SYNX_CLIENT_HW_FENCE_IFE3_CTX0 + signal_id);
-	case CAM_SYNC_HW_FENCE_CLIENT_IFE4_CTX0:
-		return (SYNX_CLIENT_HW_FENCE_IFE4_CTX0 + signal_id);
-	case CAM_SYNC_HW_FENCE_CLIENT_IFE5_CTX0:
-		return (SYNX_CLIENT_HW_FENCE_IFE5_CTX0 + signal_id);
-	case CAM_SYNC_HW_FENCE_CLIENT_IFE6_CTX0:
-		return (SYNX_CLIENT_HW_FENCE_IFE6_CTX0 + signal_id);
-	case CAM_SYNC_HW_FENCE_CLIENT_IFE7_CTX0:
-		return (SYNX_CLIENT_HW_FENCE_IFE7_CTX0 + signal_id);
-	case CAM_SYNC_HW_FENCE_CLIENT_IFE8_CTX0:
-		return (SYNX_CLIENT_HW_FENCE_IFE8_CTX0 + signal_id);
-	case CAM_SYNC_HW_FENCE_CLIENT_IFE9_CTX0:
-		return (SYNX_CLIENT_HW_FENCE_IFE9_CTX0 + signal_id);
-	case CAM_SYNC_HW_FENCE_CLIENT_IFE10_CTX0:
-		return (SYNX_CLIENT_HW_FENCE_IFE10_CTX0 + signal_id);
-	case CAM_SYNC_HW_FENCE_CLIENT_IFE11_CTX0:
-		return (SYNX_CLIENT_HW_FENCE_IFE11_CTX0 + signal_id);
-	default:
-		return SYNX_CLIENT_MAX;
-	}
 }
 
 static void __cam_synx_obj_signal_cb(u32 h_synx, int status, void *data)
@@ -604,6 +568,44 @@ end:
 	spin_unlock_bh(&g_cam_synx_obj_dev->row_spinlocks[row_idx]);
 	return rc;
 }
+#if IS_REACHABLE(CONFIG_ENABLE_SOCCP)
+enum synx_client_id cam_synx_map_camera_client_id_for_synx(
+	enum cam_sync_fencing_client_cores cam_client_id,
+	uint32_t signal_id)
+{
+	switch (cam_client_id) {
+	case CAM_SYNC_SYNX_CLIENT_ICP_0:
+		return SYNX_CLIENT_ICP_CTX0;
+	case CAM_SYNC_SYNX_CLIENT_ICP_1:
+		return SYNX_CLIENT_NATIVE;
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE0_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE0_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE1_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE1_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE2_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE2_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE3_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE3_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE4_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE4_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE5_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE5_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE6_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE6_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE7_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE7_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE8_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE8_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE9_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE9_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE10_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE10_CTX0 + signal_id);
+	case CAM_SYNC_HW_FENCE_CLIENT_IFE11_CTX0:
+		return (SYNX_CLIENT_HW_FENCE_IFE11_CTX0 + signal_id);
+	default:
+		return SYNX_CLIENT_MAX;
+	}
+}
 
 struct synx_session *cam_synx_initialize_hw_fence_session(
 	struct cam_sync_hwfence_session_initialize_params *init_params,
@@ -709,6 +711,33 @@ err:
 			client_id, rc);
 	return rc;
 }
+#else
+enum synx_client_id cam_synx_map_camera_client_id_for_synx(
+	enum cam_sync_fencing_client_cores cam_client_id,
+	uint32_t signal_id)
+{
+	return -EOPNOTSUPP;
+}
+
+int cam_synx_core_recovery(
+	enum cam_sync_fencing_client_cores cam_core_id)
+{
+	return -EOPNOTSUPP;
+}
+
+int cam_synx_uninitialize_hw_fence_session(
+	struct synx_session *session_handle)
+{
+	return -EOPNOTSUPP;
+}
+
+struct synx_session *cam_synx_initialize_hw_fence_session(
+	struct cam_sync_hwfence_session_initialize_params *init_params,
+	void **sw_tx_wm_vaddr)
+{
+	return ERR_PTR(-EOPNOTSUPP);
+}
+#endif
 
 int __cam_synx_init_session(void)
 {

@@ -228,7 +228,9 @@ static int cam_sync_util_release_synx_dma(int32_t sync_obj)
 	int rc = 0;
 	struct sync_table_row *row;
 	struct cam_dma_fence_release_params release_params;
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
 	struct cam_synx_obj_release_params synx_release_params;
+#endif
 	struct sync_ext_fence_info *ext_fence_info, *tmp;
 
 	row = sync_dev->sync_table + sync_obj;
