@@ -762,11 +762,12 @@ static int32_t cam_sensor_cmd_buffer(struct cam_sensor_ctrl_t *s_ctrl,
 		cmd_type = cmd_desc->type;
 		CAM_DBG(CAM_SENSOR, "cmdtype %d", cmd_desc->type);
 		switch(cmd_type) {
-			case CAM_CMD_BUF_I2C:
+			case CAM_CMD_BUF_I2C: {
 				// I2C cmd buffer type
-				CAM_DBG(CAM_SENSOR, "reqid  %d ", csl_packet->header.request_id);
 				struct i2c_settings_array *i2c_settings =
 					&cci_settings->event_data[i].trigger_sensor_cmd_buf_info.i2c_settings;
+
+				CAM_DBG(CAM_SENSOR, "reqid  %d ", csl_packet->header.request_id);
 				cci_settings->event_data[i].cmd_type =
 					CAM_SENSOR_CMD_TYPE_I2C_SETTING;
 				INIT_LIST_HEAD(&(
@@ -783,6 +784,7 @@ static int32_t cam_sensor_cmd_buffer(struct cam_sensor_ctrl_t *s_ctrl,
 				cci_settings->is_settings_valid =
 					i2c_settings->is_settings_valid;
 				break;
+			}
 			case CAM_CMD_BUF_GENERIC: {
 				// Blob cmd buffer type
 				struct sensor_userdata s_userdata = {0};
