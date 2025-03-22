@@ -1304,14 +1304,24 @@ static int cam_ife_csid_ver2_handle_event_err(
 	evt.event_data = (void *)&err_evt_info;
 
 	for (i = 0; i < CAM_IFE_PIX_PATH_RES_MAX; i++) {
-		if (csid_hw->token_data[i].res_id == res->res_id) {
-			token = csid_hw->token_data[i].token;
-			break;
+		if (res) {
+			if (csid_hw->token_data[i].res_id == res->res_id) {
+				token = csid_hw->token_data[i].token;
+				break;
+			}
+		} else {
+			if (csid_hw->token_data[i].token) {
+				token = csid_hw->token_data[i].token;
+				break;
+			}
 		}
 	}
 
 	if (!token) {
-		CAM_ERR(CAM_ISP, "cannot find token data for res :%d ", res->res_id);
+		if (res)
+			CAM_ERR(CAM_ISP, "cannot find token data for res :%d ", res->res_id);
+		else
+			CAM_ERR(CAM_ISP, "cannot find token data for null res");
 		goto end;
 	}
 
