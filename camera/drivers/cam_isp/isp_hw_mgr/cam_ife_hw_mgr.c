@@ -6199,6 +6199,39 @@ static int cam_ife_mgr_acquire_offline_out(
 	return rc;
 }
 
+static void cam_ife_mgr_update_acquire_param(
+	struct cam_ife_hw_mgr_ctx *ife_ctx,
+	struct cam_hw_acquire_args *acquire_args)
+{
+	struct cam_ife_hw_concrete_ctx  *c_ctx = ife_ctx->concr_ctx;
+
+	if (g_ife_hw_mgr.isp_caps.support_consumed_addr)
+		acquire_args->op_flags |=
+			CAM_IFE_CTX_CONSUME_ADDR_EN;
+
+	if ((c_ctx->flags.is_sfe_shdr) || (c_ctx->flags.is_sfe_fs))
+		acquire_args->op_flags |=
+			CAM_IFE_CTX_APPLY_DEFAULT_CFG;
+
+	if (c_ctx->ctx_type == CAM_IFE_CTX_TYPE_CUSTOM)
+		acquire_args->op_flags |= CAM_IFE_CTX_CUSTOM_EN;
+
+	if (c_ctx->ctx_config & CAM_IFE_CTX_CFG_FRAME_HEADER_TS)
+		acquire_args->op_flags |=
+			CAM_IFE_CTX_FRAME_HEADER_EN;
+
+	if (c_ctx->ctx_config & CAM_IFE_CTX_CFG_DYNAMIC_SWITCH_ON)
+		acquire_args->op_flags |=
+			CAM_IFE_CTX_DYNAMIC_SWITCH_EN;
+
+	if (c_ctx->ctx_type == CAM_IFE_CTX_TYPE_SFE)
+		acquire_args->op_flags |=
+			CAM_IFE_CTX_SFE_EN;
+
+	if (c_ctx->flags.is_aeb_mode)
+		acquire_args->op_flags |= CAM_IFE_CTX_AEB_EN;
+}
+
 /* entry function: acquire_hw */
 static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 {
@@ -6533,14 +6566,10 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 
 	c_ctx->last_cdm_done_req = 0;
 
-	if (g_ife_hw_mgr.isp_caps.support_consumed_addr)
-		acquire_args->op_flags |=
-			CAM_IFE_CTX_CONSUME_ADDR_EN;
+	cam_ife_mgr_update_acquire_param(ife_mgr_ctx, acquire_args);
 
 	if ((c_ctx->flags.is_sfe_shdr) ||
 		(c_ctx->flags.is_sfe_fs)) {
-		acquire_args->op_flags |=
-			CAM_IFE_CTX_APPLY_DEFAULT_CFG;
 		c_ctx->scratch_buf_info.sfe_scratch_config =
 			kzalloc(sizeof(struct cam_sfe_scratch_buf_cfg), GFP_KERNEL);
 		if (!c_ctx->scratch_buf_info.sfe_scratch_config) {
@@ -6563,24 +6592,6 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 		/* Set scratch by default at stream on */
 		cam_ife_mgr_reset_streamon_scratch_cfg(ife_mgr_ctx);
 	}
-
-	if (c_ctx->ctx_type == CAM_IFE_CTX_TYPE_CUSTOM)
-		acquire_args->op_flags |= CAM_IFE_CTX_CUSTOM_EN;
-
-	if (c_ctx->ctx_config & CAM_IFE_CTX_CFG_FRAME_HEADER_TS)
-		acquire_args->op_flags |=
-			CAM_IFE_CTX_FRAME_HEADER_EN;
-
-	if (c_ctx->ctx_config & CAM_IFE_CTX_CFG_DYNAMIC_SWITCH_ON)
-		acquire_args->op_flags |=
-			CAM_IFE_CTX_DYNAMIC_SWITCH_EN;
-
-	if (c_ctx->ctx_type == CAM_IFE_CTX_TYPE_SFE)
-		acquire_args->op_flags |=
-			CAM_IFE_CTX_SFE_EN;
-
-	if (c_ctx->flags.is_aeb_mode)
-		acquire_args->op_flags |= CAM_IFE_CTX_AEB_EN;
 
 	c_ctx->flags.ctx_in_use = true;
 	c_ctx->num_reg_dump_buf = 0;
@@ -18810,6 +18821,7 @@ static int cam_ife_mgr_v_acquire(void *hw_mgr_priv, void *acquire_hw_args)
 				acq_args_ptr->acquired_hw_path,
 				acquired_hw_data->acquired_hw_path,
 				sizeof(acq_args_ptr->acquired_hw_path));
+			cam_ife_mgr_update_acquire_param(ife_mgr_ctx, acq_args_ptr);
 		}
 	} else {
 		rc =  cam_ife_mgr_acquire(hw_mgr_priv, acquire_hw_args);
