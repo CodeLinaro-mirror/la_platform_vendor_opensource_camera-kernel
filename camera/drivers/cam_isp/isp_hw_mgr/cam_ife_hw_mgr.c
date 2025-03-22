@@ -18747,8 +18747,6 @@ static int cam_ife_mgr_v_acquire(void *hw_mgr_priv, void *acquire_hw_args)
 			CAM_IFE_DECODE_FORMAT_MASK;
 		allocated = false;
 		mutex_lock(&ife_hw_mgr->ctx_mutex);
-		ife_hw_mgr->offline_reconfig =
-			cam_ife_find_reconfig_required(hw_mgr_priv, ife_mgr_ctx);
 		ctx_idx =
 			atomic_read(&ife_hw_mgr->num_acquired_offline_ctx);
 		/* TODO: update the condition for allocating additional HWs */
@@ -18798,6 +18796,8 @@ static int cam_ife_mgr_v_acquire(void *hw_mgr_priv, void *acquire_hw_args)
 			    sizeof(acq_args_ptr->acquired_hw_path));
 
 			ife_hw_mgr->starting_offline_cnt++;
+			ife_hw_mgr->offline_reconfig =
+				cam_ife_find_reconfig_required(hw_mgr_priv, ife_mgr_ctx);
 		} else {
 			/* Offline multi camera currently supports only contexts
 			 * with same capabilities. because it forced to use the first
@@ -18822,6 +18822,8 @@ static int cam_ife_mgr_v_acquire(void *hw_mgr_priv, void *acquire_hw_args)
 				acquired_hw_data->acquired_hw_path,
 				sizeof(acq_args_ptr->acquired_hw_path));
 			cam_ife_mgr_update_acquire_param(ife_mgr_ctx, acq_args_ptr);
+			ife_hw_mgr->offline_reconfig =
+				cam_ife_find_reconfig_required(hw_mgr_priv, ife_mgr_ctx);
 		}
 	} else {
 		rc =  cam_ife_mgr_acquire(hw_mgr_priv, acquire_hw_args);
@@ -18956,6 +18958,7 @@ static int cam_ife_mgr_v_release_hw(void *hw_mgr_priv, void *release_hw_args)
 	}
 	rc = cam_ife_mgr_release_hw(hw_mgr_priv, release_hw_args);
 	hw_mgr_ctx->ctx_in_use = false;
+	hw_mgr_ctx->is_offline = false;
 	return rc;
 }
 
