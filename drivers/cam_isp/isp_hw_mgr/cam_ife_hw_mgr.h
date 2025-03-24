@@ -58,7 +58,8 @@ enum cam_ife_ctx_master_type {
  * @disable_ife_mmu_prefetch:  Disable MMU prefetch for IFE bus WR
  * @disable_line_based_mode:   Disable line based mode for per port
  *                             feature with duplicate sensors
- *
+ *@csid_rx_capture_vc_dt_rst:  Dynamic change vc/dt for rx capture
+ *                             control and reset strobes
  */
 struct cam_ife_hw_mgr_debug {
 	struct dentry  *dentry;
@@ -69,6 +70,7 @@ struct cam_ife_hw_mgr_debug {
 	uint32_t       sfe_debug;
 	uint32_t       sfe_sensor_diag_cfg;
 	uint32_t       sfe_cache_debug[CAM_SFE_HW_NUM_MAX];
+	uint32_t       csid_rx_capture_vc_dt_rst;
 	bool           enable_req_dump;
 	bool           per_req_reg_dump;
 	bool           disable_ubwc_comp;
