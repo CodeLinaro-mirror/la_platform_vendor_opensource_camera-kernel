@@ -63,12 +63,6 @@ MODULE_IMPORT_NS(DMA_BUF);
 
 #define IS_CSF25(x, y) ((((x) == 2) && ((y) == 5)) ? 1 : 0)
 
-#define QCOM_SCM_CAMERA_MAX_QOS_CNT 20
-struct cam_scm_camera_qos {
-	u32 offset;
-	u32 val;
-};
-
 struct cam_fw_alloc_info {
 	struct device *fw_dev;
 	void          *fw_kva;
@@ -77,8 +71,6 @@ struct cam_fw_alloc_info {
 
 int cam_reserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length);
 void cam_unreserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length);
-int cam_update_camnoc_qos_settings(uint32_t use_case_id,
-	uint32_t num_arg, struct cam_scm_camera_qos *scm_buf);
 int camera_component_match_add_drivers(struct device *master_dev,
 	struct component_match **match_list);
 void cam_check_iommu_faults(struct iommu_domain *domain,
@@ -107,6 +99,9 @@ int cam_cpas_drv_channel_switch_for_dev(const struct device *dev);
 
 inline struct icc_path *cam_icc_get_path(struct device *dev,
 	const int src_id, const int dst_id, const char *path_name, bool use_path_name);
+
+int cam_update_camnoc_qos_settings(uint32_t use_case_id,
+	uint32_t num_arg, struct qcom_scm_camera_qos *scm_buf);
 
 int camera_i2c_compare_dev(struct device *dev, const void *data);
 
