@@ -23,7 +23,6 @@
 #include "cam_smmu_api.h"
 #include "cam_compat.h"
 #include "camera_main.h"
-#include "cam_req_mgr_dev.h"
 
 static struct cam_custom_dev g_custom_dev;
 static uint32_t g_num_custom_hws;
