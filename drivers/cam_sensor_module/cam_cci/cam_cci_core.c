@@ -460,7 +460,7 @@ static int cam_cci_release_context_data(
 	struct cam_hw_soc_info *soc_info =
 		&cci_dev->soc_info;
 	void __iomem *base = soc_info->reg_map[0].mem_base;
-	uint32_t reg_offset = master * 0x200 + i2cqueue * 0x100;
+	uint32_t reg_offset = master * 0x200 + i2cqueue * 0x100, read_val = 0;
 	uint32_t reg_gpio_offset = get_ctx->gpioqueue * 0x100;
 	struct cam_cci_master_info *cci_master_info;
 	struct cam_cci_gpio_info *cci_gpio_info;
@@ -476,7 +476,7 @@ static int cam_cci_release_context_data(
 	cci_gpio_info = &cci_dev->cci_gpio_info;
 
 	mutex_lock(&cci_master_info->mutex_q[i2cqueue]);
-	uint32_t read_val = cam_io_r_mb(base +
+	read_val = cam_io_r_mb(base +
 		CCI_I2C_M0_Q0_CUR_WORD_CNT_ADDR + reg_offset);
 	CAM_DBG(CAM_CCI, "i2c cmd cnt %d during contextid release", read_val);
 	if (read_val > 0)
