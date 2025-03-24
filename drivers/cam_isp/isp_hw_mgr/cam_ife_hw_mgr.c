@@ -19974,6 +19974,7 @@ static int cam_ife_hw_mgr_handle_hw_buf_done(
 	ife_hwr_irq_wm_done_cb = ife_hw_mgr_ctx->common.event_cb;
 	compdone_evt_info = (struct cam_isp_hw_compdone_event_info *)event_info->event_data;
 	buf_done_event_data.num_handles = 0;
+	buf_done_event_data.global_timestamp = event_info->global_timestamp;
 
 	for (i = 0; i < compdone_evt_info->num_res; i++) {
 		CAM_DBG(CAM_ISP,

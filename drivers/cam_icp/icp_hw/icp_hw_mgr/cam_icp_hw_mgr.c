@@ -2704,8 +2704,8 @@ static void cam_icp_mgr_process_dbg_buf(unsigned int debug_lvl)
 			dbg_msg = (struct hfi_msg_debug *)pkt_ptr;
 			dbg_buf = (char *)&dbg_msg->msg_data;
 			timestamp = ((((uint64_t)(dbg_msg->timestamp_hi) << 32)
-				| dbg_msg->timestamp_lo) >> 16);
-			trace_cam_icp_fw_dbg(dbg_buf, timestamp/2);
+				| dbg_msg->timestamp_lo));
+			trace_cam_icp_fw_dbg(dbg_buf, timestamp);
 			if (!debug_lvl)
 				CAM_INFO(CAM_ICP, "FW_DBG:%s", dbg_buf);
 		}

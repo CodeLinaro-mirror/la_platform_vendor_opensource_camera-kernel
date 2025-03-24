@@ -2475,7 +2475,10 @@ static int cam_vfe_bus_ver3_handle_vfe_out_done_top_half(uint32_t evt_id,
 	struct cam_vfe_bus_ver3_vfe_out_data       *rsrc_data = NULL;
 	struct cam_vfe_bus_irq_evt_payload         *evt_payload;
 	struct cam_vfe_bus_ver3_comp_grp_data      *resource_data;
+	struct cam_hw_info                         *hw_info;
 	uint32_t                                    status_0;
+	uint32_t                                    cntcv_lo_val = 0, cntcv_hi_val = 0;
+	uint64_t                                    global_timer = 0;
 
 	vfe_out = th_payload->handler_priv;
 	if (!vfe_out) {
@@ -2485,7 +2488,17 @@ static int cam_vfe_bus_ver3_handle_vfe_out_done_top_half(uint32_t evt_id,
 
 	rsrc_data = vfe_out->res_priv;
 	resource_data = rsrc_data->comp_grp->res_priv;
+	hw_info = (struct cam_hw_info *)vfe_out->hw_intf->hw_priv;
 
+	if (hw_info->soc_info.global_timer_mem_base != NULL) {
+		cntcv_lo_val = cam_io_r_mb(hw_info->soc_info.global_timer_mem_base +
+				MPM_READ_CNTCV_LO);
+		cntcv_hi_val = cam_io_r_mb(hw_info->soc_info.global_timer_mem_base +
+				MPM_READ_CNTCV_HI);
+		global_timer = ((uint64_t)cntcv_hi_val << 32) | cntcv_lo_val;
+	} else {
+		CAM_WARN(CAM_ISP, "Failed to get global timer value");
+	}
 	rc  = cam_vfe_bus_ver3_get_evt_payload(rsrc_data->common_data,
 		&evt_payload);
 
@@ -2499,15 +2512,15 @@ static int cam_vfe_bus_ver3_handle_vfe_out_done_top_half(uint32_t evt_id,
 	}
 
 	cam_isp_hw_get_timestamp(&evt_payload->ts);
-
 	evt_payload->core_index = rsrc_data->common_data->core_index;
 	evt_payload->evt_id = evt_id;
+	evt_payload->global_timestamp = global_timer;
 
 	for (i = 0; i < th_payload->num_registers; i++) {
 		evt_payload->irq_reg_val[i] = th_payload->evt_status_arr[i];
-		CAM_DBG(CAM_ISP, "VFE:%d Bus IRQ status_%d: 0x%X",
+		CAM_DBG(CAM_ISP, "VFE:%d Bus IRQ status_%d: 0x%X global timer %llu",
 			rsrc_data->common_data->core_index, i,
-			th_payload->evt_status_arr[i]);
+			th_payload->evt_status_arr[i], global_timer);
 	}
 
 	th_payload->evt_payload_priv = evt_payload;
@@ -2616,6 +2629,7 @@ static int cam_vfe_bus_ver3_handle_vfe_out_done_bottom_half(
 				compdone_evt_info.res_id[i]);
 		}
 		evt_info.event_data = (void *)&compdone_evt_info;
+		evt_info.global_timestamp = evt_payload->global_timestamp;
 		if (rsrc_data->common_data->event_cb)
 			rsrc_data->common_data->event_cb(ctx, evt_id,
 				(void *)&evt_info);
