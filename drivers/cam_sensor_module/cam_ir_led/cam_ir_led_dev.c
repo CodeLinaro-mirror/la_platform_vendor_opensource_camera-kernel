@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -469,7 +469,7 @@ static int32_t cam_ir_led_config(struct cam_ir_led_ctrl *ictrl,
 	csl_packet = (struct cam_packet *)(uintptr_t)(generic_ptr +
 			config.offset);
 
-	offset = (uint32_t *)((uint8_t *)&csl_packet->payload +
+	offset = (uint32_t *)((uint8_t *)&csl_packet->payload_flex +
 		csl_packet->cmd_buf_offset);
 	cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 	rc = cam_mem_get_cpu_buf(cmd_desc->mem_handle,
