@@ -75,7 +75,7 @@ config MSM_GLOBAL_SYNX_V2
 	  and global synchronization across cores.
 	  Synx V2 code only compiles if this is enabled.
 
-config ENABLE_SOCCP
+config CAM_ENABLE_SOCCP
 	bool "enabling soccp module"
 	help
 	  This is enabling SOCCP module.

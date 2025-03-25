@@ -1874,33 +1874,6 @@ int cam_sync_synx_core_recovery(
 }
 
 #if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
-static bool cam_sync_validate_and_get_hw_fence_client_info(
-	int32_t session_hdl, uint32_t *client_core, uint32_t *col_index)
-{
-	CAM_SYNC_GET_CLIENT_INFO_FROM_SESSION_HDL(session_hdl, client_core, col_index);
-
-	return CAM_SYNC_VALIDATE_HW_FENCE_CLIENT_INFO(client_core, col_index);
-}
-
-static int cam_sync_find_free_bit_util(
-	void *bitmap, uint32_t num_bits, long *free_idx)
-{
-	long idx;
-	bool bit;
-
-	do {
-		idx = find_first_zero_bit(bitmap, num_bits);
-		if (idx >= num_bits) {
-			CAM_ERR(CAM_SYNC, "No free idx available");
-			return -ENOMEM;
-		}
-		bit = test_and_set_bit(idx, bitmap);
-	} while (bit);
-
-	*free_idx = idx;
-	return 0;
-}
-
 static inline int cam_sync_signal_synx_fence_util(
 	struct sync_synx_obj_info *synx_obj_info, uint32_t status)
 {
@@ -2328,29 +2301,6 @@ end:
 	return rc;
 }
 
-static int __cam_sync_validate_hw_fence_client_entry(int32_t session_hdl,
-	struct cam_sync_hw_fence_client_entries *entry)
-{
-	int rc = 0;
-
-	if (entry->cookie != session_hdl) {
-		CAM_ERR(CAM_SYNC,
-				"Cookie [0x%x] mismatch for session_hdl: 0x%x",
-				entry->cookie, session_hdl);
-		rc = -EINVAL;
-		goto end;
-	}
-
-	if (!entry->active) {
-		CAM_ERR(CAM_SYNC,
-				"Session with hdl: 0x%x is not active", session_hdl);
-		rc = -EINVAL;
-	}
-
-end:
-	return rc;
-}
-
 static int cam_generic_fence_process_synx_obj_cmd(
 	uint32_t sync_manager_idx, uint32_t id, int32_t fence_cmd_args_flag,
 	struct cam_generic_fence_cmd_args *fence_cmd_args)
@@ -2378,6 +2328,58 @@ static int cam_generic_fence_process_synx_obj_cmd(
 		break;
 	}
 
+	return rc;
+}
+#endif
+
+#if IS_REACHABLE(CONFIG_CAM_ENABLE_SOCCP)
+static int cam_sync_find_free_bit_util(
+	void *bitmap, uint32_t num_bits, long *free_idx)
+{
+	long idx;
+	bool bit;
+
+	do {
+		idx = find_first_zero_bit(bitmap, num_bits);
+		if (idx >= num_bits) {
+			CAM_ERR(CAM_SYNC, "No free idx available");
+			return -ENOMEM;
+		}
+		bit = test_and_set_bit(idx, bitmap);
+	} while (bit);
+
+	*free_idx = idx;
+	return 0;
+}
+
+static bool cam_sync_validate_and_get_hw_fence_client_info(
+	int32_t session_hdl, uint32_t *client_core, uint32_t *col_index)
+{
+	CAM_SYNC_GET_CLIENT_INFO_FROM_SESSION_HDL(session_hdl, client_core, col_index);
+
+	return CAM_SYNC_VALIDATE_HW_FENCE_CLIENT_INFO(client_core, col_index);
+}
+
+static int __cam_sync_validate_hw_fence_client_entry(int32_t session_hdl,
+	struct cam_sync_hw_fence_client_entries *entry)
+{
+	int rc = 0;
+
+	if (entry->cookie != session_hdl) {
+		CAM_ERR(CAM_SYNC,
+				"Cookie [0x%x] mismatch for session_hdl: 0x%x",
+				entry->cookie, session_hdl);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	if (!entry->active) {
+		CAM_ERR(CAM_SYNC,
+				"Session with hdl: 0x%x is not active", session_hdl);
+		rc = -EINVAL;
+	}
+
+end:
 	return rc;
 }
 
@@ -2928,33 +2930,6 @@ static int cam_sync_soccp_ssr_notify(struct notifier_block *nb, unsigned long ac
 
 	return NOTIFY_OK;
 }
-
-int cam_sync_hw_fence_session_cleanup(void)
-{
-	int i, j, rc = 0;
-	uint32_t client_entry_idx;
-	struct cam_sync_hw_fence_client_entries *client_entry;
-
-	for (i = 0; i < CAM_SYNC_HW_FENCE_MAX_CLIENTS; i++) {
-		for (j = 0; j < CAM_SYNC_HW_FENCE_MAX_SUB_GRPS; j++) {
-			client_entry_idx = (i * CAM_SYNC_HW_FENCE_MAX_SUB_GRPS) + j;
-			spin_lock(hw_fence_info.hw_fence_locks[client_entry_idx]);
-			client_entry = &hw_fence_info.hw_fence_tbl[client_entry_idx];
-			if (client_entry->active) {
-				clear_bit(j, hw_fence_info.client_bitmaps[i]);
-				rc = cam_sync_deinitialize_hw_fence_session(
-					client_entry->cookie);
-				if (rc) {
-					spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
-					return rc;
-				}
-			}
-			spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
-		}
-	}
-	return rc;
-}
-
 int cam_sync_initialize_hw_fence_session(
 	struct cam_sync_hwfence_session_initialize_params *init_params)
 {
@@ -3022,12 +2997,10 @@ int cam_sync_initialize_hw_fence_session(
 	}
 	sync_dev->ref_cnt++;
 	if (sync_dev->ref_cnt) {
-#if IS_REACHABLE(CONFIG_ENABLE_SOCCP)
 		rc = synx_enable_resources(synx_client_idx, SYNX_RESOURCE_SOCCP, true);
 		if (rc)
 			CAM_ERR(CAM_SYNC, "Failed to power up SOCCP for synx_id: %u",
 			synx_client_idx);
-#endif
 	}
 	return rc;
 
@@ -3089,12 +3062,10 @@ int cam_sync_deinitialize_hw_fence_session(int32_t session_hdl)
 
 		sync_dev->notifier = NULL;
 		memset(&sync_dev->nb, 0, sizeof(sync_dev->nb));
-#if IS_REACHABLE(CONFIG_ENABLE_SOCCP)
 		rc = synx_enable_resources(synx_client_idx, SYNX_RESOURCE_SOCCP, false);
 		if (rc)
 			CAM_ERR(CAM_SYNC, "Failed to power up SOCCP for synx_id: %u",
 			synx_client_idx);
-#endif
 	} else {
 		CAM_ERR(CAM_SYNC,
 			"Not set SocCP to dormant/power down state due to unbalanced initialize/deinitialize HW fence session calls, ref_cnt: %d",
@@ -3103,13 +3074,35 @@ int cam_sync_deinitialize_hw_fence_session(int32_t session_hdl)
 end:
 	return rc;
 }
+
+int cam_sync_hw_fence_session_cleanup(void)
+{
+	int i, j, rc = 0;
+	uint32_t client_entry_idx;
+	struct cam_sync_hw_fence_client_entries *client_entry;
+
+	for (i = 0; i < CAM_SYNC_HW_FENCE_MAX_CLIENTS; i++) {
+		for (j = 0; j < CAM_SYNC_HW_FENCE_MAX_SUB_GRPS; j++) {
+			client_entry_idx = (i * CAM_SYNC_HW_FENCE_MAX_SUB_GRPS) + j;
+			spin_lock(hw_fence_info.hw_fence_locks[client_entry_idx]);
+			client_entry = &hw_fence_info.hw_fence_tbl[client_entry_idx];
+			if (client_entry->active) {
+				clear_bit(j, hw_fence_info.client_bitmaps[i]);
+				rc = cam_sync_deinitialize_hw_fence_session(
+					client_entry->cookie);
+				if (rc) {
+					spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
+					return rc;
+				}
+			}
+			spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
+		}
+	}
+	return rc;
+}
 #else
 int cam_sync_check_and_update_hw_fence_queue_pntrs(
 	struct cam_sync_hwfence_info *hwfence_info)
-{
-	return -EOPNOTSUPP;
-}
-int cam_sync_hw_fence_session_cleanup(void)
 {
 	return -EOPNOTSUPP;
 }
@@ -3121,6 +3114,11 @@ int cam_sync_initialize_hw_fence_session(
 }
 
 int cam_sync_deinitialize_hw_fence_session(int32_t session_hdl)
+{
+	return -EOPNOTSUPP;
+}
+
+int cam_sync_hw_fence_session_cleanup(void)
 {
 	return -EOPNOTSUPP;
 }
@@ -3382,7 +3380,7 @@ static int cam_generic_fence_process_one_to_many_cmds(
 
 	switch (id) {
 	case CAM_GENERIC_FENCE_CREATE:
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX_V2)
+#if IS_REACHABLE(CONFIG_CAM_ENABLE_SOCCP)
 		rc = cam_generic_fence_handle_one_to_many_create(sync_manager_idx, fence_cmd_args);
 		break;
 #endif

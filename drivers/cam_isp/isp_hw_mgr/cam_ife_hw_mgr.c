@@ -21249,16 +21249,17 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 
 		memset(&init_params, 0, sizeof(init_params));
 	}
+	if (num_ipcc_clients) {
+		rc = cam_smmu_map_phy_mem_region(g_ife_hw_mgr.mgr_common.img_iommu_hdl,
+			CAM_SMMU_REGION_DEVICE, 0, &iova, &len);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "Failed to map Device region mem, rc: %u", rc);
+			goto hw_fence_session_cleanup;
+		}
 
-	rc = cam_smmu_map_phy_mem_region(g_ife_hw_mgr.mgr_common.img_iommu_hdl,
-		CAM_SMMU_REGION_DEVICE, 0, &iova, &len);
-	if (rc) {
-		CAM_ERR(CAM_ISP, "Failed to map Device region mem, rc: %u", rc);
-		goto hw_fence_session_cleanup;
+		CAM_DBG(CAM_ISP, "Device region found, sending info to bus");
+		cam_ife_hw_mgr_send_ipcc_region_info(&g_ife_hw_mgr, iova, len);
 	}
-
-	CAM_DBG(CAM_ISP, "Device region found, sending info to bus");
-	cam_ife_hw_mgr_send_ipcc_region_info(&g_ife_hw_mgr, iova, len);
 	CAM_DBG(CAM_ISP, "Exit");
 
 	return 0;

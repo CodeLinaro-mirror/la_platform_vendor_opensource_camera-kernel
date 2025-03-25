@@ -6,7 +6,7 @@
 #include <linux/soc/qcom/msm_hw_fence.h>
 
 #include "cam_sync_synx.h"
-#if IS_REACHABLE(CONFIG_ENABLE_SOCCP)
+#if IS_REACHABLE(CONFIG_CAM_ENABLE_SOCCP)
 #include <synx_extension_api.h>
 #endif
 
@@ -568,7 +568,7 @@ end:
 	spin_unlock_bh(&g_cam_synx_obj_dev->row_spinlocks[row_idx]);
 	return rc;
 }
-#if IS_REACHABLE(CONFIG_ENABLE_SOCCP)
+#if IS_REACHABLE(CONFIG_CAM_ENABLE_SOCCP)
 enum synx_client_id cam_synx_map_camera_client_id_for_synx(
 	enum cam_sync_fencing_client_cores cam_client_id,
 	uint32_t signal_id)

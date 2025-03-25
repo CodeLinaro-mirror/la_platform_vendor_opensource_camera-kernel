@@ -5823,10 +5823,13 @@ int cam_vfe_bus_ver3_init(
 	bus_priv->constraint_error_list = ver3_hw_info->constraint_error_list;
 	bus_priv->common_data.image_addr_fifo_cnt_mask =
 		ver3_hw_info->image_addr_fifo_cnt_mask;
-	bus_priv->ipcc_info.ipcc_en = soc_private->ipcc_info.ipcc_en;
-	bus_priv->ipcc_info.ipcc_protocol_id = soc_private->ipcc_info.ipcc_protocol_id;
-	bus_priv->ipcc_info.ipcc_dest_client_id = soc_private->ipcc_info.ipcc_dest_client_id;
-	bus_priv->ipcc_info.hw_client_ipcc_id = soc_private->ipcc_info.ipcc_client_id;
+	if (soc_info) {
+		bus_priv->ipcc_info.ipcc_en = soc_private->ipcc_info.ipcc_en;
+		bus_priv->ipcc_info.ipcc_protocol_id = soc_private->ipcc_info.ipcc_protocol_id;
+		bus_priv->ipcc_info.ipcc_dest_client_id =
+			soc_private->ipcc_info.ipcc_dest_client_id;
+		bus_priv->ipcc_info.hw_client_ipcc_id = soc_private->ipcc_info.ipcc_client_id;
+	}
 	bus_priv->common_data.ipcc_client_send_offset = ver3_hw_info->ipcc_client_send_offset;
 	bus_priv->common_data.ipcc_protocol_reg_block_size =
 		ver3_hw_info->ipcc_protocol_reg_block_size;
