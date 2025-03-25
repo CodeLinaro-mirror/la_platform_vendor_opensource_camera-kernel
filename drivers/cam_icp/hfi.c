@@ -339,9 +339,9 @@ int hfi_cmd_ubwc_config(uint32_t *ubwc_cfg)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	dbg_prop->prop_data[0] = HFI_PROP_SYS_UBWC_CFG;
-	dbg_prop->prop_data[1] = ubwc_cfg[0];
-	dbg_prop->prop_data[2] = ubwc_cfg[1];
+	dbg_prop->prop_data_flex[0] = HFI_PROP_SYS_UBWC_CFG;
+	dbg_prop->prop_data_flex[1] = ubwc_cfg[0];
+	dbg_prop->prop_data_flex[2] = ubwc_cfg[1];
 
 	hfi_write_cmd(prop);
 	kfree(prop);
@@ -372,11 +372,11 @@ int hfi_cmd_ubwc_config_ext(uint32_t *ubwc_ipe_cfg,
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	dbg_prop->prop_data[0] = HFI_PROPERTY_SYS_UBWC_CONFIG_EX;
-	dbg_prop->prop_data[1] = ubwc_bps_cfg[0];
-	dbg_prop->prop_data[2] = ubwc_bps_cfg[1];
-	dbg_prop->prop_data[3] = ubwc_ipe_cfg[0];
-	dbg_prop->prop_data[4] = ubwc_ipe_cfg[1];
+	dbg_prop->prop_data_flex[0] = HFI_PROPERTY_SYS_UBWC_CONFIG_EX;
+	dbg_prop->prop_data_flex[1] = ubwc_bps_cfg[0];
+	dbg_prop->prop_data_flex[2] = ubwc_bps_cfg[1];
+	dbg_prop->prop_data_flex[3] = ubwc_ipe_cfg[0];
+	dbg_prop->prop_data_flex[4] = ubwc_ipe_cfg[1];
 
 	hfi_write_cmd(prop);
 	kfree(prop);
@@ -402,9 +402,9 @@ int hfi_enable_ipe_bps_pc(bool enable, uint32_t core_info)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	dbg_prop->prop_data[0] = HFI_PROP_SYS_IPEBPS_PC;
-	dbg_prop->prop_data[1] = enable;
-	dbg_prop->prop_data[2] = core_info;
+	dbg_prop->prop_data_flex[0] = HFI_PROP_SYS_IPEBPS_PC;
+	dbg_prop->prop_data_flex[1] = enable;
+	dbg_prop->prop_data_flex[2] = core_info;
 
 	hfi_write_cmd(prop);
 	kfree(prop);
@@ -441,9 +441,9 @@ int hfi_set_debug_level(u64 icp_dbg_type, uint32_t lvl)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	dbg_prop->prop_data[0] = HFI_PROP_SYS_DEBUG_CFG;
-	dbg_prop->prop_data[1] = lvl;
-	dbg_prop->prop_data[2] = icp_dbg_type;
+	dbg_prop->prop_data_flex[0] = HFI_PROP_SYS_DEBUG_CFG;
+	dbg_prop->prop_data_flex[1] = lvl;
+	dbg_prop->prop_data_flex[2] = icp_dbg_type;
 	hfi_write_cmd(prop);
 
 	kfree(prop);
@@ -468,19 +468,19 @@ int hfi_set_fw_dump_level(uint32_t lvl)
 	fw_dump_level_switch_prop->size = size;
 	fw_dump_level_switch_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	fw_dump_level_switch_prop->num_prop = 1;
-	fw_dump_level_switch_prop->prop_data[0] = HFI_PROP_SYS_FW_DUMP_CFG;
-	fw_dump_level_switch_prop->prop_data[1] = lvl;
+	fw_dump_level_switch_prop->prop_data_flex[0] = HFI_PROP_SYS_FW_DUMP_CFG;
+	fw_dump_level_switch_prop->prop_data_flex[1] = lvl;
 
 	CAM_DBG(CAM_HFI, "prop->size = %d\n"
 			 "prop->pkt_type = %d\n"
 			 "prop->num_prop = %d\n"
-			 "prop->prop_data[0] = %d\n"
-			 "prop->prop_data[1] = %d\n",
+			 "prop->prop_data_flex[0] = %d\n"
+			 "prop->prop_data_flex[1] = %d\n",
 			 fw_dump_level_switch_prop->size,
 			 fw_dump_level_switch_prop->pkt_type,
 			 fw_dump_level_switch_prop->num_prop,
-			 fw_dump_level_switch_prop->prop_data[0],
-			 fw_dump_level_switch_prop->prop_data[1]);
+			 fw_dump_level_switch_prop->prop_data_flex[0],
+			 fw_dump_level_switch_prop->prop_data_flex[1]);
 
 	hfi_write_cmd(prop);
 	kfree(prop);
@@ -515,7 +515,7 @@ void hfi_send_system_cmd(uint32_t type, uint64_t data, uint32_t size)
 			prop.size = sizeof(struct hfi_cmd_prop);
 			prop.pkt_type = type;
 			prop.num_prop = 1;
-			prop.prop_data[0] = HFI_PROP_SYS_DEBUG_CFG;
+			prop.prop_data_flex[0] = HFI_PROP_SYS_DEBUG_CFG;
 			hfi_write_cmd(&prop);
 		}
 	}
