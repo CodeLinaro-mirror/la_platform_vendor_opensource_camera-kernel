@@ -368,7 +368,7 @@ static int cam_vfe_top_ver4_enable_irq(
 		 */
 
 		if (!vfe_res->is_per_port_acquire && !rsrc_data->irq_err_handle &&
-			!vfe_res->is_per_port_start) {
+			!vfe_res->is_per_port_start && irq_args->enable_irq) {
 			rsrc_data->irq_err_handle = cam_irq_controller_subscribe_irq(
 				rsrc_data->vfe_irq_controller,
 				CAM_IRQ_PRIORITY_0,
