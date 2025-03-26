@@ -2721,6 +2721,68 @@ static void cam_icp_mgr_process_dbg_buf(unsigned int debug_lvl)
 	}
 }
 
+static int cam_icp_mgr_handle_buf_done_err(uint32_t *msg_ptr)
+{
+	struct hfi_msg_ipebps_async_ack *ioconfig_ack = NULL;
+	struct cam_icp_hw_ctx_data *ctx_data = NULL;
+	struct cam_context *ctx;
+	struct cam_sync_signal_param param;
+	struct cam_ctx_request *req = NULL;
+	int j = 0, rc = 0;
+
+	ioconfig_ack = (struct hfi_msg_ipebps_async_ack *)msg_ptr;
+	ctx_data = (struct cam_icp_hw_ctx_data *)
+			U64_TO_PTR(ioconfig_ack->user_data1);
+	ctx = (struct cam_context *)ctx_data->context_priv;
+
+	spin_lock(&ctx->lock);
+	req = list_first_entry(&ctx->active_req_list,
+		struct cam_ctx_request, list);
+	if (!req) {
+		CAM_INFO(CAM_ICP, "[%s][ctx_id %d] no request in active request list",
+			ctx->dev_name, ctx->ctx_id);
+		spin_unlock(&ctx->lock);
+		return -EINVAL;
+	}
+	list_del_init(&req->list);
+	spin_unlock(&ctx->lock);
+
+	if (!req->num_out_map_entries) {
+		CAM_ERR(CAM_CTXT, "[%s][ctx_id %d] no output fence to signal",
+			ctx->dev_name, ctx->ctx_id);
+		rc = -EIO;
+		goto end;
+	}
+
+	CAM_DBG(CAM_ICP, "[%s][ctx_id %d] req %llu num_out_map_entries %d",
+		ctx->dev_name, ctx->ctx_id, req->request_id, req->num_out_map_entries);
+	for (j = 0; j < req->num_out_map_entries; j++) {
+		memset(&param, 0, sizeof(param));
+		param.sync_obj = req->out_map_entries[j].sync_id;
+		param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
+		param.event_cause = CAM_SYNC_ICP_EVENT_FRAME_PROCESS_FAILURE;
+		cam_sync_signal(&param, NULL);
+		req->out_map_entries[j].sync_id = -1;
+		CAM_DBG(CAM_REQ, "Send fence failure %d signal with %d",
+			req->out_map_entries[j].sync_id,
+			CAM_SYNC_STATE_SIGNALED_ERROR);
+	}
+end:
+	if (req->packet) {
+		cam_common_mem_free(req->packet);
+		req->packet = NULL;
+	}
+
+	CAM_INFO(CAM_ICP,
+		"[%s][ctx_id %d] : Moving req[%llu] from active_list to free_list in error state",
+		ctx->dev_name, ctx->ctx_id, req->request_id);
+	spin_lock(&ctx->lock);
+	list_add_tail(&req->list, &ctx->free_req_list);
+	req->ctx = NULL;
+	spin_unlock(&ctx->lock);
+	return rc;
+}
+
 static int cam_icp_process_msg_pkt_type(
 	struct cam_icp_hw_mgr *hw_mgr,
 	uint32_t *msg_ptr,
@@ -2776,7 +2838,7 @@ static int cam_icp_process_msg_pkt_type(
 		rc = cam_icp_mgr_process_fatal_error(hw_mgr, msg_ptr);
 		if (rc)
 			CAM_ERR(CAM_ICP, "failed in processing evt notify");
-
+		cam_icp_mgr_handle_buf_done_err(msg_ptr);
 		break;
 
 	case HFI_MSG_DBG_SYNX_TEST:
