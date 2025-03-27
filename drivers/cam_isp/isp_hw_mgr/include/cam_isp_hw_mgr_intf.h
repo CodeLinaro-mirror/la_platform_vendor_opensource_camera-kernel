@@ -13,6 +13,7 @@
 #include <linux/list.h>
 #include <media/cam_isp.h>
 #include "cam_hw_mgr_intf.h"
+#include "cam_packet_util.h"
 
 /* MAX IFE instance */
 #define CAM_IFE_HW_NUM_MAX   7
@@ -138,6 +139,7 @@ struct cam_isp_bw_config_internal {
  * @reg_dump_buf_desc:     cmd buffer descriptors for reg dump
  * @num_reg_dump_buf:      Count of descriptors in reg_dump_buf_desc
  * @packet                 CSL packet from user mode driver
+ * @kmd_cmd_buff_info:         reference to kmd buffer
  *
  */
 struct cam_isp_prepare_hw_update_data {
@@ -151,6 +153,7 @@ struct cam_isp_prepare_hw_update_data {
 						CAM_REG_DUMP_MAX_BUF_ENTRIES];
 	uint32_t                              num_reg_dump_buf;
 	struct cam_packet                     *packet;
+	struct cam_kmd_buf_info               kmd_cmd_buff_info;
 };
 
 
