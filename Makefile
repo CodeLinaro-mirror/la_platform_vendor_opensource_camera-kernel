@@ -33,3 +33,7 @@ headers_install:
 
 %:
 	echo "Processing glob target $@"
+	@$(foreach arch, $(SUPPORTED_ARCH), \
+		echo "Target: $(arch)"; \
+		$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules $(KBUILD_OPTIONS) CAMERA_ARCH=$(arch); \
+	)

@@ -1365,10 +1365,12 @@ static int cam_vfe_bus_ver3_acquire_wm(
 	struct cam_vfe_bus_ver3_wm_resource_data  *rsrc_data = NULL;
 	char wm_mode[50] = {'\0'};
 
-	if (wm_res->res_state != CAM_ISP_RESOURCE_STATE_AVAILABLE) {
-		CAM_ERR(CAM_ISP, "VFE:%u WM:%d not available state:%d",
-			wm_res->hw_intf->hw_idx, wm_idx, wm_res->res_state);
-		return -EALREADY;
+	if (!update_only) {
+		if (wm_res->res_state != CAM_ISP_RESOURCE_STATE_AVAILABLE) {
+			CAM_ERR(CAM_ISP, "VFE:%u WM:%d not available state:%d",
+				wm_res->hw_intf->hw_idx, wm_idx, wm_res->res_state);
+			return -EALREADY;
+		}
 	}
 
 	rsrc_data = wm_res->res_priv;
