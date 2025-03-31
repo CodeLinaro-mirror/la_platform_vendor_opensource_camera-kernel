@@ -780,6 +780,8 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 		rc = -EINVAL;
 		goto end;
 	}
+	cam_mem_put_cpu_buf(config.packet_handle);
+	return rc;
 
 end:
 	cam_common_mem_free(csl_packet);
