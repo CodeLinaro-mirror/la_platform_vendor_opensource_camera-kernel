@@ -9624,6 +9624,8 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 	ctx_isp->ul_path_en =
 		(param.op_flags & CAM_IFE_CTX_UL_PATH);
 	memset(&ctx_isp->ul_data, 0, sizeof(ctx_isp->ul_data));
+	for (i = 0; i < MAX_SETTING_PACKETS; i++)
+		memset(&ctx_isp->setting_data[i], 0, sizeof(ctx_isp->setting_data[i]));
 	rc = __cam_isp_ctx_allocate_mem_hw_entries(ctx, &param);
 	if (rc) {
 		CAM_ERR(CAM_ISP, "Ctx[%d] allocate hw entry fail",
