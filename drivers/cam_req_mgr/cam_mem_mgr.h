@@ -61,7 +61,6 @@ struct cam_presil_dmabuf_params {
  * @presil_params:  Parameters specific to presil environment
  * @urefcount:      Reference counter to track whether the buffer is
  *                  mapped and in use by umd
- * @ref_lock:       Mutex lock for refcount
  * @idx_lock:           spinlock for buffer
  */
 struct cam_mem_buf_queue {
@@ -90,7 +89,6 @@ struct cam_mem_buf_queue {
 	struct cam_presil_dmabuf_params presil_params;
 #endif
 	struct kref urefcount;
-	struct mutex ref_lock;
 	spinlock_t idx_lock;
 };
 
