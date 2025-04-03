@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_sync_synx.h"
@@ -82,15 +82,19 @@ static int __cam_synx_obj_release(int32_t row_idx)
 static int __cam_synx_obj_find_free_idx(uint32_t *idx)
 {
 	int rc = 0;
+	bool bit;
 
-	*idx = find_first_zero_bit(g_cam_synx_obj_dev->bitmap, CAM_SYNX_MAX_OBJS);
-	if (*idx < CAM_SYNX_MAX_OBJS)
-		set_bit(*idx, g_cam_synx_obj_dev->bitmap);
-	else
-		rc = -ENOMEM;
-
-	if (rc)
-		CAM_ERR(CAM_SYNX, "No free synx idx");
+	do {
+		*idx = find_first_zero_bit(g_cam_synx_obj_dev->bitmap, CAM_SYNX_MAX_OBJS);
+		if (*idx >= CAM_SYNX_MAX_OBJS) {
+			CAM_ERR(CAM_SYNC,
+				"Error: Unable to find free synx idx = %d reached max!",
+				*idx);
+			return -ENOMEM;
+		}
+		CAM_DBG(CAM_SYNC, "Index location available at idx: %ld", *idx);
+		bit = test_and_set_bit(*idx, g_cam_synx_obj_dev->bitmap);
+	} while (bit);
 
 	return rc;
 }
