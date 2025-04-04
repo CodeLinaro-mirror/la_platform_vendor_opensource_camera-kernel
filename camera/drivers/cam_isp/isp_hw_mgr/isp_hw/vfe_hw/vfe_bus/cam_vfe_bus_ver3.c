@@ -4751,7 +4751,8 @@ static int cam_vfe_bus_ver3_enable_irq_vfe_out(void *bus_priv, void *res_irq_mas
 		if (rsrc_data->is_dual && !rsrc_data->is_master)
 			goto end;
 
-		if (!vfe_out->irq_handle && !vfe_out->is_per_port_start) {
+		if (!vfe_out->irq_handle && !vfe_out->is_per_port_acquire &&
+			!vfe_out->is_per_port_start && irq_args->enable_irq) {
 			CAM_DBG(CAM_ISP, "res_id :%d bus_irq_reg_mask[0] :0x%x bus_irq_reg_mask[1] :0x%x",
 				vfe_out->res_id,
 				rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_BUF_DONE_MASK][CAM_VFE_BUS_VER3_IRQ_REG0],

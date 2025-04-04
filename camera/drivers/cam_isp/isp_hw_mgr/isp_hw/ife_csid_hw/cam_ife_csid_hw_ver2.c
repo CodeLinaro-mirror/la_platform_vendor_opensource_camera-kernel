@@ -7128,7 +7128,8 @@ static int cam_ife_csid_ver2_update_path_irq(
 	}
 	path_cfg->stored_irq_masks[CAM_IFE_CSID_TOP_MASK][path_cfg->irq_reg_idx] = val;
 
-	if (!res->is_per_port_acquire && !path_cfg->irq_handle && !res->is_per_port_start) {
+	if (!res->is_per_port_acquire && !path_cfg->irq_handle &&
+		!res->is_per_port_start && enable) {
 		rc = cam_ife_csid_ver2_path_irq_subscribe(csid_hw, res,
 			path_cfg->stored_irq_masks[CAM_IFE_CSID_TOP_MASK][path_cfg->irq_reg_idx],
 			path_cfg->stored_irq_masks[CAM_IFE_CSID_ERR_MASK][path_cfg->irq_reg_idx]);
