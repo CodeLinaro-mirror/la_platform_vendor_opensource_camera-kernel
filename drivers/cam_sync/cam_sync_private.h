@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __CAM_SYNC_PRIVATE_H__
@@ -44,6 +44,24 @@
 #define CAM_SYNC_PAYLOAD_WORDS          2
 #define CAM_SYNC_NAME                   "cam_sync"
 #define CAM_SYNC_MAX_SYNC_MANAGER       16
+
+#define CAM_SYNC_TYPE_INDV              0
+#define CAM_SYNC_TYPE_GROUP             1
+
+/* Maximum number of external fence payloads */
+#define CAM_SYNC_MAX_EXT_FENCE_PAYLOADS 256
+
+/**
+ * enum sync_type - Enum to indicate the type of sync object,
+ * i.e. individual or group.
+ *
+ * @SYNC_TYPE_INDV  : Object is an individual sync object
+ * @SYNC_TYPE_GROUP : Object is a group sync object
+ */
+enum sync_type {
+	SYNC_TYPE_INDV,
+	SYNC_TYPE_GROUP
+};
 
 /**
  * enum sync_list_clean_type - Enum to indicate the type of list clean action
@@ -136,11 +154,13 @@ struct sync_uid_info {
  * @dma_fence_row_idx     : Index of the row corresponding to this dma fence
  *                          in the dma fence table
  * @sync_created_with_dma : If sync obj and dma fence are created together
+ * @is_valid              : set true when there is a DMA associated with sync
  */
 struct sync_dma_fence_info {
 	int32_t dma_fence_fd;
 	int32_t dma_fence_row_idx;
 	bool    sync_created_with_dma;
+	bool    is_valid;
 };
 
 /**
@@ -150,11 +170,27 @@ struct sync_dma_fence_info {
  * @synx_obj_row_idx       : Index of the row corresponding to this synx obj
  *                           in the synx obj table
  * @sync_created_with_synx : If sync obj and synx obj are created together
+ * @is_valid               : set true when there is a Synx associated with sync
  */
 struct sync_synx_obj_info {
 	uint32_t synx_obj;
 	int32_t  synx_obj_row_idx;
 	bool     sync_created_with_synx;
+	bool     is_valid;
+};
+
+/**
+ * struct sync_ext_fence_info - External fence info associated with a sync obj
+ *
+ * @list : List member used to append this node to a linked list
+ * @dma_fence_info : DMA fence info associated with this sync obj
+ * @synx_obj_info : Synx object info associated with this sync obj
+ *
+ */
+struct sync_ext_fence_info {
+	struct list_head list;
+	struct sync_dma_fence_info dma_fence_info;
+	struct sync_synx_obj_info synx_obj_info;
 };
 
 /**
@@ -200,6 +236,7 @@ struct sync_table_row {
 	unsigned long ext_fence_mask;
 	struct sync_dma_fence_info dma_fence_info;
 	struct sync_synx_obj_info synx_obj_info;
+	struct list_head ext_fences;
 };
 
 /**
@@ -250,6 +287,9 @@ struct sync_device {
 #if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX)
 	struct synx_register_params params;
 #endif
+	spinlock_t payload_lock;
+	struct list_head free_ext_fence_list;
+	struct sync_ext_fence_info ext_fence_info[CAM_SYNC_MAX_EXT_FENCE_PAYLOADS];
 	uint32_t version;
 };
 
