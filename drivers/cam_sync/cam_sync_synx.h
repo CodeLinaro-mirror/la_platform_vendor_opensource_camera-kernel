@@ -182,6 +182,17 @@ int cam_synx_uninitialize_hw_fence_session(
 	struct synx_session *session_handle);
 
 /**
+ * @brief: Synx recovery for a given core
+ *
+ * @param core_id: Core ID we want to recover for
+ *
+ * @return Status of operation. Zero in case of success
+ * -EINVAL if core_id is invalid
+ */
+int cam_synx_core_recovery(
+	enum cam_sync_fencing_client_cores core_id);
+
+/**
  * @brief: cam synx driver close
  *
  */
