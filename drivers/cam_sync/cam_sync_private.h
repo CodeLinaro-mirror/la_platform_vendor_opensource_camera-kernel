@@ -36,7 +36,6 @@
 
 #define CAM_SYNC_OBJ_NAME_LEN           64
 #define CAM_SYNC_MAX_OBJS               2048
-#define CAM_GENERIC_FENCE_BATCH_MAX     10
 #define CAM_SYNC_MAX_V4L2_EVENTS        250
 #define CAM_SYNC_DEBUG_FILENAME         "cam_debug"
 #define CAM_SYNC_DEBUG_BASEDIR          "cam"
@@ -197,25 +196,28 @@ struct sync_ext_fence_info {
  * struct sync_table_row - Single row of information about a sync object, used
  * for internal book keeping in the sync driver
  *
- * @name              : Optional string representation of the sync object
- * @type              : Type of the sync object (individual or group)
- * @sync_id           : Integer id representing this sync object
- * @parents_list      : Linked list of parents of this sync object
- * @children_list     : Linked list of children of this sync object
- * @state             : State (INVALID, ACTIVE, SIGNALED_SUCCESS or
- *                      SIGNALED_ERROR)
- * @remaining         : Count of remaining children that not been signaled
- * @signaled          : Completion variable on which block calls will wait
- * @callback_list     : Linked list of kernel callbacks registered
- * @user_payload_list : LInked list of user space payloads registered
- * @ref_cnt           : ref count of the number of usage of the fence.
- * @uid               : Unique ID of the current fence that is using this sync obj
- * @sync_manager_idx  : Sync manager index for fence
- * @struct old_fence  : Unique ID and state of previous fence that used
- *                      same sync obj
- * @ext_fence_mask    : Mask to indicate associated external fence types
- * @dma_fence_info    : dma fence info if associated
+ * @name               : Optional string representation of the sync object
+ * @type               : Type of the sync object (individual or group)
+ * @sync_id            : Integer id representing this sync object
+ * @parents_list       : Linked list of parents of this sync object
+ * @children_list      : Linked list of children of this sync object
+ * @state              : State (INVALID, ACTIVE, SIGNALED_SUCCESS or
+ *                       SIGNALED_ERROR)
+ * @remaining          : Count of remaining children that not been signaled
+ * @hw_fence_client_idx: Index in the HW fence client table for this fence
+ * @signaled           : Completion variable on which block calls will wait
+ * @callback_list      : Linked list of kernel callbacks registered
+ * @user_payload_list  : LInked list of user space payloads registered
+ * @ref_cnt            : ref count of the number of usage of the fence.
+ * @uid                : Unique ID of the current fence that is using this sync obj
+ * @sync_manager_idx   : Sync manager index for fence
+ * @struct old_fence   : Unique ID and state of previous fence that used
+ *                       same sync obj
+ * @ext_fence_mask     : Mask to indicate associated external fence types
+ * @dma_fence_info     : dma fence info if associated
  * @synx_obj_info      : synx obj info if associated
+ * @ext_fences         : linked list of external fences for this sync object
+ * @is_merged_primary  : flag to indicate if sync obj is merged primary
  */
 struct sync_table_row {
 	char name[CAM_SYNC_OBJ_NAME_LEN];
@@ -227,6 +229,7 @@ struct sync_table_row {
 	struct list_head children_list;
 	uint32_t state;
 	uint32_t remaining;
+	int32_t hw_fence_client_idx;
 	struct completion signaled;
 	struct list_head callback_list;
 	struct list_head user_payload_list;
@@ -237,6 +240,7 @@ struct sync_table_row {
 	struct sync_dma_fence_info dma_fence_info;
 	struct sync_synx_obj_info synx_obj_info;
 	struct list_head ext_fences;
+	bool is_merged_primary;
 };
 
 /**
@@ -270,6 +274,10 @@ struct cam_signalable_info {
  * @params                : Parameters for synx call back registration
  * @version               : version support
  * @hw_fencing_en         : Indicates if HW fencing is enabled for a given target
+ * @nb                    : Notifier block used for remoteproc SSR
+ * @notifier              : Remoteproc SSR notifier
+ * @soccp_rproc           : Remoteproc info for power on/off SocCP
+ * @ref_cnt               : ref count of the number of HW fence session initialize/uninitialize
  */
 struct sync_device {
 	struct video_device *vdev;
@@ -293,6 +301,10 @@ struct sync_device {
 	struct sync_ext_fence_info ext_fence_info[CAM_SYNC_MAX_EXT_FENCE_PAYLOADS];
 	uint32_t version;
 	bool hw_fencing_en;
+	struct notifier_block nb;
+	void *notifier;
+	struct rproc *soccp_rproc;
+	int ref_cnt;
 };
 
 
