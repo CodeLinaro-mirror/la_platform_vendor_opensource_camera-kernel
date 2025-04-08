@@ -7230,6 +7230,9 @@ int cam_icp_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 	init_completion(&icp_hw_mgr.icp_complete);
 	cam_common_register_mini_dump_cb(
 		cam_icp_hw_mgr_mini_dump_cb, "cam_icp");
+	if (icp_hw_mgr.synx_signaling_en)
+		icp_hw_mgr.synx_core_id = CAM_SYNC_SYNX_CLIENT_ICP_0;
+
 	return rc;
 
 icp_workers_create_failed:

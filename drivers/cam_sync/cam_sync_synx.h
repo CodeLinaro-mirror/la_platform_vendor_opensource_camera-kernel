@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __CAM_SYNC_SYNX_H__
 #define __CAM_SYNC_SYNX_H__
@@ -11,6 +11,7 @@
 #include <synx_api.h>
 
 #include "cam_sync.h"
+#include "cam_sync_api.h"
 #include "cam_debug_util.h"
 
 #define CAM_SYNX_MAX_OBJS 64
@@ -135,6 +136,13 @@ int cam_synx_obj_signal_obj(struct cam_synx_obj_signal *signal_synx_obj);
  */
 int cam_synx_obj_register_cb(int32_t *sync_obj, int32_t row_idx,
 	cam_sync_callback_for_synx_obj sync_cb);
+
+struct synx_session *cam_synx_initialize_hw_fence_session(
+	struct cam_sync_hwfence_session_initialize_params *init_params,
+	void **sw_tx_wm_vaddr);
+
+int cam_synx_uninitialize_hw_fence_session(
+	struct synx_session *session_handle);
 
 /**
  * @brief: cam synx driver close

@@ -264,11 +264,12 @@ struct cam_signalable_info {
  * @worker                : Worker used for dispatching kernel callbacks
  * @cam_sync_eventq       : Event queue used to dispatch user payloads to user space
  * @bitmap                : Bitmap representation of all sync objects
- * @open_cnt	          : Count of file open calls made on the sync driver
+ * @open_cnt              : Count of file open calls made on the sync driver
  * @sync_manager_id_mask  : Bit mask to get sync manager idx
  * @sync_manager_id_shift : Bit shift required to get sync manager idx
  * @params                : Parameters for synx call back registration
  * @version               : version support
+ * @hw_fencing_en         : Indicates if HW fencing is enabled for a given target
  */
 struct sync_device {
 	struct video_device *vdev;
@@ -291,6 +292,7 @@ struct sync_device {
 	struct list_head free_ext_fence_list;
 	struct sync_ext_fence_info ext_fence_info[CAM_SYNC_MAX_EXT_FENCE_PAYLOADS];
 	uint32_t version;
+	bool hw_fencing_en;
 };
 
 
