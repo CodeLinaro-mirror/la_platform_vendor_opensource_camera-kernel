@@ -140,6 +140,7 @@
 #define CAM_ISP_GENERIC_BLOB_TYPE_CHECK_SETTING_ID          30
 #define CAM_ISP_GENERIC_BLOB_TYPE_PRIMARY_PORT_CONFIG       31
 #define CAM_ISP_GENERIC_BLOB_TYPE_PRIMARY_SCRATCH_BUF_CFG   32
+#define CAM_ISP_GENERIC_BLOB_TYPE_HWFENCE_MODE_CONFIG       33
 
 #define CAM_ISP_VC_DT_CFG    4
 
@@ -230,6 +231,7 @@
 #define CAM_ISP_STREAM_GROUP_CFG_MAX   12
 /*6 rdi paths and 1 pix path */
 #define CAM_ISP_STREAM_CFG_MAX         7
+
 
 /* Query devices */
 /**
@@ -668,6 +670,38 @@ struct cam_isp_resource_hfr_config {
 	__u32                          reserved;
 	struct cam_isp_port_hfr_config port_hfr_config[1];
 } __attribute__((packed));
+
+/**
+ * struct cam_isp_port_hw_fence_config - To set the fencing mode
+ *      for a given group/client.
+ *
+ * @res_type          : output resource type defined in file cam_isp_ife.h
+ * @src_grp           : Optional param to provide src_grp, provided in query
+ *                      caps
+ * @fencing_mode      : Frame or slice
+ * @reserved          : reserved for alignment
+ */
+struct cam_isp_port_hw_fence_config {
+	__u32   res_type;
+	__u32   src_grp;
+	__u32   fencing_mode;
+	__u32   reserved;
+};
+
+
+/**
+ * struct cam_isp_resource_hw_fence_config - Resource HW Fence
+	configuration.
+ *
+ * @version:                 version info
+ * @num_res:                 Number of resources
+ * @port_hw_fence_config:    HW fence configuration for each resource
+ */
+struct cam_isp_resource_hw_fence_config {
+	__u32                                   version;
+	__u32                                   num_res;
+	struct cam_isp_port_hw_fence_config port_hw_fence_config[];
+};
 
 /**
  * struct cam_isp_dual_split_params - dual isp spilt parameters
