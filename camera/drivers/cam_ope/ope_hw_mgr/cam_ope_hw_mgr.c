@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/uaccess.h>
@@ -1974,6 +1974,12 @@ static int cam_ope_mgr_process_cmd_io_buf_req(struct cam_ope_hw_mgr *hw_mgr,
 
 	for (i = 0; i < in_frame_process->batch_size; i++) {
 		in_frame_set = &in_frame_process->frame_set[i];
+		if (in_frame_set->num_io_bufs > OPE_MAX_IO_BUFS) {
+			CAM_ERR(CAM_OPE, "Wrong number of io buffers: %d",
+				in_frame_set->num_io_bufs);
+			return -EINVAL;
+		}
+
 		for (j = 0; j < in_frame_set->num_io_bufs; j++) {
 			in_io_buf = &in_frame_set->io_buf[j];
 			for (k = 0; k < in_io_buf->num_planes; k++) {
@@ -1992,12 +1998,13 @@ static int cam_ope_mgr_process_cmd_io_buf_req(struct cam_ope_hw_mgr *hw_mgr,
 
 	for (i = 0; i < ope_request->num_batch; i++) {
 		in_frame_set = &in_frame_process->frame_set[i];
-		ope_request->num_io_bufs[i] = in_frame_set->num_io_bufs;
 		if (in_frame_set->num_io_bufs > OPE_MAX_IO_BUFS) {
 			CAM_ERR(CAM_OPE, "Wrong number of io buffers: %d",
 				in_frame_set->num_io_bufs);
 			return -EINVAL;
 		}
+
+		ope_request->num_io_bufs[i] = in_frame_set->num_io_bufs;
 
 		for (j = 0; j < in_frame_set->num_io_bufs; j++) {
 			in_io_buf = &in_frame_set->io_buf[j];
