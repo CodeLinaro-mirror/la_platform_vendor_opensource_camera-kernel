@@ -65,12 +65,14 @@ int cam_packet_util_validate_packet(struct cam_packet *packet,
 	size_t sum_cmd_desc = 0;
 	size_t sum_io_cfgs = 0;
 	size_t sum_patch_desc = 0;
-	size_t pkt_wo_payload = 0;
+	size_t pkt_wo_payload = offsetof(struct cam_packet, payload);
 
 	if (!packet)
 		return -EINVAL;
 
-	if ((size_t)packet->header.size > remain_len) {
+	if (!(packet->header.size) ||
+		(size_t)packet->header.size > remain_len ||
+		(size_t)packet->header.size <= pkt_wo_payload) {
 		CAM_ERR(CAM_UTIL,
 			"Invalid packet size: %zu, CPU buf length: %zu",
 			(size_t)packet->header.size, remain_len);
@@ -85,16 +87,13 @@ int cam_packet_util_validate_packet(struct cam_packet *packet,
 	sum_cmd_desc = packet->num_cmd_buf * sizeof(struct cam_cmd_buf_desc);
 	sum_io_cfgs = packet->num_io_configs * sizeof(struct cam_buf_io_cfg);
 	sum_patch_desc = packet->num_patches * sizeof(struct cam_patch_desc);
-	pkt_wo_payload = offsetof(struct cam_packet, payload);
 
-	if ((!packet->header.size) ||
-		((size_t)packet->header.size <= pkt_wo_payload) ||
-		((pkt_wo_payload + (size_t)packet->cmd_buf_offset +
-		sum_cmd_desc) > (size_t)packet->header.size) ||
+	if (((pkt_wo_payload + (size_t)packet->cmd_buf_offset +
+			sum_cmd_desc) > (size_t)packet->header.size) ||
 		((pkt_wo_payload + (size_t)packet->io_configs_offset +
-		sum_io_cfgs) > (size_t)packet->header.size) ||
+			sum_io_cfgs) > (size_t)packet->header.size) ||
 		((pkt_wo_payload + (size_t)packet->patch_offset +
-		sum_patch_desc) > (size_t)packet->header.size)) {
+			sum_patch_desc) > (size_t)packet->header.size)) {
 		CAM_ERR(CAM_UTIL, "params not within mem len:%zu %zu %zu %zu",
 			(size_t)packet->header.size, sum_cmd_desc,
 			sum_io_cfgs, sum_patch_desc);
