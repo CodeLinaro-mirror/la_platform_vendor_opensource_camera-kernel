@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
 #include <linux/mod_devicetable.h>
 #include <linux/of_device.h>
 #include <linux/module.h>
-#include <dt-bindings/msm-camera.h>
+#include <dt-bindings/camera/msm-camera.h>
 #include "cam_sfe_dev.h"
 #include "cam_sfe_core.h"
 #include "cam_sfe_soc.h"

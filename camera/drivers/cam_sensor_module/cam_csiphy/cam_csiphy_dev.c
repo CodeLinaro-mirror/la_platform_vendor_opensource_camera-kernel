@@ -10,7 +10,7 @@
 #include "cam_csiphy_core.h"
 #include <media/cam_sensor.h>
 #include "camera_main.h"
-#include <dt-bindings/msm-camera.h>
+#include <dt-bindings/camera/msm-camera.h>
 
 #define CSIPHY_DEBUGFS_NAME_MAX_SIZE 10
 static struct dentry *root_dentry;

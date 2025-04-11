@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 
@@ -13,7 +13,7 @@
 #include "cam_vfe_core.h"
 #include "cam_vfe_soc.h"
 #include "cam_debug_util.h"
-#include <dt-bindings/msm-camera.h>
+#include <dt-bindings/camera/msm-camera.h>
 
 static  struct cam_isp_hw_intf_data cam_vfe_hw_list[CAM_VFE_HW_NUM_MAX];
 static uint32_t g_num_ife_hws, g_num_ife_lite_hws;

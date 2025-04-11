@@ -1,13 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_DEBUG_UTIL_H_
 #define _CAM_DEBUG_UTIL_H_
 
-#include <msm-camera.h>
+#include <dt-bindings/camera/msm-camera.h>
 #include <linux/platform_device.h>
 #include "cam_trace.h"
 

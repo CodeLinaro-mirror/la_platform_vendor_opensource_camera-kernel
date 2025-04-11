@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_csiphy_dev.h"
@@ -9,7 +9,7 @@
 #include "cam_csiphy_soc.h"
 #include "cam_csiphy_core.h"
 #include <media/cam_sensor.h>
-#include <dt-bindings/msm-camera.h>
+#include <dt-bindings/camera/msm-camera.h>
 #include "camera_main.h"
 
 static struct dentry *root_dentry;

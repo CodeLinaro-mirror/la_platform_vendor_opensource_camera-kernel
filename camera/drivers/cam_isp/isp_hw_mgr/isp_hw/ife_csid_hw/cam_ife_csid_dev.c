@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -13,7 +13,7 @@
 #include "cam_debug_util.h"
 #include "camera_main.h"
 #include "cam_cpas_api.h"
-#include <dt-bindings/msm-camera.h>
+#include <dt-bindings/camera/msm-camera.h>
 
 static struct cam_hw_intf *cam_ife_csid_hw_list[CAM_IFE_CSID_HW_NUM_MAX] = {
 	0, 0, 0, 0};

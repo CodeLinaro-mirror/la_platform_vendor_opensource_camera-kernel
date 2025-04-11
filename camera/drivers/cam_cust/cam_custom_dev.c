@@ -11,7 +11,7 @@
 #include <linux/iommu.h>
 #include <linux/timer.h>
 #include <linux/kernel.h>
-#include <dt-bindings/msm-camera.h>
+#include <dt-bindings/camera/msm-camera.h>
 
 #include <media/cam_req_mgr.h>
 
