@@ -8200,7 +8200,6 @@ put_ref:
 	}
 free_req:
 	mutex_lock(&ctx_isp->isp_mutex);
-	list_add_tail(&req->list, &ctx->free_req_list);
 	__cam_isp_ctx_move_req_to_free_list(ctx, req);
 	mutex_unlock(&ctx_isp->isp_mutex);
 
