@@ -2940,7 +2940,6 @@ int cam_sync_initialize_hw_fence_session(
 	struct cam_sync_hw_fence_client_entries *client_entry;
 	struct synx_session *synx_session = NULL;
 	void *notifier;
-	enum synx_client_id synx_client_idx;
 
 	if (!sync_dev->hw_fencing_en)
 		return -EOPNOTSUPP;
@@ -2948,9 +2947,6 @@ int cam_sync_initialize_hw_fence_session(
 	synx_session = cam_synx_initialize_hw_fence_session(init_params, &txq_wr_ptr);
 	if (IS_ERR_OR_NULL(synx_session))
 		return -EINVAL;
-
-	synx_client_idx = cam_synx_map_camera_client_id_for_synx(init_params->client_core,
-		init_params->signal_id);
 
 	rc = cam_sync_find_free_bit_util(hw_fence_info.client_bitmaps[init_params->client_core],
 		hw_fence_info.num_bits, &idx);
@@ -2996,12 +2992,7 @@ int cam_sync_initialize_hw_fence_session(
 		sync_dev->notifier = notifier;
 	}
 	sync_dev->ref_cnt++;
-	if (sync_dev->ref_cnt) {
-		rc = synx_enable_resources(synx_client_idx, SYNX_RESOURCE_SOCCP, true);
-		if (rc)
-			CAM_ERR(CAM_SYNC, "Failed to power up SOCCP for synx_id: %u",
-			synx_client_idx);
-	}
+
 	return rc;
 
 deinitialize_session:
@@ -3016,7 +3007,6 @@ int cam_sync_deinitialize_hw_fence_session(int32_t session_hdl)
 	uint32_t client_core = 0, col_idx = 0, client_entry_idx = 0;
 	struct synx_session *synx_session;
 	struct cam_sync_hw_fence_client_entries *client_entry;
-	enum synx_client_id synx_client_idx;
 
 	if (!sync_dev->hw_fencing_en)
 		return -EOPNOTSUPP;
@@ -3040,8 +3030,6 @@ int cam_sync_deinitialize_hw_fence_session(int32_t session_hdl)
 	}
 
 	synx_session = client_entry->session_hdl;
-	synx_client_idx = cam_synx_map_camera_client_id_for_synx(client_entry->client_core,
-		client_entry->signal_id);
 
 	memset(client_entry, 0x0, sizeof(*client_entry));
 	spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
@@ -3062,14 +3050,6 @@ int cam_sync_deinitialize_hw_fence_session(int32_t session_hdl)
 
 		sync_dev->notifier = NULL;
 		memset(&sync_dev->nb, 0, sizeof(sync_dev->nb));
-		rc = synx_enable_resources(synx_client_idx, SYNX_RESOURCE_SOCCP, false);
-		if (rc)
-			CAM_ERR(CAM_SYNC, "Failed to power up SOCCP for synx_id: %u",
-			synx_client_idx);
-	} else {
-		CAM_ERR(CAM_SYNC,
-			"Not set SocCP to dormant/power down state due to unbalanced initialize/deinitialize HW fence session calls, ref_cnt: %d",
-			sync_dev->ref_cnt);
 	}
 end:
 	return rc;
