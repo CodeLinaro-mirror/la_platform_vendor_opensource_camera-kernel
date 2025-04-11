@@ -15576,6 +15576,12 @@ static int cam_ife_mgr_free_in_proc_req(struct cam_ife_hw_mgr *ife_hw_mgr,
 					ife_hw_mgr->starting_offline_cnt) {
 				ife_hw_mgr->starting_offline_cnt--;
 			}
+
+			if (c_elem->prepare.packet) {
+				cam_common_mem_free(c_elem->prepare.packet);
+				c_elem->prepare.packet = NULL;
+			}
+
 			list_del_init(&c_elem->list);
 			kfree(c_elem);
 		}
@@ -15592,6 +15598,7 @@ static int cam_ife_mgr_enqueue_offline_update(void *hw_mgr_priv,
 	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx =
 		(struct cam_ife_hw_mgr_ctx *) prepare->ctxt_to_hw_map;
 	struct cam_ife_mgr_offline_in_queue *c_elem;
+	struct cam_packet* packet_offline = NULL;
 
 	c_elem = kzalloc(sizeof(struct cam_ife_mgr_offline_in_queue),
 			GFP_KERNEL);
@@ -15601,6 +15608,13 @@ static int cam_ife_mgr_enqueue_offline_update(void *hw_mgr_priv,
 	c_elem->request_id = prepare->packet->header.request_id;
 	c_elem->ctx_idx = hw_mgr_ctx->ctx_idx;
 	c_elem->ready = false;
+
+	if (cam_packet_util_copy_pkt_to_kmd(prepare->packet, &packet_offline,
+		prepare->packet->header.size)) {
+		CAM_ERR(CAM_ISP, "Failed to copy packet for offline, broken. ");
+		return -1;
+	}
+	c_elem->prepare.packet = packet_offline;
 
 	INIT_LIST_HEAD(&c_elem->list);
 
