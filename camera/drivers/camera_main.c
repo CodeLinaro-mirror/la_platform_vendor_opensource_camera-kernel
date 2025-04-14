@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/module.h>
 #include <linux/build_bug.h>
+#include <linux/platform_device.h>
+#include <linux/of_platform.h>
 
 #include "cam_req_mgr_dev.h"
 #include "cam_sync_api.h"
@@ -287,10 +289,16 @@ static void __camera_exit(int i, int j)
 	}
 }
 
-static int camera_init(void)
+static const struct of_device_id of_camera_bus_match_table[] = {
+	{ .compatible = "simple-bus", },
+	{} /* Empty terminated list */
+};
+
+static int cam_main_probe(struct platform_device *pdev)
 {
 	int rc;
 	uint i, j, num_inits;
+	struct device_node *node = pdev->dev.of_node;
 
 	CAM_INFO(CAM_UTIL, "%s", camera_banner);
 	rc = camera_verify_submodules();
@@ -318,18 +326,68 @@ static int camera_init(void)
 		}
 	}
 
-	CAM_DBG(CAM_UTIL, "Camera initcalls done");
+	/* Populate all the parrent + child nodes here... */
+	rc = of_platform_populate(node, of_camera_bus_match_table, NULL, &pdev->dev);
+	if (rc) {
+		CAM_ERR(CAM_UTIL,"Camera main populate failed %d", rc);
+		goto end_init;
+	}
+	CAM_INFO(CAM_UTIL, "camera probe success %d", rc);
+	CAM_INFO(CAM_UTIL, "Spectra camera driver initialized");
+
 
 end_init:
 	return rc;
 }
 
-static void camera_exit(void)
+static void cam_main_remove(struct platform_device *pdev)
 {
 	__camera_exit(ARRAY_SIZE(submodule_table), 0);
 	cam_debugfs_deinit();
-
 	CAM_INFO(CAM_UTIL, "Spectra camera driver exited!");
+}
+
+static const struct of_device_id camera_main_dt_match[] = {
+	{.compatible = "qcom,camera"},
+	{}
+};
+
+static struct platform_driver camera_main_driver = {
+	.probe = cam_main_probe,
+	.remove = cam_main_remove,
+	.driver = {
+		.name = "camera_main",
+		.owner = THIS_MODULE,
+		.of_match_table = camera_main_dt_match,
+	},
+};
+
+static int camera_init(void)
+{
+	struct device_node *node;
+	const struct of_device_id *match;
+	int rc = -ENODEV;
+
+	for_each_matching_node(node, camera_main_dt_match) {
+		match = of_match_node(camera_main_dt_match, node);
+		if (match) {
+			rc = platform_driver_register(&camera_main_driver);
+			if (rc < 0) {
+				CAM_ERR(CAM_UTIL, "Platform register failed = %d for camera", rc);
+			}
+			break;
+		}
+	}
+
+	if (rc == -ENODEV) {
+		CAM_ERR(CAM_UTIL, "No matching device found for camera driver = %d", rc);
+	}
+	return rc;
+}
+
+static void camera_exit(void)
+{
+	platform_driver_unregister(&camera_main_driver);
 }
 
 module_init(camera_init);
