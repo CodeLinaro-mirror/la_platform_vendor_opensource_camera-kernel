@@ -1357,7 +1357,7 @@ int32_t cam_sensor_update_power_up_settings(void *cmd_buf,
 	size_t cmd_buf_len)
 {
 	int32_t rc = 0, tot_size = 0, last_cmd_type = 0;
-	int32_t i = 0, pwr_up = 0, pwr_down = 0;;
+	int32_t i = 0, pwr_up = 0, pwr_down = 0;
 	struct cam_sensor_power_setting *pwr_settings;
 	void *ptr = cmd_buf, *scr;
 	struct common_header *cmm_hdr = (struct common_header *)cmd_buf;
