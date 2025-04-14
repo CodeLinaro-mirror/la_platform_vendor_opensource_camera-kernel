@@ -5857,7 +5857,8 @@ static int cam_ife_csid_ver2_update_path_irq(
 		goto end;
 	}
 
-	if (!res->is_per_port_acquire && !path_cfg->irq_handle && !res->is_per_port_start) {
+	if (!res->is_per_port_acquire && !path_cfg->irq_handle &&
+		!res->is_per_port_start && enable) {
 		switch (res->res_id) {
 		case  CAM_IFE_PIX_PATH_RES_IPP:
 			bh_handler = cam_ife_csid_ver2_ipp_bottom_half;
