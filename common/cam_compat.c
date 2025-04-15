@@ -11,11 +11,6 @@
 
 #include <soc/qcom/rpmh.h>
 
-#include <linux/of.h>
-#if IS_ENABLED(CONFIG_SPECTRA_SOC_QCOM_SOCINFO)
-#include <soc/qcom/socinfo.h>
-#endif
-
 #include "cam_compat.h"
 #include "cam_debug_util.h"
 #include "cam_cpas_api.h"
@@ -526,21 +521,10 @@ int cam_i3c_driver_remove(struct i3c_device *client)
 }
 #endif
 
-#if ((KERNEL_VERSION(6, 7, 0) >= LINUX_VERSION_CODE) && IS_ENABLED(CONFIG_QCOM_MEM_BUF))
-long cam_dma_buf_set_name(struct dma_buf *dmabuf, const char *name)
-{
-		long ret = 0;
-
-			ret = dma_buf_set_name(dmabuf, name);
-
-				return ret;
-}
-#else
 long cam_dma_buf_set_name(struct dma_buf *dmabuf, const char *name)
 {
 	return 0;
 }
-#endif
 
 #ifdef CONFIG_SPECTRA_KT
 int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)

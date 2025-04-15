@@ -12,16 +12,12 @@
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
 #include <linux/of_address.h>
-#if IS_ENABLED(CONFIG_QCOM_LAZY_MAPPING)
 #include <linux/msm_dma_iommu_mapping.h>
-#endif
 #include <linux/workqueue.h>
 #include <linux/genalloc.h>
 #include <linux/debugfs.h>
 
-#if IS_ENABLED(CONFIG_QCOM_SECURE_BUFFER)
 #include <soc/qcom/secure_buffer.h>
-#endif
 
 #include <media/cam_req_mgr.h>
 

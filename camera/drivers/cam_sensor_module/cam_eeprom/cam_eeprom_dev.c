@@ -809,11 +809,11 @@ int cam_eeprom_driver_init(void)
 
 	return 0;
 i3c_register_err:
-	i2c_del_driver(&cam_eeprom_i2c_driver);
+	i2c_del_driver(&cam_sensor_i2c_driver);
 i2c_register_err:
 	spi_unregister_driver(&cam_eeprom_spi_driver);
 spi_register_err:
-	platform_driver_unregister(&cam_eeprom_platform_driver);
+	platform_driver_unregister(&cam_sensor_platform_driver);
 
 	return rc;
 }
