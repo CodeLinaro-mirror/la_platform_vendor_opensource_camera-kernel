@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -517,7 +517,7 @@ static int32_t r2j30516_lens_driver_download_fw(
 
 	r2j30516_lens_driver_read_fw_version(spi, &fw_version);
 	if (fw_version != FW_VERSION) {
-		CAM_ERR(CAM_LENS_DRIVER, "Fw_version mismatch", cmd_num);
+		CAM_ERR(CAM_LENS_DRIVER, "Fw_version mismatch %d", cmd_num);
 		ret = -1;
 	} else {
 		r2j30516_lens_driver_set_normal(spi);
@@ -825,6 +825,7 @@ static uint16_t rel_drv_get_motor_driving_duty(uint8_t lensPowerLevel,
 	switch (lensPowerLevel) {
 	case POWER_LEVEL_OFF:
 		driving_duty = 0;
+		fallthrough;
 	case POWER_LEVEL_WEAK:
 		if (channel == CH12)
 			driving_duty = CH12_WEAK_EXT_34_PER_AMP;

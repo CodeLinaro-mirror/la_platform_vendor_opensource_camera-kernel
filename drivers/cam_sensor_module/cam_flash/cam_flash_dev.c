@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -358,14 +359,12 @@ static long cam_flash_subdev_do_ioctl(struct v4l2_subdev *sd,
 }
 #endif
 
-static int32_t cam_flash_i2c_driver_remove(struct i2c_client *client)
+static void cam_flash_i2c_driver_remove(struct i2c_client *client)
 {
-	int32_t rc = 0;
 	struct cam_flash_ctrl *fctrl = i2c_get_clientdata(client);
 	/* Handle I2C Devices */
 	if (!fctrl) {
 		CAM_ERR(CAM_FLASH, "Flash device is NULL");
-		return -EINVAL;
 	}
 
 	CAM_INFO(CAM_FLASH, "i2c driver remove invoked");
@@ -373,7 +372,6 @@ static int32_t cam_flash_i2c_driver_remove(struct i2c_client *client)
 	kfree(fctrl->i2c_data.per_frame);
 	fctrl->i2c_data.per_frame = NULL;
 	kfree(fctrl);
-	return rc;
 }
 
 static struct v4l2_subdev_core_ops cam_flash_subdev_core_ops = {
@@ -601,8 +599,7 @@ static int32_t cam_flash_platform_probe(struct platform_device *pdev)
 	return rc;
 }
 
-static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
-	const struct i2c_device_id *id)
+static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client)
 {
 	int32_t rc = 0, i = 0;
 	struct cam_flash_ctrl *fctrl;
@@ -612,10 +609,6 @@ static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
 		CAM_ERR(CAM_FLASH, "Invalid Args client: %pK",
 			client);
 		return -EINVAL;
-	}
-
-	if (id == NULL) {
-		CAM_DBG(CAM_FLASH, "device id is Null");
 	}
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {

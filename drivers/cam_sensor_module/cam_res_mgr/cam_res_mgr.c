@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/init.h>
@@ -10,6 +10,7 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/gpio.h>
+#include <linux/pinctrl/consumer.h>
 #include "cam_debug_util.h"
 #include "cam_res_mgr_api.h"
 #include "cam_res_mgr_private.h"
@@ -254,7 +255,7 @@ int cam_res_mgr_util_shared_gpio_check_hold(uint gpio)
 
 	if (is_shared_gpio && is_shared_pctrl_gpio) {
 		CAM_ERR(CAM_RES,
-			"gpio %u cannot be shared between pinctrl and gpio");
+			"gpio cannot be shared between pinctrl and gpio");
 		return -EINVAL;
 	}
 

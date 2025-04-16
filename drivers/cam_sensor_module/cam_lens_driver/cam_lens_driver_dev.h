@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_LENS_DRIVER_DEV_H_
@@ -13,7 +13,6 @@
 #include <linux/of.h>
 #include <linux/module.h>
 #include <linux/irqreturn.h>
-#include <linux/ion.h>
 #include <linux/iommu.h>
 #include <linux/timer.h>
 #include <linux/kernel.h>

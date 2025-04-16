@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_csiphy_soc.h"
@@ -45,12 +46,12 @@ static int cam_io_phy_dump(void __iomem *base_addr,
 	p_str = line_str;
 	for (i = 0; i < size; i++) {
 		if (i % NUM_REGISTER_PER_LINE == 0) {
-			snprintf(p_str, 12, "0x%08x: ",
+			snprintf(p_str, 13, "0x%08x: ",
 				REG_OFFSET(start_offset, i));
 			p_str += 11;
 		}
 		data = readl_relaxed(base_addr + REG_OFFSET(start_offset, i));
-		snprintf(p_str, 9, "%08x ", data);
+		snprintf(p_str, 10, "%08x ", data);
 		p_str += 8;
 		if ((i + 1) % NUM_REGISTER_PER_LINE == 0) {
 			CAM_ERR(CAM_CSIPHY, "%s", line_str);
@@ -106,7 +107,7 @@ int32_t cam_csiphy_status_dmp(struct csiphy_device *csiphy_dev)
 	clear_reg = csiphy_reg->mipi_csiphy_interrupt_clear0_addr;
 	size = csiphy_reg->csiphy_interrupt_status_size;
 
-	CAM_INFO(CAM_CSIPHY, "PHY base addr=%pK offset=0x%x size=%d",
+	CAM_INFO(CAM_CSIPHY, "PHY base addr=%pK offset=0x%x size=%llu",
 		phy_base, status_reg, size);
 
 	if (phy_base != NULL) {
