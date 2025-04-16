@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -16,7 +17,7 @@
 static struct cam_hw_intf *cam_custom_hw_sub_mod_list
 	[CAM_CUSTOM_SUB_MOD_MAX_INSTANCES] = {0, 0};
 
-static char cam_custom_hw_sub_mod_name[8];
+static char cam_custom_hw_sub_mod_name[11];
 
 struct cam_custom_device_hw_info cam_custom_hw_info = {
 	.hw_ver = 0x0,
