@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/string.h>
@@ -66,7 +66,7 @@ void cam_common_util_thread_switch_delay_detect(
 		scheduled_ts  = ktime_to_timespec64(scheduled_time);
 		cur_ts = ktime_to_timespec64(cur_time);
 		CAM_WARN_RATE_LIMIT_CUSTOM(CAM_UTIL, 1, 1,
-			"%s delay detected %ld:%06ld cur %ld:%06ld diff %ld: threshold %d",
+			"%s delay detected %lld:%06ld cur %lld:%06ld diff %llu: threshold %d",
 			token, scheduled_ts.tv_sec,
 			scheduled_ts.tv_nsec/NSEC_PER_USEC,
 			cur_ts.tv_sec, cur_ts.tv_nsec/NSEC_PER_USEC,
@@ -81,7 +81,7 @@ int cam_common_mem_kdup(void **dst,
 	gfp_t flag = GFP_KERNEL;
 
 	if (!src || !dst || !size) {
-		CAM_ERR(CAM_UTIL, "Invalid params src: %pK dst: %pK size: %u",
+		CAM_ERR(CAM_UTIL, "Invalid params src: %pK dst: %pK size: %zu",
 			src, dst, size);
 		return -EINVAL;
 	}
@@ -91,7 +91,7 @@ int cam_common_mem_kdup(void **dst,
 
 	*dst = kvzalloc(size, flag);
 	if (!*dst) {
-		CAM_ERR(CAM_UTIL, "Failed to allocate memory with size: %u", size);
+		CAM_ERR(CAM_UTIL, "Failed to allocate memory with size: %zu", size);
 		return -ENOMEM;
 	}
 
