@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -784,8 +785,10 @@ static int cam_cpastop_poweron(struct cam_hw_info *cpas_hw)
 
 	if (errata_wa_list) {
 		errata_wa = &errata_wa_list->tcsr_camera_hf_sf_ares_glitch;
+#ifdef CONFIG_SPECTRA_SECURE
 		if (errata_wa->enable)
 			cam_cpastop_scm_write(errata_wa);
+#endif
 	}
 
 	return 0;
