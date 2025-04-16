@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/iopoll.h>
@@ -68,7 +69,7 @@ static int cam_top_tpg_ver3_process_cmd(void *hw_priv,
 	switch (cmd_type) {
 	case CAM_ISP_HW_CMD_TPG_CORE_CFG_CMD:
 		if (arg_size != sizeof(struct cam_isp_tpg_core_config)) {
-			CAM_ERR(CAM_ISP, "Invalid size %u expected %u",
+			CAM_ERR(CAM_ISP, "Invalid size %u expected %lu",
 				arg_size,
 				sizeof(struct cam_isp_tpg_core_config));
 			rc = -EINVAL;

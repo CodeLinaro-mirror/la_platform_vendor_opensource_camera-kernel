@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 
@@ -24,6 +24,8 @@
 #include "cam_debug_util.h"
 #include "cam_cpas_api.h"
 #include "cam_trace.h"
+#include "cam_compat.h"
+
 
 static const char drv_name[] = "vfe_bus";
 
@@ -788,44 +790,71 @@ static enum cam_vfe_bus_ver3_packer_format
 {
 	switch (out_fmt) {
 	case CAM_FORMAT_MIPI_RAW_6:
+		fallthrough;
 	case CAM_FORMAT_MIPI_RAW_8:
+		fallthrough;
 	case CAM_FORMAT_MIPI_RAW_10:
+		fallthrough;
 	case CAM_FORMAT_MIPI_RAW_12:
+		fallthrough;
 	case CAM_FORMAT_MIPI_RAW_14:
+		fallthrough;
 	case CAM_FORMAT_MIPI_RAW_16:
+		fallthrough;
 	case CAM_FORMAT_MIPI_RAW_20:
+		fallthrough;
 	case CAM_FORMAT_PLAIN16_8:
+		fallthrough;
 	case CAM_FORMAT_PLAIN128:
+		fallthrough;
 	case CAM_FORMAT_PD8:
 		return PACKER_FMT_VER3_PLAIN_128;
+		fallthrough;
 	case CAM_FORMAT_PLAIN8:
 		return PACKER_FMT_VER3_PLAIN_8;
+		fallthrough;
 	case CAM_FORMAT_NV21:
 		if ((wm_index == 1) || (wm_index == 3) || (wm_index == 5))
 			return PACKER_FMT_VER3_PLAIN_8_LSB_MSB_10_ODD_EVEN;
+		fallthrough;
 	case CAM_FORMAT_NV12:
+		fallthrough;
 	case CAM_FORMAT_UBWC_NV12:
+		fallthrough;
 	case CAM_FORMAT_UBWC_NV12_4R:
+		fallthrough;
 	case CAM_FORMAT_Y_ONLY:
 		return PACKER_FMT_VER3_PLAIN_8_LSB_MSB_10;
+		fallthrough;
 	case CAM_FORMAT_PLAIN16_10:
 		return PACKER_FMT_VER3_PLAIN_16_10BPP;
+		fallthrough;
 	case CAM_FORMAT_PLAIN16_12:
 		return PACKER_FMT_VER3_PLAIN_16_12BPP;
+		fallthrough;
 	case CAM_FORMAT_PLAIN16_14:
 		return PACKER_FMT_VER3_PLAIN_16_14BPP;
+		fallthrough;
 	case CAM_FORMAT_PLAIN16_16:
 		return PACKER_FMT_VER3_PLAIN_16_16BPP;
+		fallthrough;
 	case CAM_FORMAT_PLAIN32:
+		fallthrough;
 	case CAM_FORMAT_ARGB:
 		return PACKER_FMT_VER3_PLAIN_32;
+		fallthrough;
 	case CAM_FORMAT_PLAIN64:
+		fallthrough;
 	case CAM_FORMAT_ARGB_16:
+		fallthrough;
 	case CAM_FORMAT_PD10:
 		return PACKER_FMT_VER3_PLAIN_64;
+		fallthrough;
 	case CAM_FORMAT_UBWC_TP10:
+		fallthrough;
 	case CAM_FORMAT_TP10:
 		return PACKER_FMT_VER3_TP_10;
+		fallthrough;
 	default:
 		return PACKER_FMT_VER3_MAX;
 	}
@@ -1169,8 +1198,11 @@ static int cam_vfe_bus_ver3_acquire_wm(
 		case CAM_FORMAT_UBWC_NV12:
 			rsrc_data->en_ubwc = 1;
 			/* Fall through for NV12 */
+			fallthrough;
 		case CAM_FORMAT_NV21:
+			fallthrough;
 		case CAM_FORMAT_NV12:
+			fallthrough;
 		case CAM_FORMAT_Y_ONLY:
 			switch (plane) {
 			case PLANE_C:
@@ -1884,7 +1916,7 @@ static int cam_vfe_bus_ver3_init_comp_grp(uint32_t index,
 		rsrc_data->comp_grp_type != CAM_VFE_BUS_VER3_COMP_GRP_1)
 		rsrc_data->ubwc_static_ctrl = 0;
 	else {
-		ddr_type = of_fdt_get_ddrtype();
+		ddr_type = cam_get_ddr_type();
 		if ((ddr_type == DDR_TYPE_LPDDR5) ||
 			(ddr_type == DDR_TYPE_LPDDR5X))
 			rsrc_data->ubwc_static_ctrl =
