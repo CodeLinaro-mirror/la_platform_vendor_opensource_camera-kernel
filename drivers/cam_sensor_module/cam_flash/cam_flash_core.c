@@ -648,7 +648,6 @@ static int cam_flash_low(
 	struct cam_flash_frame_setting *flash_data)
 {
 	int i = 0, rc = 0;
-	struct led_classdev_flash *led_cdev_flash = NULL;
 
 	if (!flash_data) {
 		CAM_ERR(CAM_FLASH, "Flash Data Null");
@@ -660,11 +659,6 @@ static int cam_flash_low(
 			cam_res_mgr_led_trigger_event(
 				flash_ctrl->flash_trigger[i],
 				LED_OFF);
-		} else if (flash_ctrl->pmic_flcdev[i] != NULL) {
-			led_cdev_flash = flash_ctrl->pmic_flcdev[i];
-			CAM_DBG(CAM_FLASH, "Led_flash[%d]: set strobe to false",
-				i);
-			led_set_flash_strobe(led_cdev_flash, false);
 		}
 	}
 
