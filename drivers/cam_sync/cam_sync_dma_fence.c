@@ -82,17 +82,20 @@ static void __cam_dma_fence_print_table(void)
 static int __cam_dma_fence_find_free_idx(uint32_t *idx)
 {
 	int rc = 0;
+	bool bit;
 
-	*idx = find_first_zero_bit(g_cam_dma_fence_dev->bitmap, CAM_DMA_FENCE_MAX_FENCES);
-	if (*idx < CAM_DMA_FENCE_MAX_FENCES)
-		set_bit(*idx, g_cam_dma_fence_dev->bitmap);
-	else
-		rc = -ENOMEM;
-
-	if (rc) {
-		CAM_ERR(CAM_DMA_FENCE, "No free idx, printing dma fence table......");
-		__cam_dma_fence_print_table();
-	}
+	do {
+		*idx = find_first_zero_bit(g_cam_dma_fence_dev->bitmap, CAM_DMA_FENCE_MAX_FENCES);
+		if (*idx >= CAM_DMA_FENCE_MAX_FENCES) {
+			CAM_ERR(CAM_SYNC,
+				"Error: Unable to create DMA idx = %d reached max!",
+				*idx);
+			__cam_dma_fence_print_table();
+			return -ENOMEM;
+		}
+		CAM_DBG(CAM_SYNC, "Index location available at idx: %ld", *idx);
+		bit = test_and_set_bit(*idx, g_cam_dma_fence_dev->bitmap);
+	} while (bit);
 
 	return rc;
 }
