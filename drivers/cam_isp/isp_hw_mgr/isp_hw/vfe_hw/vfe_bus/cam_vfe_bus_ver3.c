@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 
@@ -3785,20 +3785,21 @@ static int cam_vfe_bus_ver3_update_wm(void *priv, void *cmd_args, uint32_t arg_s
 		}
 
 		val = stride;
-		CAM_DBG(CAM_ISP, "VFE:%u val before stride %d",
-			bus_priv->common_data.core_index, val);
+		CAM_DBG(CAM_ISP, "VFE:%u io config stride val %u wm config stride: %u",
+			bus_priv->common_data.core_index, val, cfg->stride);
 		val = ALIGNUP(val, 16);
 		if (val != stride)
-			CAM_DBG(CAM_ISP, "VFE:%u Warning stride %u expected %u",
+			CAM_DBG(CAM_ISP, "VFE:%u Warning unaligned stride %u expected %u",
 				bus_priv->common_data.core_index, stride, val);
 
 		if (cfg->stride != val || !wm_data->init_cfg_done ||
 			((wm_data->out_rsrc_data->mc_based ||
 			wm_data->out_rsrc_data->cntxt_cfg_except) &&
 			!wm_data->mc_data[hw_cntxt_id].init_cfg_done)) {
+			val = (cfg->stride ? cfg->stride : (cfg->stride = val));
+
 			CAM_ISP_ADD_REG_VAL_PAIR(reg_val_pair, MAX_REG_VAL_PAIR_SIZE, j,
-				wm_data->hw_regs->image_cfg_2, stride);
-			cfg->stride = val;
+				wm_data->hw_regs->image_cfg_2, val);
 			CAM_DBG(CAM_ISP, "VFE:%u WM:%d image stride 0x%X",
 				bus_priv->common_data.core_index, wm_data->index,
 				reg_val_pair[j-1]);
@@ -4472,6 +4473,8 @@ static int cam_vfe_bus_ver3_update_wm_config_v2(
 
 		/* Per req configuring port/wm as lossy/loseless */
 		cfg->rcs_en = (wm_config->param_mask & CAM_IFE_WM_RCS_EN);
+
+		cfg->stride = wm_config->stride;
 
 		/*
 		 * For RAW10/RAW12/RAW14 sensor mode seamless switch case,
