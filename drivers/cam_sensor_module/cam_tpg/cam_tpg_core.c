@@ -575,12 +575,12 @@ static int cam_tpg_packet_parse(
 
 		if (csl_packet->num_cmd_buf <= 0) {
 			rc = -EINVAL;
-			goto end;
+			goto free_kdup;
 		}
 		rc = cam_tpg_cmd_buf_parse(tpg_dev, csl_packet);
 		if (rc < 0) {
 			CAM_ERR(CAM_TPG, "CMD buffer parse failed");
-			goto end;
+			goto free_kdup;
 		}
 		CAM_DBG(CAM_TPG, "TPG[%d] External Trigger request id: %llu",
 					tpg_dev->soc_info.index,
