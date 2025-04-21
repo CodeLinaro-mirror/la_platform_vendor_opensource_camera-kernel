@@ -1055,7 +1055,7 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 	switch (csl_packet->header.op_code & 0xFFFFFF) {
 	case CAM_FLASH_PACKET_OPCODE_INIT: {
 		/* INIT packet*/
-		offset = (uint32_t *)((uint8_t *)&csl_packet->payload +
+		offset = (uint32_t *)((uint8_t *)&csl_packet->payload_flex +
 			csl_packet->cmd_buf_offset);
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 
@@ -1466,7 +1466,7 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 	switch (csl_packet->header.op_code & 0xFFFFFF) {
 	case CAM_FLASH_PACKET_OPCODE_INIT: {
 		/* INIT packet*/
-		offset = (uint32_t *)((uint8_t *)&csl_packet->payload +
+		offset = (uint32_t *)((uint8_t *)&csl_packet->payload_flex +
 			csl_packet->cmd_buf_offset);
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 		rc = cam_mem_get_cpu_buf(cmd_desc->mem_handle,

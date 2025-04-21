@@ -510,7 +510,7 @@ static int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 
 	switch (csl_packet->header.op_code & 0xFFFFFF) {
 	case CAM_ACTUATOR_PACKET_OPCODE_INIT:
-		offset = (uint32_t *)&csl_packet->payload;
+		offset = (uint32_t *)&csl_packet->payload_flex;
 		offset += (csl_packet->cmd_buf_offset / sizeof(uint32_t));
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 
@@ -732,7 +732,7 @@ static int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 		INIT_LIST_HEAD(&(i2c_read_settings.list_head));
 
 		io_cfg = (struct cam_buf_io_cfg *) ((uint8_t *)
-			&csl_packet->payload +
+			&csl_packet->payload_flex +
 			csl_packet->io_configs_offset);
 
 		if (io_cfg == NULL) {
