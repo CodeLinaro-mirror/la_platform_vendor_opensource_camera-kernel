@@ -663,6 +663,13 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 		((uint32_t *)&csl_packet->payload +
 		csl_packet->cmd_buf_offset / 4);
 
+	rc = cam_packet_util_validate_cmd_desc(cmd_desc);
+	if (rc) {
+		CAM_ERR(CAM_CSIPHY, "Invalid cmd desc ret: %d", rc);
+		cam_mem_put_cpu_buf(cfg_dev->packet_handle);
+		cam_common_mem_free(csl_packet);
+	}
+
 	rc = cam_mem_get_cpu_buf(cmd_desc->mem_handle,
 		&generic_ptr, &len);
 	if (rc < 0) {
