@@ -150,7 +150,10 @@ struct cam_cdm_bl_request {
 	enum cam_cdm_bl_cmd_addr_type type;
 	uint32_t cmd_arrary_count;
 	bool gen_irq_arb;
-	struct cam_cdm_bl_cmd cmd[1];
+	union {
+	       struct cam_cdm_bl_cmd cmd[1];
+		__DECLARE_FLEX_ARRAY(struct cam_cdm_bl_cmd, cmd_flex);
+	};
 };
 
 /**

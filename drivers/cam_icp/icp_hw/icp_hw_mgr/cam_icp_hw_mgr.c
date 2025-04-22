@@ -2171,7 +2171,7 @@ static int cam_icp_mgr_process_msg_frame_process(uint32_t *msg_ptr)
 	}
 
 	frame_done =
-		(struct hfi_msg_frame_process_done *)ioconfig_ack->msg_data;
+		(struct hfi_msg_frame_process_done *)ioconfig_ack->msg_data_flex;
 	if (!frame_done) {
 		cam_icp_mgr_handle_frame_process(msg_ptr,
 			ICP_FRAME_PROCESS_FAILURE);
@@ -2202,7 +2202,7 @@ static int cam_icp_mgr_process_msg_config_io(uint32_t *msg_ptr)
 
 	if (ioconfig_ack->opcode == HFI_IPEBPS_CMD_OPCODE_IPE_CONFIG_IO) {
 		ipe_config_ack =
-			(struct hfi_msg_ipe_config *)(ioconfig_ack->msg_data);
+			(struct hfi_msg_ipe_config *)(ioconfig_ack->msg_data_flex);
 		if (ipe_config_ack->rc) {
 			CAM_ERR(CAM_ICP, "rc = %d failed with\n"
 				"err_no = [%u] err_type = [%s]",
@@ -2222,7 +2222,7 @@ static int cam_icp_mgr_process_msg_config_io(uint32_t *msg_ptr)
 		ctx_data->scratch_mem_size = ipe_config_ack->scratch_mem_size;
 	} else {
 		bps_config_ack =
-			(struct hfi_msg_bps_common *)(ioconfig_ack->msg_data);
+			(struct hfi_msg_bps_common *)(ioconfig_ack->msg_data_flex);
 		if (bps_config_ack->rc) {
 			CAM_ERR(CAM_ICP, "rc : %u, opcode :%u",
 				bps_config_ack->rc, ioconfig_ack->opcode);
@@ -3272,7 +3272,7 @@ static int cam_icp_mgr_abort_handle_wq(
 		abort_cmd->opcode = HFI_IPEBPS_CMD_OPCODE_IPE_ABORT;
 
 	abort_cmd->num_fw_handles = 1;
-	abort_cmd->fw_handles[0] = ctx_data->fw_handle;
+	abort_cmd->fw_handles_flex[0] = ctx_data->fw_handle;
 	abort_cmd->user_data1 = PTR_TO_U64(ctx_data);
 	abort_cmd->user_data2 = (uint64_t)0x0;
 
@@ -3317,7 +3317,7 @@ static int cam_icp_mgr_abort_handle(
 
 	reinit_completion(&ctx_data->wait_complete);
 	abort_cmd->num_fw_handles = 1;
-	abort_cmd->fw_handles[0] = ctx_data->fw_handle;
+	abort_cmd->fw_handles_flex[0] = ctx_data->fw_handle;
 	abort_cmd->user_data1 = PTR_TO_U64(ctx_data);
 	abort_cmd->user_data2 = (uint64_t)0x0;
 
@@ -3373,7 +3373,7 @@ static int cam_icp_mgr_destroy_handle(
 
 	reinit_completion(&ctx_data->wait_complete);
 	destroy_cmd->num_fw_handles = 1;
-	destroy_cmd->fw_handles[0] = ctx_data->fw_handle;
+	destroy_cmd->fw_handles_flex[0] = ctx_data->fw_handle;
 	destroy_cmd->user_data1 = PTR_TO_U64(ctx_data);
 	destroy_cmd->user_data2 = (uint64_t)0x0;
 	memcpy(destroy_cmd->payload.direct, &ctx_data->temp_payload,
@@ -3959,7 +3959,7 @@ static int cam_icp_mgr_send_config_io(struct cam_icp_hw_ctx_data *ctx_data,
 	reinit_completion(&ctx_data->wait_complete);
 
 	ioconfig_cmd.num_fw_handles = 1;
-	ioconfig_cmd.fw_handles[0] = ctx_data->fw_handle;
+	ioconfig_cmd.fw_handles_flex[0] = ctx_data->fw_handle;
 	ioconfig_cmd.payload.indirect = io_buf_addr;
 	ioconfig_cmd.user_data1 = PTR_TO_U64(ctx_data);
 	ioconfig_cmd.user_data2 = (uint64_t)0x0;
@@ -4110,7 +4110,7 @@ static int cam_icp_mgr_prepare_frame_process_cmd(
 	else
 		hfi_cmd->opcode = HFI_IPEBPS_CMD_OPCODE_IPE_FRAME_PROCESS;
 	hfi_cmd->num_fw_handles = 1;
-	hfi_cmd->fw_handles[0] = ctx_data->fw_handle;
+	hfi_cmd->fw_handles_flex[0] = ctx_data->fw_handle;
 	hfi_cmd->payload.indirect = fw_cmd_buf_iova_addr;
 	hfi_cmd->user_data1 = PTR_TO_U64(ctx_data);
 	hfi_cmd->user_data2 = request_id;
@@ -4400,9 +4400,9 @@ static int cam_icp_process_stream_settings(
 			return -EINVAL;
 		}
 
-		map_cmd->mem_map_region_sets[i].start_addr = (uint32_t)iova +
+		map_cmd->mem_map_region_sets_flex[i].start_addr = (uint32_t)iova +
 			(cmd_mem_regions->map_info_array_flex[i].offset);
-		map_cmd->mem_map_region_sets[i].len = (uint32_t) len;
+		map_cmd->mem_map_region_sets_flex[i].len = (uint32_t) len;
 
 		CAM_DBG(CAM_ICP, "Region %u mem_handle %d iova %pK len %u",
 			(i+1), cmd_mem_regions->map_info_array_flex[i].mem_handle,
@@ -4432,7 +4432,7 @@ static int cam_icp_process_stream_settings(
 	else
 		async_direct->opcode = HFI_IPEBPS_CMD_OPCODE_MEM_UNMAP;
 	async_direct->num_fw_handles = 1;
-	async_direct->fw_handles[0] = ctx_data->fw_handle;
+	async_direct->fw_handles_flex[0] = ctx_data->fw_handle;
 	async_direct->user_data1 = (uint64_t)ctx_data;
 	async_direct->user_data2 = (uint64_t)0x0;
 	memcpy(async_direct->payload.direct, map_cmd,
@@ -4715,7 +4715,7 @@ static int cam_icp_mgr_process_cfg_io_cmd(
 		ioconfig_cmd->opcode = HFI_IPEBPS_CMD_OPCODE_IPE_CONFIG_IO;
 
 	ioconfig_cmd->num_fw_handles = 1;
-	ioconfig_cmd->fw_handles[0] = ctx_data->fw_handle;
+	ioconfig_cmd->fw_handles_flex[0] = ctx_data->fw_handle;
 	ioconfig_cmd->payload.indirect = io_config;
 	ioconfig_cmd->user_data1 = PTR_TO_U64(ctx_data);
 	ioconfig_cmd->user_data2 = request_id;

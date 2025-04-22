@@ -4217,10 +4217,10 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 				CAM_ERR(CAM_ISP, "Unexpected BL type %d",
 					cmd->flags);
 
-			cdm_cmd->cmd[i - skip].bl_addr.mem_handle = cmd->handle;
-			cdm_cmd->cmd[i - skip].offset = cmd->offset;
-			cdm_cmd->cmd[i - skip].len = cmd->len;
-			cdm_cmd->cmd[i - skip].arbitrate = false;
+			cdm_cmd->cmd_flex[i - skip].bl_addr.mem_handle = cmd->handle;
+			cdm_cmd->cmd_flex[i - skip].offset = cmd->offset;
+			cdm_cmd->cmd_flex[i - skip].len = cmd->len;
+			cdm_cmd->cmd_flex[i - skip].arbitrate = false;
 		}
 		cdm_cmd->cmd_arrary_count = cfg->num_hw_update_entries - skip;
 
