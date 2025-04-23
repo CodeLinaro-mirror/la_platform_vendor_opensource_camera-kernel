@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_ISP_H__
@@ -140,6 +140,7 @@
 #define CAM_ISP_GENERIC_BLOB_TYPE_CHECK_SETTING_ID          30
 #define CAM_ISP_GENERIC_BLOB_TYPE_PRIMARY_PORT_CONFIG       31
 #define CAM_ISP_GENERIC_BLOB_TYPE_PRIMARY_SCRATCH_BUF_CFG   32
+#define CAM_ISP_GENERIC_BLOB_TYPE_HWFENCE_MODE_CONFIG       33
 
 #define CAM_ISP_VC_DT_CFG    4
 
@@ -204,6 +205,7 @@
 #define CAM_ISP_INDEPENDENT_CRM                BIT(8)
 #define CAM_ISP_SLAVE_METADATA_EN              BIT(9)
 #define CAM_ISP_UL_PATH                        BIT(10)
+#define CAM_ISP_IFE_LITE_GROUPING_EN           BIT(11)
 
 #define CAM_ISP_ACQUIRE_TYPE_NONE              0
 #define CAM_ISP_ACQUIRE_TYPE_VIRTUAL           1
@@ -224,11 +226,13 @@
 #define CAM_IFE_DECODE_FORMAT_SHIFT_VAL 8
 
 #define CAM_IFE_GET_QUERY_CAP_V2        1
+#define CAM_IFE_GET_QUERY_CAP_V3        2
 
 /* ISP stream config params */
 #define CAM_ISP_STREAM_GROUP_CFG_MAX   12
 /*6 rdi paths and 1 pix path */
 #define CAM_ISP_STREAM_CFG_MAX         7
+
 
 /* Query devices */
 /**
@@ -283,6 +287,30 @@ struct cam_isp_query_cap_cmd_v2 {
 	struct cam_iommu_handle     device_iommu;
 	struct cam_iommu_handle     cdm_iommu;
 	struct cam_isp_dev_cap_info dev_caps[CAM_ISP_HW_MAX];
+};
+
+/**
+ * struct cam_isp_query_cap_cmd_v3 - ISP query device capability payload
+ *
+ * @version:                    version details
+ * @num_dev:                    returned number of device capabilities
+ * @ispctx_qu_depth:            returned isp context queue depth
+ * @reserved:                   reserved field for alignment
+ * @device_iommu:               returned iommu handles for device
+ * @cdm_iommu:                  returned iommu handles for cdm
+ * @dev_caps:                   returned device capability array
+ * @hw_fence_device_info:       returned HW fence device info
+ *
+ */
+struct cam_isp_query_cap_cmd_v3 {
+	__u32                            version;
+	__s32                            num_dev;
+	__u32                            isp_ctx_queue_depth;
+	__u32                            reserved;
+	struct cam_iommu_handle          device_iommu;
+	struct cam_iommu_handle          cdm_iommu;
+	struct cam_isp_dev_cap_info      dev_caps[CAM_ISP_HW_MAX];
+	struct cam_hw_fence_device_info  hw_fence_device_info;
 };
 
 /* Acquire Device */
@@ -667,6 +695,38 @@ struct cam_isp_resource_hfr_config {
 	__u32                          reserved;
 	struct cam_isp_port_hfr_config port_hfr_config[1];
 } __attribute__((packed));
+
+/**
+ * struct cam_isp_port_hw_fence_config - To set the fencing mode
+ *      for a given group/client.
+ *
+ * @res_type          : output resource type defined in file cam_isp_ife.h
+ * @src_grp           : Optional param to provide src_grp, provided in query
+ *                      caps
+ * @fencing_mode      : Frame or slice
+ * @reserved          : reserved for alignment
+ */
+struct cam_isp_port_hw_fence_config {
+	__u32   res_type;
+	__u32   src_grp;
+	__u32   fencing_mode;
+	__u32   reserved;
+};
+
+
+/**
+ * struct cam_isp_resource_hw_fence_config - Resource HW Fence
+	configuration.
+ *
+ * @version:                 version info
+ * @num_res:                 Number of resources
+ * @port_hw_fence_config:    HW fence configuration for each resource
+ */
+struct cam_isp_resource_hw_fence_config {
+	__u32                                   version;
+	__u32                                   num_res;
+	struct cam_isp_port_hw_fence_config port_hw_fence_config[];
+};
 
 /**
  * struct cam_isp_dual_split_params - dual isp spilt parameters
