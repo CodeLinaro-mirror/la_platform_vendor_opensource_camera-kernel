@@ -10503,11 +10503,6 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 	if (per_port_feature_enable)
 		goto reset_scratch_buffers;
 
-	if (ctx->flags.hwfence_en) {
-		kfree(ctx->hwfence_info);
-		ctx->hwfence_info = NULL;
-	}
-
 	/* Note:stop resource will remove the irq mask from the hardware */
 
 	CAM_DBG(CAM_ISP, "Halting CSIDs");
@@ -11888,6 +11883,12 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 	if (!per_port_feature_enable)
 		cam_ife_hw_mgr_release_hw_for_ctx(ctx, CAM_IFE_STREAM_GRP_INDEX_NONE);
 
+	if (ctx->flags.hwfence_en) {
+		CAM_INFO(CAM_ISP, "setting hwfence_info as NULL");
+		kfree(ctx->hwfence_info);
+		ctx->hwfence_info = NULL;
+		ctx->flags.hwfence_en = false;
+	}
 	/* reset base info */
 	ctx->num_base = 0;
 	memset(ctx->base, 0, sizeof(ctx->base));
