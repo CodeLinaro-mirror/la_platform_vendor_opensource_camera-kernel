@@ -304,6 +304,9 @@ static void cam_isp_dev_component_unbind(struct device *dev,
 		(const char **)&compat_str);
 
 	cam_isp_hw_mgr_deinit(compat_str);
+	if (!g_isp_dev.ctx_isp)
+		goto end;
+
 	/* clean up resources */
 	for (i = 0; i < g_isp_dev.max_context; i++) {
 		rc = cam_isp_context_deinit(&g_isp_dev.ctx_isp[i]);
@@ -321,6 +324,7 @@ static void cam_isp_dev_component_unbind(struct device *dev,
 	if (rc)
 		CAM_ERR(CAM_ISP, "Unregister failed rc: %d", rc);
 
+end:
 	memset(&g_isp_dev, 0, sizeof(g_isp_dev));
 }
 

@@ -12225,6 +12225,9 @@ err:
 
 int cam_isp_context_deinit(struct cam_isp_context *ctx)
 {
+	if (!ctx)
+		return 0;
+
 	if (ctx->base)
 		cam_context_deinit(ctx->base);
 
