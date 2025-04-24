@@ -841,15 +841,24 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 	int32_t rc = 0, tot_size = 0, last_cmd_type = 0;
 	int32_t i = 0, pwr_up = 0, pwr_down = 0;
 	struct cam_sensor_power_setting *pwr_settings;
-	void *ptr = cmd_buf, *scr;
-	struct cam_cmd_power *pwr_cmd = (struct cam_cmd_power *)cmd_buf;
-	struct common_header *cmm_hdr = (struct common_header *)cmd_buf;
+	void *ptr = NULL, *scr;
+	struct common_header *cmm_hdr = NULL;
+	struct cam_cmd_power *pwr_cmd =
+		kzalloc(cmd_buf_len, GFP_KERNEL);
+	if (!pwr_cmd) {
+        CAM_DBG(CAM_SENSOR, "pwr_cmd memory allocation failed!");
+		return -ENOMEM;
+	}
+	memcpy(pwr_cmd, cmd_buf, cmd_buf_len);
+        ptr = pwr_cmd;
+	cmm_hdr = (struct common_header *)pwr_cmd;
 
-	if (!pwr_cmd || !cmd_length || cmd_buf_len < (size_t)cmd_length ||
-		cam_sensor_validate(cmd_buf, cmd_buf_len)) {
+	if (!cmd_length || cmd_buf_len < (size_t)cmd_length ||
+		cam_sensor_validate(pwr_cmd, cmd_buf_len)) {
 		CAM_ERR(CAM_SENSOR, "Invalid Args: pwr_cmd %pK, cmd_length: %d",
 			pwr_cmd, cmd_length);
-		return -EINVAL;
+		rc = -EINVAL;
+                goto free_power_command;
 	}
 
 	power_info->power_setting_size = 0;
@@ -858,8 +867,10 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 		kzalloc(sizeof(struct cam_sensor_power_setting) *
 			MAX_POWER_CONFIG, GFP_KERNEL);
 	if (!power_info->power_setting)
-		return -ENOMEM;
-
+        {
+		rc = -ENOMEM;
+                goto free_power_command;
+        }
 	power_info->power_down_setting_size = 0;
 	power_info->power_down_setting =
 		(struct cam_sensor_power_setting *)
@@ -869,7 +880,8 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 		kfree(power_info->power_setting);
 		power_info->power_setting = NULL;
 		power_info->power_setting_size = 0;
-		return -ENOMEM;
+		rc = -ENOMEM;
+                goto free_power_command;
 	}
 
 	while (tot_size < cmd_length) {
@@ -879,37 +891,37 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 		}
 		if (cmm_hdr->cmd_type ==
 			CAMERA_SENSOR_CMD_TYPE_PWR_UP) {
-			struct cam_cmd_power *pwr_cmd =
+			struct cam_cmd_power *pwr_up_cmd =
 				(struct cam_cmd_power *)ptr;
 
 			if ((U16_MAX - power_info->power_setting_size) <
-				pwr_cmd->count) {
+				pwr_up_cmd->count) {
 				CAM_ERR(CAM_SENSOR, "ERR: Overflow occurs");
 				rc = -EINVAL;
 				goto free_power_settings;
 			}
 
-			power_info->power_setting_size += pwr_cmd->count;
+			power_info->power_setting_size += pwr_up_cmd->count;
 			if ((power_info->power_setting_size > MAX_POWER_CONFIG)
-				|| (pwr_cmd->count >= SENSOR_SEQ_TYPE_MAX)) {
+				|| (pwr_up_cmd->count >= SENSOR_SEQ_TYPE_MAX)) {
 				CAM_ERR(CAM_SENSOR,
 				"pwr_up setting size %d, pwr_cmd->count: %d",
 					power_info->power_setting_size,
-					pwr_cmd->count);
+					pwr_up_cmd->count);
 				rc = -EINVAL;
 				goto free_power_settings;
 			}
 			scr = ptr + sizeof(struct cam_cmd_power);
 			tot_size = tot_size + sizeof(struct cam_cmd_power);
 
-			if (pwr_cmd->count == 0)
+			if (pwr_up_cmd->count == 0)
 				CAM_WARN(CAM_SENSOR, "pwr_up_size is zero");
 
-			for (i = 0; i < pwr_cmd->count; i++, pwr_up++) {
+			for (i = 0; i < pwr_up_cmd->count; i++, pwr_up++) {
 				power_info->power_setting[pwr_up].seq_type =
-				pwr_cmd->power_settings[i].power_seq_type;
+				pwr_up_cmd->power_settings[i].power_seq_type;
 				power_info->power_setting[pwr_up].config_val =
-				pwr_cmd->power_settings[i].config_val_low;
+				pwr_up_cmd->power_settings[i].config_val_low;
 				power_info->power_setting[pwr_up].delay = 0;
 				if (i) {
 					scr = scr +
@@ -985,40 +997,40 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 			cmm_hdr = (struct common_header *)ptr;
 		} else if (cmm_hdr->cmd_type ==
 			CAMERA_SENSOR_CMD_TYPE_PWR_DOWN) {
-			struct cam_cmd_power *pwr_cmd =
+			struct cam_cmd_power *pwr_dwn_cmd  =
 				(struct cam_cmd_power *)ptr;
 
 			scr = ptr + sizeof(struct cam_cmd_power);
 			tot_size = tot_size + sizeof(struct cam_cmd_power);
 			if ((U16_MAX - power_info->power_down_setting_size) <
-				pwr_cmd->count) {
+				pwr_dwn_cmd->count) {
 				CAM_ERR(CAM_SENSOR, "ERR: Overflow");
 				rc = -EINVAL;
 				goto free_power_settings;
 			}
 
-			power_info->power_down_setting_size += pwr_cmd->count;
+			power_info->power_down_setting_size += pwr_dwn_cmd->count;
 			if ((power_info->power_down_setting_size >
-				MAX_POWER_CONFIG) || (pwr_cmd->count >=
+				MAX_POWER_CONFIG) || (pwr_dwn_cmd->count >=
 				SENSOR_SEQ_TYPE_MAX)) {
 				CAM_ERR(CAM_SENSOR,
 				"pwr_down_setting_size %d, pwr_cmd->count: %d",
 					power_info->power_down_setting_size,
-					pwr_cmd->count);
+					pwr_dwn_cmd->count);
 				rc = -EINVAL;
 				goto free_power_settings;
 			}
 
-			if (pwr_cmd->count == 0)
+			if (pwr_dwn_cmd->count == 0)
 				CAM_ERR(CAM_SENSOR, "pwr_down size is zero");
 
-			for (i = 0; i < pwr_cmd->count; i++, pwr_down++) {
+			for (i = 0; i < pwr_dwn_cmd->count; i++, pwr_down++) {
 				pwr_settings =
 				&power_info->power_down_setting[pwr_down];
 				pwr_settings->seq_type =
-				pwr_cmd->power_settings[i].power_seq_type;
+				pwr_dwn_cmd->power_settings[i].power_seq_type;
 				pwr_settings->config_val =
-				pwr_cmd->power_settings[i].config_val_low;
+				pwr_dwn_cmd->power_settings[i].config_val_low;
 				power_info->power_down_setting[pwr_down].delay
 					= 0;
 				if (i) {
@@ -1053,7 +1065,7 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 		}
 	}
 
-	return rc;
+	goto free_power_command;
 free_power_settings:
 	kfree(power_info->power_down_setting);
 	kfree(power_info->power_setting);
@@ -1061,6 +1073,9 @@ free_power_settings:
 	power_info->power_setting = NULL;
 	power_info->power_down_setting_size = 0;
 	power_info->power_setting_size = 0;
+free_power_command:
+	kfree(pwr_cmd);
+	pwr_cmd = NULL;
 	return rc;
 }
 
