@@ -154,6 +154,27 @@ static void __cam_isp_ctx_update_event_record(
 	ctx_isp->event_record[event][iterator].timestamp  = cur_time;
 }
 
+static void cam_isp_ctx_signal_virtual_port_fences(struct cam_isp_ctx_req *req_isp,
+	struct cam_hw_config_args *cfg)
+{
+	int i;
+	struct cam_sync_signal_param param;
+
+	for (i = 0; i < req_isp->num_fence_map_out; i++) {
+		if (req_isp->fence_map_out[i].resource_handle < CAM_ISP_IFE_OUT_VIRTUAL_RES_BASE)
+			continue;
+
+		memset(&param, 0, sizeof(param));
+		param.sync_obj = req_isp->fence_map_out[i].sync_id;
+		param.status = CAM_SYNC_STATE_SIGNALED_SUCCESS;
+		param.event_cause = CAM_SYNC_COMMON_EVENT_SUCCESS;
+		param.request_id = cfg->request_id;
+		param.applied_crop_req_id = cfg->crop_settings_id;
+		cam_sync_signal(&param, NULL);
+		req_isp->num_acked++;
+	}
+}
+
 static int __cam_isp_ctx_dump_event_record(
 	struct cam_isp_context *ctx_isp,
 	uintptr_t               cpu_addr,
@@ -5209,6 +5230,7 @@ static int cam_isp_ctx_reapply_iq_config(struct cam_context *ctx, struct cam_ctx
 
 	rc = ctx->hw_mgr_intf->hw_config(ctx->hw_mgr_intf->hw_mgr_priv, &cfg);
 	if (!rc) {
+		cam_isp_ctx_signal_virtual_port_fences(req_isp, &cfg);
 		if (reapply_type != CAM_CONFIG_REAPPLY_NONE) {
 			list_del_init(&req->list);
 			__cam_isp_ctx_move_req_to_free_list(ctx, req);
@@ -5233,7 +5255,10 @@ static int cam_isp_ctx_reapply_iq_config(struct cam_context *ctx, struct cam_ctx
 			CAM_DBG(CAM_REQ, "full request %lld config success ctx %u",
 				req->request_id, ctx->ctx_id);
 		}
-		req_isp->applied_crop_req_id = cfg.applied_crop_req_id;
+		if (ctx_isp->fast_crop_en)
+			req_isp->applied_crop_req_id = cfg.crop_settings_id;
+		else
+			req_isp->applied_crop_req_id = cfg.applied_crop_req_id;
 	} else if (rc == -EALREADY) {
 		list_del_init(&req->list);
 		__cam_isp_ctx_move_req_to_free_list(ctx, req);
@@ -5658,6 +5683,7 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 
 	rc = ctx->hw_mgr_intf->hw_config(ctx->hw_mgr_intf->hw_mgr_priv, &cfg);
 	if (!rc) {
+		cam_isp_ctx_signal_virtual_port_fences(req_isp, &cfg);
 		mutex_lock(&ctx_isp->isp_mutex);
 		ctx_isp->substate_activated = next_state;
 		ctx_isp->last_applied_req_id = apply->request_id;
@@ -5669,7 +5695,10 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 				"ctx %d req %llu CDM callback not happen but received buf done",
 				ctx->ctx_id, req->request_id);
 		}
-		req_isp->applied_crop_req_id = cfg.applied_crop_req_id;
+		if (ctx_isp->fast_crop_en)
+			req_isp->applied_crop_req_id = cfg.crop_settings_id;
+		else
+			req_isp->applied_crop_req_id = cfg.applied_crop_req_id;
 		list_del_init(&req->list);
 		list_add_tail(&req->list, &ctx->wait_req_list);
 		ctx_isp->waitlist_req_cnt++;
@@ -5677,7 +5706,7 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 			"new substate Substate[%s], applied req %lld waitlist_req_cnt:%d ctx:%u crop_settings_id: %lld",
 			__cam_isp_ctx_substate_val_to_type(next_state),
 			ctx_isp->last_applied_req_id, ctx_isp->waitlist_req_cnt, ctx->ctx_id,
-			cfg.crop_settings_id);
+			req_isp->applied_crop_req_id);
 		mutex_unlock(&ctx_isp->isp_mutex);
 		__cam_isp_ctx_update_state_monitor_array(ctx_isp,
 			CAM_ISP_STATE_CHANGE_TRIGGER_APPLIED,
@@ -5688,7 +5717,10 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 		mutex_lock(&ctx_isp->isp_mutex);
 		req_isp->bubble_detected = true;
 		req_isp->cdm_reset_before_apply = false;
-		req_isp->applied_crop_req_id = cfg.applied_crop_req_id;
+		if (ctx_isp->fast_crop_en)
+			req_isp->applied_crop_req_id = cfg.crop_settings_id;
+		else
+			req_isp->applied_crop_req_id = cfg.applied_crop_req_id;
 		atomic_set(&ctx_isp->process_bubble, 1);
 		list_del_init(&req->list);
 		list_add(&req->list, &ctx->active_req_list);

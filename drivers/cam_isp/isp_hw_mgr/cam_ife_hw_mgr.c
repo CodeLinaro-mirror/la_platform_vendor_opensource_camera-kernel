@@ -9826,6 +9826,58 @@ static int cam_isp_blob_bw_update(
 	return rc;
 }
 
+static int cam_isp_notify_crop_setting_applied(
+	struct cam_hw_config_args *cfg, struct cam_isp_crop_setting_block_info *setting_info)
+{
+	int rc = 0;
+	int i, j;
+	size_t len = 0;
+	struct cam_ife_hw_mgr_ctx *ctx;
+	struct cam_hw_fence_map_entry *fence_map_out;
+	struct cam_isp_crop_out_port_data *out_port_data;
+
+	ctx = (struct cam_ife_hw_mgr_ctx *)cfg->ctxt_to_hw_map;
+	if (!setting_info->num_valid_ports) {
+		CAM_ERR(CAM_ISP, "ctx: %u req %llu Invalid number of ports: %u", ctx->ctx_index,
+			cfg->request_id, setting_info->num_valid_ports);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	for (i = 0; i < cfg->num_out_map_entries; i++) {
+		fence_map_out = &cfg->out_map_entries[i];
+		if (fence_map_out->resource_handle < CAM_ISP_IFE_OUT_VIRTUAL_RES_BASE)
+			continue;
+
+		for (j = 0; j < setting_info->num_valid_ports; j++) {
+			out_port_data = &setting_info->out_data_flex[j];
+			if (fence_map_out->resource_handle != out_port_data->res_type)
+				continue;
+
+			rc = cam_mem_get_cpu_buf(fence_map_out->buf_handle[0], (uintptr_t *)&
+				fence_map_out->kernel_map_buf_addr[0], &len);
+			if (rc) {
+				CAM_ERR(CAM_ISP,
+					"i: %d j: %d get cpu buf failed for virtual_ife_out_port: 0x%x mem_hdl=0x%x rc: %d",
+					i, j, fence_map_out->resource_handle,
+					fence_map_out->buf_handle[0], rc);
+				goto end;
+			}
+
+			memcpy(fence_map_out->kernel_map_buf_addr[0], out_port_data->payload_flex,
+				out_port_data->payload_size);
+			cam_mem_put_cpu_buf(fence_map_out->buf_handle[0]);
+			break;
+		}
+		if (j == setting_info->num_valid_ports)
+			CAM_WARN(CAM_ISP,
+				"crop setting info not found for res: 0x%x ctx: %u req: %llu",
+				fence_map_out->resource_handle, ctx->ctx_index, cfg->request_id);
+	}
+end:
+	return rc;
+}
+
 /* entry function: config_hw */
 static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 					void *config_hw_args)
@@ -10064,6 +10116,13 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].len,
 					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset);
 				cdm_cmd->cmd_arrary_count++;
+				rc = cam_isp_notify_crop_setting_applied(cfg, block_info);
+				if (rc) {
+					CAM_WARN(CAM_ISP,
+						"notify failed for crop setting applied ctx %d req %llu rc: %d",
+						ctx->ctx_index, cfg->request_id, rc);
+					rc = 0;
+				}
 			}
 
 			/* Add to the second entry since the first one is change base cmd */
