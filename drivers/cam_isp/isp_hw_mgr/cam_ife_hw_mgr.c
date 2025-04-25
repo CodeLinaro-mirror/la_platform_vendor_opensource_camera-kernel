@@ -21113,13 +21113,14 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 	struct cam_isp_hw_bus_cap isp_bus_cap = {0};
 	struct cam_isp_hw_path_port_map path_port_map;
 	struct cam_isp_hw_mgr_res *res_list_sfe_out;
+#if IS_REACHABLE(CONFIG_CAM_ENABLE_SOCCP)
 	size_t len;
 	dma_addr_t iova, iova_queue;
 	struct cam_vfe_bus_ipcc_config hwfenceinfo;
 	struct cam_hw_intf *hw_intf;
 	struct cam_sync_hwfence_session_initialize_params init_params;
 	uint32_t num_ipcc_clients;
-
+#endif
 
 	memset(&g_ife_hw_mgr, 0, sizeof(g_ife_hw_mgr));
 	memset(&path_port_map, 0, sizeof(path_port_map));
@@ -21399,6 +21400,8 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 	cam_common_register_mini_dump_cb(cam_ife_hw_mgr_mini_dump_cb,
 		"CAM_ISP");
 
+#if IS_REACHABLE(CONFIG_CAM_ENABLE_SOCCP)
+
 	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
 		if (!g_ife_hw_mgr.ife_devices[i])
 			break;
@@ -21463,12 +21466,15 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 		CAM_DBG(CAM_ISP, "Device region found, sending info to bus");
 		cam_ife_hw_mgr_send_ipcc_region_info(&g_ife_hw_mgr, iova, len);
 	}
+#endif
 	CAM_DBG(CAM_ISP, "Exit");
 
 	return 0;
 
+#if IS_REACHABLE(CONFIG_CAM_ENABLE_SOCCP)
 hw_fence_session_cleanup:
 	cam_sync_hw_fence_session_cleanup();
+#endif
 end:
 	if (rc) {
 		for (i = 0; i < CAM_IFE_CTX_MAX; i++) {
