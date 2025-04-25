@@ -166,6 +166,7 @@ struct cam_isp_in_port_generic_info {
 	bool                            per_port_en;
 	bool                            ul_path_mode;
 	bool                            is_lite_grouping;
+	bool                            fast_crop_en;
 	struct cam_isp_out_port_generic_info    *data;
 };
 
