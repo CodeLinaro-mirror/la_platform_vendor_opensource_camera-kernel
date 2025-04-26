@@ -2413,7 +2413,6 @@ static int cam_ife_mgr_stop_hw_res_stream_grp(
 		if (!hw_mgr_res)
 			continue;
 
-		CAM_INFO(CAM_ISP, "i:%d", i);
 		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res);
 	}
 
