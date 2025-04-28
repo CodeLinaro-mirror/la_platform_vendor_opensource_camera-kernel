@@ -1344,7 +1344,7 @@ int cam_mem_mgr_map(struct cam_mem_mgr_map_cmd *cmd)
 	tbl.bufq[idx].dma_buf = NULL;
 	tbl.bufq[idx].flags |= cmd->flags;
 	spin_lock(&tbl.bufq[idx].idx_lock);
-	tbl.bufq[idx].buf_handle = GET_MEM_HANDLE(idx, cmd->fd);
+	tbl.bufq[idx].buf_handle = GET_MEM_HANDLE(idx, map_fd);
 	spin_unlock(&tbl.bufq[idx].idx_lock);
 
 	if (cmd->flags & CAM_MEM_FLAG_PROTECTED_MODE)

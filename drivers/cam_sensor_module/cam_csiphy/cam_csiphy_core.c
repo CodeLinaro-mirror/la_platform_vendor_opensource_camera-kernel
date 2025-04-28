@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -674,6 +674,7 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 		CAM_ERR(CAM_CSIPHY, "Invalid cmd desc ret: %d", rc);
 		cam_mem_put_cpu_buf(cfg_dev->packet_handle);
 		cam_common_mem_free(csl_packet);
+		return rc;
 	}
 
 	rc = cam_mem_get_cpu_buf(cmd_desc->mem_handle,
