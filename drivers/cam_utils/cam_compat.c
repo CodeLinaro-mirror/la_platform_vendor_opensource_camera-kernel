@@ -140,7 +140,7 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 			return -EINVAL;
 		}
 
-		rc = get_client_env_object(&client_env);
+		rc = smci_get_client_env_object(&client_env);
 		if (rc) {
 			CAM_ERR(CAM_CSIPHY, "Failed getting mink env object, rc: %d", rc);
 			rc = -EINVAL;
@@ -214,7 +214,7 @@ int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info)
 	int rc = 0;
 	struct smci_object client_env, sc_object;
 
-	rc = get_client_env_object(&client_env);
+	rc = smci_get_client_env_object(&client_env);
 	if (rc) {
 		CAM_ERR(CAM_ISP, "Failed getting mink env object, rc: %d", rc);
 		return rc;
@@ -308,7 +308,7 @@ int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info)
 	int rc = 0;
 	struct smci_object client_env, sc_object;
 
-	rc = get_client_env_object(&client_env);
+	rc = smci_get_client_env_object(&client_env);
 	if (rc) {
 		CAM_ERR(CAM_ISP, "Failed getting mink env object, rc: %d", rc);
 		return rc;
