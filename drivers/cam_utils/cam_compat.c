@@ -965,6 +965,21 @@ int cam_sensor_i2c_driver_remove(struct i2c_client *client)
 }
 #endif
 
+#if IS_REACHABLE(CONFIG_CAM_ENABLE_SOCCP)
+int cam_synx_enable_resources(uint32_t client_idx, uint32_t signal_id, bool enable)
+{
+	enum synx_client_id synx_client_idx;
+
+	synx_client_idx = cam_synx_map_camera_client_id_for_synx(client_idx, signal_id);
+	return synx_enable_resources(synx_client_idx, SYNX_RESOURCE_SOCCP, enable);
+}
+#else
+int cam_synx_enable_resources(uint32_t client_idx, uint32_t signal_id, bool enable)
+{
+	return 0;
+}
+#endif
+
 int cam_mem_buf_dma_buf_get_memparcel_hdl(struct dma_buf *dmabuf,
 	uint32_t *smmu_proxy_buf_hdl, struct cam_csf_version *csf_version)
 {
