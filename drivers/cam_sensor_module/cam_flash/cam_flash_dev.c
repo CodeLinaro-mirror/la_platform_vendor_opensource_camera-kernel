@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  */
@@ -40,6 +39,8 @@ static void cam_flash_populate_query_current(struct cam_flash_ctrl *fctrl,
 	for (i = 0; i < fctrl->torch_num_sources; i++)
 		flash_cap->max_current_torch[i] =
 			soc_private->torch_max_current[i];
+#else
+	}
 #endif
 }
 
@@ -222,6 +223,8 @@ static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 		for (i = 0; i < fctrl->torch_num_sources; i++)
 			flash_cap.max_current_torch[i] =
 				soc_private->torch_max_current[i];
+#else
+		}
 #endif
 
 		if (copy_to_user(u64_to_user_ptr(cmd->handle),
