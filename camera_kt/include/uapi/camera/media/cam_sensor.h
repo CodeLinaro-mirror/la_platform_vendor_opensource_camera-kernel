@@ -521,4 +521,8 @@ struct cam_ir_led_query_cap_info {
        uint32_t    pwm_period_ns;
        uint8_t     brightness;
 } __attribute__((packed));
+
+#define VIDIOC_MSM_CCI_CFG \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 23, struct cam_cci_ctrl)
+
 #endif
