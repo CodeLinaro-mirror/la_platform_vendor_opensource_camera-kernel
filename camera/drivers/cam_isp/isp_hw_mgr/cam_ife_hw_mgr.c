@@ -16036,7 +16036,7 @@ static int  cam_ife_hw_mgr_find_affected_ctx(
 		/* Add affected_context in list of recovery data */
 		CAM_DBG(CAM_ISP, "Add affected ctx %c to list",
 			c_ctx->ctx_index);
-		if (recovery_data->no_of_context < CAM_CTX_MAX)
+		if (recovery_data->no_of_context < CAM_IFE_CTX_MAX)
 			recovery_data->affected_ctx[
 				recovery_data->no_of_context++] = c_ctx;
 
@@ -18719,7 +18719,7 @@ static int cam_ife_mgr_v_acquire(void *hw_mgr_priv, void *acquire_hw_args)
 	}
 
 	mutex_lock(&ife_hw_mgr->ctx_mutex);
-	for (i = 0; i < CAM_CTX_MAX; i++) {
+	for (i = 0; i < CAM_IFE_CTX_MAX; i++) {
 		if (!ife_hw_mgr->virt_ctx_pool[i].ctx_in_use) {
 			ife_mgr_ctx = &ife_hw_mgr->virt_ctx_pool[i];
 			ife_mgr_ctx->ctx_in_use = true;
@@ -18730,7 +18730,7 @@ static int cam_ife_mgr_v_acquire(void *hw_mgr_priv, void *acquire_hw_args)
 	}
 	mutex_unlock(&ife_hw_mgr->ctx_mutex);
 
-	if (i == CAM_CTX_MAX) {
+	if (i == CAM_IFE_CTX_MAX) {
 		CAM_ERR(CAM_ISP, "No free context!");
 		return -EINVAL;
 	}
@@ -18952,7 +18952,7 @@ static int cam_ife_mgr_v_release_hw(void *hw_mgr_priv, void *release_hw_args)
 	hw_mgr_ctx = (struct cam_ife_hw_mgr_ctx *)release_args->ctxt_to_hw_map;
 	if (hw_mgr_ctx->is_offline) {
 		ife_idx = atomic_read(&ife_hw_mgr->num_acquired_offline_ctx);
-		if (ife_idx < CAM_CTX_MAX &&
+		if (ife_idx < CAM_IFE_CTX_MAX &&
 				ife_hw_mgr->acquired_hw_pool[ife_idx].ife_ctx) {
 			/* HW is stopped - so we release it */
 			hw_mgr_ctx->concr_ctx =
@@ -19262,12 +19262,12 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl,
 	INIT_LIST_HEAD(&g_ife_hw_mgr.in_proc_queue.list);
 	atomic_set(&g_ife_hw_mgr.active_ctx_cnt, 0);
 	atomic_set(&g_ife_hw_mgr.num_acquired_offline_ctx, 0);
-	for (i = 0; i < CAM_CTX_MAX; i++) {
+	for (i = 0; i < CAM_IFE_CTX_MAX; i++) {
 		memset(&g_ife_hw_mgr.virt_ctx_pool[i], 0,
 			sizeof(g_ife_hw_mgr.virt_ctx_pool[i]));
 	}
 
-	for (i = 0; i < CAM_CTX_MAX; i++) {
+	for (i = 0; i < CAM_IFE_CTX_MAX; i++) {
 		memset(&g_ife_hw_mgr.acquired_hw_pool[i], 0,
 			sizeof(g_ife_hw_mgr.acquired_hw_pool[i]));
 		g_ife_hw_mgr.acquired_hw_pool[i].ctx_idx = i;
@@ -19407,7 +19407,7 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl,
 	return 0;
 end:
 	if (rc) {
-		for (i = 0; i < CAM_CTX_MAX; i++) {
+		for (i = 0; i < CAM_IFE_CTX_MAX; i++) {
 			cam_tasklet_deinit(
 				&g_ife_hw_mgr.mgr_common.tasklet_pool[i]);
 			g_ife_hw_mgr.ctx_pool[i].cdm_cmd = NULL;
@@ -19436,7 +19436,7 @@ void cam_ife_hw_mgr_deinit(void)
 	kfree(g_ife_hw_mgr.debug_cfg.sfe_perf_counter_val);
 	kfree(g_ife_hw_mgr.debug_cfg.ife_perf_counter_val);
 
-	for (i = 0; i < CAM_CTX_MAX; i++) {
+	for (i = 0; i < CAM_IFE_CTX_MAX; i++) {
 		cam_tasklet_deinit(
 			&g_ife_hw_mgr.mgr_common.tasklet_pool[i]);
 		g_ife_hw_mgr.ctx_pool[i].cdm_cmd = NULL;
