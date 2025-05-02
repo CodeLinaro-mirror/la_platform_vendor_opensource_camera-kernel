@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -1192,7 +1192,7 @@ int32_t cam_context_dump_dev_to_hw(struct cam_context *ctx,
 		 */
 		if (dump_args.offset > cmd->offset) {
 			cam_context_dump_context(ctx, &dump_args);
-			CAM_INFO(CAM_CTXT, "[%s] ctx: %d Filled Length %u",
+			CAM_INFO(CAM_CTXT, "[%s] ctx: %d Filled Length %lu",
 				 ctx->dev_name, ctx->ctx_id,
 				 dump_args.offset - cmd->offset);
 			cmd->offset  = dump_args.offset;

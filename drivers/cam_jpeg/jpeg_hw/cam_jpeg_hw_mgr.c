@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/uaccess.h>
@@ -446,7 +446,7 @@ static int cam_jpeg_insert_cdm_change_base(
 
 	if (config_args->hw_update_entries[CAM_JPEG_CHBASE].offset >=
 		ch_base_len) {
-		CAM_ERR(CAM_JPEG, "Not enough buf offset %d len %d",
+		CAM_ERR(CAM_JPEG, "Not enough buf offset %d len %zu",
 			config_args->hw_update_entries[CAM_JPEG_CHBASE].offset,
 			ch_base_len);
 		cam_mem_put_cpu_buf(
@@ -1637,7 +1637,7 @@ hw_dump:
 
 	if (diff < CAM_JPEG_RESPONSE_TIME_THRESHOLD) {
 		CAM_INFO(CAM_JPEG,
-			"No error req %lld %ld:%06ld %ld:%06ld",
+			"No error req %lld %lld:%06ld %lld:%06ld",
 			dump_args->request_id,
 			req_ts.tv_sec,
 			req_ts.tv_nsec/NSEC_PER_USEC,
@@ -1648,7 +1648,7 @@ hw_dump:
 	}
 
 	CAM_INFO(CAM_JPEG,
-		"Error req %lld %ld:%06ld %ld:%06ld",
+		"Error req %lld %lld:%06ld %lld:%06ld",
 		dump_args->request_id,
 		req_ts.tv_sec,
 		req_ts.tv_nsec/NSEC_PER_USEC,
@@ -1883,18 +1883,12 @@ static int cam_jpeg_mgr_create_debugfs_entry(void)
 	/* Store parent inode for cleanup in caller */
 	g_jpeg_hw_mgr.dentry = dbgfileptr;
 
-	dbgfileptr = debugfs_create_file("camnoc_misr_test", 0644,
+	debugfs_create_file("camnoc_misr_test", 0644,
 		g_jpeg_hw_mgr.dentry, NULL, &camnoc_misr_test);
 
-	dbgfileptr = debugfs_create_file("bug_on_misr_mismatch", 0644,
+	debugfs_create_file("bug_on_misr_mismatch", 0644,
 		g_jpeg_hw_mgr.dentry, NULL, &bug_on_misr_mismatch);
 
-	if (IS_ERR(dbgfileptr)) {
-		if (PTR_ERR(dbgfileptr) == -ENODEV)
-			CAM_WARN(CAM_JPEG, "DebugFS not enabled in kernel!");
-		else
-			rc = PTR_ERR(dbgfileptr);
-	}
 err:
 	return rc;
 }

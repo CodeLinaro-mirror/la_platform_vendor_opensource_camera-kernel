@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-mapping.h>
+#include <linux/dma-buf.h>
 #include <linux/of_address.h>
+#include <linux/slab.h>
 
 #include "cam_compat.h"
 #include "cam_debug_util.h"
@@ -51,6 +53,7 @@ void cam_unreserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length)
 	iounmap(icp_fw->fw_kva);
 }
 
+#ifdef CONFIG_SPECTRA_SECURE
 int cam_ife_notify_safe_lut_scm(bool safe_trigger)
 {
 	const uint32_t smmu_se_ife = 0;
@@ -72,6 +75,7 @@ int cam_ife_notify_safe_lut_scm(bool safe_trigger)
 
 	return rc;
 }
+EXPORT_SYMBOL(cam_ife_notify_safe_lut_scm);
 
 int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 	bool protect, int32_t offset)
@@ -90,6 +94,7 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 
 	return rc;
 }
+EXPORT_SYMBOL(cam_csiphy_notify_secure_mode);
 
 void cam_cpastop_scm_write(struct cam_cpas_hw_errata_wa *errata_wa)
 {
@@ -99,7 +104,8 @@ void cam_cpastop_scm_write(struct cam_cpas_hw_errata_wa *errata_wa)
 	reg_val |= errata_wa->data.reg_info.value;
 	qcom_scm_io_writel(errata_wa->data.reg_info.offset, reg_val);
 }
-
+EXPORT_SYMBOL(cam_cpastop_scm_write);
+#endif /* CONFIG_SPECTRA_SECURE */
 static int camera_platform_compare_dev(struct device *dev, const void *data)
 {
 	return platform_bus_type.match(dev, (struct device_driver *) data);
@@ -126,6 +132,7 @@ void cam_unreserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length)
 		icp_fw->fw_hdl);
 }
 
+#ifdef CONFIG_SPECTRA_SECURE
 int cam_ife_notify_safe_lut_scm(bool safe_trigger)
 {
 	const uint32_t smmu_se_ife = 0;
@@ -183,6 +190,7 @@ void cam_cpastop_scm_write(struct cam_cpas_hw_errata_wa *errata_wa)
 	reg_val |= errata_wa->data.reg_info.value;
 	scm_io_write(errata_wa->data.reg_info.offset, reg_val);
 }
+#endif /* CONFIG_SPECTRA_SECURE */
 
 static int camera_platform_compare_dev(struct device *dev, void *data)
 {
@@ -262,4 +270,86 @@ int camera_component_match_add_drivers(struct device *master_dev,
 	}
 end:
 	return rc;
+}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+void cam_free_clear(const void * ptr)
+{
+	kfree_sensitive(ptr);
+}
+#else
+void cam_free_clear(const void * ptr)
+{
+	kzfree(ptr);
+}
+#endif
+
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+void cam_smmu_util_iommu_custom(struct device *dev,
+	dma_addr_t discard_start, size_t discard_length)
+{
+	return;
+}
+
+int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
+{
+	struct iosys_map mapping = {0};
+	int error_code = dma_buf_vmap(dmabuf, &mapping);
+
+	if (error_code)
+		*vaddr = 0;
+	else
+		*vaddr = (mapping.is_iomem) ?
+			(uintptr_t)mapping.vaddr_iomem : (uintptr_t)mapping.vaddr;
+
+	return error_code;
+}
+
+void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
+{
+	struct iosys_map mapping = IOSYS_MAP_INIT_VADDR(vaddr);
+
+	dma_buf_vunmap(dmabuf, &mapping);
+}
+
+#else
+void cam_smmu_util_iommu_custom(struct device *dev,
+	dma_addr_t discard_start, size_t discard_length)
+{
+	iommu_dma_enable_best_fit_algo(dev);
+
+	if (discard_start)
+		iommu_dma_reserve_iova(dev, discard_start, discard_length);
+
+	return;
+}
+
+int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
+{
+	int error_code = 0;
+	void *addr = dma_buf_vmap(dmabuf);
+
+	if (!addr) {
+		*vaddr = 0;
+		error_code = -ENOSPC;
+	} else {
+		*vaddr = (uintptr_t)addr;
+	}
+
+	return error_code;
+}
+
+void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
+{
+	dma_buf_vunmap(dmabuf, vaddr);
+}
+
+#endif
+int cam_get_ddr_type(void)
+{
+	/* We assume all chipsets running kernel version 5.15+
+	 * to be using only DDR5 based memory.
+	 */
+	return DDR_TYPE_LPDDR5;
 }

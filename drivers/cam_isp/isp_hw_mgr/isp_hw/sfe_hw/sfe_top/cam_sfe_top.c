@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -416,7 +417,7 @@ static int cam_sfe_top_set_hw_clk_rate(
 			soc_info->src_clk_idx, &clk_lvl);
 		if (rc) {
 			CAM_WARN(CAM_SFE,
-				"Failed to get clk level for %s with clk_rate %llu src_idx %d rc: %d",
+				"Failed to get clk level for %s with clk_rate %lu src_idx %d rc: %d",
 				soc_info->dev_name, max_clk_rate,
 				soc_info->src_clk_idx, rc);
 			rc = 0;
@@ -427,7 +428,7 @@ static int cam_sfe_top_set_hw_clk_rate(
 		cam_cpas_update_ahb_vote(soc_private->cpas_handle, &ahb_vote);
 	} else {
 		CAM_ERR(CAM_PERF,
-			"Set clk rate failed for SFE [%u] clk: %s rate: %llu rc: %d",
+			"Set clk rate failed for SFE [%u] clk: %s rate: %lu rc: %d",
 			soc_info->index,
 			soc_info->clk_name[soc_info->src_clk_idx],
 			max_clk_rate, rc);

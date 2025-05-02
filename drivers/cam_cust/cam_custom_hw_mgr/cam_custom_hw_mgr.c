@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -1012,7 +1012,7 @@ static int cam_custom_mgr_acquire_hw_for_ctx(
 	/* Acquire custom csid */
 	rc = cam_custom_hw_mgr_acquire_csid_res(custom_ctx, in_port_info);
 	if (rc) {
-		CAM_ERR(CAM_CUSTOM, "Custom csid acquire failed rc %d");
+		CAM_ERR(CAM_CUSTOM, "Custom csid acquire failed rc %d",rc);
 		goto err;
 	}
 
