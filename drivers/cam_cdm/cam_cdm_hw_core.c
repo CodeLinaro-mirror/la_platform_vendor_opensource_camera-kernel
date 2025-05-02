@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -945,7 +946,7 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 				test_bit(CAM_CDM_RESET_HW_STATUS,
 					&core->cdm_status)) {
 			CAM_ERR_RATE_LIMIT(CAM_CDM,
-				"In error/reset state cnt=%d total cnt=%d cdm_status 0x%x",
+				"In error/reset state cnt=%d total cnt=%d cdm_status 0x%lx",
 				i, req->data->cmd_arrary_count,
 				core->cdm_status);
 			rc = -EAGAIN;
