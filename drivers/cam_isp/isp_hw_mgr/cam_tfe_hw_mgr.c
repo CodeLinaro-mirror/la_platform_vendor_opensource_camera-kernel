@@ -951,7 +951,7 @@ static int cam_tfe_hw_mgr_acquire_res_tfe_out_rdi(
 
 	tfe_out_res = &tfe_ctx->res_list_tfe_out[tfe_out_res_id & 0xFF];
 	for (i = 0; i < in_port->num_out_res; i++) {
-		out_port = &in_port->data[i];
+		out_port = &in_port->data_flex[i];
 
 		CAM_DBG(CAM_ISP, "i = %d, tfe_out_res_id = %d, out_port: %d",
 			i, tfe_out_res_id, out_port->res_id);
@@ -1009,7 +1009,7 @@ static int cam_tfe_hw_mgr_acquire_res_tfe_out_pixel(
 	struct cam_hw_intf                       *hw_intf;
 
 	for (i = 0; i < in_port->num_out_res; i++) {
-		out_port = &in_port->data[i];
+		out_port = &in_port->data_flex[i];
 		k = out_port->res_id & 0xFF;
 		if (k >= CAM_TFE_HW_OUT_RES_MAX) {
 			CAM_ERR(CAM_ISP, "invalid output resource type 0x%x",
@@ -1265,12 +1265,12 @@ static int cam_tfe_hw_mgr_acquire_res_tfe_csid_pxl(
 	csid_acquire.res_type = CAM_ISP_RESOURCE_PIX_PATH;
 	csid_acquire.res_id = path_res_id;
 	csid_acquire.in_port = in_port;
-	csid_acquire.out_port = in_port->data;
+	csid_acquire.out_port = in_port->data_flex;
 	csid_acquire.node_res = NULL;
 	csid_acquire.event_cb_prv = tfe_ctx;
 	csid_acquire.event_cb = cam_tfe_hw_mgr_event_handler;
 	if (in_port->num_out_res)
-		out_port = &(in_port->data[0]);
+		out_port = &(in_port->data_flex[0]);
 
 	if (tfe_ctx->is_tpg) {
 		if (tfe_ctx->res_list_tpg.hw_res[0]->hw_intf->hw_idx == 0)
@@ -1430,7 +1430,7 @@ acquire_successful:
 			csid_res_temp->hw_res[0]->hw_intf->hw_idx;
 		csid_acquire.sync_mode = CAM_ISP_HW_SYNC_SLAVE;
 		csid_acquire.node_res = NULL;
-		csid_acquire.out_port = in_port->data;
+		csid_acquire.out_port = in_port->data_flex;
 		csid_acquire.event_cb_prv = tfe_ctx;
 		csid_acquire.event_cb = cam_tfe_hw_mgr_event_handler;
 
@@ -1566,7 +1566,7 @@ static int cam_tfe_hw_mgr_acquire_res_tfe_csid_rdi(
 	tfe_hw_mgr = tfe_ctx->hw_mgr;
 
 	for (j = 0; j < in_port->num_out_res; j++) {
-		out_port = &in_port->data[j];
+		out_port = &in_port->data_flex[j];
 		path_res_id = cam_tfe_hw_mgr_get_tfe_csid_rdi_res_type(
 			out_port->res_id);
 
@@ -1736,7 +1736,7 @@ static int cam_tfe_hw_mgr_preprocess_port(
 
 
 	for (i = 0; i < in_port->num_out_res; i++) {
-		out_port = &in_port->data[i];
+		out_port = &in_port->data_flex[i];
 		CAM_DBG(CAM_ISP, "out_res id %d", out_port->res_id);
 
 		if (cam_tfe_hw_mgr_is_rdi_res(out_port->res_id)) {
@@ -2751,10 +2751,10 @@ static int cam_tfe_mgr_config_hw(void *hw_mgr_priv,
 				CAM_ERR(CAM_ISP, "Unexpected BL type %d",
 					cmd->flags);
 
-			cdm_cmd->cmd[i - skip].bl_addr.mem_handle = cmd->handle;
-			cdm_cmd->cmd[i - skip].offset = cmd->offset;
-			cdm_cmd->cmd[i - skip].len = cmd->len;
-			cdm_cmd->cmd[i - skip].arbitrate = false;
+			cdm_cmd->cmd_flex[i - skip].bl_addr.mem_handle = cmd->handle;
+			cdm_cmd->cmd_flex[i - skip].offset = cmd->offset;
+			cdm_cmd->cmd_flex[i - skip].len = cmd->len;
+			cdm_cmd->cmd_flex[i - skip].arbitrate = false;
 		}
 		cdm_cmd->cmd_arrary_count = cfg->num_hw_update_entries - skip;
 		reinit_completion(&ctx->config_done_complete);
@@ -2777,16 +2777,16 @@ static int cam_tfe_mgr_config_hw(void *hw_mgr_priv,
 	for (i = 0; i < cdm_cmd->cmd_arrary_count; i++) {
 		if (cdm_cmd->type == CAM_CDM_BL_CMD_TYPE_MEM_HANDLE) {
 			ctx->last_submit_bl_cmd.cmd[i].mem_handle =
-				cdm_cmd->cmd[i].bl_addr.mem_handle;
+				cdm_cmd->cmd_flex[i].bl_addr.mem_handle;
 
 			rc = cam_mem_get_io_buf(
-			cdm_cmd->cmd[i].bl_addr.mem_handle,
+			cdm_cmd->cmd_flex[i].bl_addr.mem_handle,
 			g_tfe_hw_mgr.mgr_common.cmd_iommu_hdl,
 			&ctx->last_submit_bl_cmd.cmd[i].hw_addr,
 			&ctx->last_submit_bl_cmd.cmd[i].len);
 		} else if (cdm_cmd->type ==
 			CAM_CDM_BL_CMD_TYPE_HW_IOVA) {
-			if (!cdm_cmd->cmd[i].bl_addr.hw_iova) {
+			if (!cdm_cmd->cmd_flex[i].bl_addr.hw_iova) {
 				CAM_ERR(CAM_CDM,
 					"Submitted Hw bl hw_iova is invalid %d:%d",
 					i, cdm_cmd->cmd_arrary_count);
@@ -2795,9 +2795,9 @@ static int cam_tfe_mgr_config_hw(void *hw_mgr_priv,
 			}
 			rc = 0;
 			ctx->last_submit_bl_cmd.cmd[i].hw_addr =
-			(uint64_t)cdm_cmd->cmd[i].bl_addr.hw_iova;
+			(uint64_t)cdm_cmd->cmd_flex[i].bl_addr.hw_iova;
 			ctx->last_submit_bl_cmd.cmd[i].len =
-			cdm_cmd->cmd[i].len + cdm_cmd->cmd[i].offset;
+			cdm_cmd->cmd_flex[i].len + cdm_cmd->cmd_flex[i].offset;
 			ctx->last_submit_bl_cmd.cmd[i].mem_handle = 0;
 		} else
 			CAM_INFO(CAM_ISP,
@@ -2805,11 +2805,11 @@ static int cam_tfe_mgr_config_hw(void *hw_mgr_priv,
 				cdm_cmd->type, i);
 
 		ctx->last_submit_bl_cmd.cmd[i].offset =
-			cdm_cmd->cmd[i].offset;
+			cdm_cmd->cmd_flex[i].offset;
 		ctx->last_submit_bl_cmd.cmd[i].type =
 			cdm_cmd->type;
 		ctx->last_submit_bl_cmd.cmd[i].input_len =
-		 cdm_cmd->cmd[i].len;
+		 cdm_cmd->cmd_flex[i].len;
 	}
 
 	if (!cfg->init_packet)
@@ -3734,7 +3734,7 @@ static int cam_isp_tfe_blob_hfr_update(
 
 	kmd_buf_info = blob_info->kmd_buf_info;
 	for (i = 0; i < hfr_config->num_ports; i++) {
-		port_hfr_config = &hfr_config->port_hfr_config[i];
+		port_hfr_config = &hfr_config->port_hfr_config_flex[i];
 		res_id_out = port_hfr_config->resource_type & 0xFF;
 
 		CAM_DBG(CAM_ISP, "hfr config idx %d, type=%d", i,
@@ -3915,7 +3915,7 @@ static int cam_isp_tfe_blob_clock_update(
 				CAM_ISP_HW_TFE_IN_RDI0) && (hw_mgr_res->res_id
 				<= CAM_ISP_HW_TFE_IN_RDI2)) {
 				for (j = 0; j < clock_config->num_rdi; j++)
-					clk_rate = max(clock_config->rdi_hz[j],
+					clk_rate = max(clock_config->rdi_hz_flex[j],
 						clk_rate);
 			} else {
 				CAM_ERR(CAM_ISP, "Invalid res_id %u",
@@ -4219,10 +4219,10 @@ static int cam_tfe_update_dual_config(
 				(j * (CAM_PACKET_MAX_PLANES *
 				dual_config->num_ports));
 
-			if (!dual_config->stripes[stp_index].port_id)
+			if (!dual_config->stripes_flex[stp_index].port_id)
 				continue;
 
-			outport_id = dual_config->stripes[stp_index].port_id;
+			outport_id = dual_config->stripes_flex[stp_index].port_id;
 			if (outport_id >= size_isp_out) {
 				CAM_ERR(CAM_UTIL,
 					"inval outport id:%d i:%d j:%d num ports:%d ",
@@ -4250,7 +4250,7 @@ static int cam_tfe_update_dual_config(
 			dual_isp_update_args.split_id = j;
 			dual_isp_update_args.res      = res;
 			dual_isp_update_args.stripe_config =
-				&dual_config->stripes[stp_index];
+				&dual_config->stripes_flex[stp_index];
 			rc = res->hw_intf->hw_ops.process_cmd(
 				res->hw_intf->hw_priv,
 				CAM_ISP_HW_CMD_STRIPE_UPDATE,
@@ -4289,7 +4289,7 @@ int cam_tfe_add_command_buffers(
 	 * packet
 	 */
 	cmd_desc = (struct cam_cmd_buf_desc *)
-			((uint8_t *)&prepare->packet->payload +
+			((uint8_t *)&prepare->packet->payload_flex +
 			prepare->packet->cmd_buf_offset);
 
 	CAM_DBG(CAM_ISP, "split id = %d, number of command buffers:%d",
@@ -4688,7 +4688,7 @@ static void cam_tfe_mgr_print_io_bufs(struct cam_tfe_hw_mgr  *hw_mgr,
 	iommu_hdl = hw_mgr->mgr_common.img_iommu_hdl;
 	sec_mmu_hdl = hw_mgr->mgr_common.img_iommu_hdl_secure;
 
-	io_cfg = (struct cam_buf_io_cfg *)((uint32_t *)&packet->payload +
+	io_cfg = (struct cam_buf_io_cfg *)((uint32_t *)&packet->payload_flex +
 		packet->io_configs_offset / 4);
 
 	for (i = 0; i < packet->num_io_configs; i++) {

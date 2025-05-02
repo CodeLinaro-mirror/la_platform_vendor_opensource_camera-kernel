@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -1055,7 +1055,7 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 	switch (csl_packet->header.op_code & 0xFFFFFF) {
 	case CAM_FLASH_PACKET_OPCODE_INIT: {
 		/* INIT packet*/
-		offset = (uint32_t *)((uint8_t *)&csl_packet->payload +
+		offset = (uint32_t *)((uint8_t *)&csl_packet->payload_flex +
 			csl_packet->cmd_buf_offset);
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 
@@ -1225,7 +1225,7 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 		break;
 	}
 	case CAM_FLASH_PACKET_OPCODE_SET_OPS: {
-		offset = (uint32_t *)((uint8_t *)&csl_packet->payload +
+		offset = (uint32_t *)((uint8_t *)&csl_packet->payload_flex +
 			csl_packet->cmd_buf_offset);
 		frm_offset = csl_packet->header.request_id %
 			MAX_PER_FRAME_ARRAY;
@@ -1263,7 +1263,7 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 		break;
 	}
 	case CAM_FLASH_PACKET_OPCODE_NON_REALTIME_SET_OPS: {
-		offset = (uint32_t *)((uint8_t *)&csl_packet->payload +
+		offset = (uint32_t *)((uint8_t *)&csl_packet->payload_flex +
 			csl_packet->cmd_buf_offset);
 
 		/* add support for handling i2c_data*/
@@ -1327,7 +1327,7 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 		i2c_reg_settings       = &i2c_data->streamoff_settings;
 		i2c_reg_settings->request_id = 0;
 		i2c_reg_settings->is_settings_valid = 1;
-		offset = (uint32_t *)((uint8_t *)&csl_packet->payload +
+		offset = (uint32_t *)((uint8_t *)&csl_packet->payload_flex +
 			csl_packet->cmd_buf_offset);
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 		rc = cam_sensor_i2c_command_parser(&fctrl->io_master_info,
@@ -1466,7 +1466,7 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 	switch (csl_packet->header.op_code & 0xFFFFFF) {
 	case CAM_FLASH_PACKET_OPCODE_INIT: {
 		/* INIT packet*/
-		offset = (uint32_t *)((uint8_t *)&csl_packet->payload +
+		offset = (uint32_t *)((uint8_t *)&csl_packet->payload_flex +
 			csl_packet->cmd_buf_offset);
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 		rc = cam_mem_get_cpu_buf(cmd_desc->mem_handle,
@@ -1557,7 +1557,7 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 		break;
 	}
 	case CAM_FLASH_PACKET_OPCODE_SET_OPS: {
-		offset = (uint32_t *)((uint8_t *)&csl_packet->payload +
+		offset = (uint32_t *)((uint8_t *)&csl_packet->payload_flex +
 			csl_packet->cmd_buf_offset);
 		frm_offset = csl_packet->header.request_id %
 			MAX_PER_FRAME_ARRAY;
@@ -1666,7 +1666,7 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 		break;
 	}
 	case CAM_FLASH_PACKET_OPCODE_NON_REALTIME_SET_OPS: {
-		offset = (uint32_t *)((uint8_t *)&csl_packet->payload +
+		offset = (uint32_t *)((uint8_t *)&csl_packet->payload_flex +
 			csl_packet->cmd_buf_offset);
 		fctrl->nrt_info.cmn_attr.is_settings_valid = true;
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);

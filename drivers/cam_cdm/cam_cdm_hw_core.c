@@ -829,26 +829,26 @@ static int cam_hw_cdm_arb_submit_bl(struct cam_hw_info *cdm_hw,
 	list_add_tail(&node->entry,
 		&core->bl_fifo[fifo_idx]
 		.bl_request_list);
-	cdm_cmd->cmd[i].arbitrate = true;
+	cdm_cmd->cmd_flex[i].arbitrate = true;
 	rc = cam_mem_get_cpu_buf(
-		cdm_cmd->cmd[i].bl_addr.mem_handle,
+		cdm_cmd->cmd_flex[i].bl_addr.mem_handle,
 		&cpu_addr, &len);
 	if (rc || !cpu_addr) {
 		CAM_ERR(CAM_OPE, "get cmd buffailed %x",
-			cdm_cmd->cmd[i].bl_addr
+			cdm_cmd->cmd_flex[i].bl_addr
 			.mem_handle);
 		return rc;
 	}
 	core->ops->cdm_write_genirq(
 		((uint32_t *)cpu_addr +
-		cdm_cmd->cmd[i].offset / 4 +
-		cdm_cmd->cmd[i].len / 4),
+		cdm_cmd->cmd_flex[i].offset / 4 +
+		cdm_cmd->cmd_flex[i].len / 4),
 		core->bl_fifo[fifo_idx].bl_tag - 1,
 		1, fifo_idx);
 	rc = cam_hw_cdm_bl_write(cdm_hw,
 		(uint32_t)hw_vaddr_ptr +
-		cdm_cmd->cmd[i].offset,
-		cdm_cmd->cmd[i].len + 7,
+		cdm_cmd->cmd_flex[i].offset,
+		cdm_cmd->cmd_flex[i].len + 7,
 		core->bl_fifo[fifo_idx].bl_tag - 1,
 		1, fifo_idx);
 	if (rc) {
@@ -856,7 +856,7 @@ static int cam_hw_cdm_arb_submit_bl(struct cam_hw_info *cdm_hw,
 			"CDM hw bl write failed tag=%d",
 			core->bl_fifo[fifo_idx].bl_tag -
 			1);
-			cam_mem_put_cpu_buf(cdm_cmd->cmd[i].bl_addr.mem_handle);
+			cam_mem_put_cpu_buf(cdm_cmd->cmd_flex[i].bl_addr.mem_handle);
 			list_del_init(&node->entry);
 			kfree(node);
 			return -EIO;
@@ -868,12 +868,12 @@ static int cam_hw_cdm_arb_submit_bl(struct cam_hw_info *cdm_hw,
 			"CDM hw commit failed tag=%d",
 			core->bl_fifo[fifo_idx].bl_tag -
 			1);
-			cam_mem_put_cpu_buf(cdm_cmd->cmd[i].bl_addr.mem_handle);
+			cam_mem_put_cpu_buf(cdm_cmd->cmd_flex[i].bl_addr.mem_handle);
 			list_del_init(&node->entry);
 			kfree(node);
 			return -EIO;
 	}
-	cam_mem_put_cpu_buf(cdm_cmd->cmd[i].bl_addr.mem_handle);
+	cam_mem_put_cpu_buf(cdm_cmd->cmd_flex[i].bl_addr.mem_handle);
 	return 0;
 }
 
@@ -933,11 +933,11 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 		dma_addr_t hw_vaddr_ptr = 0;
 		size_t len = 0;
 
-		if ((!cdm_cmd->cmd[i].len) &&
-			(cdm_cmd->cmd[i].len > 0x100000)) {
+		if ((!cdm_cmd->cmd_flex[i].len) &&
+			(cdm_cmd->cmd_flex[i].len > 0x100000)) {
 			CAM_ERR(CAM_CDM,
 				"cmd len(%d) is invalid cnt=%d total cnt=%d",
-				cdm_cmd->cmd[i].len, i,
+				cdm_cmd->cmd_flex[i].len, i,
 				req->data->cmd_arrary_count);
 			rc = -EINVAL;
 			break;
@@ -966,11 +966,11 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 
 		if (req->data->type == CAM_CDM_BL_CMD_TYPE_MEM_HANDLE) {
 			rc = cam_mem_get_io_buf(
-				cdm_cmd->cmd[i].bl_addr.mem_handle,
+				cdm_cmd->cmd_flex[i].bl_addr.mem_handle,
 				core->iommu_hdl.non_secure, &hw_vaddr_ptr,
 				&len);
 		} else if (req->data->type == CAM_CDM_BL_CMD_TYPE_HW_IOVA) {
-			if (!cdm_cmd->cmd[i].bl_addr.hw_iova) {
+			if (!cdm_cmd->cmd_flex[i].bl_addr.hw_iova) {
 				CAM_ERR(CAM_CDM,
 					"Hw bl hw_iova is invalid %d:%d",
 					i, req->data->cmd_arrary_count);
@@ -979,8 +979,8 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 			}
 			rc = 0;
 			hw_vaddr_ptr =
-				(uint64_t)cdm_cmd->cmd[i].bl_addr.hw_iova;
-			len = cdm_cmd->cmd[i].len + cdm_cmd->cmd[i].offset;
+				(uint64_t)cdm_cmd->cmd_flex[i].bl_addr.hw_iova;
+			len = cdm_cmd->cmd_flex[i].len + cdm_cmd->cmd_flex[i].offset;
 		} else {
 			CAM_ERR(CAM_CDM,
 				"Only mem hdl/hw va type is supported %d",
@@ -990,14 +990,14 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 		}
 
 		if ((!rc) && (hw_vaddr_ptr) && (len) &&
-			(len >= cdm_cmd->cmd[i].offset)) {
+			(len >= cdm_cmd->cmd_flex[i].offset)) {
 
-			if ((len - cdm_cmd->cmd[i].offset) <
-				cdm_cmd->cmd[i].len) {
+			if ((len - cdm_cmd->cmd_flex[i].offset) <
+				cdm_cmd->cmd_flex[i].len) {
 				CAM_ERR(CAM_CDM,
 					"Not enough buffer cmd offset: %u cmd length: %u",
-					cdm_cmd->cmd[i].offset,
-					cdm_cmd->cmd[i].len);
+					cdm_cmd->cmd_flex[i].offset,
+					cdm_cmd->cmd_flex[i].len);
 				rc = -EINVAL;
 				break;
 			}
@@ -1016,10 +1016,10 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 			} else {
 				rc = cam_hw_cdm_bl_write(cdm_hw,
 					((uint32_t)hw_vaddr_ptr +
-						cdm_cmd->cmd[i].offset),
-					(cdm_cmd->cmd[i].len - 1),
+						cdm_cmd->cmd_flex[i].offset),
+					(cdm_cmd->cmd_flex[i].len - 1),
 					core->bl_fifo[fifo_idx].bl_tag,
-					cdm_cmd->cmd[i].arbitrate,
+					cdm_cmd->cmd_flex[i].arbitrate,
 					fifo_idx);
 				if (rc) {
 					CAM_ERR(CAM_CDM,
@@ -1032,8 +1032,8 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 		} else {
 			CAM_ERR(CAM_CDM,
 				"Sanity check failed for hdl=%x len=%zu:%d",
-				cdm_cmd->cmd[i].bl_addr.mem_handle, len,
-				cdm_cmd->cmd[i].offset);
+				cdm_cmd->cmd_flex[i].bl_addr.mem_handle, len,
+				cdm_cmd->cmd_flex[i].offset);
 			CAM_ERR(CAM_CDM, "Sanity check failed for %d:%d",
 				i, req->data->cmd_arrary_count);
 			rc = -EINVAL;
@@ -1070,7 +1070,7 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 			}
 			core->bl_fifo[fifo_idx].bl_tag++;
 
-			if (cdm_cmd->cmd[i].enable_debug_gen_irq) {
+			if (cdm_cmd->cmd_flex[i].enable_debug_gen_irq) {
 				if (write_count == 0) {
 					write_count =
 						cam_hw_cdm_wait_for_bl_fifo(

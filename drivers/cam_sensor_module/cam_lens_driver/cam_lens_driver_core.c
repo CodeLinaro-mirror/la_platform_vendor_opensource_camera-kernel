@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -418,7 +418,7 @@ static int32_t cam_lens_driver_parse_get_motor_status_cmd(
 			get_motor_cmd->motorId_flag, get_motor_cmd->num_of_cmd);
 	/* Get IO config Buffer */
 	io_cfg = (struct cam_buf_io_cfg *) ((uint8_t *)
-			&csl_packet->payload +
+			&csl_packet->payload_flex +
 			csl_packet->io_configs_offset);
 
 	CAM_DBG(CAM_LENS_DRIVER, "number of IO configs: %d:",
@@ -648,7 +648,7 @@ static int32_t cam_lens_driver_motor_operation_parse(
 					get_motor_power_level_cmd->motorId);
 			/* Get IO config Buffer */
 			io_cfg = (struct cam_buf_io_cfg *) ((uint8_t *)
-					&csl_packet->payload +
+					&csl_packet->payload_flex +
 					csl_packet->io_configs_offset);
 
 			CAM_DBG(CAM_LENS_DRIVER, "number of IO configs: %d",
@@ -918,7 +918,7 @@ int32_t cam_lens_driver_config(struct cam_lens_driver_ctrl_t *l_ctrl,
 	case CAM_LENS_DRIVER_PACKET_OPCODE_INIT:{
 		struct cam_lens_driver_init_param *init_param = NULL;
 
-		offset = (uint32_t *)&csl_packet->payload;
+		offset = (uint32_t *)&csl_packet->payload_flex;
 		offset += csl_packet->cmd_buf_offset;
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 
@@ -971,7 +971,7 @@ int32_t cam_lens_driver_config(struct cam_lens_driver_ctrl_t *l_ctrl,
 		break;
 	}
 	case CAM_LENS_DRIVER_PACKET_OPCODE_MOTOR_OPERATION:
-		offset = (uint32_t *)&csl_packet->payload;
+		offset = (uint32_t *)&csl_packet->payload_flex;
 		offset += csl_packet->cmd_buf_offset;
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 		CAM_DBG(CAM_LENS_DRIVER, "Num of cmd buf : %d",
