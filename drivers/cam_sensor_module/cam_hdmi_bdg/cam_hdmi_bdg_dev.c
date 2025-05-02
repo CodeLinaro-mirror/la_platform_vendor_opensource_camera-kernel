@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/init.h>
 #include <linux/module.h>
@@ -179,10 +179,8 @@ static int hdmi_bdg_irq_handler_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 
-	enum of_gpio_flags flags;
-
-	hdmi_bdg_irq_gpio = of_get_named_gpio_flags(pdev->dev.of_node,
-			"hdmi_bdg_irq_pin", 0, &flags);
+	hdmi_bdg_irq_gpio = of_get_named_gpio(pdev->dev.of_node,
+			"hdmi_bdg_irq_pin", 0);
 	ret = gpio_request(hdmi_bdg_irq_gpio, "hdmi_bdg_irq_pin");
 	if (ret) {
 		CAM_ERR(CAM_SENSOR, "Error! can't request irq pin %x", hdmi_bdg_irq_gpio);
@@ -216,8 +214,7 @@ static int hdmi_bdg_irq_handler_probe(struct platform_device *pdev)
 	ret = cdev_add(hdmi_bdg_irq_handler_cdev, hdmi_bdg_irq_handler_dev, 1);
 	if (ret)
 		goto fail_cdev_del;
-	hdmi_bdg_irq_handler_class = class_create(THIS_MODULE,
-			HDMI_BDG_IRQ_HANDLER_DEVNAME);
+	hdmi_bdg_irq_handler_class = class_create(HDMI_BDG_IRQ_HANDLER_DEVNAME);
 	if (IS_ERR(hdmi_bdg_irq_handler_class)) {
 		ret = PTR_ERR(hdmi_bdg_irq_handler_class);
 		goto fail_cdev_del;
