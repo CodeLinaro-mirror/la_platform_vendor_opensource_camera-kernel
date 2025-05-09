@@ -906,10 +906,8 @@ int cam_common_mem_kdup(void **dst,
 
 	return 0;
 }
-EXPORT_SYMBOL(cam_common_mem_kdup);
 
 void cam_common_mem_free(void *memory)
 {
 	kvfree(memory);
 }
-EXPORT_SYMBOL(cam_common_mem_free);
