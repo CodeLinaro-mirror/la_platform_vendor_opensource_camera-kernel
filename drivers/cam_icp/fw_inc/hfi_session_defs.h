@@ -572,14 +572,6 @@ struct hfi_msg_bps_common {
 } __packed;
 
 /**
- * struct ipe_bps_destroy
- * @user_data: user data
- */
-struct ipe_bps_destroy {
-	uint64_t userdata;
-};
-
-/**
  * struct hfi_msg_ipe_frame_process
  * @status: result of ipe frame process command
  * @scratch_buf_addr: address of scratch buffer

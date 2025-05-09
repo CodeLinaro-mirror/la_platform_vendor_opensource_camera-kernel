@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/uaccess.h>
@@ -3373,8 +3373,6 @@ static int cam_icp_mgr_destroy_handle(
 	destroy_cmd->fw_handles_flex[0] = ctx_data->fw_handle;
 	destroy_cmd->user_data1 = PTR_TO_U64(ctx_data);
 	destroy_cmd->user_data2 = (uint64_t)0x0;
-	memcpy(destroy_cmd->payload.direct, &ctx_data->temp_payload,
-		sizeof(uint64_t));
 
 	rc = hfi_write_cmd(destroy_cmd);
 	if (rc) {
