@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_COMPAT_H_
@@ -39,7 +40,9 @@
 #include <linux/qcom-dma-mapping.h>
 #endif
 
-#if KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+MODULE_IMPORT_NS("DMA_BUF");
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
 MODULE_IMPORT_NS(DMA_BUF);
 #endif
 
