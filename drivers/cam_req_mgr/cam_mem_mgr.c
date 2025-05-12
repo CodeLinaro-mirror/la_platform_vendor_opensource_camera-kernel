@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -52,8 +52,8 @@ static void cam_mem_mgr_print_tbl(void)
 			min = do_div(tmp, 60);
 			hrs = do_div(tmp, 24);
 			CAM_INFO(CAM_MEM,
-				"%llu:%llu:%llu:%llu idx %d fd %d size %zu krefCount %d urefCount %d",
-				hrs, min, sec, ms, i, tbl.bufq[i].fd,
+				"%llu:%llu:%llu:%llu idx %d fd %d i_ino %lu size %zu krefCount %d urefCount %d",
+				hrs, min, sec, ms, i, tbl.bufq[i].fd, tbl.bufq[i].i_ino,
 				tbl.bufq[i].len, kref_read(&tbl.bufq[i].krefcount),
 				kref_read(&tbl.bufq[i].urefcount));
 		}
@@ -278,23 +278,25 @@ int cam_mem_get_io_buf(int32_t buf_handle, int32_t mmu_handle,
 	if (CAM_MEM_MGR_IS_SECURE_HDL(buf_handle))
 		rc = cam_smmu_get_stage2_iova(mmu_handle,
 			tbl.bufq[idx].fd,
+			tbl.bufq[idx].dma_buf,
 			iova_ptr,
 			len_ptr);
 	else
 		rc = cam_smmu_get_iova(mmu_handle,
 			tbl.bufq[idx].fd,
+			tbl.bufq[idx].dma_buf,
 			iova_ptr,
 			len_ptr);
 	if (rc) {
 		CAM_ERR(CAM_MEM,
-			"fail to map buf_hdl:0x%x, mmu_hdl: 0x%x for fd:%d",
-			buf_handle, mmu_handle, tbl.bufq[idx].fd);
+			"fail to map buf_hdl:0x%x, mmu_hdl: 0x%x for fd:%d i_ino:%lu",
+			buf_handle, mmu_handle, tbl.bufq[idx].fd, tbl.bufq[idx].i_ino);
 		goto handle_mismatch;
 	}
 
 	CAM_DBG(CAM_MEM,
-		"handle:0x%x fd:%d iova_ptr:%pK len_ptr:%llu",
-		mmu_handle, tbl.bufq[idx].fd, iova_ptr, *len_ptr);
+		"handle:0x%x fd:%d i_ino:%lu iova_ptr:%pK len_ptr:%llu",
+		mmu_handle, tbl.bufq[idx].fd, tbl.bufq[idx].i_ino, iova_ptr, *len_ptr);
 handle_mismatch:
 	mutex_unlock(&tbl.bufq[idx].q_lock);
 	return rc;
@@ -528,7 +530,8 @@ put_heaps:
 
 static int cam_mem_util_get_dma_buf(size_t len,
 	unsigned int cam_flags,
-	struct dma_buf **buf)
+	struct dma_buf **buf,
+	unsigned long *i_ino)
 {
 	int rc = 0;
 	struct dma_heap *heap;
@@ -623,6 +626,8 @@ static int cam_mem_util_get_dma_buf(size_t len,
 		}
 	}
 
+	*i_ino = file_inode((*buf)->file)->i_ino;
+
 	if (cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) {
 		if (num_vmids >= CAM_MAX_VMIDS) {
 			CAM_ERR(CAM_MEM, "Insufficient array size for vmids %d", num_vmids);
@@ -643,7 +648,7 @@ static int cam_mem_util_get_dma_buf(size_t len,
 
 	}
 
-	CAM_DBG(CAM_MEM, "Allocate success, len=%zu, *buf=%pK", len, *buf);
+	CAM_DBG(CAM_MEM, "Allocate success, len=%zu, *buf=%pK, i_ino=%lu", len, *buf, *i_ino);
 
 	if (tbl.alloc_profile_enable) {
 		CAM_GET_TIMESTAMP(ts2);
@@ -660,14 +665,16 @@ end:
 
 static int cam_mem_util_buffer_alloc(struct cam_mem_mgr_alloc_cmd *cmd,
 	struct dma_buf **dmabuf,
-	int *fd)
+	int *fd,
+	unsigned long *i_ino)
 {
 	int rc;
 	struct dma_buf *temp_dmabuf = NULL;
 
 	rc = cam_mem_util_get_dma_buf(cmd->len,
 		cmd->flags,
-		dmabuf);
+		dmabuf,
+		i_ino);
 	if (rc) {
 		CAM_ERR(CAM_MEM,
 			"Error allocating dma buf : len=%llu, flags=0x%x",
@@ -682,8 +689,8 @@ static int cam_mem_util_buffer_alloc(struct cam_mem_mgr_alloc_cmd *cmd,
 		goto put_buf;
 	}
 
-	CAM_DBG(CAM_MEM, "Alloc success : len=%zu, *dmabuf=%pK, fd=%d",
-		cmd->len, *dmabuf, *fd);
+	CAM_DBG(CAM_MEM, "Alloc success : len=%zu, *dmabuf=%pK, fd=%d, i_ino=%lu",
+		cmd->len, *dmabuf, *fd, *i_ino);
 
 	/*
 	 * increment the ref count so that ref count becomes 2 here
@@ -707,7 +714,8 @@ put_buf:
 static int cam_mem_util_get_dma_buf(size_t len,
 	unsigned int heap_id_mask,
 	unsigned int flags,
-	struct dma_buf **buf)
+	struct dma_buf **buf,
+	unsigned long *i_ino)
 {
 	int rc = 0;
 
@@ -722,6 +730,8 @@ static int cam_mem_util_get_dma_buf(size_t len,
 	*buf = ion_alloc(len, heap_id_mask, flags);
 	if (IS_ERR_OR_NULL(*buf))
 		return -ENOMEM;
+
+	*i_ino = file_inode((*buf)->file)->i_ino;
 
 	return rc;
 }
@@ -893,10 +903,10 @@ static int cam_mem_util_map_hw_va(uint32_t flags,
 		for (i = 0; i < num_hdls; i++) {
 			rc = cam_smmu_map_stage2_iova(mmu_hdls[i],
 				fd,
+				dmabuf,
 				dir,
 				hw_vaddr,
-				len,
-				dmabuf);
+				len);
 
 			if (rc < 0) {
 				CAM_ERR(CAM_MEM,
@@ -909,13 +919,13 @@ static int cam_mem_util_map_hw_va(uint32_t flags,
 		for (i = 0; i < num_hdls; i++) {
 			rc = cam_smmu_map_user_iova(mmu_hdls[i],
 				fd,
+				dmabuf,
 				dis_delayed_unmap,
 				dir,
 				(dma_addr_t *)hw_vaddr,
 				len,
 				region,
-				is_internal,
-				dmabuf);
+				is_internal);
 
 			if (rc < 0) {
 				CAM_ERR(CAM_MEM,
@@ -930,11 +940,12 @@ static int cam_mem_util_map_hw_va(uint32_t flags,
 multi_map_fail:
 	if (flags & CAM_MEM_FLAG_PROTECTED_MODE)
 		for (--i; i >= 0; i--)
-			cam_smmu_unmap_stage2_iova(mmu_hdls[i], fd);
+			cam_smmu_unmap_stage2_iova(mmu_hdls[i], fd, dmabuf);
 	else
 		for (--i; i >= 0; i--)
 			cam_smmu_unmap_user_iova(mmu_hdls[i],
 				fd,
+				dmabuf,
 				CAM_SMMU_REGION_IO);
 	return rc;
 
@@ -950,6 +961,7 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd *cmd)
 	size_t len;
 	uintptr_t kvaddr = 0;
 	size_t klen;
+	unsigned long i_ino = 0;
 
 	if (!atomic_read(&cam_mem_mgr_state)) {
 		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
@@ -971,11 +983,19 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd *cmd)
 
 	rc = cam_mem_util_buffer_alloc(cmd,
 		&dmabuf,
-		&fd);
+		&fd,
+		&i_ino);
 	if (rc) {
 		CAM_ERR(CAM_MEM,
 			"Ion Alloc failed, len=%llu, align=%llu, flags=0x%x, num_hdl=%d",
 			cmd->len, cmd->align, cmd->flags, cmd->num_hdl);
+		cam_mem_mgr_print_tbl();
+		return rc;
+	}
+
+	if (!dmabuf) {
+		CAM_ERR(CAM_MEM,
+			"Ion Alloc return NULL dmabuf! fd=%d, i_ino=%lu, len=%zu", fd, i_ino, len);
 		cam_mem_mgr_print_tbl();
 		return rc;
 	}
@@ -1029,6 +1049,7 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd *cmd)
 
 	mutex_lock(&tbl.bufq[idx].q_lock);
 	tbl.bufq[idx].fd = fd;
+	tbl.bufq[idx].i_ino = i_ino;
 	tbl.bufq[idx].dma_buf = NULL;
 	tbl.bufq[idx].flags = cmd->flags;
 	tbl.bufq[idx].buf_handle = GET_MEM_HANDLE(idx, fd);
@@ -1070,9 +1091,9 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd *cmd)
 	cmd->out.vaddr = 0;
 
 	CAM_DBG(CAM_MEM,
-		"fd=%d, flags=0x%x, num_hdl=%d, idx=%d, buf handle=%x, len=%zu",
+		"fd=%d, flags=0x%x, num_hdl=%d, idx=%d, buf handle=%x, len=%zu, i_ino=%lu",
 		cmd->out.fd, cmd->flags, cmd->num_hdl, idx, cmd->out.buf_handle,
-		tbl.bufq[idx].len);
+		tbl.bufq[idx].len, tbl.bufq[idx].i_ino);
 
 	return rc;
 
@@ -1085,14 +1106,14 @@ slot_fail:
 	return rc;
 }
 
-static bool cam_mem_util_is_map_internal(int32_t fd)
+static bool cam_mem_util_is_map_internal(int32_t fd, unsigned i_ino)
 {
 	uint32_t i;
 	bool is_internal = false;
 
 	mutex_lock(&tbl.m_lock);
 	for_each_set_bit(i, tbl.bitmap, tbl.bits) {
-		if (tbl.bufq[i].fd == fd) {
+		if (tbl.bufq[i].fd == fd && (tbl.bufq[i].i_ino == i_ino)) {
 			is_internal = tbl.bufq[i].is_internal;
 			break;
 		}
@@ -1110,6 +1131,7 @@ int cam_mem_mgr_map(struct cam_mem_mgr_map_cmd *cmd)
 	dma_addr_t hw_vaddr = 0;
 	size_t len = 0;
 	bool is_internal = false;
+	unsigned long i_ino;
 
 	if (!atomic_read(&cam_mem_mgr_state)) {
 		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
@@ -1139,7 +1161,9 @@ int cam_mem_mgr_map(struct cam_mem_mgr_map_cmd *cmd)
 		return -EINVAL;
 	}
 
-	is_internal = cam_mem_util_is_map_internal(cmd->fd);
+	i_ino = file_inode(dmabuf->file)->i_ino;
+
+	is_internal = cam_mem_util_is_map_internal(cmd->fd, i_ino);
 
 	idx = cam_mem_get_slot();
 	if (idx < 0) {
@@ -1177,6 +1201,7 @@ int cam_mem_mgr_map(struct cam_mem_mgr_map_cmd *cmd)
 
 	mutex_lock(&tbl.bufq[idx].q_lock);
 	tbl.bufq[idx].fd = cmd->fd;
+	tbl.bufq[idx].i_ino = i_ino;
 	tbl.bufq[idx].dma_buf = NULL;
 	tbl.bufq[idx].flags = cmd->flags;
 	spin_lock(&tbl.bufq[idx].idx_lock);
@@ -1209,9 +1234,9 @@ int cam_mem_mgr_map(struct cam_mem_mgr_map_cmd *cmd)
 	cmd->out.vaddr = 0;
 	cmd->out.size = (uint32_t)len;
 	CAM_DBG(CAM_MEM,
-		"fd=%d, flags=0x%x, num_hdl=%d, idx=%d, buf handle=%x, len=%zu",
+		"fd=%d, flags=0x%x, num_hdl=%d, idx=%d, buf handle=%x, len=%zu, i_ino=%lu",
 		cmd->fd, cmd->flags, cmd->num_hdl, idx, cmd->out.buf_handle,
-		tbl.bufq[idx].len);
+		tbl.bufq[idx].len, tbl.bufq[idx].i_ino);
 
 	return rc;
 map_fail:
@@ -1230,6 +1255,8 @@ static int cam_mem_util_unmap_hw_va(int32_t idx,
 	int32_t *mmu_hdls;
 	int num_hdls;
 	int fd;
+	struct dma_buf *dma_buf;
+	unsigned long i_ino;
 	int rc = 0;
 
 	if (idx >= CAM_MEM_BUFQ_MAX || idx <= 0) {
@@ -1241,18 +1268,20 @@ static int cam_mem_util_unmap_hw_va(int32_t idx,
 	mmu_hdls = tbl.bufq[idx].hdls;
 	num_hdls = tbl.bufq[idx].num_hdl;
 	fd = tbl.bufq[idx].fd;
+	dma_buf = tbl.bufq[idx].dma_buf;
+	i_ino = tbl.bufq[idx].i_ino;
 
 	CAM_DBG(CAM_MEM,
-		"unmap_hw_va : idx=%d, fd=%x, flags=0x%x, num_hdls=%d, client=%d",
-		idx, fd, flags, num_hdls, client);
+		"unmap_hw_va : idx=%d, fd=%x, i_ino=%lu, flags=0x%x, num_hdls=%d, client=%d",
+		idx, fd, i_ino, flags, num_hdls, client);
 
 	if (flags & CAM_MEM_FLAG_PROTECTED_MODE) {
 		for (i = 0; i < num_hdls; i++) {
-			rc = cam_smmu_unmap_stage2_iova(mmu_hdls[i], fd);
+			rc = cam_smmu_unmap_stage2_iova(mmu_hdls[i], fd, dma_buf);
 			if (rc < 0) {
 				CAM_ERR(CAM_MEM,
-					"Failed in secure unmap, i=%d, fd=%d, mmu_hdl=%d, rc=%d",
-					i, fd, mmu_hdls[i], rc);
+					"Failed in secure unmap, i=%d, fd=%d, i_ino=%lu, mmu_hdl=%d, rc=%d",
+					i, fd, i_ino, mmu_hdls[i], rc);
 				goto unmap_end;
 			}
 		}
@@ -1260,7 +1289,7 @@ static int cam_mem_util_unmap_hw_va(int32_t idx,
 		for (i = 0; i < num_hdls; i++) {
 			if (client == CAM_SMMU_MAPPING_USER) {
 				rc = cam_smmu_unmap_user_iova(mmu_hdls[i],
-					fd, region);
+					fd, dma_buf, region);
 			} else if (client == CAM_SMMU_MAPPING_KERNEL) {
 				rc = cam_smmu_unmap_kernel_iova(mmu_hdls[i],
 					tbl.bufq[idx].dma_buf, region);
@@ -1272,8 +1301,8 @@ static int cam_mem_util_unmap_hw_va(int32_t idx,
 			}
 			if (rc < 0) {
 				CAM_ERR(CAM_MEM,
-					"Failed in unmap, i=%d, fd=%d, mmu_hdl=%d, region=%d, rc=%d",
-					i, fd, mmu_hdls[i], region, rc);
+					"Failed in unmap, i=%d, fd=%d, i_ino=%lu, mmu_hdl=%d, region=%d, rc=%d",
+					i, fd, i_ino, mmu_hdls[i], region, rc);
 				goto unmap_end;
 			}
 		}
@@ -1329,6 +1358,7 @@ static int cam_mem_mgr_cleanup_table(void)
 			tbl.bufq[i].dma_buf = NULL;
 		}
 		tbl.bufq[i].fd = -1;
+		tbl.bufq[i].i_ino = 0;
 		tbl.bufq[i].flags = 0;
 		tbl.bufq[i].buf_handle = -1;
 		tbl.bufq[i].vaddr = 0;
@@ -1432,15 +1462,17 @@ static void cam_mem_util_unmap(int32_t idx)
 		sizeof(int32_t) * CAM_MEM_MMU_MAX_HANDLE);
 
 	CAM_DBG(CAM_MEM,
-		"Ion buf at idx = %d freeing fd = %d, imported %d, dma_buf %pK",
+		"Ion buf at idx = %d freeing fd = %d, imported %d, dma_buf %pK, i_ino %lu",
 		idx, tbl.bufq[idx].fd,
 		tbl.bufq[idx].is_imported,
-		tbl.bufq[idx].dma_buf);
+		tbl.bufq[idx].dma_buf,
+		tbl.bufq[idx].i_ino);
 
 	if (tbl.bufq[idx].dma_buf)
 		dma_buf_put(tbl.bufq[idx].dma_buf);
 
 	tbl.bufq[idx].fd = -1;
+	tbl.bufq[idx].i_ino = 0;
 	tbl.bufq[idx].dma_buf = NULL;
 	tbl.bufq[idx].is_imported = false;
 	tbl.bufq[idx].is_internal = false;
@@ -1645,6 +1677,7 @@ int cam_mem_mgr_request_mem(struct cam_mem_mgr_request_desc *inp,
 	int32_t idx;
 	int32_t smmu_hdl = 0;
 	int32_t num_hdl = 0;
+	unsigned long i_ino = 0;
 
 	enum cam_smmu_region_id region = CAM_SMMU_REGION_SHARED;
 
@@ -1667,7 +1700,8 @@ int cam_mem_mgr_request_mem(struct cam_mem_mgr_request_desc *inp,
 
 	rc = cam_mem_util_get_dma_buf(inp->size,
 		inp->flags,
-		&buf);
+		&buf,
+		&i_ino);
 
 	if (rc) {
 		CAM_ERR(CAM_MEM, "ION alloc failed for shared buffer");
@@ -1727,6 +1761,7 @@ int cam_mem_mgr_request_mem(struct cam_mem_mgr_request_desc *inp,
 	mem_handle = GET_MEM_HANDLE(idx, ion_fd);
 	tbl.bufq[idx].dma_buf = buf;
 	tbl.bufq[idx].fd = -1;
+	tbl.bufq[idx].i_ino = i_ino;
 	tbl.bufq[idx].flags = inp->flags;
 	spin_lock(&tbl.bufq[idx].idx_lock);
 	tbl.bufq[idx].buf_handle = mem_handle;
@@ -1751,6 +1786,8 @@ int cam_mem_mgr_request_mem(struct cam_mem_mgr_request_desc *inp,
 	out->len = inp->size;
 	out->region = region;
 
+	CAM_DBG(CAM_MEM, "idx=%d, dmabuf=%pK, i_ino=%lu, flags=0x%x, mem_handle=0x%x",
+			idx, buf, i_ino, inp->flags, mem_handle);
 	return rc;
 slot_fail:
 	cam_smmu_unmap_kernel_iova(inp->smmu_hdl,
@@ -1828,6 +1865,7 @@ int cam_mem_mgr_reserve_memory_region(struct cam_mem_mgr_request_desc *inp,
 	int32_t idx;
 	int32_t smmu_hdl = 0;
 	int32_t num_hdl = 0;
+	unsigned long i_ino = 0;
 
 	if (!atomic_read(&cam_mem_mgr_state)) {
 		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
@@ -1851,7 +1889,8 @@ int cam_mem_mgr_reserve_memory_region(struct cam_mem_mgr_request_desc *inp,
 
 	rc = cam_mem_util_get_dma_buf(inp->size,
 		0,
-		&buf);
+		&buf,
+		&i_ino);
 
 	if (rc) {
 		CAM_ERR(CAM_MEM, "ION alloc failed for sec heap buffer");
@@ -1883,6 +1922,7 @@ int cam_mem_mgr_reserve_memory_region(struct cam_mem_mgr_request_desc *inp,
 	mutex_lock(&tbl.bufq[idx].q_lock);
 	mem_handle = GET_MEM_HANDLE(idx, ion_fd);
 	tbl.bufq[idx].fd = -1;
+	tbl.bufq[idx].i_ino = i_ino;
 	tbl.bufq[idx].dma_buf = buf;
 	tbl.bufq[idx].flags = inp->flags;
 	spin_lock(&tbl.bufq[idx].idx_lock);
