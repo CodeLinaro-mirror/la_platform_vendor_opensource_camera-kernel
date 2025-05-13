@@ -994,7 +994,6 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 	if (!csl_packet->num_cmd_buf) {
 		CAM_ERR(CAM_FLASH, "Invalid num_cmd_buffer = %d",
 			csl_packet->num_cmd_buf);
-		cam_mem_put_cpu_buf(config.packet_handle);
 		rc = -EINVAL;
 		goto end;
 	}
