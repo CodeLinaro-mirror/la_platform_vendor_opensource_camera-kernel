@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -12,6 +12,7 @@
 #include "cam_sensor_util.h"
 #include "cam_mem_mgr.h"
 #include "cam_res_mgr_api.h"
+#include "cam_common_util.h"
 
 #define CAM_SENSOR_PINCTRL_STATE_SLEEP "cam_suspend"
 #define CAM_SENSOR_PINCTRL_STATE_DEFAULT "cam_default"
@@ -220,9 +221,9 @@ static int32_t cam_sensor_handle_random_write(
 
 	for (cnt = 0; cnt < payload_count; cnt++) {
 		i2c_list->i2c_settings.reg_setting[cnt].reg_addr =
-			cam_cmd_i2c_random_wr->random_wr_payload[cnt].reg_addr;
+			cam_cmd_i2c_random_wr->random_wr_payload_flex[cnt].reg_addr;
 		i2c_list->i2c_settings.reg_setting[cnt].reg_data =
-			cam_cmd_i2c_random_wr->random_wr_payload[cnt].reg_data;
+			cam_cmd_i2c_random_wr->random_wr_payload_flex[cnt].reg_data;
 		i2c_list->i2c_settings.reg_setting[cnt].data_mask = 0;
 	}
 	*offset = cnt;
@@ -273,7 +274,7 @@ static int32_t cam_sensor_handle_continuous_write(
 		i2c_list->i2c_settings.reg_setting[cnt].reg_addr =
 			cam_cmd_i2c_continuous_wr->reg_addr;
 		i2c_list->i2c_settings.reg_setting[cnt].reg_data =
-			cam_cmd_i2c_continuous_wr->data_read[cnt].reg_data;
+			cam_cmd_i2c_continuous_wr->data_read_flex[cnt].reg_data;
 		i2c_list->i2c_settings.reg_setting[cnt].data_mask = 0;
 	}
 	*offset = cnt;
@@ -425,7 +426,7 @@ static int32_t cam_sensor_handle_random_read(
 
 		for (cnt = 0; cnt < payload_count; cnt++) {
 			i2c_list->i2c_settings.reg_setting[cnt].reg_addr =
-				cmd_i2c_random_rd->data_read[cnt].reg_data;
+				cmd_i2c_random_rd->data_read_flex[cnt].reg_data;
 		}
 		*offset = cnt;
 		*list = &(i2c_list->list);
@@ -1392,9 +1393,9 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 
 			for (i = 0; i < pwr_cmd->count; i++, pwr_up++) {
 				power_info->power_setting[pwr_up].seq_type =
-				pwr_cmd->power_settings[i].power_seq_type;
+				pwr_cmd->power_settings_flex[i].power_seq_type;
 				power_info->power_setting[pwr_up].config_val =
-				pwr_cmd->power_settings[i].config_val_low;
+				pwr_cmd->power_settings_flex[i].config_val_low;
 				power_info->power_setting[pwr_up].delay = 0;
 				if (i) {
 					scr = scr +
@@ -1501,9 +1502,9 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 				pwr_settings =
 				&power_info->power_down_setting[pwr_down];
 				pwr_settings->seq_type =
-				pwr_cmd->power_settings[i].power_seq_type;
+				pwr_cmd->power_settings_flex[i].power_seq_type;
 				pwr_settings->config_val =
-				pwr_cmd->power_settings[i].config_val_low;
+				pwr_cmd->power_settings_flex[i].config_val_low;
 				power_info->power_down_setting[pwr_down].delay
 					= 0;
 				if (i) {
@@ -2015,44 +2016,6 @@ static int cam_config_mclk_reg(struct cam_sensor_power_ctrl_t *ctrl,
 	return rc;
 }
 
-int cam_sensor_util_request_power_domain(struct cam_hw_soc_info *soc_info)
-{
-	int rc = 0;
-
-	rc = cam_soc_util_configure_pd(soc_info);
-	if (rc) {
-		CAM_ERR(CAM_SENSOR, "Failed to configure Genpd");
-		return rc;
-	}
-
-	pm_runtime_enable(soc_info->dev);
-
-	/*
-	 * Doing a pm_runtime_get_sync() and pm_runtime_put_sync() after pm_runtime_enable
-	 * makes sure that the GDSC is off and only enabled later by the usecase when there
-	 * is such a requirement.
-	 */
-	cam_soc_util_power_domain_enable_default(soc_info);
-	cam_soc_util_power_domain_disable_default(soc_info);
-
-	return rc;
-}
-
-void cam_sensor_util_release_power_domain(struct cam_hw_soc_info *soc_info)
-{
-	int i;
-
-	pm_runtime_disable(soc_info->dev);
-
-	for (i = 0; i < soc_info->num_genpd; i++) {
-		if (!soc_info->genpd)
-			continue;
-		if (!soc_info->genpd[i])
-			continue;
-		dev_pm_domain_detach(soc_info->genpd[i], true);
-	}
-}
-
 int cam_sensor_core_power_up(struct cam_sensor_power_ctrl_t *ctrl,
 		struct cam_hw_soc_info *soc_info)
 {
@@ -2252,12 +2215,6 @@ int cam_sensor_core_power_up(struct cam_sensor_power_ctrl_t *ctrl,
 					power_setting->seq_val, num_vreg);
 			}
 
-			rc = cam_soc_util_power_domain_enable_default(soc_info);
-			if (rc < 0) {
-				CAM_ERR(CAM_SENSOR,
-					"Power domain enable failed with rc = %d", rc);
-				goto power_up_failed;
-			}
 			rc = msm_cam_sensor_handle_reg_gpio(
 				power_setting->seq_type,
 				gpio_num_info, 1);
@@ -2351,8 +2308,6 @@ power_up_failed:
 				CAM_ERR(CAM_SENSOR, "seq_val:%d > num_vreg: %d",
 					power_setting->seq_val, num_vreg);
 			}
-
-			cam_soc_util_power_domain_disable_default(soc_info);
 
 			msm_cam_sensor_handle_reg_gpio(power_setting->seq_type,
 				gpio_num_info, GPIOF_OUT_INIT_LOW);
@@ -2528,8 +2483,6 @@ int cam_sensor_util_power_down(struct cam_sensor_power_ctrl_t *ctrl,
 			} else
 				CAM_ERR(CAM_SENSOR,
 					"error in power up/down seq");
-
-			cam_soc_util_power_domain_disable_default(soc_info);
 
 			ret = msm_cam_sensor_handle_reg_gpio(pd->seq_type,
 				gpio_num_info, GPIOF_OUT_INIT_LOW);

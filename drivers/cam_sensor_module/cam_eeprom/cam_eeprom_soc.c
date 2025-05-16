@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -12,6 +13,7 @@
 
 #include "cam_eeprom_soc.h"
 #include "cam_debug_util.h"
+#include "cam_common_util.h"
 
 #define cam_eeprom_spi_parse_cmd(spi_dev, name, out)          \
 	{                                                     \
@@ -381,19 +383,6 @@ int cam_eeprom_parse_dt(struct cam_eeprom_ctrl_t *e_ctrl)
 	}
 
 	rc = cam_sensor_util_regulator_powerup(soc_info);
-	if (rc < 0)
-		return rc;
-
-	rc = cam_sensor_util_request_power_domain(soc_info);
-	if (rc < 0)
-		return rc;
-
 	return rc;
 }
 
-void cam_eeprom_release_power_domain(struct cam_eeprom_ctrl_t *e_ctrl)
-{
-	struct cam_hw_soc_info *soc_info = &e_ctrl->soc_info;
-
-	cam_sensor_util_release_power_domain(soc_info);
-}

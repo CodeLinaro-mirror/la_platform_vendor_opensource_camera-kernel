@@ -136,8 +136,7 @@ static int cam_sensor_init_subdev_params(struct cam_sensor_ctrl_t *s_ctrl)
 		&cam_sensor_internal_ops;
 	s_ctrl->v4l2_dev_str.ops =
 		&cam_sensor_subdev_ops;
-	strlcpy(s_ctrl->device_name, CAMX_SENSOR_DEV_NAME,
-		sizeof(s_ctrl->device_name));
+	strscpy(s_ctrl->device_name, CAMX_SENSOR_DEV_NAME, CAM_CTX_DEV_NAME_MAX_LENGTH);
 	s_ctrl->v4l2_dev_str.name =
 		s_ctrl->device_name;
 	s_ctrl->v4l2_dev_str.sd_flags =
@@ -366,7 +365,6 @@ static void cam_sensor_component_unbind(struct device *dev,
 	mutex_lock(&(s_ctrl->cam_sensor_mutex));
 	cam_sensor_shutdown(s_ctrl);
 	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
-	cam_sensor_release_power_domain(s_ctrl);
 	cam_unregister_subdev(&(s_ctrl->v4l2_dev_str));
 	soc_info = &s_ctrl->soc_info;
 	for (i = 0; i < soc_info->num_clk; i++)
@@ -414,7 +412,6 @@ int cam_sensor_i2c_driver_remove_common(struct i2c_client *client)
 	mutex_lock(&(s_ctrl->cam_sensor_mutex));
 	cam_sensor_shutdown(s_ctrl);
 	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
-	cam_sensor_release_power_domain(s_ctrl);
 	rc = cam_unregister_subdev(&(s_ctrl->v4l2_dev_str));
 
 	if (rc)

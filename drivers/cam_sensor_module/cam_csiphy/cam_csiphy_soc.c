@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_csiphy_soc.h"
@@ -34,6 +34,7 @@ static int cam_io_phy_dump(void __iomem *base_addr,
 	char          line_str[128];
 	char         *p_str;
 	int           i;
+	int           bytes_written, used_size;
 	uint32_t      data;
 
 	CAM_INFO(CAM_CSIPHY, "addr=%pK offset=0x%x size=%d",
@@ -43,20 +44,26 @@ static int cam_io_phy_dump(void __iomem *base_addr,
 		return -EINVAL;
 
 	line_str[0] = '\0';
+	used_size = 0;
 	p_str = line_str;
 	for (i = 0; i < size; i++) {
 		if (i % NUM_REGISTER_PER_LINE == 0) {
-			snprintf(p_str, 12, "0x%08x: ",
+			bytes_written = scnprintf(p_str,
+				sizeof(line_str) - used_size, "0x%08x: ",
 				REG_OFFSET(start_offset, i));
-			p_str += 11;
+			p_str += bytes_written;
+			used_size += bytes_written;
 		}
 		data = readl_relaxed(base_addr + REG_OFFSET(start_offset, i));
-		snprintf(p_str, 9, "%08x ", data);
-		p_str += 8;
+		bytes_written = scnprintf(p_str, sizeof(line_str) - used_size,
+			"%08x  ", data);
+		p_str += bytes_written;
+		used_size += bytes_written;
 		if ((i + 1) % NUM_REGISTER_PER_LINE == 0) {
-			CAM_ERR(CAM_CSIPHY, "%s", line_str);
+			CAM_DBG(CAM_IO_DUMP, "%s", line_str);
 			line_str[0] = '\0';
 			p_str = line_str;
+			used_size = 0;
 		}
 	}
 	if (line_str[0] != '\0')
