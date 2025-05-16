@@ -897,10 +897,9 @@ static int cam_ir_led_platform_probe(struct platform_device *pdev)
 	return rc;
 }
 
-static int cam_ir_led_platform_remove(struct platform_device *pdev)
+void cam_ir_led_platform_remove(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &cam_ir_led_component_ops);
-	return 0;
 }
 
 static struct cam_ir_led_table cam_pmic_ir_led_table = {
@@ -964,11 +963,13 @@ int32_t cam_ir_led_init_module(void)
 
 	return rc;
 }
+EXPORT_SYMBOL(cam_ir_led_init_module);
 
 void cam_ir_led_exit_module(void)
 {
 	platform_driver_unregister(&cam_ir_led_platform_driver);
 }
+EXPORT_SYMBOL(cam_ir_led_exit_module);
 
 MODULE_DESCRIPTION("CAM IR_LED");
 MODULE_LICENSE("GPL v2");
