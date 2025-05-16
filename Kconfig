@@ -22,6 +22,14 @@ config SPECTRA_JPEG
 	  This module interact with tfe HW for
 	  snapshot processing.
 
+config SPECTRA_LRME
+         bool "enable camera lrme module"
+         help
+           This is enabling camera LRME module.
+           camera lrme module will be functional.
+           This module interact with lrme HW for
+           snapshot processing.
+
 config SPECTRA_SENSOR
 	bool "enable camera sensor module"
 	help

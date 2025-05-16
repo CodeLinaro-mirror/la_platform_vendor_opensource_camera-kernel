@@ -4217,10 +4217,10 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 				CAM_ERR(CAM_ISP, "Unexpected BL type %d",
 					cmd->flags);
 
-			cdm_cmd->cmd[i - skip].bl_addr.mem_handle = cmd->handle;
-			cdm_cmd->cmd[i - skip].offset = cmd->offset;
-			cdm_cmd->cmd[i - skip].len = cmd->len;
-			cdm_cmd->cmd[i - skip].arbitrate = false;
+			cdm_cmd->cmd_flex[i - skip].bl_addr.mem_handle = cmd->handle;
+			cdm_cmd->cmd_flex[i - skip].offset = cmd->offset;
+			cdm_cmd->cmd_flex[i - skip].len = cmd->len;
+			cdm_cmd->cmd_flex[i - skip].arbitrate = false;
 		}
 		cdm_cmd->cmd_arrary_count = cfg->num_hw_update_entries - skip;
 
@@ -5170,7 +5170,7 @@ static int cam_isp_blob_ubwc_update(
 
 		kmd_buf_info = blob_info->kmd_buf_info;
 		for (i = 0; i < ubwc_config->num_ports; i++) {
-			ubwc_plane_cfg = &ubwc_config->ubwc_plane_cfg[i][0];
+			ubwc_plane_cfg = &ubwc_config->ubwc_plane_cfg_array_flex[i][0];
 			res_id_out = ubwc_plane_cfg->port_type & 0xFF;
 
 			CAM_DBG(CAM_ISP, "UBWC config idx %d, port_type=%d", i,
@@ -5340,7 +5340,7 @@ static int cam_isp_blob_ubwc_update_v2(
 
 	kmd_buf_info = blob_info->kmd_buf_info;
 	for (i = 0; i < ubwc_config->num_ports; i++) {
-		ubwc_plane_cfg = &ubwc_config->ubwc_plane_cfg[i][0];
+		ubwc_plane_cfg = &ubwc_config->ubwc_plane_cfg_array_flex[i][0];
 		res_id_out = ubwc_plane_cfg->port_type & 0xFF;
 
 		CAM_DBG(CAM_ISP, "UBWC config idx %d, port_type=%d", i,
