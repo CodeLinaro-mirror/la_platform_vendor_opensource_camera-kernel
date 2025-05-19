@@ -1376,23 +1376,24 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 	void *ptr = NULL, *scr;
 	struct common_header *cmm_hdr = NULL;
 	struct cam_cmd_power *pwr_cmd =
-		kzalloc(sizeof(struct cam_cmd_power), GFP_KERNEL);
+		kzalloc(cmd_buf_len, GFP_KERNEL);
 	if (!pwr_cmd) {
         CAM_DBG(CAM_SENSOR, "pwr_cmd memory allocation failed!");
 		return -ENOMEM;
 	}
+	memcpy(pwr_cmd, cmd_buf, cmd_buf_len);
+        ptr = pwr_cmd;
+	cmm_hdr = (struct common_header *)pwr_cmd;
 
-	if (!cmd_length || cmd_buf_len < (size_t)cmd_length ||
+	if (!pwr_cmd || !cmd_length || cmd_buf_len < (size_t)cmd_length ||
 		cam_sensor_validate(pwr_cmd, cmd_buf_len)) {
-		CAM_ERR(CAM_SENSOR, "Invalid Args: cmd_length: %d cmd_buf_len %d",
-			cmd_length, cmd_buf_len);
+		CAM_ERR(CAM_SENSOR, "Invalid Args: pwr_cmd %pK, cmd_length: %d",
+			pwr_cmd, cmd_length);
 		rc = -EINVAL;
 		goto free_power_command;
 	}
 
         memcpy(pwr_cmd, cmd_buf, sizeof(struct cam_cmd_power));
-        ptr = pwr_cmd;
-	cmm_hdr = (struct common_header *)pwr_cmd;
 
 	power_info->power_setting_size = 0;
 	power_info->power_setting =
