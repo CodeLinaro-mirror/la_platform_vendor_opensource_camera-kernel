@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -430,6 +430,10 @@ static int cam_pm_sensor_suspend(struct device *pdev)
 	cam_cmd.handle_type = CAM_HANDLE_USER_POINTER;
 	cam_cmd.size        = 0;
 	s_ctrl = dev_get_drvdata(pdev);
+        if (!s_ctrl) {
+		CAM_ERR(CAM_SENSOR, "s_ctrl is NULL");
+		return rc;
+	}
 	rc = cam_sensor_driver_cmd(s_ctrl, &cam_cmd);
 	/* will return success if its already powered down or device is not connected */
 	if (rc == -EINVAL || rc == -ENODEV) {
@@ -439,8 +443,10 @@ static int cam_pm_sensor_suspend(struct device *pdev)
 	else {
 		s_ctrl->no_lpm_mode_enabled = false;
 	}
+
 	if (rc < 0)
 		CAM_ERR(CAM_SENSOR, "Failed to I2C_POWER_DOWN sensor");
+
 	return rc;
 }
 
@@ -464,8 +470,7 @@ static int cam_pm_sensor_hibernation_suspend(struct device *pdev)
 	if (rc == -EINVAL || rc == -ENODEV) {
 		s_ctrl->no_lpm_mode_enabled = true;
 		rc = 0;
-	}
-	else {
+	} else {
 		s_ctrl->no_lpm_mode_enabled = false;
 	}
 #else
