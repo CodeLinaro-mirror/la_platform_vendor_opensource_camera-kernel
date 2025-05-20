@@ -1247,7 +1247,7 @@ static int __cam_isp_ctx_enqueue_init_request(
 			req_isp_old->hw_update_data.mup_val = req_isp_new->hw_update_data.mup_val;
 			req_old->request_id = req->request_id;
 
-			 list_add_tail(&req->list, &ctx->free_req_list);
+			list_add_tail(&req->list, &ctx->free_req_list);
 		}
 	} else {
 		CAM_WARN(CAM_ISP,
@@ -4830,7 +4830,7 @@ static int cam_isp_ctx_reapply_iq_config(struct cam_context *ctx, struct cam_ctx
 	if (!rc) {
 		if (reapply_type != CAM_CONFIG_REAPPLY_NONE) {
 			list_del_init(&req->list);
-			list_add_tail(&req->list, &ctx->free_req_list);
+			__cam_isp_ctx_move_req_to_free_list(ctx, req);
 			CAM_DBG(CAM_REQ, "request %lld config success ctx %u",
 				req->request_id, ctx->ctx_id);
 		} else {
@@ -4854,7 +4854,7 @@ static int cam_isp_ctx_reapply_iq_config(struct cam_context *ctx, struct cam_ctx
 		}
 	} else if (rc == -EALREADY) {
 		list_del_init(&req->list);
-		list_add(&req->list, &ctx->free_req_list);
+		__cam_isp_ctx_move_req_to_free_list(ctx, req);
 		CAM_DBG(CAM_REQ, "move request %lld to free list ctx %u",
 			req->request_id, ctx->ctx_id);
 	} else {
@@ -4916,7 +4916,7 @@ static int __cam_isp_ctx_apply_dropped_req_in_bubble_state(
 		}
 		ctx_isp->active_req_cnt--;
 		list_del_init(&req->list);
-		list_add_tail(&req->list, &ctx->free_req_list);
+		__cam_isp_ctx_move_req_to_free_list(ctx, req);
 	}
 
 apply_wait:
@@ -4966,7 +4966,7 @@ apply_wait:
 			}
 			ctx_isp->waitlist_req_cnt--;
 			list_del_init(&req->list);
-			list_add_tail(&req->list, &ctx->free_req_list);
+			__cam_isp_ctx_move_req_to_free_list(ctx, req);
 		} else {
 			reapply_type = CAM_CONFIG_REAPPLY_NONE;
 			*last_applied_ife_req = req->request_id;
@@ -5070,7 +5070,7 @@ apply_pending:
 				}
 			}
 			list_del_init(&req->list);
-			list_add_tail(&req->list, &ctx->free_req_list);
+			__cam_isp_ctx_move_req_to_free_list(ctx, req);
 		}
 	}
 
@@ -8200,7 +8200,6 @@ put_ref:
 	}
 free_req:
 	mutex_lock(&ctx_isp->isp_mutex);
-	list_add_tail(&req->list, &ctx->free_req_list);
 	__cam_isp_ctx_move_req_to_free_list(ctx, req);
 	mutex_unlock(&ctx_isp->isp_mutex);
 
@@ -9189,7 +9188,7 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 			req->request_id, ctx_isp->active_req_cnt, ctx->ctx_id);
 	} else if ((ctx_isp->rdi_only_context || ctx_isp->rdi_stats_context) &&
 		!req_isp->num_fence_map_out) {
-		list_add_tail(&req->list, &ctx->free_req_list);
+		__cam_isp_ctx_move_req_to_free_list(ctx, req);
 		CAM_DBG(CAM_REQ,
 			"Move pending req: %lld to free list(cnt: %d) ctx %u",
 			req->request_id, ctx_isp->active_req_cnt, ctx->ctx_id);
@@ -9673,7 +9672,7 @@ static int __cam_isp_ctx_reset_and_recover(
 			}
 		}
 		list_del_init(&req->list);
-		list_add_tail(&req->list, &ctx->free_req_list);
+		__cam_isp_ctx_move_req_to_free_list(ctx, req);
 		ctx_isp->waitlist_req_cnt--;
 		CAM_INFO(CAM_REQ, "request %lld config success ctx %u",
 				req->request_id, ctx->ctx_id);
@@ -9730,8 +9729,8 @@ static int32_t __cam_isp_ctx_independent_sof_timer(void *priv, void *data)
 	struct cam_context              *ctx     = NULL;
 	int rc = 0;
 
-	if (!data || !priv) {
-		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
+	if (!priv) {
+		CAM_ERR(CAM_CRM, "input args NULL %pK", priv);
 		return -EINVAL;
 	}
 
@@ -9889,7 +9888,7 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 		__cam_isp_ctx_send_req_error(ctx_isp, req_isp);
 		mutex_lock(&ctx_isp->isp_mutex);
 		list_del_init(&req->list);
-		list_add_tail(&req->list, &cam_ctx->free_req_list);
+		__cam_isp_ctx_move_req_to_free_list(cam_ctx, req);
 		mutex_unlock(&ctx_isp->isp_mutex);
 		return -EBUSY;
 	}
