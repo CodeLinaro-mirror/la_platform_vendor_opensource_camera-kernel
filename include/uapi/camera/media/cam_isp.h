@@ -141,6 +141,7 @@
 #define CAM_ISP_GENERIC_BLOB_TYPE_PRIMARY_PORT_CONFIG       31
 #define CAM_ISP_GENERIC_BLOB_TYPE_PRIMARY_SCRATCH_BUF_CFG   32
 #define CAM_ISP_GENERIC_BLOB_TYPE_HWFENCE_MODE_CONFIG       33
+#define CAM_ISP_GENERIC_BLOB_TYPE_FAST_CROP_CFG             34
 
 #define CAM_ISP_VC_DT_CFG    4
 
@@ -206,6 +207,7 @@
 #define CAM_ISP_SLAVE_METADATA_EN              BIT(9)
 #define CAM_ISP_UL_PATH                        BIT(10)
 #define CAM_ISP_IFE_LITE_GROUPING_EN           BIT(11)
+#define CAM_ISP_FAST_CROP                      BIT(12)
 
 #define CAM_ISP_ACQUIRE_TYPE_NONE              0
 #define CAM_ISP_ACQUIRE_TYPE_VIRTUAL           1
@@ -1504,6 +1506,86 @@ struct cam_isp_primary_port_scratch_buf_config {
 	__u32                                        version;
 	__u32                                        num_scratch_bufs;
 	struct cam_isp_primary_port_scratch_buf_info scratch_buf_info[];
+};
+
+/**
+ * struct cam_isp_fast_crop_shared_buffer_info - Fast crop shared buffer config shared
+ *                                               as part of INIT packet
+ *
+ * @version          : Struct version
+ * @mem_hdl          : Mem_hdl of shared buffer
+ * @offset           : Offset of shared buffer
+ * @size             : Size of shared buffer
+ */
+struct cam_isp_fast_crop_shared_buffer_info {
+	__s32 version;
+	__s32 mem_hdl;
+	__u32 offset;
+	__u32 size;
+};
+
+/**
+ * struct cam_isp_crop_out_port_data - Crop data per port to be written as output in
+ *                                     secondary buffer.
+ *
+ * @version          : Struct version
+ * @res_type         : Resource type
+ * @payload_size     : Size of payload to be written in output buffer
+ * @reserved         : Reserved for 64 bit alignment
+ * @payload          : Payload data
+ */
+struct cam_isp_crop_out_port_data {
+	__s32     version;
+	__u32     res_type;
+	__u32     payload_size;
+	__u32     reserved;
+	__DECLARE_FLEX_ARRAY(__u32, payload_flex);
+};
+
+/**
+ * struct cam_isp_crop_setting_block_info - Information related to crop setting
+ *
+ * @version          : Struct version
+ * @cmd_mem_hdl      : Mem handle of buffer having crop settings, this command buffer
+ *                     will only have direct commands.
+ * @cmd_offset       : Offset in command buffer.
+ * @cmd_size         : Size of commands.
+ * @num_valid_ports  : Total number of valid ports.
+ * @reserved         : Reserved for 64 bit alignment
+ * @setting_id       : Setting ID
+ * @out_data         : Information of output to be written in output buffers
+ */
+struct cam_isp_crop_setting_block_info {
+	__s32     version;
+	__s32     cmd_mem_hdl;
+	__u32     cmd_offset;
+	__u32     cmd_size;
+	__u32     num_valid_ports;
+	__u32     reserved;
+	__u64     setting_id;
+	__DECLARE_FLEX_ARRAY(struct cam_isp_crop_out_port_data, out_data_flex);
+};
+
+/**
+ * struct cam_isp_crop_setting_info - Structure to be contained in shared buffer
+ *                                    between HWL and KMD regarding fast crop.
+ *
+ * @version          : Struct version
+ * @rd_idx           : Read index of setting_data array, updated only by KMD.
+ * @wr_idx           : Read index of setting_data array, updated only by UMD.
+ * @num_blocks       : Size of setting_data array.
+ * @block_size       : Size of setting_data.
+ * @reserved         : Reserved for 64 bit alignment
+ * @setting_data     : Information related to each crop setting.
+ */
+struct cam_isp_crop_setting_info {
+	__s32    version;
+	__u32    rd_idx;
+	__u32    wr_idx;
+	__u32    num_blocks;
+	__u32    block_size;
+	__u32    reserved;
+	__DECLARE_FLEX_ARRAY(struct cam_isp_crop_setting_block_info, setting_data_flex);
 };
 
 #define CAM_ISP_ACQUIRE_COMMON_VER0         0x1000

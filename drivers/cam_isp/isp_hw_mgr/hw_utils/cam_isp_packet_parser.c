@@ -747,7 +747,8 @@ static int cam_isp_get_outport_res_id(
 	struct cam_buf_io_cfg              *io_cfg,
 	enum cam_isp_hw_type                hw_type,
 	uint32_t                           *res_type,
-	uint32_t                           *res_id_out)
+	uint32_t                           *res_id_out,
+	bool                               *is_virtual_ife_out_port)
 {
 	int         rc = 0;
 	uint32_t    out_port;
@@ -777,6 +778,9 @@ static int cam_isp_get_outport_res_id(
 				io_cfg->resource_type, prepare->packet->header.request_id);
 			return -EINVAL;
 		}
+	} else if (io_cfg->resource_type >= CAM_ISP_IFE_OUT_VIRTUAL_RES_BASE) {
+		*res_type = io_cfg->resource_type;
+		*is_virtual_ife_out_port = true;
 	} else {
 		*res_id_out = io_cfg->resource_type & 0xFF;
 		*res_type = io_cfg->resource_type;
@@ -1122,6 +1126,7 @@ int cam_isp_add_io_buffers(
 	bool                                is_buf_secure, found = false;
 	uint32_t                            mode, res_type;
 	size_t                              len = 0;
+	bool                                is_virtual_ife_out_port = false;
 
 	io_cfg = (struct cam_buf_io_cfg *) ((uint8_t *)
 			&prepare->packet->payload +
@@ -1160,11 +1165,13 @@ int cam_isp_add_io_buffers(
 
 		if (io_cfg[i].direction == CAM_BUF_OUTPUT) {
 			if (io_cfg[i].resource_type < out_base ||
-				io_cfg[i].resource_type >= out_max)
+				((io_cfg[i].resource_type >= out_max) &&
+				(io_cfg[i].resource_type < CAM_ISP_IFE_OUT_VIRTUAL_RES_BASE)))
 				continue;
 
 			rc = cam_isp_get_outport_res_id(priv, prepare,
-				&io_cfg[i], hw_type, &res_type, &res_id_out);
+				&io_cfg[i], hw_type, &res_type, &res_id_out,
+				&is_virtual_ife_out_port);
 			if (rc) {
 				CAM_ERR(CAM_ISP,
 					"failed to get outport res_id\n"
@@ -1211,6 +1218,11 @@ int cam_isp_add_io_buffers(
 						prepare->max_out_map_entries);
 					return -EINVAL;
 				}
+			}
+
+			if (is_virtual_ife_out_port) {
+				out_map_entries->buf_handle[0] = io_cfg[i].mem_handle[0];
+				continue;
 			}
 
 			hw_mgr_res = &res_list_isp_out[res_id_out];

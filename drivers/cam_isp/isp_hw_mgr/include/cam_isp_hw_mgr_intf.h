@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_ISP_HW_MGR_INTF_H_
@@ -49,6 +49,7 @@
 #define CAM_IFE_CTX_INDEPENDENT_CRM_EN BIT(6)
 #define CAM_IFE_CTX_SLAVE_METADTA_EN   BIT(7)
 #define CAM_IFE_CTX_UL_PATH            BIT(8)
+#define CAM_IFE_CTX_FAST_CROP_EN       BIT(9)
 
 /*
  * Maximum configuration entry size  - This is based on the
@@ -64,6 +65,9 @@
 
 /* Maximum number of primary ports */
 #define CAM_IFE_HW_PRIMARY_PORT_MAX 16
+
+/* Maximum number of valid crop settings */
+#define CAM_IFE_VALID_CROP_SETTINGS_MAX 8
 
 /* ctx get virtual rdi mapping callback function type */
 typedef int (*cam_hw_get_virtual_rdi_mapping_cb_func)(void *context,
