@@ -854,14 +854,6 @@ static int cam_req_mgr_component_master_bind(struct device *dev)
 	if (rc)
 		return rc;
 
-	rc = cam_media_device_setup(dev);
-	if (rc)
-		goto media_setup_fail;
-
-	rc = cam_video_device_setup();
-	if (rc)
-		goto video_setup_fail;
-
 	g_dev.open_cnt = 0;
 	g_dev.shutdown_state = false;
 	mutex_init(&g_dev.cam_lock);
@@ -881,6 +873,15 @@ static int cam_req_mgr_component_master_bind(struct device *dev)
 	}
 
 	g_dev.state = true;
+
+	rc = cam_media_device_setup(dev);
+	if (rc)
+		goto media_setup_fail;
+
+	rc = cam_video_device_setup();
+	if (rc)
+		goto video_setup_fail;
+
 	INIT_LIST_HEAD(&cam_req_mgr_ordered_sd_list);
 
 	if (g_cam_req_mgr_timer_cachep == NULL) {
@@ -915,17 +916,17 @@ static int cam_req_mgr_component_master_bind(struct device *dev)
 sysfs_fail:
 	sysfs_remove_file(&dev->kobj, &camera_debug_sysfs_attr.attr);
 req_mgr_device_deinit:
-	cam_req_mgr_core_device_deinit();
-req_mgr_core_fail:
-	cam_req_mgr_util_deinit();
-req_mgr_util_fail:
-	mutex_destroy(&g_dev.dev_lock);
-	mutex_destroy(&g_dev.cam_lock);
 	cam_video_device_cleanup();
 video_setup_fail:
 	cam_media_device_cleanup();
 media_setup_fail:
+	cam_req_mgr_core_device_deinit();
+req_mgr_core_fail:
+	cam_req_mgr_util_deinit();
+req_mgr_util_fail:
 	cam_v4l2_device_cleanup();
+	mutex_destroy(&g_dev.dev_lock);
+	mutex_destroy(&g_dev.cam_lock);
 	g_dev.state = false;
 	return rc;
 }
