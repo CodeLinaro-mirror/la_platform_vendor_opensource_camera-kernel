@@ -200,7 +200,10 @@ struct cam_cmd_power {
 	__u8                        reserved;
 	__u8                        cmd_type;
 	__u16                       more_reserved;
-	struct cam_power_settings   power_settings[1];
+	union {
+		struct cam_power_settings   power_settings[1];
+		__DECLARE_FLEX_ARRAY(struct cam_power_settings, power_settings_flex);
+	};
 } __attribute__((packed));
 
 /**
@@ -211,7 +214,6 @@ struct cam_cmd_power {
  * @ cmd_type        :   Command buffer type
  * @ data_type       :   I2C data type
  * @ addr_type       :   I2C address type
- * @ reserved
  */
 struct i2c_rdwr_header {
 	__u32    count;
@@ -240,7 +242,10 @@ struct i2c_random_wr_payload {
  */
 struct cam_cmd_i2c_random_wr {
 	struct i2c_rdwr_header       header;
-	struct i2c_random_wr_payload random_wr_payload[1];
+	union {
+		struct i2c_random_wr_payload random_wr_payload[1];
+		__DECLARE_FLEX_ARRAY(struct i2c_random_wr_payload, random_wr_payload_flex);
+	};
 } __attribute__((packed));
 
 /**
@@ -262,7 +267,10 @@ struct cam_cmd_read {
 struct cam_cmd_i2c_continuous_wr {
 	struct i2c_rdwr_header header;
 	__u32                  reg_addr;
-	struct cam_cmd_read    data_read[1];
+	union {
+		struct cam_cmd_read    data_read[1];
+		__DECLARE_FLEX_ARRAY(struct cam_cmd_read, data_read_flex);
+	};
 } __attribute__((packed));
 
 /**
@@ -272,18 +280,24 @@ struct cam_cmd_i2c_continuous_wr {
  */
 struct cam_cmd_i2c_random_rd {
 	struct i2c_rdwr_header header;
-	struct cam_cmd_read    data_read[1];
+	union {
+		struct cam_cmd_read    data_read[1];
+		__DECLARE_FLEX_ARRAY(struct cam_cmd_read, data_read_flex);
+	};
 } __attribute__((packed));
 
 /**
  * struct cam_cmd_i2c_continuous_rd - I2C continuous continuous read command
  * @ header          :   header of READ/WRITE I2C command
  * @ reg_addr        :   Register address
- *
+ * @ num_bytes       :   Number of bytes to be written
+ * @ data_read       :   I2C read command
  */
 struct cam_cmd_i2c_continuous_rd {
 	struct i2c_rdwr_header header;
 	__u32                  reg_addr;
+	__u32                  num_bytes;
+	struct cam_cmd_read    data_read[1];
 } __attribute__((packed));
 
 /**

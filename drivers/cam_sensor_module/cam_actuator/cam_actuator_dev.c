@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_actuator_dev.h"
@@ -35,7 +35,6 @@ int cam_actuator_i2c_driver_remove_common(struct i2c_client *client)
 	if (rc)
 		CAM_ERR(CAM_ACTUATOR, "unregistering actuator subdev is unsucessful");
 
-	cam_actuator_release_power_domain(a_ctrl);
 
 	soc_private =
 		(struct cam_actuator_soc_private *)a_ctrl->soc_info.soc_private;
@@ -181,7 +180,7 @@ static int cam_actuator_init_subdev(struct cam_actuator_ctrl_t *a_ctrl)
 		&cam_actuator_internal_ops;
 	a_ctrl->v4l2_dev_str.ops =
 		&cam_actuator_subdev_ops;
-	strlcpy(a_ctrl->device_name, CAMX_ACTUATOR_DEV_NAME,
+	strscpy(a_ctrl->device_name, CAMX_ACTUATOR_DEV_NAME,
 		sizeof(a_ctrl->device_name));
 	a_ctrl->v4l2_dev_str.name =
 		a_ctrl->device_name;
@@ -404,8 +403,6 @@ static void cam_actuator_component_unbind(struct device *dev,
 	mutex_unlock(&(a_ctrl->actuator_mutex));
 	cam_unregister_subdev(&(a_ctrl->v4l2_dev_str));
 
-	cam_actuator_release_power_domain(a_ctrl);
-
 	soc_private =
 		(struct cam_actuator_soc_private *)a_ctrl->soc_info.soc_private;
 	power_info = &soc_private->power_info;
@@ -427,11 +424,18 @@ const static struct component_ops cam_actuator_component_ops = {
 	.unbind = cam_actuator_component_unbind,
 };
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int32_t cam_actuator_platform_remove(
 	struct platform_device *pdev)
+#else
+static void cam_actuator_platform_remove(
+	struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_actuator_component_ops);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_actuator_driver_dt_match[] = {

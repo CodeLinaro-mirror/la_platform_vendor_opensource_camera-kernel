@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -1877,7 +1877,7 @@ int cam_smmu_reserve_sec_heap(int32_t smmu_hdl,
 		goto err_put;
 	}
 
-	secheap_buf->table = dma_buf_map_attachment(secheap_buf->attach,
+	secheap_buf->table = cam_compat_dmabuf_map_attach(secheap_buf->attach,
 		DMA_BIDIRECTIONAL);
 	if (IS_ERR_OR_NULL(secheap_buf->table)) {
 		rc = PTR_ERR(secheap_buf->table);
@@ -1912,7 +1912,7 @@ int cam_smmu_reserve_sec_heap(int32_t smmu_hdl,
 	return rc;
 
 err_unmap_sg:
-	dma_buf_unmap_attachment(secheap_buf->attach,
+	cam_compat_dmabuf_unmap_attach(secheap_buf->attach,
 		secheap_buf->table,
 		DMA_BIDIRECTIONAL);
 err_detach:
@@ -1967,7 +1967,7 @@ int cam_smmu_release_sec_heap(int32_t smmu_hdl)
 			sec_heap_iova_len);
 	}
 
-	dma_buf_unmap_attachment(secheap_buf->attach,
+	cam_compat_dmabuf_unmap_attach(secheap_buf->attach,
 		secheap_buf->table, DMA_BIDIRECTIONAL);
 	dma_buf_detach(secheap_buf->buf, secheap_buf->attach);
 	dma_buf_put(secheap_buf->buf);
@@ -2015,7 +2015,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 		goto err_out;
 	}
 
-	table = dma_buf_map_attachment(attach, dma_dir);
+	table = cam_compat_dmabuf_map_attach(attach, dma_dir);
 	if (IS_ERR_OR_NULL(table)) {
 		rc = PTR_ERR(table);
 		CAM_ERR(CAM_SMMU, "Error: dma map attachment failed");
@@ -2095,14 +2095,14 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 		idx, buf, (void *)iommu_cb_set.cb_info[idx].dev,
 		(void *)*paddr_ptr, (unsigned int)*len_ptr);
 
-	dma_buf_unmap_attachment(attach, table, dma_dir);
+	cam_compat_dmabuf_unmap_attach(attach, table, dma_dir);
 
 	return 0;
 
 err_free_iova:
 	cam_smmu_unmap_from_pool(cb->domain, pool, *len_ptr, *paddr_ptr);
 err_buf_unmap_attach:
-	dma_buf_unmap_attachment(attach, table, dma_dir);
+	cam_compat_dmabuf_unmap_attach(attach, table, dma_dir);
 err_buf_detach:
 	dma_buf_detach(buf, attach);
 err_out:
@@ -2733,7 +2733,7 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 		goto err_out;
 	}
 
-	table = dma_buf_map_attachment(attach, dma_dir);
+	table = cam_compat_dmabuf_map_attach(attach, dma_dir);
 	if (IS_ERR_OR_NULL(table)) {
 		CAM_ERR(CAM_SMMU, "Error: dma buf map attachment failed");
 		rc = PTR_ERR(table);
@@ -2771,7 +2771,7 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 	return 0;
 
 err_unmap_sg:
-	dma_buf_unmap_attachment(attach, table, dma_dir);
+	cam_compat_dmabuf_unmap_attach(attach, table, dma_dir);
 err_detach:
 	dma_buf_detach(dmabuf, attach);
 err_out:
@@ -2870,7 +2870,7 @@ static int cam_smmu_secure_unmap_buf_and_remove_from_list(
 	}
 
 	/* iommu buffer clean up */
-	dma_buf_unmap_attachment(mapping_info->attach,
+	cam_compat_dmabuf_unmap_attach(mapping_info->attach,
 		mapping_info->table, mapping_info->dir);
 	dma_buf_detach(mapping_info->buf, mapping_info->attach);
 	mapping_info->buf = NULL;
@@ -4240,7 +4240,11 @@ static int cam_smmu_probe(struct platform_device *pdev)
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_smmu_remove(struct platform_device *pdev)
+#else
+static void cam_smmu_remove(struct platform_device *pdev)
+#endif
 {
 	struct device *dev = &pdev->dev;
 
@@ -4257,10 +4261,14 @@ static int cam_smmu_remove(struct platform_device *pdev)
 		component_del(&pdev->dev, &cam_smmu_fw_dev_component_ops);
 	} else {
 		CAM_ERR(CAM_SMMU, "Unrecognized child device: %s", pdev->name);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 		return -ENODEV;
+#endif
 	}
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 struct platform_driver cam_smmu_driver = {

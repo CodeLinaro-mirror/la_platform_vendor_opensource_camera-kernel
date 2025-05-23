@@ -25,6 +25,7 @@ int cam_ir_led_stop_dev(struct cam_ir_led_ctrl *ictrl)
 
 	return rc;
 }
+EXPORT_SYMBOL(cam_ir_led_stop_dev);
 
 int cam_ir_led_release_dev(struct cam_ir_led_ctrl *ictrl)
 {
@@ -41,6 +42,7 @@ int cam_ir_led_release_dev(struct cam_ir_led_ctrl *ictrl)
 
 	return rc;
 }
+EXPORT_SYMBOL(cam_ir_led_release_dev);
 
 void cam_ir_led_shutdown(struct cam_ir_led_ctrl *ictrl)
 {
@@ -61,3 +63,4 @@ void cam_ir_led_shutdown(struct cam_ir_led_ctrl *ictrl)
 	else
 		ictrl->ir_led_state = CAM_IR_LED_STATE_INIT;
 }
+EXPORT_SYMBOL(cam_ir_led_shutdown);

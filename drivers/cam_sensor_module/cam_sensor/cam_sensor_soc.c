@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -289,10 +289,6 @@ int32_t cam_sensor_parse_dt(struct cam_sensor_ctrl_t *s_ctrl)
 	if (rc < 0)
 		return rc;
 
-	rc = cam_sensor_util_request_power_domain(soc_info);
-	if (rc < 0)
-		return rc;
-
 	rc = msm_sensor_init_default_params(s_ctrl);
 	if (rc < 0) {
 		CAM_ERR(CAM_SENSOR,
@@ -307,11 +303,4 @@ FREE_DT_DATA:
 	s_ctrl->sensordata = NULL;
 
 	return rc;
-}
-
-void cam_sensor_release_power_domain(struct cam_sensor_ctrl_t *s_ctrl)
-{
-	struct cam_hw_soc_info *soc_info = &s_ctrl->soc_info;
-
-	cam_sensor_util_release_power_domain(soc_info);
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 
@@ -1350,13 +1350,13 @@ static int cam_vfe_bus_ver3_acquire_wm(
 
 	switch (rsrc_data->en_cfg) {
 	case 0x1:
-		strlcpy(wm_mode, "line-based", sizeof(wm_mode));
+		strscpy(wm_mode, "line-based", sizeof(wm_mode));
 		break;
 	case ((0x1 << 16) | 0x1):
-		strlcpy(wm_mode, "frame-based", sizeof(wm_mode));
+		strscpy(wm_mode, "frame-based", sizeof(wm_mode));
 		break;
 	case ((0x2 << 16) | 0x1):
-		strlcpy(wm_mode, "index-based", sizeof(wm_mode));
+		strscpy(wm_mode, "index-based", sizeof(wm_mode));
 		break;
 	}
 
@@ -3417,7 +3417,7 @@ static int cam_vfe_bus_ver3_update_stripe_cfg(void *priv, void *cmd_args,
 	for (i = 0; i < vfe_out_data->num_wm; i++) {
 		wm_data = vfe_out_data->wm_res[i].res_priv;
 		stripe_config = (struct cam_isp_dual_stripe_config  *)
-			&stripe_args->dual_cfg->stripes[ports_plane_idx + i];
+			&stripe_args->dual_cfg->stripes_flex[ports_plane_idx + i];
 		wm_data->width = stripe_config->width;
 
 		/*

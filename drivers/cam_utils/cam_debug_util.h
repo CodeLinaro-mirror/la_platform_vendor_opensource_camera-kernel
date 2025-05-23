@@ -1,19 +1,15 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023,2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_DEBUG_UTIL_H_
 #define _CAM_DEBUG_UTIL_H_
 
-#include <msm-camera.h>
+#include <dt-bindings/msm-camera.h>
 #include <linux/platform_device.h>
 #include "cam_trace.h"
-
-#ifndef CONFIG_SPECTRA_KT
-#include "cam_presil_hw_access.h"
-#endif // !CONFIG_SPECTRA_KT
 
 extern unsigned long long debug_mdl;
 extern unsigned int debug_type;
@@ -60,13 +56,14 @@ enum cam_debug_module_id {
 	CAM_OPE,                 /* bit 28 */
 	CAM_IO_ACCESS,           /* bit 29 */
 	CAM_SFE,                 /* bit 30 */
-	CAM_IR_LED,              /* bit 31 */
+        CAM_IR_LED,              /* bit 31 */
 	CAM_CRE,                 /* bit 32 */
 	CAM_PRESIL_CORE,         /* bit 33 */
 	CAM_TPG,                 /* bit 34 */
 	CAM_DMA_FENCE,           /* bit 35 */
 	CAM_SENSOR_UTIL,         /* bit 36 */
 	CAM_SYNX,                /* bit 37 */
+	CAM_IO_DUMP,             /* bit 38 */
 	CAM_DBG_MOD_MAX
 };
 
@@ -127,7 +124,9 @@ __builtin_choose_expr(((module_id) == CAM_TPG), "CAM-TPG",                  \
 __builtin_choose_expr(((module_id) == CAM_DMA_FENCE), "CAM-DMA-FENCE",      \
 __builtin_choose_expr(((module_id) == CAM_SENSOR_UTIL), "CAM-SENSOR-UTIL",      \
 __builtin_choose_expr(((module_id) == CAM_SYNX), "CAM-SYNX",                \
-"CAMERA")))))))))))))))))))))))))))))))))))))
+__builtin_choose_expr(((module_id) == CAM_IO_DUMP), "CAM-IO-DUMP",          \
+__builtin_choose_expr(((module_id) == CAM_IO_DUMP), "CAM_IR_LED",          \
+"CAMERA"))))))))))))))))))))))))))))))))))))))
 
 enum cam_log_print_type {
 	CAM_PRINT_LOG   = 0x1,

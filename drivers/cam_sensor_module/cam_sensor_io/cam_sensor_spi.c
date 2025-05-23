@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023,2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_sensor_spi.h"
 #include "cam_debug_util.h"
+#include "cam_common_util.h"
 
 static int cam_spi_txfr(struct spi_device *spi, char *txbuf,
 	char *rxbuf, int num_byte)

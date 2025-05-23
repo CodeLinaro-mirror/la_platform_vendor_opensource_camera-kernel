@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_eeprom_dev.h"
@@ -163,7 +163,7 @@ static int cam_eeprom_init_subdev(struct cam_eeprom_ctrl_t *e_ctrl)
 
 	e_ctrl->v4l2_dev_str.internal_ops = &cam_eeprom_internal_ops;
 	e_ctrl->v4l2_dev_str.ops = &cam_eeprom_subdev_ops;
-	strlcpy(e_ctrl->device_name, CAM_EEPROM_NAME,
+	strscpy(e_ctrl->device_name, CAM_EEPROM_NAME,
 		sizeof(e_ctrl->device_name));
 	e_ctrl->v4l2_dev_str.name = e_ctrl->device_name;
 	e_ctrl->v4l2_dev_str.sd_flags =
@@ -292,7 +292,6 @@ int cam_eeprom_i2c_driver_remove_common(struct i2c_client *client)
 	mutex_lock(&(e_ctrl->eeprom_mutex));
 	cam_eeprom_shutdown(e_ctrl);
 	mutex_unlock(&(e_ctrl->eeprom_mutex));
-	cam_eeprom_release_power_domain(e_ctrl);
 	mutex_destroy(&(e_ctrl->eeprom_mutex));
 	rc = cam_unregister_subdev(&(e_ctrl->v4l2_dev_str));
 	if (rc)
@@ -429,7 +428,6 @@ int cam_eeprom_spi_driver_remove_common(struct spi_device *sdev)
 	mutex_lock(&(e_ctrl->eeprom_mutex));
 	cam_eeprom_shutdown(e_ctrl);
 	mutex_unlock(&(e_ctrl->eeprom_mutex));
-	cam_eeprom_release_power_domain(e_ctrl);
 	mutex_destroy(&(e_ctrl->eeprom_mutex));
 	rc = cam_unregister_subdev(&(e_ctrl->v4l2_dev_str));
 	if (rc)
@@ -548,7 +546,6 @@ static void cam_eeprom_component_unbind(struct device *dev,
 	mutex_lock(&(e_ctrl->eeprom_mutex));
 	cam_eeprom_shutdown(e_ctrl);
 	mutex_unlock(&(e_ctrl->eeprom_mutex));
-	cam_eeprom_release_power_domain(e_ctrl);
 	mutex_destroy(&(e_ctrl->eeprom_mutex));
 	cam_unregister_subdev(&(e_ctrl->v4l2_dev_str));
 	kfree(soc_info->soc_private);
@@ -576,10 +573,16 @@ static int32_t cam_eeprom_platform_driver_probe(
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_eeprom_platform_driver_remove(struct platform_device *pdev)
+#else
+static void cam_eeprom_platform_driver_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_eeprom_component_ops);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_eeprom_dt_match[] = {

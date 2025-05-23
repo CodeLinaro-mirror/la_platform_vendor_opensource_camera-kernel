@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -934,11 +934,11 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 		dma_addr_t hw_vaddr_ptr = 0;
 		size_t len = 0;
 
-		if ((!cdm_cmd->cmd[i].len) &&
-			(cdm_cmd->cmd[i].len > 0x100000)) {
+		if ((!cdm_cmd->cmd_flex[i].len) &&
+			(cdm_cmd->cmd_flex[i].len > 0x100000)) {
 			CAM_ERR(CAM_CDM,
 				"cmd len(%d) is invalid cnt=%d total cnt=%d",
-				cdm_cmd->cmd[i].len, i,
+				cdm_cmd->cmd_flex[i].len, i,
 				req->data->cmd_arrary_count);
 			rc = -EINVAL;
 			break;
@@ -967,11 +967,11 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 
 		if (req->data->type == CAM_CDM_BL_CMD_TYPE_MEM_HANDLE) {
 			rc = cam_mem_get_io_buf(
-				cdm_cmd->cmd[i].bl_addr.mem_handle,
+				cdm_cmd->cmd_flex[i].bl_addr.mem_handle,
 				core->iommu_hdl.non_secure, &hw_vaddr_ptr,
 				&len);
 		} else if (req->data->type == CAM_CDM_BL_CMD_TYPE_HW_IOVA) {
-			if (!cdm_cmd->cmd[i].bl_addr.hw_iova) {
+			if (!cdm_cmd->cmd_flex[i].bl_addr.hw_iova) {
 				CAM_ERR(CAM_CDM,
 					"Hw bl hw_iova is invalid %d:%d",
 					i, req->data->cmd_arrary_count);
@@ -980,8 +980,8 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 			}
 			rc = 0;
 			hw_vaddr_ptr =
-				(uint64_t)cdm_cmd->cmd[i].bl_addr.hw_iova;
-			len = cdm_cmd->cmd[i].len + cdm_cmd->cmd[i].offset;
+				(uint64_t)cdm_cmd->cmd_flex[i].bl_addr.hw_iova;
+			len = cdm_cmd->cmd_flex[i].len + cdm_cmd->cmd_flex[i].offset;
 		} else {
 			CAM_ERR(CAM_CDM,
 				"Only mem hdl/hw va type is supported %d",
@@ -991,14 +991,14 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 		}
 
 		if ((!rc) && (hw_vaddr_ptr) && (len) &&
-			(len >= cdm_cmd->cmd[i].offset)) {
+			(len >= cdm_cmd->cmd_flex[i].offset)) {
 
-			if ((len - cdm_cmd->cmd[i].offset) <
-				cdm_cmd->cmd[i].len) {
+			if ((len - cdm_cmd->cmd_flex[i].offset) <
+				cdm_cmd->cmd_flex[i].len) {
 				CAM_ERR(CAM_CDM,
 					"Not enough buffer cmd offset: %u cmd length: %u",
-					cdm_cmd->cmd[i].offset,
-					cdm_cmd->cmd[i].len);
+					cdm_cmd->cmd_flex[i].offset,
+					cdm_cmd->cmd_flex[i].len);
 				rc = -EINVAL;
 				break;
 			}
@@ -1017,10 +1017,10 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 			} else {
 				rc = cam_hw_cdm_bl_write(cdm_hw,
 					((uint32_t)hw_vaddr_ptr +
-						cdm_cmd->cmd[i].offset),
-					(cdm_cmd->cmd[i].len - 1),
+						cdm_cmd->cmd_flex[i].offset),
+					(cdm_cmd->cmd_flex[i].len - 1),
 					core->bl_fifo[fifo_idx].bl_tag,
-					cdm_cmd->cmd[i].arbitrate,
+					cdm_cmd->cmd_flex[i].arbitrate,
 					fifo_idx);
 				if (rc) {
 					CAM_ERR(CAM_CDM,
@@ -1033,8 +1033,8 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 		} else {
 			CAM_ERR(CAM_CDM,
 				"Sanity check failed for hdl=%x len=%zu:%d",
-				cdm_cmd->cmd[i].bl_addr.mem_handle, len,
-				cdm_cmd->cmd[i].offset);
+				cdm_cmd->cmd_flex[i].bl_addr.mem_handle, len,
+				cdm_cmd->cmd_flex[i].offset);
 			CAM_ERR(CAM_CDM, "Sanity check failed for %d:%d",
 				i, req->data->cmd_arrary_count);
 			rc = -EINVAL;
@@ -2231,7 +2231,7 @@ static int cam_hw_cdm_component_bind(struct device *dev,
 
 		init_completion(&cdm_core->bl_fifo[i].bl_complete);
 
-		len = strlcpy(work_q_name, cdm_core->name,
+		len = strscpy(work_q_name, cdm_core->name,
 				sizeof(cdm_core->name));
 		snprintf(work_q_name + len, sizeof(work_q_name) - len, "%d", i);
 		cdm_core->bl_fifo[i].work_queue = alloc_workqueue(work_q_name,
@@ -2260,7 +2260,7 @@ static int cam_hw_cdm_component_bind(struct device *dev,
 	cpas_parms.cell_index = cdm_hw->soc_info.index;
 	cpas_parms.dev = &pdev->dev;
 	cpas_parms.userdata = cdm_hw_intf;
-	strlcpy(cpas_parms.identifier, cdm_hw->soc_info.label_name,
+	strscpy(cpas_parms.identifier, cdm_hw->soc_info.label_name,
 		CAM_HW_IDENTIFIER_LENGTH);
 	rc = cam_cpas_register_client(&cpas_parms);
 	if (rc) {
@@ -2509,10 +2509,16 @@ static int cam_hw_cdm_probe(struct platform_device *pdev)
 	return rc;
 }
 
-static int cam_hw_cdm_remove(struct platform_device *pdev)
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
+int cam_hw_cdm_remove(struct platform_device *pdev)
+#else
+void cam_hw_cdm_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_hw_cdm_component_ops);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 struct platform_driver cam_hw_cdm_driver = {

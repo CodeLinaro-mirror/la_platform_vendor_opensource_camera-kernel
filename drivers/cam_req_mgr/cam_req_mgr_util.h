@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023,2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_REQ_MGR_UTIL_API_H_
@@ -10,12 +10,8 @@
 #include <media/cam_req_mgr.h>
 #include "cam_req_mgr_util_priv.h"
 
-#ifdef CONFIG_SPECTRA_KT
-
 /* Interval for cam_info_rate_limit_custom() */
 #define CAM_RATE_LIMIT_INTERVAL_5SEC 5
-
-#endif
 
 /**
  * state of a handle(session/device)

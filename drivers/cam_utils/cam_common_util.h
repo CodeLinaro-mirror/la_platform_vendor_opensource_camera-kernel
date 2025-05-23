@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_COMMON_UTIL_H_
@@ -9,6 +9,7 @@
 
 #include <linux/types.h>
 #include <linux/kernel.h>
+#include <linux/vmalloc.h>
 
 #include "cam_hw_mgr_intf.h"
 
@@ -327,8 +328,6 @@ int cam_common_read_poll_timeout(
  */
 int cam_common_modify_timer(struct timer_list *timer, int32_t timeout_val);
 
-#ifdef CONFIG_SPECTRA_KT
-
 /**
  * cam_common_util_thread_switch_delay_detect()
  *
@@ -341,25 +340,6 @@ int cam_common_modify_timer(struct timer_list *timer, int32_t timeout_val);
  */
 void cam_common_util_thread_switch_delay_detect(const char *token,
 	ktime_t scheduled_time, uint32_t threshold);
-
-#else
-
-/**
- * cam_common_util_thread_switch_delay_detect()
- *
- * @brief                  Detect if there is any scheduling delay
- *
- * @wq_name:               workq name
- * @state:                 either schedule or execution
- * @cb:                    callback scheduled or executed
- * @scheduled_time:        Time when workq or tasklet was scheduled
- * @threshold:             Threshold time
- *
- */
-void cam_common_util_thread_switch_delay_detect(char *wq_name, const char *state,
-	void *cb, ktime_t scheduled_time, uint32_t threshold);
-
-#endif // CONFIG_SPECTRA_KT
 
 /**
  * cam_common_register_mini_dump_cb()

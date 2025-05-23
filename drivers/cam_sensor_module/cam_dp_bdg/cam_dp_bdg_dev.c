@@ -236,7 +236,7 @@ fail_exit:
 	return ret;
 }
 
-static int dp_bdg_irq_handler_remove(struct platform_device *pdev)
+void dp_bdg_irq_handler_remove(struct platform_device *pdev)
 {
 	gpio_free(dp_bdg_irq_gpio);
 	disable_irq(dp_bdg_irq);
@@ -246,7 +246,6 @@ static int dp_bdg_irq_handler_remove(struct platform_device *pdev)
 	device_destroy(dp_bdg_irq_handler_class, dp_bdg_irq_handler_dev);
 	class_destroy(dp_bdg_irq_handler_class);
 	unregister_chrdev_region(dp_bdg_irq_handler_dev, 1);
-	return 0;
 }
 
 struct platform_driver dp_bdg_irq_handler_driver = {

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_COMPAT_H_
@@ -14,7 +14,6 @@
 #include <linux/list_sort.h>
 #include <linux/spi/spi.h>
 #include <linux/firmware/qcom/qcom_scm.h>
-#include <linux/firmware/qcom/qcom_scm_addon.h>
 
 #include "cam_csiphy_dev.h"
 #include "cam_cpastop_hw.h"
@@ -35,6 +34,12 @@ MODULE_IMPORT_NS(DMA_BUF);
 #include <linux/CTrustedCameraDriver.h>
 #endif
 
+#if (KERNEL_VERSION(6, 7, 0) <= LINUX_VERSION_CODE)
+#define CAM_SUBDEV_NAME_SIZE 32
+#else
+#define CAM_SUBDEV_NAME_SIZE V4L2_SUBDEV_NAME_SIZE
+#endif
+
 #define IS_CSF25(x, y) ((((x) == 2) && ((y) == 5)) ? 1 : 0)
 
 struct cam_fw_alloc_info {
@@ -52,6 +57,10 @@ void cam_check_iommu_faults(struct iommu_domain *domain,
 void cam_free_clear(const void *);
 int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr);
 void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr);
+struct sg_table *cam_compat_dmabuf_map_attach(
+	struct dma_buf_attachment *attach, enum dma_data_direction dma_dir);
+void cam_compat_dmabuf_unmap_attach(struct dma_buf_attachment *attach,
+	struct sg_table *table, enum dma_data_direction dma_dir);
 void cam_smmu_util_iommu_custom(struct device *dev,
 	dma_addr_t discard_start, size_t discard_length);
 int cam_get_ddr_type(void);
@@ -137,10 +146,6 @@ void cam_eeprom_spi_driver_remove(struct spi_device *sdev);
 #else
 static int32_t cam_eeprom_spi_driver_remove(struct spi_device *sdev);
 #endif
-
-#ifndef CONFIG_SPECTRA_KT
-int cam_smmu_fetch_csf_version(struct cam_csf_version *csf_version);
-#endif /* ifndef CONFIG_SPECTRA_KT */
 
 bool cam_secure_get_vfe_fd_port_config(void);
 unsigned long cam_update_dma_map_attributes(unsigned long attr);

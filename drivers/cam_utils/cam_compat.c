@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-mapping.h>
@@ -110,36 +110,6 @@ int cam_cpas_drv_channel_switch_for_dev(const struct device *dev)
 	return 0;
 }
 #endif
-
-#ifndef CONFIG_SPECTRA_KT
-
-int cam_smmu_fetch_csf_version(struct cam_csf_version *csf_version)
-{
-#ifdef CONFIG_SPECTRA_SECURE
-	struct csf_version csf_ver;
-	int rc;
-
-	/* Fetch CSF version from SMMU proxy driver */
-	rc = smmu_proxy_get_csf_version(&csf_ver);
-	if (rc) {
-		CAM_ERR(CAM_SMMU,
-			"Failed to get CSF version from SMMU proxy: %d", rc);
-		return rc;
-	}
-
-	csf_version->arch_ver = csf_ver.arch_ver;
-	csf_version->max_ver = csf_ver.max_ver;
-	csf_version->min_ver = csf_ver.min_ver;
-#else
-	/* This defaults to the legacy version */
-	csf_version->arch_ver = 2;
-	csf_version->max_ver = 0;
-	csf_version->min_ver = 0;
-#endif /* CONFIG_SPECTRA_SECURE */
-	return 0;
-}
-
-#endif /* ifndef CONFIG_SPECTRA_KT */
 
 unsigned long cam_update_dma_map_attributes(unsigned long attrs)
 {
@@ -288,8 +258,6 @@ static inline int camera_component_compare_dev(struct device *dev, void *data)
 	return dev == data;
 }
 
-#ifdef CONFIG_SPECTRA_KT
-
 /* Add component matches to list for master of aggregate driver */
 int camera_component_match_add_drivers(struct device *master_dev,
 	struct component_match **match_list)
@@ -324,63 +292,6 @@ int camera_component_match_add_drivers(struct device *master_dev,
 end:
 	return rc;
 }
-
-#else
-
-/* Add component matches to list for master of aggregate driver */
-int camera_component_match_add_drivers(struct device *master_dev,
-	struct component_match **match_list)
-{
-	int i, rc = 0;
-	struct platform_device *pdev = NULL;
-	struct i2c_client *client = NULL;
-	struct device *start_dev = NULL, *match_dev = NULL;
-
-	if (!master_dev || !match_list) {
-		CAM_ERR(CAM_UTIL, "Invalid parameters for component match add");
-		rc = -EINVAL;
-		goto end;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(cam_component_platform_drivers); i++) {
-		struct device_driver const *drv =
-			&cam_component_platform_drivers[i]->driver;
-		const void *drv_ptr = (const void *)drv;
-		start_dev = NULL;
-		while ((match_dev = bus_find_device(&platform_bus_type,
-			start_dev, drv_ptr, &camera_platform_compare_dev))) {
-			put_device(start_dev);
-			pdev = to_platform_device(match_dev);
-			CAM_DBG(CAM_UTIL, "Adding matched component:%s", pdev->name);
-			component_match_add(master_dev, match_list,
-				camera_component_compare_dev, match_dev);
-			start_dev = match_dev;
-		}
-		put_device(start_dev);
-	}
-
-	for (i = 0; i < ARRAY_SIZE(cam_component_i2c_drivers); i++) {
-		struct device_driver const *drv =
-			&cam_component_i2c_drivers[i]->driver;
-		const void *drv_ptr = (const void *)drv;
-		start_dev = NULL;
-		while ((match_dev = bus_find_device(&i2c_bus_type,
-			start_dev, drv_ptr, &camera_i2c_compare_dev))) {
-			put_device(start_dev);
-			client = to_i2c_client(match_dev);
-			CAM_DBG(CAM_UTIL, "Adding matched component:%s", client->name);
-			component_match_add(master_dev, match_list,
-				camera_component_compare_dev, match_dev);
-			start_dev = match_dev;
-		}
-		put_device(start_dev);
-	}
-
-end:
-	return rc;
-}
-
-#endif /* ifdef CONFIG_SPECTRA_KT */
 
 struct iommu_fault_ids {
 	int bid;
@@ -418,10 +329,15 @@ static int inline cam_subdev_list_cmp(struct cam_subdev *entry_1, struct cam_sub
 		return 0;
 }
 
+#if (KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE)
 int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 {
-	struct iosys_map mapping = {0};
+	struct iosys_map mapping;
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	int error_code = dma_buf_vmap_unlocked(dmabuf, &mapping);
+#else
 	int error_code = dma_buf_vmap(dmabuf, &mapping);
+#endif
 
 	if (error_code) {
 		*vaddr = 0;
@@ -439,56 +355,84 @@ int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
 {
 	struct iosys_map mapping = IOSYS_MAP_INIT_VADDR(vaddr);
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	dma_buf_vunmap_unlocked(dmabuf, &mapping);
+#else
+	dma_buf_vunmap(dmabuf, &mapping);
+#endif
+}
+
+#elif (KERNEL_VERSION(5, 15, 0) <= LINUX_VERSION_CODE)
+int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
+{
+	struct dma_buf_map mapping;
+	int error_code = dma_buf_vmap(dmabuf, &mapping);
+
+	if (error_code)
+		*vaddr = 0;
+	else
+		*vaddr = (mapping.is_iomem) ?
+			(uintptr_t)mapping.vaddr_iomem : (uintptr_t)mapping.vaddr;
+
+	return error_code;
+}
+
+void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
+{
+	struct dma_buf_map mapping = DMA_BUF_MAP_INIT_VADDR(vaddr);
 
 	dma_buf_vunmap(dmabuf, &mapping);
 }
 
+#else
+int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
+{
+	int error_code = 0;
+	void *addr = dma_buf_vmap(dmabuf);
+
+	if (!addr) {
+		*vaddr = 0;
+		error_code = -ENOSPC;
+	} else {
+		*vaddr = (uintptr_t)addr;
+	}
+
+	return error_code;
+}
+
+void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
+{
+	dma_buf_vunmap(dmabuf, vaddr);
+}
+#endif
+
+struct sg_table *cam_compat_dmabuf_map_attach(struct dma_buf_attachment *attach,
+	enum dma_data_direction dma_dir)
+{
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	return dma_buf_map_attachment_unlocked(attach, dma_dir);
+#else
+	return dma_buf_map_attachment(attach, dma_dir);
+#endif
+}
+
+void cam_compat_dmabuf_unmap_attach(struct dma_buf_attachment *attach,
+	struct sg_table *table, enum dma_data_direction dma_dir)
+{
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	dma_buf_unmap_attachment_unlocked(attach, table, dma_dir);
+#else
+	dma_buf_unmap_attachment(attach, table, dma_dir);
+#endif
+}
+
+
+
+#if (KERNEL_VERSION(5, 15, 0) <= LINUX_VERSION_CODE)
 void cam_smmu_util_iommu_custom(struct device *dev,
 	dma_addr_t discard_start, size_t discard_length)
 {
-	return;
-}
 
-int cam_get_ddr_type(void)
-{
-	int ret;
-	u64 ddr_type;
-	struct device_node *root_node;
-	struct device_node *mem_node = NULL;
-
-	root_node = of_find_node_by_path("/");
-
-	if (root_node == NULL) {
-		CAM_ERR(CAM_UTIL, "Unable to find root node");
-		return -ENOENT;
-	}
-
-	do {
-		mem_node = of_get_next_child(root_node, mem_node);
-		if (of_node_name_prefix(mem_node, "memory")) {
-			CAM_DBG(CAM_UTIL,
-					"memory node found with full name %s",
-					mem_node->full_name);
-			break;
-		}
-	} while (mem_node != NULL);
-
-	of_node_put(root_node);
-	if (mem_node == NULL) {
-		CAM_ERR(CAM_UTIL, "memory node not found");
-		return -ENOENT;
-	}
-
-	ret = of_property_read_u64(mem_node, "ddr_device_type", &ddr_type);
-
-	of_node_put(mem_node);
-	if (ret < 0) {
-		CAM_ERR(CAM_UTIL, "ddr_device_type read failed");
-		return ret;
-	}
-
-	CAM_DBG(CAM_UTIL, "DDR Type %lld", ddr_type);
-	return ddr_type;
 }
 
 int cam_req_mgr_ordered_list_cmp(void *priv,
@@ -498,18 +442,34 @@ int cam_req_mgr_ordered_list_cmp(void *priv,
 		list_entry(head_2, struct cam_subdev, list));
 }
 
-#if KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE
-void cam_i3c_driver_remove(struct i3c_device *client)
+int cam_get_ddr_type(void)
 {
-	CAM_DBG(CAM_SENSOR, "I3C remove invoked for %s",
-		(client ? dev_name(&client->dev) : "none"));
+	/* We assume all chipsets running kernel version 5.15+
+	 * to be using only DDR5 based memory.
+	 */
+	return DDR_TYPE_LPDDR5;
 }
 #else
 int cam_i3c_driver_remove(struct i3c_device *client)
 {
-    CAM_DBG(CAM_SENSOR, "I3C remove invoked for %s",
-        (client ? dev_name(&client->dev) : "none"));
-    return 0;
+	iommu_dma_enable_best_fit_algo(dev);
+
+	if (discard_start)
+		iommu_dma_reserve_iova(dev, discard_start, discard_length);
+
+	return;
+}
+
+int cam_req_mgr_ordered_list_cmp(void *priv,
+	struct list_head *head_1, struct list_head *head_2)
+{
+	return cam_subdev_list_cmp(list_entry(head_1, struct cam_subdev, list),
+		list_entry(head_2, struct cam_subdev, list));
+}
+
+int cam_get_ddr_type(void)
+{
+	return of_fdt_get_ddrtype();
 }
 #endif
 
@@ -518,7 +478,7 @@ long cam_dma_buf_set_name(struct dma_buf *dmabuf, const char *name)
 	return 0;
 }
 
-#ifdef CONFIG_SPECTRA_KT
+
 int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
 {
 	int rc = 0;
@@ -531,22 +491,6 @@ int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
 
 	return rc;
 }
-
-#else
-
-int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
-{
-	int rc = 0;
-
-	soc_info->irq_num[0] = platform_get_irq(soc_info->pdev, 0);
-	if (soc_info->irq_num[0] < 0) {
-		rc = soc_info->irq_num[0];
-		return rc;
-	}
-
-	return rc;
-}
-#endif /* ifdef CONFIG_SPECTRA_KT */
 
 #ifdef CONFIG_SPECTRA_PARTIAL_CAMERA
 int cam_get_subpart_info(uint32_t *part_info, uint32_t max_num_cam)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023,2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -9,9 +9,6 @@
 #include <linux/slab.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
-#include <linux/pm_domain.h>
-#include <linux/pm_runtime.h>
-#include <linux/pm_opp.h>
 #include <linux/pinctrl/consumer.h>
 #include "cam_soc_util.h"
 #include "cam_debug_util.h"
@@ -505,16 +502,6 @@ int cam_soc_util_set_src_clk_rate(struct cam_hw_soc_info *soc_info,
 			apply_level);
 	}
 
-	rc = dev_pm_opp_set_rate(soc_info->dev,
-			  soc_info->clk_rate[apply_level][soc_info->src_clk_idx]);
-	if (rc) {
-		CAM_ERR(CAM_UTIL,
-			"Unable to set operating point for dev %s clk_name %s rc %d",
-			soc_info->dev_name, soc_info->clk_name[soc_info->src_clk_idx],
-			rc);
-		return rc;
-	}
-
 	rc = cam_soc_util_set_clk_rate(clk,
 		soc_info->clk_name[src_clk_idx], clk_rate,
 		&soc_info->applied_src_clk_rate);
@@ -710,17 +697,6 @@ int cam_soc_util_clk_enable_default(struct cam_hw_soc_info *soc_info,
 	if (soc_info->cam_cx_ipeak_enable)
 		cam_cx_ipeak_update_vote_cx_ipeak(soc_info, apply_level);
 
-	rc = dev_pm_opp_set_rate(soc_info->dev,
-			soc_info->clk_rate[apply_level][soc_info->src_clk_idx]);
-	if (rc) {
-		CAM_ERR(CAM_UTIL,
-			"Unable to set operating point for dev %s clk_name %s rc %d",
-			soc_info->dev_name, soc_info->clk_name[soc_info->src_clk_idx],
-			rc);
-		return rc;
-	}
-
-
 	for (i = 0; i < soc_info->num_clk; i++) {
 		rc = cam_soc_util_clk_enable(soc_info->clk[i],
 			soc_info->clk_name[i],
@@ -775,7 +751,6 @@ void cam_soc_util_clk_disable_default(struct cam_hw_soc_info *soc_info)
 	if (soc_info->cam_cx_ipeak_enable)
 		cam_cx_ipeak_unvote_cx_ipeak(soc_info);
 
-	dev_pm_opp_set_rate(soc_info->dev, 0);
 	for (i = soc_info->num_clk - 1; i >= 0; i--)
 		cam_soc_util_clk_disable(soc_info->clk[i],
 			soc_info->clk_name[i]);
@@ -1008,15 +983,6 @@ int cam_soc_util_set_clk_rate_level(struct cam_hw_soc_info *soc_info,
 	if (soc_info->cam_cx_ipeak_enable)
 		cam_cx_ipeak_update_vote_cx_ipeak(soc_info, apply_level);
 
-	rc = dev_pm_opp_set_rate(soc_info->dev,
-			  soc_info->clk_rate[apply_level][soc_info->src_clk_idx]);
-	if (rc) {
-		CAM_ERR(CAM_UTIL,
-			"Unable to set operating point for dev %s clk_name %s rc %d",
-			soc_info->dev_name, soc_info->clk_name[soc_info->src_clk_idx],
-			rc);
-		return rc;
-	}
 
 	for (i = 0; i < soc_info->num_clk; i++) {
 		if (do_not_set_src_clk && (i == soc_info->src_clk_idx)) {
@@ -1253,7 +1219,8 @@ static int cam_soc_util_request_gpio_table(
 			}
 		}
 	} else {
-		gpio_free_array(gpio_tbl, size);
+		for (i = 0; i < size; i++)
+			gpio_free(gpio_tbl[i].gpio);
 	}
 
 	return rc;
@@ -1587,39 +1554,6 @@ static void cam_soc_util_regulator_disable_default(
 	}
 }
 
-void cam_soc_util_power_domain_disable_default(
-	struct cam_hw_soc_info *soc_info)
-{
-	int i, ret = 0, num_pds = soc_info->num_genpd;
-
-	if (num_pds < 1) {
-		CAM_DBG(CAM_UTIL,
-			"power-domains not defined for dev %s num_pds = %d",
-			num_pds, soc_info->dev_name);
-		return;
-	}
-
-	if (num_pds == 1) {
-		dev_pm_genpd_set_performance_state(soc_info->dev, 0);
-		ret = pm_runtime_put_sync(soc_info->dev);
-		CAM_DBG(CAM_UTIL,
-			"power-domain disabled for dev %s ret %d",
-			soc_info->dev_name, ret);
-		return;
-	}
-
-	for (i = num_pds - 1; i >= 0; i--) {
-		if (!soc_info->genpd)
-			continue;
-
-		if (!soc_info->genpd[i])
-			continue;
-
-		dev_pm_genpd_set_performance_state(soc_info->genpd[i], 0);
-		pm_runtime_put(soc_info->genpd[i]);
-	}
-}
-
 static int cam_soc_util_regulator_enable_default(
 	struct cam_hw_soc_info *soc_info)
 {
@@ -1663,145 +1597,6 @@ disable_rgltr:
 		}
 	}
 
-	return rc;
-}
-
-int cam_soc_util_power_domain_enable_default(
-	struct cam_hw_soc_info *soc_info)
-{
-	int i = 0, ret = 0;
-	int32_t num_pds = soc_info->num_genpd;
-
-	if (num_pds < 1) {
-		CAM_DBG(CAM_UTIL,
-			"power-domains not defined for dev %s num_pds = %d",
-			num_pds, soc_info->dev_name);
-		goto end;
-	}
-
-	if (num_pds == 1) {
-		dev_pm_genpd_set_performance_state(soc_info->dev, INT_MAX);
-		ret = pm_runtime_get_sync(soc_info->dev);
-		CAM_DBG(CAM_UTIL,
-			"power-domain enabled for dev %s ret %d",
-			soc_info->dev_name, ret);
-
-		if (ret < 0) {
-			CAM_ERR(CAM_UTIL,
-				"power-domain enable failed for dev %s ret %d",
-				soc_info->dev_name, ret);
-			pm_runtime_put(soc_info->dev);
-			dev_pm_genpd_set_performance_state(soc_info->dev, 0);
-		}
-
-		goto end;
-	}
-
-	for (i = 0; i < num_pds; i++) {
-		if (!soc_info->genpd)
-			continue;
-
-		if (!soc_info->genpd[i])
-			continue;
-
-		dev_pm_genpd_set_performance_state(soc_info->genpd[i], INT_MAX);
-		ret = pm_runtime_get_sync(soc_info->genpd[i]);
-		if (ret < 0) {
-			CAM_ERR(CAM_UTIL,
-				"power-domain enable failed for dev %s ret %d i %d",
-				soc_info->dev_name, ret, i);
-			goto disable_pds;
-		}
-	}
-
-	goto end;
-
-disable_pds:
-	for (i--; i >= 0; i--) {
-		if (!soc_info->genpd[i])
-			continue;
-
-		dev_pm_genpd_set_performance_state(soc_info->genpd[i], 0);
-		pm_runtime_put(soc_info->genpd[i]);
-	}
-end:
-	return ret;
-}
-
-int cam_soc_util_configure_pd(struct cam_hw_soc_info *soc_info)
-{
-	int i, ret = 0;
-
-	soc_info->num_genpd = of_count_phandle_with_args(soc_info->dev->of_node,
-							"power-domains",
-							"#power-domain-cells");
-	if (soc_info->num_genpd < 1) {
-		CAM_WARN(CAM_UTIL,
-			"DBG: power-domains not defined for %s",
-			soc_info->dev_name);
-		soc_info->num_genpd = 0;
-		goto end;
-	}
-
-	CAM_DBG(CAM_UTIL,
-		"num_genpd defined for dev %s: %d",
-		soc_info->dev_name, soc_info->num_genpd);
-	/*
-	 * With only one power domain defined there is no need to have
-	 * references of genpd devices as the genpd attach will happen
-	 * during probe with dev_pm_domain_attach().
-	 */
-	if (soc_info->num_genpd == 1) {
-		goto end;
-	}
-
-	soc_info->genpd = devm_kmalloc_array(soc_info->dev, soc_info->num_genpd,
-					     sizeof(struct device), GFP_KERNEL);
-	if (!soc_info->genpd) {
-		CAM_ERR(CAM_UTIL,
-			"devm_kmalloc_array failed for dev %s, num_genpd %d",
-			soc_info->dev_name, soc_info->num_genpd);
-		ret = -ENOMEM;
-		goto end;
-	}
-
-	for (i = 0; i < soc_info->num_genpd; i++) {
-		soc_info->genpd[i] = dev_pm_domain_attach_by_id(soc_info->dev, i);
-		if (IS_ERR(soc_info->genpd[i])) {
-			CAM_ERR(CAM_UTIL,
-				"Error in pm_domain_attach");
-			ret = PTR_ERR(soc_info->genpd[i]);
-			goto fail_pm;
-		}
-	}
-
-	goto end;
-
-fail_pm:
-	for (--i ; i >= 0; i--)
-		dev_pm_domain_detach(soc_info->genpd[i], true);
-end:
-	return ret;
-}
-
-int cam_soc_util_configure_opp(struct cam_hw_soc_info *soc_info)
-{
-	int rc = 0;
-
-	rc = devm_pm_opp_set_clkname(soc_info->dev, soc_info->clk_name[soc_info->src_clk_idx]);
-	if (rc) {
-		CAM_ERR(CAM_UTIL,
-			"OPP set_clkname failed for dev %s clk_name %s rc %d",
-			soc_info->dev_name, soc_info->clk_name[soc_info->src_clk_idx], rc);
-		return rc;
-	}
-
-	rc = devm_pm_opp_of_add_table(soc_info->dev);
-	if (rc) {
-		CAM_ERR(CAM_UTIL,
-			"OPP add_table failed for dev %s rc %d",
-			soc_info->dev_name, rc);
-	}
 	return rc;
 }
 
@@ -1856,20 +1651,6 @@ int cam_soc_util_request_platform_resource(
 			goto put_regulator;
 	}
 
-	rc = cam_soc_util_configure_pd(soc_info);
-	if (rc)
-		goto put_regulator;
-
-	pm_runtime_enable(soc_info->dev);
-
-	/*
-	 * Doing a pm_runtime_get_sync() and pm_runtime_put_sync() after pm_runtime_enable
-	 * makes sure that the GDSC is off and only enabled later by the usecase when there
-	 * is such a requirement.
-	 */
-	cam_soc_util_power_domain_enable_default(soc_info);
-	cam_soc_util_power_domain_disable_default(soc_info);
-
 	if (soc_info->irq_num > 0) {
 		rc = devm_request_irq(soc_info->dev, soc_info->irq_num,
 			handler, IRQF_TRIGGER_RISING,
@@ -1893,11 +1674,6 @@ int cam_soc_util_request_platform_resource(
 			rc = -ENOENT;
 			goto put_clk;
 		}
-	}
-	rc = cam_soc_util_configure_opp(soc_info);
-	if (rc) {
-		CAM_ERR(CAM_UTIL, "Failed to configure OPP");
-		goto put_clk;
 	}
 
 	rc = cam_soc_util_request_pinctrl(soc_info);
@@ -1978,15 +1754,6 @@ int cam_soc_util_release_platform_resource(struct cam_hw_soc_info *soc_info)
 		}
 	}
 
-	pm_runtime_disable(soc_info->dev);
-	for (i = 0; i < soc_info->num_genpd; i++) {
-		if (!soc_info->genpd)
-			continue;
-		if (!soc_info->genpd[i])
-			continue;
-		dev_pm_domain_detach(soc_info->genpd[i], true);
-	}
-
 	for (i = soc_info->num_reg_map - 1; i >= 0; i--) {
 		iounmap(soc_info->reg_map[i].mem_base);
 		soc_info->reg_map[i].mem_base = NULL;
@@ -2026,16 +1793,10 @@ int cam_soc_util_enable_platform_resource(struct cam_hw_soc_info *soc_info,
 		return rc;
 	}
 
-	rc = cam_soc_util_power_domain_enable_default(soc_info);
-	if (rc < 0) {
-		CAM_ERR(CAM_UTIL, "Power domains enable failed");
-		goto disable_regulator;
-	}
-
 	if (enable_clocks) {
 		rc = cam_soc_util_clk_enable_default(soc_info, clk_level);
 		if (rc)
-			goto disable_power_domain;
+			goto disable_regulator;
 	}
 
 	if (enable_irq) {
@@ -2063,9 +1824,6 @@ disable_clk:
 	if (enable_clocks)
 		cam_soc_util_clk_disable_default(soc_info);
 
-disable_power_domain:
-	cam_soc_util_power_domain_disable_default(soc_info);
-
 disable_regulator:
 	cam_soc_util_regulator_disable_default(soc_info);
 
@@ -2086,8 +1844,6 @@ int cam_soc_util_disable_platform_resource(struct cam_hw_soc_info *soc_info,
 
 	if (disable_clocks)
 		cam_soc_util_clk_disable_default(soc_info);
-
-	cam_soc_util_power_domain_disable_default(soc_info);
 
 	cam_soc_util_regulator_disable_default(soc_info);
 
@@ -2174,9 +1930,9 @@ static int cam_soc_util_dump_cont_reg_range(
 			goto end;
 		}
 
-		dump_out_buf->dump_data[write_idx++] = reg_read->offset +
+		dump_out_buf->dump_data_flex[write_idx++] = reg_read->offset +
 			(i * sizeof(uint32_t));
-		dump_out_buf->dump_data[write_idx++] =
+		dump_out_buf->dump_data_flex[write_idx++] =
 			cam_soc_util_r(soc_info, base_idx,
 			(reg_read->offset + (i * sizeof(uint32_t))));
 		dump_out_buf->bytes_written += (2 * sizeof(uint32_t));
@@ -2530,7 +2286,7 @@ static int cam_soc_util_user_reg_dump(
 	}
 	for (i = 0; i < reg_dump_desc->num_read_range; i++) {
 
-		reg_read_info = &reg_dump_desc->read_range[i];
+		reg_read_info = &reg_dump_desc->read_range_flex[i];
 		if (reg_read_info->type ==
 				CAM_REG_DUMP_READ_TYPE_CONT_RANGE) {
 			rc = cam_soc_util_dump_cont_reg_range_user_buf(
@@ -2668,10 +2424,10 @@ int cam_soc_util_reg_dump_to_cmd_buf(void *ctx,
 		req_id, ctx, reg_input_info->num_dump_sets);
 	for (i = 0; i < reg_input_info->num_dump_sets; i++) {
 		if ((cmd_in_data_end - cmd_buf_start) <= (uintptr_t)
-			reg_input_info->dump_set_offsets[i]) {
+			reg_input_info->dump_set_offsets_flex[i]) {
 			CAM_ERR(CAM_UTIL,
 				"Invalid dump set offset: [%d], cmd_buf_start: [%pK] cmd_in_data_end: [%pK]",
-				reg_input_info->dump_set_offsets[i],
+				reg_input_info->dump_set_offsets_flex[i],
 				(void *)cmd_buf_start, (void *)cmd_in_data_end);
 			rc = -EINVAL;
 			goto end;
@@ -2679,7 +2435,7 @@ int cam_soc_util_reg_dump_to_cmd_buf(void *ctx,
 
 		reg_dump_desc = (struct cam_reg_dump_desc *)
 			(cmd_buf_start +
-			(uintptr_t)reg_input_info->dump_set_offsets[i]);
+			(uintptr_t)reg_input_info->dump_set_offsets_flex[i]);
 		if ((reg_dump_desc->num_read_range > 1) &&
 			(sizeof(struct cam_reg_read_info) > ((U32_MAX -
 			sizeof(struct cam_reg_dump_desc)) /
@@ -2774,7 +2530,7 @@ int cam_soc_util_reg_dump_to_cmd_buf(void *ctx,
 			CAM_DBG(CAM_UTIL,
 				"Number of bytes written to cmd buffer: %u req_id: %llu",
 				dump_out_buf->bytes_written, req_id);
-			reg_read_info = &reg_dump_desc->read_range[j];
+			reg_read_info = &reg_dump_desc->read_range_flex[j];
 			if (reg_read_info->type ==
 				CAM_REG_DUMP_READ_TYPE_CONT_RANGE) {
 				rc = cam_soc_util_dump_cont_reg_range(soc_info,
