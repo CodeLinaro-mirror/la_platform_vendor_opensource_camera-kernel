@@ -613,12 +613,13 @@ int cam_ois_driver_init(void)
 	if (rc)
 		goto i3c_register_err;
 
+#ifdef CONFIG_I3C
 	rc = i3c_driver_register_with_owner(&cam_ois_i3c_driver, THIS_MODULE);
 	if (rc) {
 		CAM_ERR(CAM_OIS, "i3c_driver registration failed, rc: %d", rc);
 		goto i3c_register_err;
 	}
-
+#endif
 	return 0;
 
 i3c_register_err:
@@ -642,7 +643,9 @@ void cam_ois_driver_exit(void)
 		return;
 	}
 
+#ifdef CONFIG_I3C
 	i3c_driver_unregister(&cam_ois_i3c_driver);
+#endif
 }
 
 MODULE_DESCRIPTION("CAM OIS driver");
