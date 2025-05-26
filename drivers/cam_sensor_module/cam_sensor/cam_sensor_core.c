@@ -673,7 +673,7 @@ int32_t cam_handle_mem_ptr(uint64_t handle, struct cam_sensor_ctrl_t *s_ctrl)
 	}
 
 	cmd_desc = (struct cam_cmd_buf_desc *)
-		((uint32_t *)&pkt->payload + pkt->cmd_buf_offset/4);
+		((uint32_t *)&pkt->payload_flex + pkt->cmd_buf_offset/4);
 	if (cmd_desc == NULL) {
 		CAM_ERR(CAM_SENSOR, "command descriptor pos is invalid");
 		rc = -EINVAL;

@@ -829,26 +829,26 @@ static int cam_hw_cdm_arb_submit_bl(struct cam_hw_info *cdm_hw,
 	list_add_tail(&node->entry,
 		&core->bl_fifo[fifo_idx]
 		.bl_request_list);
-	cdm_cmd->cmd[i].arbitrate = true;
+	cdm_cmd->cmd_flex[i].arbitrate = true;
 	rc = cam_mem_get_cpu_buf(
-		cdm_cmd->cmd[i].bl_addr.mem_handle,
+		cdm_cmd->cmd_flex[i].bl_addr.mem_handle,
 		&cpu_addr, &len);
 	if (rc || !cpu_addr) {
 		CAM_ERR(CAM_OPE, "get cmd buffailed %x",
-			cdm_cmd->cmd[i].bl_addr
+			cdm_cmd->cmd_flex[i].bl_addr
 			.mem_handle);
 		return rc;
 	}
 	core->ops->cdm_write_genirq(
 		((uint32_t *)cpu_addr +
-		cdm_cmd->cmd[i].offset / 4 +
-		cdm_cmd->cmd[i].len / 4),
+		cdm_cmd->cmd_flex[i].offset / 4 +
+		cdm_cmd->cmd_flex[i].len / 4),
 		core->bl_fifo[fifo_idx].bl_tag - 1,
 		1, fifo_idx);
 	rc = cam_hw_cdm_bl_write(cdm_hw,
 		(uint32_t)hw_vaddr_ptr +
-		cdm_cmd->cmd[i].offset,
-		cdm_cmd->cmd[i].len + 7,
+		cdm_cmd->cmd_flex[i].offset,
+		cdm_cmd->cmd_flex[i].len + 7,
 		core->bl_fifo[fifo_idx].bl_tag - 1,
 		1, fifo_idx);
 	if (rc) {
@@ -856,7 +856,7 @@ static int cam_hw_cdm_arb_submit_bl(struct cam_hw_info *cdm_hw,
 			"CDM hw bl write failed tag=%d",
 			core->bl_fifo[fifo_idx].bl_tag -
 			1);
-			cam_mem_put_cpu_buf(cdm_cmd->cmd[i].bl_addr.mem_handle);
+			cam_mem_put_cpu_buf(cdm_cmd->cmd_flex[i].bl_addr.mem_handle);
 			list_del_init(&node->entry);
 			kfree(node);
 			return -EIO;
@@ -868,12 +868,12 @@ static int cam_hw_cdm_arb_submit_bl(struct cam_hw_info *cdm_hw,
 			"CDM hw commit failed tag=%d",
 			core->bl_fifo[fifo_idx].bl_tag -
 			1);
-			cam_mem_put_cpu_buf(cdm_cmd->cmd[i].bl_addr.mem_handle);
+			cam_mem_put_cpu_buf(cdm_cmd->cmd_flex[i].bl_addr.mem_handle);
 			list_del_init(&node->entry);
 			kfree(node);
 			return -EIO;
 	}
-	cam_mem_put_cpu_buf(cdm_cmd->cmd[i].bl_addr.mem_handle);
+	cam_mem_put_cpu_buf(cdm_cmd->cmd_flex[i].bl_addr.mem_handle);
 	return 0;
 }
 

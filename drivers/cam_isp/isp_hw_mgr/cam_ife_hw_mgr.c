@@ -4037,10 +4037,10 @@ static int cam_isp_classify_vote_info(
 				return rc;
 
 			for (i = 0; i < bw_config->num_paths; i++) {
-				if (bw_config->axi_path[i].usage_data ==
+				if (bw_config->axi_path_flex[i].usage_data ==
 					CAM_ISP_USAGE_LEFT_PX) {
 					memcpy(&isp_vote->axi_path[j],
-						&bw_config->axi_path[i],
+						&bw_config->axi_path_flex[i],
 						sizeof(struct
 						cam_axi_per_path_bw_vote));
 					j++;
@@ -4054,10 +4054,10 @@ static int cam_isp_classify_vote_info(
 				return rc;
 
 			for (i = 0; i < bw_config->num_paths; i++) {
-				if (bw_config->axi_path[i].usage_data ==
+				if (bw_config->axi_path_flex[i].usage_data ==
 					CAM_ISP_USAGE_RIGHT_PX) {
 					memcpy(&isp_vote->axi_path[j],
-						&bw_config->axi_path[i],
+						&bw_config->axi_path_flex[i],
 						sizeof(struct
 						cam_axi_per_path_bw_vote));
 					j++;
@@ -4071,14 +4071,14 @@ static int cam_isp_classify_vote_info(
 		&& (hw_mgr_res->res_id <=
 		CAM_ISP_HW_VFE_IN_RDI3)) {
 		for (i = 0; i < bw_config->num_paths; i++) {
-			if ((bw_config->axi_path[i].usage_data ==
+			if ((bw_config->axi_path_flex[i].usage_data ==
 				CAM_ISP_USAGE_RDI) &&
-				((bw_config->axi_path[i].path_data_type -
+				((bw_config->axi_path_flex[i].path_data_type -
 				CAM_AXI_PATH_DATA_IFE_RDI0) ==
 				(hw_mgr_res->res_id -
 				CAM_ISP_HW_VFE_IN_RDI0))) {
 				memcpy(&isp_vote->axi_path[j],
-					&bw_config->axi_path[i],
+					&bw_config->axi_path_flex[i],
 					sizeof(struct
 					cam_axi_per_path_bw_vote));
 				j++;
@@ -4130,14 +4130,14 @@ static int cam_isp_blob_bw_update_v2(
 			"ISP_BLOB usage_type=%u [%s] [%s] [%s] [%llu] [%llu] [%llu]",
 			bw_config->usage_type,
 			cam_isp_util_usage_data_to_string(
-			bw_config->axi_path[i].usage_data),
+			bw_config->axi_path_flex[i].usage_data),
 			cam_cpas_axi_util_path_type_to_string(
-			bw_config->axi_path[i].path_data_type),
+			bw_config->axi_path_flex[i].path_data_type),
 			cam_cpas_axi_util_trans_type_to_string(
-			bw_config->axi_path[i].transac_type),
-			bw_config->axi_path[i].camnoc_bw,
-			bw_config->axi_path[i].mnoc_ab_bw,
-			bw_config->axi_path[i].mnoc_ib_bw);
+			bw_config->axi_path_flex[i].transac_type),
+			bw_config->axi_path_flex[i].camnoc_bw,
+			bw_config->axi_path_flex[i].mnoc_ab_bw,
+			bw_config->axi_path_flex[i].mnoc_ib_bw);
 	}
 
 	list_for_each_entry(hw_mgr_res, &c_ctx->res_list_ife_src, list) {
@@ -7304,7 +7304,7 @@ static void cam_ife_mgr_print_io_bufs(struct cam_ife_hw_mgr  *hw_mgr,
 	iommu_hdl = hw_mgr->mgr_common.img_iommu_hdl;
 	sec_mmu_hdl = hw_mgr->mgr_common.img_iommu_hdl_secure;
 
-	io_cfg = (struct cam_buf_io_cfg *)((uint32_t *)&packet->payload +
+	io_cfg = (struct cam_buf_io_cfg *)((uint32_t *)&packet->payload_flex +
 		packet->io_configs_offset / 4);
 
 	for (i = 0; i < packet->num_io_configs; i++) {
