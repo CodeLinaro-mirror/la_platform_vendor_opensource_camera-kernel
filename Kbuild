@@ -62,6 +62,10 @@ ifneq ($(KBUILD_EXTRA_CONFIGS),)
 include $(KBUILD_EXTRA_CONFIGS)
 endif
 
+ifeq ($(CONFIG_ARCH_SUN), y)
+include $(CAMERA_KERNEL_ROOT)/config/sun.mk
+endif
+
 # List of all camera-kernel headers
 cam_include_dirs := $(shell dirname `find $(CAMERA_KERNEL_ROOT) -name '*.h'` | uniq)
 
@@ -82,6 +86,7 @@ ccflags-$(TARGET_SYNX_ENABLE) += -I$(SYNXVENDORDIR)/msm/synx
 ccflags-$(TARGET_SYNX_ENABLE) += -DCONFIG_TARGET_SYNX_ENABLE=1
 ccflags-y += -I$(CAMERA_KERNEL_ROOT)/../securemsm-kernel/
 ccflags-y += -I$(CAMERA_KERNEL_ROOT)/../securemsm-kernel/include/
+ccflags-y += $(LE_EXTRA_CFLAGS)
 
 # After creating lists, add content of 'ccflags-m' variable to 'ccflags-y' one.
 ccflags-y += ${ccflags-m}
