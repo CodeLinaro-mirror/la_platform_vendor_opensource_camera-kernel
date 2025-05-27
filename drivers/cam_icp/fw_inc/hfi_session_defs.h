@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_HFI_SESSION_DEFS_H
@@ -570,14 +570,6 @@ struct hfi_msg_bps_common {
 	uint32_t rc;
 	uint64_t user_data;
 } __packed;
-
-/**
- * struct ipe_bps_destroy
- * @user_data: user data
- */
-struct ipe_bps_destroy {
-	uint64_t userdata;
-};
 
 /**
  * struct hfi_msg_ipe_frame_process

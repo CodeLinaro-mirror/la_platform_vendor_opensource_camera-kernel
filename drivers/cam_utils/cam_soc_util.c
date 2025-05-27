@@ -2425,7 +2425,7 @@ int cam_soc_util_reg_dump_to_cmd_buf(void *ctx,
 			reg_input_info->dump_set_offsets_flex[i]) {
 			CAM_ERR(CAM_UTIL,
 				"Invalid dump set offset: [%lu], cmd_buf_start: [%lu] cmd_in_data_end: [%lu]",
-				(uintptr_t)reg_input_info->dump_set_offsets[i],
+				(uintptr_t)reg_input_info->dump_set_offsets_flex[i],
 				cmd_buf_start, cmd_in_data_end);
 			rc = -EINVAL;
 			goto end;

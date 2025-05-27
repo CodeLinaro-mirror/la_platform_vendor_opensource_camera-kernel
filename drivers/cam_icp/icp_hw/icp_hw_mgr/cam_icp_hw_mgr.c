@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/uaccess.h>
@@ -3373,8 +3373,6 @@ static int cam_icp_mgr_destroy_handle(
 	destroy_cmd->fw_handles_flex[0] = ctx_data->fw_handle;
 	destroy_cmd->user_data1 = PTR_TO_U64(ctx_data);
 	destroy_cmd->user_data2 = (uint64_t)0x0;
-	memcpy(destroy_cmd->payload.direct, &ctx_data->temp_payload,
-		sizeof(uint64_t));
 
 	rc = hfi_write_cmd(destroy_cmd);
 	if (rc) {
@@ -4397,8 +4395,8 @@ static int cam_icp_process_stream_settings(
 			return -EINVAL;
 		}
 
-		map_cmd->mem_map_region_sets[i].start_addr = (uint32_t)iova +
-			(cmd_mem_regions->map_info_array[i].offset);
+		map_cmd->mem_map_region_sets_flex[i].start_addr = (uint32_t)iova +
+			(cmd_mem_regions->map_info_array_flex[i].offset);
 		map_cmd->mem_map_region_sets_flex[i].len = (uint32_t) len;
 
 		CAM_DBG(CAM_ICP, "Region %u mem_handle %d iova %pK len %u",
@@ -4866,7 +4864,7 @@ static int cam_icp_mgr_config_stream_settings(
 	cmd_generic_blob.io_buf_addr = NULL;
 
 	cmd_desc = (struct cam_cmd_buf_desc *)
-		((uint32_t *) &packet->payload + packet->cmd_buf_offset/4);
+		((uint32_t *) &packet->payload_flex + packet->cmd_buf_offset/4);
 
 	rc = cam_packet_util_validate_cmd_desc(cmd_desc);
 	if (rc)
