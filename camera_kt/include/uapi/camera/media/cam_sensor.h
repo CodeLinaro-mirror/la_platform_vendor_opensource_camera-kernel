@@ -498,7 +498,7 @@ struct cam_flash_query_cap_info {
  */
 
 struct cam_ir_led_query_cap_info {
-       uint32_t    slot_info;
+	__u32    slot_info;
 } __attribute__ ((packed));
 
 /**
@@ -514,12 +514,12 @@ struct cam_ir_led_query_cap_info {
  */
 
  struct cam_ir_led_set_on_off {
-       uint8_t     opcode;
-       uint8_t     cmd_type;
-       uint32_t    ir_led_intensity;
-       uint32_t    pwm_duty_on_ns;
-       uint32_t    pwm_period_ns;
-       uint8_t     brightness;
+	 __u8     opcode;
+	 __u8     cmd_type;
+	 __u32    ir_led_intensity;
+	 __u32    pwm_duty_on_ns;
+	 __u32    pwm_period_ns;
+	 __u8     brightness;
 } __attribute__((packed));
 
 #define VIDIOC_MSM_CCI_CFG \
