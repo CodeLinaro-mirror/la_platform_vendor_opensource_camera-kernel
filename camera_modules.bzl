@@ -249,7 +249,7 @@ def _define_module(target, variant):
 	    },
         },
         copts = [
-        "-D__NO_FORTIFY",
+        "-D__NO_FORTIFY", "-fstrict-flex-arrays=0",
         "-include", "$(location :camera_banner)"],
         deps = base_deps + sun_deps +deps,
         kconfig = "Kconfig",
