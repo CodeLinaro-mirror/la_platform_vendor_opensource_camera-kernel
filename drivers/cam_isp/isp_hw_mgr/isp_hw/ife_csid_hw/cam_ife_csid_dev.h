@@ -8,6 +8,7 @@
 #define _CAM_IFE_CSID_DEV_H_
 
 #include "cam_isp_hw.h"
+#include <linux/version.h>
 
 int cam_ife_csid_probe(struct platform_device *pdev);
 

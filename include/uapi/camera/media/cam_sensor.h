@@ -214,6 +214,7 @@ struct cam_cmd_power {
  * @ cmd_type        :   Command buffer type
  * @ data_type       :   I2C data type
  * @ addr_type       :   I2C address type
+ * @ frequency       :   Frequency setting for reg-data pairs
  */
 struct i2c_rdwr_header {
 	__u32    count;
@@ -221,6 +222,7 @@ struct i2c_rdwr_header {
 	__u8     cmd_type;
 	__u8     data_type;
 	__u8     addr_type;
+	__u32    frequency;
 } __attribute__((packed));
 
 /**
