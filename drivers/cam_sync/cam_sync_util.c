@@ -10,7 +10,7 @@
 
 extern struct sync_uid_info sync_uid_access;
 
-int cam_sync_util_send_exit_poll_event(void)
+int cam_sync_util_send_exit_poll_event(void *fh)
 {
 	struct v4l2_event event;
 
@@ -27,7 +27,7 @@ int cam_sync_util_send_exit_poll_event(void)
 
 	event.id = CAM_SYNC_V4L_EVENT_ID_EXIT;
 
-	v4l2_event_queue(sync_dev->vdev, &event);
+	v4l2_event_queue_fh(fh, &event);
 	return 0;
 }
 
