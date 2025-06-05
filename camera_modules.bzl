@@ -223,6 +223,8 @@ def _define_module(target, variant):
                     "drivers/cam_sensor_module/cam_ir_led/cam_ir_led_dev.c",
                     "drivers/cam_sensor_module/cam_ir_led/cam_ir_led_core.c",
                     "drivers/cam_sensor_module/cam_ir_led/cam_ir_led_soc.c",
+                    "drivers/cam_sensor_module/cam_dp_bdg_lt7911d/cam_dp_bdg_lt7911d_core.c",
+                    "drivers/cam_sensor_module/cam_dp_bdg_lt7911d/cam_dp_bdg_lt7911d_dev.c",
 
                 ],
             },
