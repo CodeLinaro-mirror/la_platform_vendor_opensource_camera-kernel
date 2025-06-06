@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_ois_dev.h"
@@ -252,6 +252,7 @@ static int cam_ois_i2c_component_bind(struct device *dev,
 	o_ctrl->bridge_intf.device_hdl = -1;
 
 	mutex_init(&(o_ctrl->ois_mutex));
+	INIT_LIST_HEAD(&(o_ctrl->read_buf_list));
 	o_ctrl->cam_ois_state = CAM_OIS_INIT;
 	CAM_GET_TIMESTAMP(ts_end);
 	CAM_GET_TIMESTAMP_DIFF_IN_MICRO(ts_start, ts_end, microsec);
@@ -299,6 +300,7 @@ static void cam_ois_i2c_component_unbind(struct device *dev,
 	cam_unregister_subdev(&(o_ctrl->v4l2_dev_str));
 	cam_sensor_util_release_resources(&(o_ctrl->io_master_info), soc_info);
 	v4l2_set_subdevdata(&o_ctrl->v4l2_dev_str.sd, NULL);
+	mutex_destroy(&(o_ctrl->ois_mutex));
 	CAM_MEM_FREE(o_ctrl);
 }
 
@@ -415,6 +417,7 @@ static int cam_ois_component_bind(struct device *dev,
 	o_ctrl->soc_info.soc_private = soc_private;
 	soc_private->power_info.dev  = &pdev->dev;
 	mutex_init(&(o_ctrl->ois_mutex));
+	INIT_LIST_HEAD(&(o_ctrl->read_buf_list));
 	rc = cam_ois_driver_soc_init(o_ctrl);
 	if (rc) {
 		CAM_ERR(CAM_OIS, "failed: soc init rc %d", rc);
@@ -449,6 +452,7 @@ unreg_subdev:
 	cam_unregister_subdev(&(o_ctrl->v4l2_dev_str));
 free_soc:
 	CAM_MEM_FREE(soc_private);
+	mutex_destroy(&(o_ctrl->ois_mutex));
 free_cci_client:
 	CAM_MEM_FREE(o_ctrl->io_master_info.cci_client);
 free_o_ctrl:
@@ -479,6 +483,7 @@ static void cam_ois_component_unbind(struct device *dev,
 	cam_sensor_util_release_resources(&(o_ctrl->io_master_info), soc_info);
 	platform_set_drvdata(pdev, NULL);
 	v4l2_set_subdevdata(&o_ctrl->v4l2_dev_str.sd, NULL);
+	mutex_destroy(&(o_ctrl->ois_mutex));
 	CAM_MEM_FREE(o_ctrl);
 }
 

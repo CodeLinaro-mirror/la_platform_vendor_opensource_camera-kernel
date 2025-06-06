@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 
@@ -105,7 +105,6 @@ struct actuator_intf_params {
  * @is_deferred_park_lens : Flag to specify deferred park lens
  * @park_lens_complete    : Indicator for park lens complete
  * @read_buf_list         : Actuator register read cmd buffer handle list
- * @read_buf_lock         : Actuator register read cmd buffer mutex
  */
 struct cam_actuator_ctrl_t {
 	char device_name[CAM_CTX_DEV_NAME_MAX_LENGTH];
@@ -127,7 +126,6 @@ struct cam_actuator_ctrl_t {
 	bool is_deferred_park_lens;
 	struct completion park_lens_complete;
 	struct list_head read_buf_list;
-	struct mutex read_buf_lock;
 };
 
 /**
