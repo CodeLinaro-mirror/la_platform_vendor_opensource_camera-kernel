@@ -916,4 +916,12 @@ int cam_cpas_set_ife_core_clk_gate_value(uint32_t hw_index, bool is_power_on);
  */
 bool cam_cpas_is_notif_staling_supported(void);
 
+/**
+ * cam_cpas_is_fw_based_sys_caching_supported()
+ *
+ * @brief: API to return true if feature is supported
+ * @return true or false
+ */
+bool cam_cpas_is_fw_based_sys_caching_supported(void);
+
 #endif /* _CAM_CPAS_API_H_ */
