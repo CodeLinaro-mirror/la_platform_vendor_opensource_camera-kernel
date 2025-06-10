@@ -102,14 +102,32 @@ struct cam_cpas_feature_info {
 };
 
 /**
+ * struct cam_sys_cache_local_info : camera cache info saving locally
+ *
+ * @type:             cache type small/large etc.
+ * @staling_distance: staling_distance
+ * @mode:             camera llc's stalling mode
+ * @op_type:          cache operation type EVICT, FORGET
+ */
+struct cam_sys_cache_local_info {
+	enum cam_sys_cache_config_types  type;
+	uint32_t staling_distance;
+	enum cam_sys_cache_llcc_staling_mode mode;
+	enum cam_sys_cache_llcc_staling_op_type op_type;
+};
+
+/**
  * struct cam_sys_cache_info : Last level camera cache info
  *
- * @ref_cnt:   Ref cnt activate/deactivate cache
- * @type:      cache type small/large etc.
- * @uid:       Client user ID
- * @size:      Cache size
- * @scid:      Slice ID
- * @slic_desc: Slice descriptor
+ * @ref_cnt:          Ref cnt activate/deactivate cache
+ * @type:             cache type small/large etc.
+ * @uid:              Client user ID
+ * @size:             Cache size
+ * @scid:             Slice ID
+ * @slic_desc:        Slice descriptor
+ * @staling_distance: staling_distance
+ * @mode:             camera llc's stalling mode
+ * @op_type:          cache operation type EVICT, FORGET
  */
 struct cam_sys_cache_info {
 	uint32_t                         ref_cnt;
@@ -119,6 +137,10 @@ struct cam_sys_cache_info {
 	int32_t                          scid;
 	const char                      *name;
 	struct llcc_slice_desc          *slic_desc;
+	uint32_t staling_distance;
+	enum cam_sys_cache_llcc_staling_mode mode;
+	enum cam_sys_cache_llcc_staling_op_type op_type;
+
 };
 
 

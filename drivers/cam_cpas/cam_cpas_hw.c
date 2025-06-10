@@ -2688,6 +2688,86 @@ static int cam_cpas_deactivate_cache(
 	return rc;
 }
 
+#if IS_ENABLED(CONFIG_SPECTRA_LLCC_STALING)
+static int cam_cpas_configure_staling_cache(
+	struct cam_hw_info *cpas_hw,
+	struct cam_sys_cache_info *cache_info,
+	struct cam_sys_cache_local_info *sys_cache_info)
+{
+	int rc = 0;
+	struct llcc_staling_mode_params staling_params;
+
+	mutex_lock(&cpas_hw->hw_mutex);
+	switch (sys_cache_info->mode) {
+	case CAM_LLCC_STALING_MODE_CAPACITY: {
+		staling_params.staling_mode = LLCC_STALING_MODE_CAPACITY;
+		break;
+	}
+	case CAM_LLCC_STALING_MODE_NOTIFY: {
+		staling_params.staling_mode = LLCC_STALING_MODE_NOTIFY;
+		break;
+	}
+	default:
+		CAM_ERR(CAM_CPAS, "CPAS LLCC sys cache mode is not valid =%d op_type=%d",
+			sys_cache_info->mode, sys_cache_info->op_type);
+		break;
+	}
+
+	switch (sys_cache_info->op_type) {
+	case CAM_LLCC_NOTIFY_STALING_EVICT: {
+		staling_params.notify_params.op = LLCC_NOTIFY_STALING_WRITEBACK;
+		break;
+	}
+	default:
+		CAM_ERR(CAM_CPAS, "CPAS LLCC sys cache op_type is not valid =%d mode=%d",
+			sys_cache_info->op_type, sys_cache_info->mode);
+		break;
+	}
+	staling_params.notify_params.staling_distance = sys_cache_info->staling_distance;
+	rc = llcc_configure_staling_mode(cache_info->slic_desc, &staling_params);
+	if (!rc) {
+		cache_info->staling_distance = sys_cache_info->staling_distance;
+		cache_info->mode = sys_cache_info->mode;
+		cache_info->op_type = sys_cache_info->op_type;
+	} else if (rc == -EOPNOTSUPP) {
+		CAM_ERR(CAM_CPAS, "llcc staling feature is not supported cache:%s",
+			cache_info->name);
+	} else if (rc) {
+		CAM_ERR(CAM_CPAS,
+			"Failed to enable llcc notif cache name:%s staling_distance %d cache mode :%d cache op_type :%d",
+			cache_info->name, cache_info->staling_distance,
+			cache_info->mode, cache_info->op_type);
+	}
+
+	mutex_unlock(&cpas_hw->hw_mutex);
+	CAM_DBG(CAM_CPAS,
+		"llcc notif cache name:%s staling_distance %d cache mode :%d cache op_type :%d",
+		cache_info->name, cache_info->staling_distance,
+		cache_info->mode, cache_info->op_type);
+
+	return rc;
+}
+
+static int cam_cpas_notif_stalling_inc_cache(
+	struct cam_hw_info *cpas_hw,
+	struct cam_sys_cache_info *cache_info)
+{
+	int rc = 0;
+
+	mutex_lock(&cpas_hw->hw_mutex);
+	rc = llcc_notif_staling_inc_counter(cache_info->slic_desc);
+	if (rc == -EOPNOTSUPP)
+		CAM_ERR(CAM_CPAS, "llcc notif stalling inc not supported: %s", cache_info->name);
+	else if (rc)
+		CAM_ERR(CAM_CPAS, "Failed to llcc staling frame trigger:%s", cache_info->name);
+
+	mutex_unlock(&cpas_hw->hw_mutex);
+	CAM_DBG(CAM_CPAS, "llcc staling frame triggered cache:%s", cache_info->name);
+
+	return rc;
+}
+#endif
+
 static int cam_cpas_set_core_hw_clk(
 	struct cam_hw_info *cpas_hw,
 	uint32_t hw_index, bool is_power_on)
@@ -2724,8 +2804,10 @@ static int cam_cpas_set_core_hw_clk(
 static inline int cam_cpas_validate_cache_type(
 	uint32_t num_caches, enum cam_sys_cache_config_types type)
 {
-	if ((!num_caches) || (type < 0) || (type >= num_caches))
+	if ((!num_caches) || (type < 0) || (type >= num_caches)) {
+		CAM_ERR(CAM_CPAS, "Invalid type %d Num_cache %d ", type, num_caches);
 		return -EINVAL;
+	}
 	else
 		return 0;
 }
@@ -2800,6 +2882,75 @@ static int cam_cpas_deactivate_cache_slice(
 end:
 	return rc;
 }
+
+#if IS_ENABLED(CONFIG_SPECTRA_LLCC_STALING)
+static int cam_cpas_configure_staling_cache_slice(
+	struct cam_hw_info *cpas_hw,
+	struct cam_sys_cache_local_info sys_cache_info)
+{
+	struct cam_cpas_private_soc *soc_private =
+		(struct cam_cpas_private_soc *)cpas_hw->soc_info.soc_private;
+	uint32_t num_caches = soc_private->num_caches;
+	int rc = 0, i;
+
+	CAM_DBG(CAM_CPAS, "configuring cache type: %d", sys_cache_info.type);
+	if (cam_cpas_validate_cache_type(num_caches, sys_cache_info.type))
+		goto end;
+
+	for (i = 0; i < num_caches; i++) {
+		if (sys_cache_info.type == soc_private->llcc_info[i].type) {
+			rc = cam_cpas_configure_staling_cache(cpas_hw,
+				&soc_private->llcc_info[i], &sys_cache_info);
+			if (rc) {
+				CAM_ERR(CAM_CPAS, "llc sys cache type %d config failed, rc: %d",
+					soc_private->llcc_info[i].type, rc);
+			}
+			break;
+		}
+	}
+
+end:
+	return rc;
+}
+
+static int cam_cpas_notif_stalling_inc_cache_slice(
+	struct cam_hw_info *cpas_hw,
+	enum cam_sys_cache_config_types type)
+{
+	struct cam_cpas_private_soc *soc_private =
+		(struct cam_cpas_private_soc *)cpas_hw->soc_info.soc_private;
+	uint32_t num_caches = soc_private->num_caches;
+	int rc = 0, i;
+
+	CAM_DBG(CAM_CPAS, "notification cache type: %d", type);
+	if (cam_cpas_validate_cache_type(num_caches, type))
+		goto end;
+
+	for (i = 0; i < num_caches; i++) {
+		if (type == soc_private->llcc_info[i].type)
+			rc = cam_cpas_notif_stalling_inc_cache(cpas_hw,
+				&soc_private->llcc_info[i]);
+	}
+
+end:
+	return rc;
+}
+
+#else
+static int cam_cpas_configure_staling_cache_slice(
+	struct cam_hw_info *cpas_hw,
+	struct cam_sys_cache_local_info sys_cache_info)
+{
+	return -EOPNOTSUPP;
+}
+
+static int cam_cpas_notif_stalling_inc_cache_slice(
+	struct cam_hw_info *cpas_hw,
+	enum cam_sys_cache_config_types type)
+{
+	return -EOPNOTSUPP;
+}
+#endif
 
 static int cam_cpas_hw_gdsc_get_put(struct cam_hw_info *cpas_hw,
 	struct cam_cpas_gdsc_params gdsc)
@@ -3013,6 +3164,31 @@ static int cam_cpas_hw_process_cmd(void *hw_priv,
 		}
 		type = *((enum cam_sys_cache_config_types *) cmd_args);
 		rc = cam_cpas_deactivate_cache_slice(hw_priv, type);
+	}
+		break;
+	case CAM_CPAS_HW_CMD_CONFIGURE_STALING_LLC: {
+		struct cam_sys_cache_local_info sys_cache_info;
+
+		if (sizeof(struct cam_sys_cache_local_info) != arg_size) {
+			CAM_ERR(CAM_CPAS, "cmd_type %d, size mismatch %d",
+				cmd_type, arg_size);
+			break;
+		}
+		sys_cache_info =
+			*((struct cam_sys_cache_local_info *) cmd_args);
+		rc = cam_cpas_configure_staling_cache_slice(hw_priv, sys_cache_info);
+	}
+		break;
+	case CAM_CPAS_HW_CMD_NOTIF_STALL_INC_LLC: {
+		enum cam_sys_cache_config_types type;
+
+		if (sizeof(enum cam_sys_cache_config_types) != arg_size) {
+			CAM_ERR(CAM_CPAS, "cmd_type %d, size mismatch %d",
+				cmd_type, arg_size);
+			break;
+		}
+		type = *((enum cam_sys_cache_config_types *) cmd_args);
+		rc = cam_cpas_notif_stalling_inc_cache_slice(hw_priv, type);
 	}
 		break;
 	case CAM_CPAS_HW_CMD_DUMP_BUFF_FILL_INFO: {

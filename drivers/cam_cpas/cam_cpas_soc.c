@@ -858,6 +858,9 @@ static int cam_cpas_parse_sys_cache_uids(
 		soc_private->llcc_info[i].scid = scid;
 		soc_private->llcc_info[i].size =
 			llcc_get_slice_size(soc_private->llcc_info[i].slic_desc);
+		soc_private->llcc_info[i].staling_distance = 0;
+		soc_private->llcc_info[i].mode = CAM_LLCC_STALING_MODE_CAPACITY;
+		soc_private->llcc_info[i].op_type = CAM_LLCC_NOTIFY_STALING_EVICT;
 		soc_private->num_caches++;
 
 		CAM_DBG(CAM_CPAS,

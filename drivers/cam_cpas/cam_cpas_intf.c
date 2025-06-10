@@ -23,6 +23,8 @@
 #include "camera_main.h"
 #include "cam_smmu_api.h"
 
+#include <linux/soc/qcom/llcc-qcom.h>
+
 #define CAM_CPAS_DEV_NAME    "cam-cpas"
 #define CAM_CPAS_INTF_INITIALIZED() (g_cpas_intf && g_cpas_intf->probe_done)
 
@@ -746,6 +748,85 @@ int cam_cpas_deactivate_llcc(
 	return rc;
 }
 EXPORT_SYMBOL(cam_cpas_deactivate_llcc);
+
+int cam_cpas_configure_staling_llcc(
+	enum cam_sys_cache_config_types type,
+	enum cam_sys_cache_llcc_staling_mode mode_param,
+	enum cam_sys_cache_llcc_staling_op_type operation_type,
+	uint32_t staling_distance)
+{
+	int rc;
+	struct cam_sys_cache_local_info sys_cache_info;
+
+	if (!CAM_CPAS_INTF_INITIALIZED()) {
+		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
+		return -ENODEV;
+	}
+
+	if (!cam_cpas_is_notif_staling_supported())
+		return -EOPNOTSUPP;
+
+	sys_cache_info.mode = mode_param;
+	sys_cache_info.op_type = operation_type;
+	sys_cache_info.staling_distance = staling_distance;
+	sys_cache_info.type = type;
+
+	if (g_cpas_intf->hw_intf->hw_ops.process_cmd) {
+		rc = g_cpas_intf->hw_intf->hw_ops.process_cmd(
+			g_cpas_intf->hw_intf->hw_priv,
+			CAM_CPAS_HW_CMD_CONFIGURE_STALING_LLC, &sys_cache_info,
+			sizeof(struct cam_sys_cache_local_info));
+		if (rc)
+			CAM_ERR(CAM_CPAS,
+				"Failed in configure staling llcc type %d staling_distance %d cache mode :%d cache op_type :%d, rc=%d",
+				type, staling_distance, mode_param, operation_type, rc);
+	} else {
+		CAM_ERR(CAM_CPAS, "Invalid process_cmd ops");
+		rc = -EINVAL;
+	}
+
+	return rc;
+}
+EXPORT_SYMBOL_GPL(cam_cpas_configure_staling_llcc);
+
+int cam_cpas_notif_increment_staling_counter(
+	enum cam_sys_cache_config_types type)
+{
+	int rc;
+
+	if (!CAM_CPAS_INTF_INITIALIZED()) {
+		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
+		return -ENODEV;
+	}
+	if (!cam_cpas_is_notif_staling_supported())
+		return -EOPNOTSUPP;
+
+	if (g_cpas_intf->hw_intf->hw_ops.process_cmd) {
+		rc = g_cpas_intf->hw_intf->hw_ops.process_cmd(
+			g_cpas_intf->hw_intf->hw_priv,
+			CAM_CPAS_HW_CMD_NOTIF_STALL_INC_LLC, &type,
+			sizeof(type));
+		if (rc)
+			CAM_ERR(CAM_CPAS, "Failed in increment staling counter type %d, rc=%d",
+				type, rc);
+	} else {
+		CAM_ERR(CAM_CPAS, "Invalid process_cmd ops");
+		rc = -EINVAL;
+	}
+
+	return rc;
+}
+EXPORT_SYMBOL_GPL(cam_cpas_notif_increment_staling_counter);
+
+bool cam_cpas_is_notif_staling_supported(void)
+{
+	#if IS_ENABLED(CONFIG_SPECTRA_LLCC_STALING)
+		return true;
+	#else
+		return false;
+	#endif
+}
+EXPORT_SYMBOL_GPL(cam_cpas_is_notif_staling_supported);
 
 int cam_cpas_gdsc_get_put(
 	uint32_t sensor_index, bool enable)
