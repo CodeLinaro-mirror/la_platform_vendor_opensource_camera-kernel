@@ -1774,7 +1774,7 @@ static void cam_ife_hw_mgr_deinit_hw(
 		cam_ife_hw_mgr_deinit_hw_res(&ctx->res_list_ife_out[i]);
 
 	/* Check if any cache needs to be de-activated */
-	for (i = CAM_LLCC_SMALL_1; i < CAM_LLCC_MAX; i++) {
+	for (i = CAM_LLCC_SMALL_1; i <= CAM_LLCC_SMALL_2; i++) {
 		if (ctx->flags.sys_cache_usage[i])
 			cam_cpas_deactivate_llcc(i);
 		ctx->flags.sys_cache_usage[i] = false;
@@ -1878,7 +1878,7 @@ static int cam_ife_hw_mgr_init_hw(
 	}
 
 	/* Check if any cache needs to be activated */
-	for (i = CAM_LLCC_SMALL_1; i < CAM_LLCC_MAX; i++) {
+	for (i = CAM_LLCC_SMALL_1; i <= CAM_LLCC_SMALL_2; i++) {
 		if (ctx->flags.sys_cache_usage[i]) {
 			rc = cam_cpas_activate_llcc(i);
 			if (rc) {
@@ -21726,7 +21726,7 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 
 	/* Populate sys cache info */
 	g_ife_hw_mgr.num_caches_found = 0;
-	for (i = CAM_LLCC_SMALL_1; i < CAM_LLCC_MAX; i++) {
+	for (i = CAM_LLCC_SMALL_1; i <= CAM_LLCC_SMALL_2; i++) {
 		g_ife_hw_mgr.sys_cache_info[i].scid =
 			cam_cpas_get_scid(i);
 		g_ife_hw_mgr.sys_cache_info[i].type = i;
