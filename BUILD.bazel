@@ -118,6 +118,7 @@ driver_includes = [
     "drivers/cam_sensor_module/cam_dp_bdg",
     "drivers/cam_sensor_module/cam_hdmi_bdg",
     "drivers/cam_sensor_module/cam_dp_bdg_lt7911d",
+    "drivers/cam_sensor_module/cam_hdmi_bdg_lt6911uxe",
 ]
 
 ddk_headers(
