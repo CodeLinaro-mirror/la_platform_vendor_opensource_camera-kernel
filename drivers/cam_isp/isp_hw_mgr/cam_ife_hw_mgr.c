@@ -14164,7 +14164,7 @@ static int cam_isp_blob_hw_fence_mode_config(
 		prepare->priv;
 	ctx = prepare->ctxt_to_hw_map;
 
-	if (!g_ife_hw_mgr.isp_bus_caps.ipcc_en) {
+	if (hw_fence_config->num_res && !g_ife_hw_mgr.isp_bus_caps.ipcc_en) {
 		rc = -EOPNOTSUPP;
 		goto end;
 	}
