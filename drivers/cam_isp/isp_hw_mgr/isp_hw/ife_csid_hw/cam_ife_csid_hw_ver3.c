@@ -313,6 +313,7 @@ static int cam_ife_csid_ver3_get_evt_payload(
 	*evt_payload = list_first_entry(payload_list,
 			struct cam_ife_csid_ver3_evt_payload, list);
 	list_del_init(&(*evt_payload)->list);
+	--csid_hw->payload_cnt;
 	spin_unlock(lock);
 
 	return 0;
@@ -335,6 +336,7 @@ static int cam_ife_csid_ver3_put_evt_payload(
 	list_add_tail(&(*evt_payload)->list,
 		payload_list);
 	*evt_payload = NULL;
+	csid_hw->payload_cnt++;
 	spin_unlock_irqrestore(lock, flags);
 
 	return 0;
@@ -2855,6 +2857,22 @@ int cam_ife_csid_ver3_release(void *hw_priv,
 
 	hw_info = (struct cam_hw_info *)hw_priv;
 	csid_hw = (struct cam_ife_csid_ver3_hw *)hw_info->core_info;
+	spin_lock(&csid_hw->path_payload_lock);
+
+
+	if(csid_hw->payload_cnt < CAM_IFE_CSID_VER3_PAYLOAD_THRESHOLD)
+	{
+		CAM_INFO(CAM_ISP,"Avail Nodes %d below threshold, reiniting list",csid_hw->payload_cnt);
+		INIT_LIST_HEAD(&csid_hw->path_free_payload_list);
+		for (i = 0; i < CAM_IFE_CSID_VER3_PAYLOAD_MAX; i++)
+		{
+			INIT_LIST_HEAD(&csid_hw->path_evt_payload[i].list);
+			list_add_tail(&csid_hw->path_evt_payload[i].list,
+				&csid_hw->path_free_payload_list);
+		}
+		csid_hw->payload_cnt = CAM_IFE_CSID_VER3_PAYLOAD_MAX;
+	}
+	spin_unlock(&csid_hw->path_payload_lock);
 	res = (struct cam_isp_resource_node *)release_args;
 
 	if (res->res_type != CAM_ISP_RESOURCE_PIX_PATH) {
@@ -6127,6 +6145,8 @@ static int cam_ife_csid_hw_init_irq(
 		list_add_tail(&csid_hw->path_evt_payload[i].list,
 			&csid_hw->path_free_payload_list);
 	}
+	csid_hw->payload_cnt = CAM_IFE_CSID_VER3_PAYLOAD_MAX;
+
 	spin_lock_init(&csid_hw->rx_payload_lock);
 	INIT_LIST_HEAD(&csid_hw->rx_free_payload_list);
 	for (i = 0; i < CAM_IFE_CSID_VER3_PAYLOAD_MAX; i++) {

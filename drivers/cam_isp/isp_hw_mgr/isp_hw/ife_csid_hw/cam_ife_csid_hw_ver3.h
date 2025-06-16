@@ -39,6 +39,7 @@
 #define IFE_CSID_VER3_RX_UNBOUNDED_FRAME              BIT(24)
 
 #define CAM_IFE_CSID_VER3_PAYLOAD_MAX           256
+#define CAM_IFE_CSID_VER3_PAYLOAD_THRESHOLD     64
 
 #define IFE_CSID_VER3_PATH_ERROR_ILLEGAL_PROGRAM                 BIT(0)
 #define IFE_CSID_VER3_PATH_ERROR_FIFO_OVERFLOW                   BIT(2)
@@ -577,6 +578,7 @@ struct cam_ife_csid_ver3_hw {
     atomic_t                               discard_frame_per_path;
     atomic_t                               init_global_reset_cnt;
     uint32_t                               rup_aup_mask;
+    uint16_t                               payload_cnt;
 };
 
 /*
