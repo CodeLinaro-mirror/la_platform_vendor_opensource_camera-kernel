@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __UAPI_LINUX_CAM_REQ_MGR_H
@@ -325,6 +326,7 @@ struct cam_req_mgr_link_properties {
  */
 #define CAM_LINK_PROPERTY_NONE                      0
 #define CAM_LINK_PROPERTY_SENSOR_STANDBY_AFTER_EOF  BIT(0)
+#define CAM_LINK_PROPERTY_SENSOR_EXTERNAL_RECOVERY  BIT(1)
 
 /**
  * cam_req_mgr specific opcode ids
@@ -689,6 +691,9 @@ struct cam_mem_cpu_access_op {
 #define CAM_REQ_MGR_SENSOR_STREAM_OFF_FAILED             BIT(14)
 #define CAM_REQ_MGR_VALID_SHUTTER_DROPPED                BIT(15)
 #define CAM_REQ_MGR_ISP_ERR_HWPD_VIOLATION               BIT(16)
+#define CAM_REQ_MGR_SOF_FREEZE                           BIT(17)
+#define CAM_REQ_MGR_SOF_FREEZE_ERROR_FATAL               BIT(18)
+#define CAM_REQ_MGR_ISP_FATAL_ERROR                      BIT(19)
 
 /**
  * struct cam_req_mgr_error_msg
