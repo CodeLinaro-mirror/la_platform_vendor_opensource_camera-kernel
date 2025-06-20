@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/device.h>
@@ -28,24 +28,6 @@ static void cam_cpas_update_monitor_array(struct cam_hw_info *cpas_hw,
 	const char *identifier_string, int32_t identifier_value);
 static void cam_cpas_dump_monitor_array(
 	struct cam_cpas *cpas_core);
-
-static struct cam_cpas_subpart_info g_cam_cpas_camera_subpart_info = {
-	.num_bits = 8,
-	/*
-	 * Below fuse indexing is based on software fuse definition which is in SMEM and provided
-	 * by XBL team.
-	 */
-	.hw_bitmap_mask = {
-		{CAM_CPAS_CAM_FUSE, BIT(0)},
-		{CAM_CPAS_ISP_FUSE, BIT(0)},
-		{CAM_CPAS_ISP_FUSE, BIT(1)},
-		{CAM_CPAS_ISP_FUSE, BIT(2)},
-		{CAM_CPAS_SFE_FUSE, BIT(0)},
-		{CAM_CPAS_SFE_FUSE, BIT(1)},
-		{CAM_CPAS_SFE_FUSE, BIT(2)},
-		{CAM_CPAS_CUSTOM_FUSE, BIT(0)},
-	}
-};
 
 static void cam_cpas_process_bw_overrides(
 	struct cam_cpas_bus_client *bus_client, uint64_t *ab, uint64_t *ib,
@@ -2765,8 +2747,6 @@ int cam_cpas_hw_probe(struct platform_device *pdev,
 		&cpas_core->hw_caps, sizeof(struct cam_cpas_hw_caps));
 	if (rc)
 		goto disable_soc_res;
-
-	cpas_core->cam_subpart_info = &g_cam_cpas_camera_subpart_info;
 
 	rc = cam_get_subpart_info(&soc_private->part_info, CAM_CPAS_CAMERA_INSTANCES);
 	if (rc) {
