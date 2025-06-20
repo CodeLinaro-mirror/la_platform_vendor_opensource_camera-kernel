@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  */
 
@@ -83,7 +83,7 @@ static void cam_icp_mgr_process_dbg_buf(unsigned int debug_lvl);
  * for synx hw_mutex, ipc hw_mutex, synx global mem
  * and global cntr for qtimer
  */
-#define ICP_NUM_MEM_REGIONS_FOR_SYNX 4
+#define ICP_NUM_MEM_REGIONS_FOR_SYNX 5
 
 static int cam_icp_dump_io_cfg(struct cam_icp_hw_ctx_data *ctx_data,
 	int32_t buf_handle, uint32_t size)
@@ -2991,6 +2991,8 @@ static void cam_icp_free_hfi_mem(void)
 			CAM_SMMU_SUBREGION_IPC_HWMUTEX);
 		cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl, CAM_SMMU_REGION_DEVICE,
 			CAM_SMMU_SUBREGION_GLOBAL_CNTR);
+		cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl, CAM_SMMU_REGION_DEVICE,
+			CAM_SMMU_SUBREGION_SOC_HW_VERSION);
 	}
 }
 
@@ -3198,6 +3200,30 @@ static int cam_icp_allocate_device_global_cnt_mem(void)
 	return rc;
 }
 
+static int cam_icp_allocate_device_soc_version_mem(void)
+{
+	int rc;
+	size_t len;
+	dma_addr_t iova;
+
+	rc = cam_smmu_map_phy_mem_region(icp_hw_mgr.iommu_hdl,
+		CAM_SMMU_REGION_DEVICE, CAM_SMMU_SUBREGION_SOC_HW_VERSION,
+		&iova, &len);
+	if (rc) {
+		CAM_ERR(CAM_ICP,
+			"Failed in allocating soc hw version mem rc %d", rc);
+		return rc;
+	}
+
+	icp_hw_mgr.hfi_mem.soc_hw_version.len = len;
+	icp_hw_mgr.hfi_mem.soc_hw_version.iova = iova;
+	icp_hw_mgr.hfi_mem.soc_hw_version.smmu_hdl = icp_hw_mgr.iommu_hdl;
+
+	CAM_DBG(CAM_ICP, "iova: %llx, len: %zu", iova, len);
+
+	return rc;
+}
+
 static int cam_icp_allocate_device_ipc_hwmutex_mem(void)
 {
 	int rc;
@@ -3250,8 +3276,17 @@ static int cam_icp_allocate_mem_for_fence_signaling(void)
 	if (rc)
 		goto unmap_ipc_mutex;
 
+	rc = cam_icp_allocate_device_soc_version_mem();
+	if (rc)
+		goto unmap_global_cnt;
+
 	return 0;
 
+
+unmap_global_cnt:
+	cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl,
+		CAM_SMMU_REGION_DEVICE,
+		CAM_SMMU_SUBREGION_GLOBAL_CNTR);
 unmap_ipc_mutex:
 	cam_smmu_unmap_phy_mem_region(icp_hw_mgr.iommu_hdl,
 		CAM_SMMU_REGION_DEVICE,
@@ -4076,7 +4111,6 @@ static int cam_icp_mgr_release_ctx(struct cam_icp_hw_mgr *hw_mgr, int ctx_id)
 	}
 
 	mutex_lock(&hw_mgr->ctx_data[ctx_id].ctx_mutex);
-	cam_icp_remove_ctx_bw(hw_mgr, &hw_mgr->ctx_data[ctx_id]);
 	if (hw_mgr->ctx_data[ctx_id].state !=
 		CAM_ICP_CTX_STATE_ACQUIRED) {
 		mutex_unlock(&hw_mgr->ctx_data[ctx_id].ctx_mutex);
@@ -4085,8 +4119,7 @@ static int cam_icp_mgr_release_ctx(struct cam_icp_hw_mgr *hw_mgr, int ctx_id)
 			ctx_id, hw_mgr->ctx_data[ctx_id].state);
 		return 0;
 	}
-	cam_icp_mgr_ipe_bps_power_collapse(hw_mgr,
-		&hw_mgr->ctx_data[ctx_id], 0);
+
 	hw_mgr->ctx_data[ctx_id].state = CAM_ICP_CTX_STATE_RELEASE;
 	CAM_DBG(CAM_ICP, "E: ctx_id = %d recovery = %d",
 		ctx_id, atomic_read(&hw_mgr->recovery));
@@ -4568,13 +4601,27 @@ static int cam_icp_mgr_send_memory_region_info(
 			hw_mgr->hfi_mem.global_cntr.len;
 
 		region_info->num_valid_regions++;
+
+		/* Update soc hw version mem */
+		region_info->region_info[region_info->num_valid_regions].region_id =
+			HFI_MEM_REGION_ID_SOC_HW_VERSION;
+		region_info->region_info[region_info->num_valid_regions].region_type =
+			HFI_MEM_REGION_TYPE_DEVICE;
+		region_info->region_info[region_info->num_valid_regions].start_addr =
+			hw_mgr->hfi_mem.soc_hw_version.iova;
+		region_info->region_info[region_info->num_valid_regions].size =
+			hw_mgr->hfi_mem.soc_hw_version.len;
+
+		region_info->num_valid_regions++;
+
 		CAM_DBG(CAM_ICP,
-			"Synx mem regions global_sync[0x%x:0x%x] synx_hw_mutex[0x%x:0x%x] ipc_hw_mutex[0x%x:0x%x] global_cntr[0x%x:0x%x]",
+			"Synx mem regions global_sync[0x%x:0x%x] synx_hw_mutex[0x%x:0x%x] ipc_hw_mutex[0x%x:0x%x] global_cntr[0x%x:0x%x] soc_hw_version[0x%x:0x%x]",
 			hw_mgr->hfi_mem.fw_uncached_global_sync.iova,
 			hw_mgr->hfi_mem.fw_uncached_global_sync.len,
 			hw_mgr->hfi_mem.synx_hwmutex.iova, hw_mgr->hfi_mem.synx_hwmutex.len,
 			hw_mgr->hfi_mem.ipc_hwmutex.iova, hw_mgr->hfi_mem.ipc_hwmutex.len,
-			hw_mgr->hfi_mem.global_cntr.iova, hw_mgr->hfi_mem.global_cntr.len);
+			hw_mgr->hfi_mem.global_cntr.iova, hw_mgr->hfi_mem.global_cntr.len,
+			hw_mgr->hfi_mem.soc_hw_version.iova, hw_mgr->hfi_mem.soc_hw_version.len);
 	}
 
 	CAM_DBG(CAM_ICP,
@@ -6407,6 +6454,9 @@ static int cam_icp_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 	struct cam_hw_release_args *release_hw = release_hw_args;
 	struct cam_icp_hw_mgr *hw_mgr = hw_mgr_priv;
 	struct cam_icp_hw_ctx_data *ctx_data = NULL;
+	struct cam_hw_intf *icp_dev_intf = NULL;
+	struct cam_hw_info *lx7 = NULL;
+	struct cam_lx7_core_info *core_info = NULL;
 
 	if (!release_hw || !hw_mgr) {
 		CAM_ERR(CAM_ICP, "Invalid args: %pK %pK", release_hw, hw_mgr);
@@ -6427,6 +6477,17 @@ static int cam_icp_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 		return -EINVAL;
 	}
 
+	icp_dev_intf = hw_mgr->icp_dev_intf;
+	lx7 = icp_dev_intf->hw_priv;
+	if (!lx7) {
+		CAM_ERR(CAM_ICP, "NULL lx7 data");
+		return -EINVAL;
+	}
+	core_info = lx7->core_info;
+	if (!core_info) {
+		CAM_ERR(CAM_ICP, "Null ctx data %pK", core_info);
+		return -EINVAL;
+	}
 	mutex_lock(&hw_mgr->ctx_data[ctx_id].ctx_mutex);
 	if (hw_mgr->ctx_data[ctx_id].state != CAM_ICP_CTX_STATE_ACQUIRED) {
 		CAM_DBG(CAM_ICP, "ctx is not in use: %d", ctx_id);
@@ -6436,6 +6497,17 @@ static int cam_icp_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 	mutex_unlock(&hw_mgr->ctx_data[ctx_id].ctx_mutex);
 
 	mutex_lock(&hw_mgr->hw_mgr_mutex);
+	CAM_DBG(CAM_ICP, "cpas start %d icp clock cfg count %d",
+		core_info->cpas_start, hw_mgr->icp_clock_cfg_cnt);
+
+	/* Need to send FW abort handle and destroy handle.Thats
+	 * need ICP clocks to be up so if icp clocks config count
+	 * is zero, enabling icp clocks because in last context stop HW,
+	 * icp clocks are disabled.
+	 */
+	if (!hw_mgr->icp_clock_cfg_cnt && !core_info->cpas_start)
+		rc = cam_icp_mgr_icp_resume(hw_mgr);
+
 	if (!atomic_read(&hw_mgr->recovery) && release_hw->active_req) {
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
 		cam_icp_mgr_abort_handle(ctx_data);
@@ -6452,11 +6524,10 @@ static int cam_icp_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 		cam_icp_hw_mgr_reset_clk_info(hw_mgr);
 		rc = cam_ipe_bps_deint(hw_mgr);
 	}
-
 	if ((!hw_mgr->bps_ctxt_cnt || !hw_mgr->ipe_ctxt_cnt))
 		cam_icp_device_timer_stop(hw_mgr);
-	mutex_unlock(&hw_mgr->hw_mgr_mutex);
 
+	mutex_unlock(&hw_mgr->hw_mgr_mutex);
 	CAM_DBG(CAM_ICP, "Release done for ctx_id %d", ctx_id);
 	return rc;
 }
@@ -6644,6 +6715,132 @@ static uint32_t cam_icp_unify_dev_type(
 	}
 }
 
+static int cam_icp_mgr_hw_start(void *hw_mgr_priv, void *hw_start_args)
+{
+	struct cam_icp_hw_mgr *hw_mgr = hw_mgr_priv;
+	struct cam_hw_start_args *args =
+		(struct cam_hw_start_args *)hw_start_args;
+	struct cam_icp_hw_ctx_data *ctx_data = NULL;
+	struct cam_hw_intf *icp_dev_intf = NULL;
+	struct cam_hw_info *lx7 = NULL;
+	struct cam_lx7_core_info *core_info = NULL;
+	int ctx_id = 0, rc = 0;
+
+	if (!args || !hw_mgr) {
+		CAM_ERR(CAM_ICP, "Invalid args: %pK %pK", args, hw_mgr);
+		return -EINVAL;
+	}
+
+	icp_dev_intf = hw_mgr->icp_dev_intf;
+	if (!icp_dev_intf) {
+		CAM_ERR(CAM_ICP, "NULL dev intf");
+		return -EINVAL;
+	}
+	lx7 = icp_dev_intf->hw_priv;
+	if (!lx7) {
+		CAM_ERR(CAM_ICP, "NULL lx7 data");
+		return -EINVAL;
+	}
+
+	core_info = lx7->core_info;
+	ctx_data = args->ctxt_to_hw_map;
+	if (!ctx_data || !core_info) {
+		CAM_ERR(CAM_ICP, "Null ctx data %pK core_info %pK", ctx_data, core_info);
+		return -EINVAL;
+	}
+	ctx_id = ctx_data->ctx_id;
+	if (ctx_id < 0 || ctx_id >= CAM_ICP_CTX_MAX) {
+		CAM_ERR(CAM_ICP, "Invalid ctx id: %d", ctx_id);
+		return -EINVAL;
+	}
+
+	mutex_lock(&hw_mgr->ctx_data[ctx_id].ctx_mutex);
+	if (hw_mgr->ctx_data[ctx_id].state != CAM_ICP_CTX_STATE_ACQUIRED) {
+		CAM_DBG(CAM_ICP, "ctx is not in use: %d", ctx_id);
+		mutex_unlock(&hw_mgr->ctx_data[ctx_id].ctx_mutex);
+		return -EINVAL;
+	}
+	mutex_unlock(&hw_mgr->ctx_data[ctx_id].ctx_mutex);
+
+	mutex_lock(&hw_mgr->hw_mgr_mutex);
+	CAM_DBG(CAM_ICP, "cpas start %d icp clock cfg count %d",
+		core_info->cpas_start, hw_mgr->icp_clock_cfg_cnt);
+	if (!hw_mgr->icp_clock_cfg_cnt && !core_info->cpas_start)
+		rc = cam_icp_mgr_icp_resume(hw_mgr);
+
+	rc = cam_icp_mgr_ipe_bps_resume(hw_mgr, ctx_data);
+	if (rc)
+		goto ipe_bps_resume_failed;
+	hw_mgr->icp_clock_cfg_cnt++;
+	mutex_unlock(&hw_mgr->hw_mgr_mutex);
+	return rc;
+
+ipe_bps_resume_failed:
+	mutex_unlock(&hw_mgr->hw_mgr_mutex);
+	if (!hw_mgr->ctxt_cnt)
+		cam_icp_mgr_icp_power_collapse(hw_mgr);
+	return rc;
+}
+
+static int cam_icp_mgr_hw_stop(void *hw_mgr_priv, void *hw_stop_args)
+{
+	struct cam_icp_hw_mgr *hw_mgr = hw_mgr_priv;
+	struct cam_hw_stop_args *args =
+		(struct cam_hw_stop_args *)hw_stop_args;
+	struct cam_icp_hw_ctx_data *ctx_data = NULL;
+	struct cam_hw_intf *icp_dev_intf = NULL;
+	struct cam_hw_info *lx7 = NULL;
+	struct cam_lx7_core_info *core_info = NULL;
+	int ctx_id = 0, rc = 0;
+
+	if (!args || !hw_mgr) {
+		CAM_ERR(CAM_ICP, "Invalid args: %pK %pK", args, hw_mgr);
+		return -EINVAL;
+	}
+
+	icp_dev_intf = hw_mgr->icp_dev_intf;
+	if (!icp_dev_intf) {
+		CAM_ERR(CAM_ICP, "NULL dev intf");
+		return -EINVAL;
+	}
+	lx7 = icp_dev_intf->hw_priv;
+	if (!lx7) {
+		CAM_ERR(CAM_ICP, "NULL lx7 data");
+		return -EINVAL;
+	}
+
+	core_info = lx7->core_info;
+	ctx_data = args->ctxt_to_hw_map;
+	if (!ctx_data || !core_info) {
+		CAM_ERR(CAM_ICP, "Null ctx data %pK core_info %pK", ctx_data, core_info);
+		return -EINVAL;
+	}
+	ctx_id = ctx_data->ctx_id;
+	if (ctx_id < 0 || ctx_id >= CAM_ICP_CTX_MAX) {
+		CAM_ERR(CAM_ICP, "Invalid ctx id: %d", ctx_id);
+		return -EINVAL;
+	}
+
+	mutex_lock(&hw_mgr->ctx_data[ctx_id].ctx_mutex);
+	if (hw_mgr->ctx_data[ctx_id].state != CAM_ICP_CTX_STATE_ACQUIRED) {
+		CAM_DBG(CAM_ICP, "ctx is not in use: %d", ctx_id);
+		mutex_unlock(&hw_mgr->ctx_data[ctx_id].ctx_mutex);
+		return -EINVAL;
+	}
+	mutex_unlock(&hw_mgr->ctx_data[ctx_id].ctx_mutex);
+	mutex_lock(&hw_mgr->hw_mgr_mutex);
+	cam_icp_remove_ctx_bw(hw_mgr, &hw_mgr->ctx_data[ctx_id]);
+	cam_icp_mgr_ipe_bps_power_collapse(hw_mgr, ctx_data, 0);
+	hw_mgr->icp_clock_cfg_cnt--;
+	CAM_DBG(CAM_ICP, "cpas start %d icp clock cfg count %d",
+		core_info->cpas_start, hw_mgr->icp_clock_cfg_cnt);
+	if (!hw_mgr->icp_clock_cfg_cnt && core_info->cpas_start)
+		cam_icp_mgr_icp_power_collapse(hw_mgr);
+
+	mutex_unlock(&hw_mgr->hw_mgr_mutex);
+	return rc;
+}
+
 static int cam_icp_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 {
 	int rc = 0, bitmap_size = 0;
@@ -6724,6 +6921,8 @@ static int cam_icp_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 		rc = cam_icp_send_ubwc_cfg(hw_mgr);
 		if (rc)
 			goto ubwc_cfg_failed;
+
+		hw_mgr->icp_clock_cfg_cnt = 0;
 	}
 
 
@@ -6841,12 +7040,12 @@ static int cam_icp_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	/* Start context timer*/
 	cam_icp_ctx_timer_start(ctx_data);
 	hw_mgr->ctxt_cnt++;
+	cam_icp_mgr_ipe_bps_power_collapse(hw_mgr, ctx_data, 0);
 	mutex_unlock(&hw_mgr->hw_mgr_mutex);
 
 	CAM_DBG(CAM_ICP, "Acquire Done for ctx_id %u dev type %d",
 		ctx_data->ctx_id,
 		ctx_data->icp_dev_acquire_info->dev_type);
-
 	return 0;
 
 copy_to_user_failed:
@@ -7222,6 +7421,8 @@ int cam_icp_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 	hw_mgr_intf->hw_mgr_priv = &icp_hw_mgr;
 	hw_mgr_intf->hw_get_caps = cam_icp_mgr_get_hw_caps;
 	hw_mgr_intf->hw_acquire = cam_icp_mgr_acquire_hw;
+	hw_mgr_intf->hw_start = cam_icp_mgr_hw_start;
+	hw_mgr_intf->hw_stop = cam_icp_mgr_hw_stop;
 	hw_mgr_intf->hw_release = cam_icp_mgr_release_hw;
 	hw_mgr_intf->hw_prepare_update = cam_icp_mgr_prepare_hw_update;
 	hw_mgr_intf->hw_config_stream_settings =
