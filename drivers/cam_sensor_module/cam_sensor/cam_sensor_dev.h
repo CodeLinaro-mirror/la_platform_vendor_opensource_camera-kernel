@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SENSOR_DEV_H_
@@ -79,6 +79,16 @@ struct cam_sensor_dev_res_info {
 	char       caps[64];
 };
 
+#ifdef CONFIG_MSM_AIS
+struct cam_sensor_intr_t {
+    struct cam_sensor_ctrl_t *sctrl;
+    struct gpio gpio_array[1];
+    int gpio_idx;
+    int work_inited;
+    struct work_struct irq_work;
+};
+#endif
+
 /**
  * struct cam_sensor_ctrl_t: Camera control structure
  * @device_name: Sensor device name
@@ -154,6 +164,9 @@ struct cam_sensor_ctrl_t {
 	bool                           stream_off_after_eof;
 	bool                           hw_no_ops;
 	bool                           is_res_info_updated;
+#ifdef CONFIG_MSM_AIS
+	struct cam_sensor_intr_t       s_intr[AIS_MAX_INTR_GPIO];
+#endif
 };
 
 /**

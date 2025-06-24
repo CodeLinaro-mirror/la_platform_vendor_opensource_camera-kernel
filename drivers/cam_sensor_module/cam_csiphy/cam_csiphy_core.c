@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -327,6 +327,25 @@ void cam_csiphy_query_cap(struct csiphy_device *csiphy_dev,
 	csiphy_cap->slot_info = soc_info->index;
 	csiphy_cap->version = csiphy_dev->hw_version;
 	csiphy_cap->clk_lane = csiphy_dev->clk_lane;
+}
+
+static void cam_csiphy_query_diagnostic_info(struct csiphy_device *csiphy_dev,
+struct csiphy_diag_info *csiphyDiag)
+{
+	uint8_t i;
+	struct cam_hw_soc_info *soc_info = NULL;
+	struct csiphy_reg_parms_t *csiphy_reg = NULL;
+	void __iomem *base = NULL;
+
+	soc_info = &csiphy_dev->soc_info;
+	base =  csiphy_dev->soc_info.reg_map[0].mem_base;
+	csiphy_reg = csiphy_dev->ctrl_reg->csiphy_reg;
+
+	for (i = 0; i < csiphy_reg->csiphy_interrupt_status_size; i++) {
+		csiphyDiag->status[i] =  cam_io_r_mb(base +
+		csiphy_reg->mipi_csiphy_interrupt_status0_addr +
+		(0x4 * i));
+	}
 }
 
 int cam_csiphy_dump_status_reg(struct csiphy_device *csiphy_dev)
@@ -1536,6 +1555,9 @@ static int32_t cam_csiphy_external_cmd(struct csiphy_device *csiphy_dev,
 	struct cam_config_dev_cmd *p_submit_cmd)
 {
 	struct cam_csiphy_info cam_cmd_csiphy_info;
+	uint8_t lane_cnt = 0;
+	uint16_t lane_assign = 0;
+	uint32_t lane_enable = 0;
 	int32_t rc = 0;
 	int32_t  index = -1;
 
@@ -1561,6 +1583,22 @@ static int32_t cam_csiphy_external_cmd(struct csiphy_device *csiphy_dev,
 			cam_cmd_csiphy_info.settle_time;
 		csiphy_dev->csiphy_info[index].data_rate =
 			cam_cmd_csiphy_info.data_rate;
+
+		lane_assign = csiphy_dev->csiphy_info[index].lane_assign;
+		lane_cnt = csiphy_dev->csiphy_info[index].lane_cnt;
+
+		while (lane_cnt--) {
+			rc = cam_csiphy_get_lane_enable(csiphy_dev, index,
+				(lane_assign & 0xF), &lane_enable);
+			csiphy_dev->csiphy_info[index].lane_enable |= lane_enable;
+			lane_assign >>= 4;
+		}
+
+		csiphy_dev->csiphy_info[index].csiphy_3phase =
+			cam_cmd_csiphy_info.csiphy_3phase;
+		csiphy_dev->combo_mode =
+			cam_cmd_csiphy_info.combo_mode;
+
 		CAM_DBG(CAM_CSIPHY,
 			"%s CONFIG_DEV_EXT settle_time= %lld lane_cnt=%d",
 			__func__,
@@ -2455,6 +2493,8 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			goto release_mutex;
 		}
 
+		g_phy_data[soc_info->index].is_3phase = csiphy_dev->csiphy_info[offset].csiphy_3phase;
+
 		if (csiphy_dev->start_dev_count) {
 			clk_vote_level =
 				csiphy_dev->ctrl_reg->getclockvoting(
@@ -2667,6 +2707,18 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 					rc);
 				goto release_mutex;
 			}
+		}
+		break;
+	}
+	case CAM_DIAG_INFO: {
+		struct csiphy_diag_info csiphyDiag = {0};
+
+		cam_csiphy_query_diagnostic_info(csiphy_dev, &csiphyDiag);
+		if (copy_to_user(u64_to_user_ptr(cmd->handle),
+			&csiphyDiag, sizeof(struct csiphy_diag_info))) {
+			CAM_ERR(CAM_CSIPHY, "Failed copying from User");
+			rc = -EINVAL;
+			goto release_mutex;
 		}
 		break;
 	}

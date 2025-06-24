@@ -7,6 +7,8 @@ CONFIG_SPECTRA_JPEG := y
 CONFIG_SPECTRA_CUSTOM := y
 CONFIG_SPECTRA_SENSOR := y
 CONFIG_USE_RPMH_DRV_API := y
+CONFIG_MSM_AIS := y
+CONFIG_V4L2_LOOPBACK_V2 := y
 
 # Flags to pass into C preprocessor
 ccflags-y += -DCONFIG_SPECTRA_ISP=1
@@ -15,6 +17,9 @@ ccflags-y += -DCONFIG_SPECTRA_JPEG=1
 ccflags-y += -DCONFIG_SPECTRA_CUSTOM=1
 ccflags-y += -DCONFIG_SPECTRA_SENSOR=1
 ccflags-y += -DCONFIG_USE_RPMH_DRV_API=1
+ccflags-y += -DCONFIG_MSM_AIS=1
+ccflags-y += -DCONFIG_V4L2_LOOPBACK_V2=1
+
 
 # External Dependencies
 KBUILD_CPPFLAGS += -DCONFIG_MSM_MMRM=1

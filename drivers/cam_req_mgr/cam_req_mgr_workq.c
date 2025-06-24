@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_req_mgr_workq.h"
@@ -46,6 +46,40 @@ end:
 	WORKQ_RELEASE_LOCK(workq, flags);
 
 	return task;
+}
+
+void cam_req_mgr_workq_cancel_task(
+    struct cam_req_mgr_core_workq *workq, PFnCancelTaskFilter filter)
+{
+    struct crm_workq_task *task = NULL;
+    struct crm_workq_task *task_tmp = NULL;
+    unsigned long flags = 0;
+    int i = 0;
+
+    if (workq == NULL || filter == NULL)
+        return;
+
+    WORKQ_ACQUIRE_LOCK(workq, flags);
+    while (i < CRM_TASK_PRIORITY_MAX) {
+        list_for_each_entry_safe(task, task_tmp,
+                &workq->task.process_head[i], entry) {
+            if (filter(task->priv, task->payload)) {
+                list_del_init(&task->entry);
+
+                task->cancel = 0;
+                task->process_cb = NULL;
+                task->priv = NULL;
+                list_add_tail(&task->entry,
+                    &workq->task.empty_head);
+                atomic_add(1, &workq->task.free_cnt);
+            }
+        }
+            i++;
+    }
+
+    WORKQ_RELEASE_LOCK(workq, flags);
+    CAM_DBG(CAM_CRM, "free task cnt:%d",
+                atomic_read(&workq->task.free_cnt));
 }
 
 static void cam_req_mgr_workq_put_task(struct crm_workq_task *task)

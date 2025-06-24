@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -656,6 +656,14 @@ static int cam_mem_mgr_get_dma_heaps(void)
 		tbl.camera_heap = NULL;
 	}
 
+	tbl.secure_pixel_heap = dma_heap_find("qcom,secure-pixel");
+	if (IS_ERR_OR_NULL(tbl.secure_pixel_heap)) {
+		rc = PTR_ERR(tbl.secure_pixel_heap);
+		CAM_ERR(CAM_MEM, "qcom,secure-pixel heap not found, rc=%d", rc);
+		tbl.secure_pixel_heap = NULL;
+		goto put_heaps;
+	}
+
 	tbl.camera_uncached_heap = dma_heap_find("qcom,camera-uncached");
 	if (IS_ERR_OR_NULL(tbl.camera_uncached_heap)) {
 		/* optional heap, not a fatal error */
@@ -744,6 +752,9 @@ static int cam_mem_util_get_dma_buf(size_t len,
 			perms[num_vmids] = PERM_READ | PERM_WRITE;
 			num_vmids++;
 		}
+	} else if (cam_flags & CAM_MEM_FLAG_CP_PIXEL) {
+		try_heap = tbl.secure_pixel_heap;
+		heap = tbl.system_heap;
 	} else if (cam_flags & CAM_MEM_FLAG_EVA_NOPIXEL) {
 		heap = tbl.secure_display_heap;
 		vmids[num_vmids] = VMID_CP_NON_PIXEL;
@@ -874,6 +885,9 @@ static int cam_mem_util_get_dma_buf(size_t len,
 	} else if (cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) {
 		heap_id = ION_HEAP(ION_SECURE_DISPLAY_HEAP_ID);
 		ion_flag |= ION_FLAG_SECURE | ION_FLAG_CP_CAMERA;
+	} else if (cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) {
+		heap_id = ION_HEAP(ION_SECURE_DISPLAY_HEAP_ID);
+		ion_flag |= ION_FLAG_SECURE | ION_FLAG_CP_CAMERA;
 	} else {
 		heap_id = ION_HEAP(ION_SYSTEM_HEAP_ID) |
 			ION_HEAP(ION_CAMERA_HEAP_ID);
@@ -951,7 +965,8 @@ static int cam_mem_util_check_alloc_flags(struct cam_mem_mgr_alloc_cmd_v2 *cmd)
 		return -EINVAL;
 	}
 
-	if (cmd->flags & CAM_MEM_FLAG_PROTECTED_MODE &&
+	if (((cmd->flags & CAM_MEM_FLAG_PROTECTED_MODE) ||
+			(cmd->flags & CAM_MEM_FLAG_CP_PIXEL)) &&
 		cmd->flags & CAM_MEM_FLAG_KMD_ACCESS) {
 		CAM_ERR(CAM_MEM, "Kernel mapping in secure mode not allowed");
 		return -EINVAL;
@@ -994,7 +1009,8 @@ static int cam_mem_util_check_map_flags(struct cam_mem_mgr_map_cmd_v2 *cmd)
 		return -EINVAL;
 	}
 
-	if (cmd->flags & CAM_MEM_FLAG_PROTECTED_MODE &&
+	if (((cmd->flags & CAM_MEM_FLAG_PROTECTED_MODE) ||
+		(cmd->flags & CAM_MEM_FLAG_CP_PIXEL)) &&
 		cmd->flags & CAM_MEM_FLAG_KMD_ACCESS) {
 		CAM_ERR(CAM_MEM,
 			"Kernel mapping in secure mode not allowed, flags=0x%x",

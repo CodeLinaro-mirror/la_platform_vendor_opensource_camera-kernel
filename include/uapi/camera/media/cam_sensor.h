@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __UAPI_CAM_SENSOR_H__
@@ -649,9 +649,11 @@ struct cam_csiphy_aux_settings_params {
  *
  */
 struct cam_csiphy_info {
-	__u16    reserved;
+	__u16    lane_mask;
 	__u16    lane_assign;
 	__u16    mipi_flags;
+	__u8     csiphy_3phase;
+	__u8     combo_mode;
 	__u8     lane_cnt;
 	__u8     secure_mode;
 	__u64    settle_time;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/kernel.h>
@@ -1377,6 +1377,86 @@ static int32_t cam_sensor_validate(void *ptr, size_t remain_buf)
 	}
 	return 0;
 }
+
+#ifdef CONFIG_MSM_AIS
+int32_t ais_sensor_update_power_settings(
+	struct ais_sensor_probe_cmd *probe_cmd,
+	struct cam_sensor_power_ctrl_t *pwr_info)
+{
+	int32_t rc = 0, i = 0;
+	struct ais_sensor_power_config *pwr_cfg;
+
+	if (!probe_cmd) {
+		CAM_ERR(CAM_SENSOR, "Invalid Args: probe_cmd %pK",
+			probe_cmd);
+		return -EINVAL;
+	}
+
+	pwr_cfg = &probe_cmd->power_config;
+	if (pwr_cfg->size_up > MAX_POWER_CONFIG ||
+		pwr_cfg->size_down > MAX_POWER_CONFIG) {
+		CAM_ERR(CAM_SENSOR, "Invalid Args: size_up %d size_down %d",
+			pwr_cfg->size_up, pwr_cfg->size_down);
+		return -EINVAL;
+	}
+
+	pwr_info->power_setting_size = pwr_cfg->size_up;
+	pwr_info->power_setting =
+		(struct cam_sensor_power_setting *)
+		kcalloc(pwr_info->power_setting_size,
+			sizeof(struct cam_sensor_power_setting),
+			GFP_KERNEL);
+	if (!pwr_info->power_setting)
+		return -ENOMEM;
+
+	pwr_info->power_down_setting_size = pwr_cfg->size_down;
+	pwr_info->power_down_setting =
+		(struct cam_sensor_power_setting *)
+		kcalloc(pwr_info->power_down_setting_size,
+			sizeof(struct cam_sensor_power_setting),
+			GFP_KERNEL);
+	if (!pwr_info->power_down_setting) {
+		kfree(pwr_info->power_setting);
+		pwr_info->power_setting = NULL;
+		pwr_info->power_setting_size = 0;
+		return -ENOMEM;
+	}
+
+	CAM_DBG(CAM_SENSOR, "power up/down sizes %d/%d",
+			pwr_info->power_setting_size,
+			pwr_info->power_down_setting_size);
+
+	for (i = 0; i < pwr_info->power_setting_size; i++) {
+		pwr_info->power_setting[i].seq_type =
+			pwr_cfg->power_up_setting[i].power_seq_type;
+		pwr_info->power_setting[i].config_val =
+			pwr_cfg->power_up_setting[i].config_val_low;
+		pwr_info->power_setting[i].delay =
+			pwr_cfg->power_up_setting[i].delay;
+		CAM_DBG(CAM_SENSOR, "power up[%d] %d,%d,%d",
+				i,
+				pwr_info->power_setting[i].seq_type,
+				pwr_info->power_setting[i].config_val,
+				pwr_info->power_setting[i].delay);
+	}
+
+	for (i = 0; i < pwr_info->power_down_setting_size; i++) {
+		pwr_info->power_down_setting[i].seq_type =
+			pwr_cfg->power_down_setting[i].power_seq_type;
+		pwr_info->power_down_setting[i].config_val =
+			pwr_cfg->power_down_setting[i].config_val_low;
+		pwr_info->power_down_setting[i].delay =
+			pwr_cfg->power_down_setting[i].delay;
+		CAM_DBG(CAM_SENSOR, "power down[%d] %d,%d,%d",
+				i,
+				pwr_info->power_down_setting[i].seq_type,
+				pwr_info->power_down_setting[i].config_val,
+				pwr_info->power_down_setting[i].delay);
+	}
+
+	return rc;
+}
+#endif
 
 int32_t cam_sensor_update_power_settings(void *cmd_buf,
 	uint32_t cmd_length, struct cam_sensor_power_ctrl_t *power_info,

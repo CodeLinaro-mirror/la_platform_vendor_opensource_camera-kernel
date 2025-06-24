@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #include <linux/module.h>
 #include <linux/build_bug.h>
@@ -16,6 +16,10 @@
 #include "cam_vfe.h"
 #include "cam_sfe_dev.h"
 #include "cam_isp_dev.h"
+#include "ais_ife_dev.h"
+#include "ais_ife_csid_dev.h"
+#include "ais_ife_csid_lite17x.h"
+#include "ais_vfe17x.h"
 
 #include "cam_res_mgr_api.h"
 #include "cam_cci_dev.h"
@@ -55,9 +59,10 @@
 #include "ope_dev_intf.h"
 #include "cre_dev_intf.h"
 
-#include "cam_tfe_dev.h"
-#include "cam_tfe_csid.h"
 #include "cam_csid_ppi100.h"
+
+#include "v4l2loopback.h"
+
 #include "camera_main.h"
 
 #include "cam_generated_h"
@@ -90,23 +95,16 @@ static const struct camera_submodule_component camera_base[] = {
 	{&cam_hw_cdm_init_module, &cam_hw_cdm_exit_module},
 };
 
-static const struct camera_submodule_component camera_tfe[] = {
-#ifdef CONFIG_SPECTRA_TFE
-	{&cam_csid_ppi100_init_module, &cam_csid_ppi100_exit_module},
-	{&cam_tfe_init_module, &cam_tfe_exit_module},
-	{&cam_tfe_csid_init_module, &cam_tfe_csid_exit_module},
+static const struct camera_submodule_component camera_isp[] = {
+#ifdef CONFIG_MSM_AIS
+	{&ais_ife_csid17x_init_module, &ais_ife_csid17x_exit_module},
+	{&ais_ife_csid_lite_init_module, &ais_ife_csid_lite_exit_module},
+	{&ais_vfe_init_module, &ais_vfe_exit_module},
+	{&ais_ife_dev_init_module, &ais_ife_dev_exit_module},
+	{&cam_sfe_init_module, &cam_sfe_exit_module},
 #endif
 };
 
-static const struct camera_submodule_component camera_isp[] = {
-#ifdef CONFIG_SPECTRA_ISP
-	{&cam_ife_csid_init_module, &cam_ife_csid_exit_module},
-	{&cam_ife_csid_lite_init_module, &cam_ife_csid_lite_exit_module},
-	{&cam_vfe_init_module, &cam_vfe_exit_module},
-	{&cam_sfe_init_module, &cam_sfe_exit_module},
-	{&cam_isp_dev_init_module, &cam_isp_dev_exit_module},
-#endif
-};
 
 static const struct camera_submodule_component camera_sensor[] = {
 #ifdef CONFIG_SPECTRA_SENSOR
@@ -181,16 +179,17 @@ static const struct camera_submodule_component camera_presil[] = {
 #endif
 };
 
+static const struct camera_submodule_component camera_v4l2loopback[] = {
+#ifdef CONFIG_V4L2_LOOPBACK_V2
+    {&v4l2loopback_init_module, &v4l2loopback_cleanup_module},
+#endif
+};
+
 static const struct camera_submodule submodule_table[] = {
 	{
 		.name = "Camera BASE",
 		.num_component = ARRAY_SIZE(camera_base),
 		.component = camera_base,
-	},
-	{
-		.name = "Camera TFE",
-		.num_component = ARRAY_SIZE(camera_tfe),
-		.component = camera_tfe,
 	},
 	{
 		.name = "Camera ISP",
@@ -241,7 +240,12 @@ static const struct camera_submodule submodule_table[] = {
 		.name = "Camera Presil",
 		.num_component = ARRAY_SIZE(camera_presil),
 		.component = camera_presil,
-	}
+	},
+	{
+		.name = "Camera V4L2loopback_v2",
+		.num_component = ARRAY_SIZE(camera_v4l2loopback),
+		.component = camera_v4l2loopback,
+	},
 };
 
 static int camera_verify_submodules(void)
