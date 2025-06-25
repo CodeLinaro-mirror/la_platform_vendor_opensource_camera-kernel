@@ -1196,7 +1196,7 @@ int cam_hdmi_bdg_get_src_resolution(bool *signal_stable,
 		*id = cam_hdmi_bdg_cam_ctrl->id;
 		goto end;
 	}
-	if (hdmi_signal_status > 0xFF) {
+	if (hdmi_signal_status > 0xFF || hdmi_signal_status == 0) {
 		/* Read value from I2C should not upper than 0xFF.*/
 		/* If so, it means LT6911UXC is closed.*/
 		*signal_stable = false;
