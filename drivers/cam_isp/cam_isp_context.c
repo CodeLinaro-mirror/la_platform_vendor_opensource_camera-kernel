@@ -4595,6 +4595,7 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 		param.valid_acquired_hw;
 
 	cmd->hw_info.valid_acquired_hw = param.valid_acquired_hw;
+	ctx_isp->offline_context = false;
 
 	if (isp_hw_cmd_args.u.ctx_type == CAM_ISP_CTX_RDI) {
 		/*
