@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __UAPI_LINUX_CAM_REQ_MGR_H
@@ -63,6 +63,12 @@
 #define V4L_EVENT_CAM_REQ_MGR_NODE_EVENT                                4
 #define V4L_EVENT_CAM_REQ_MGR_SOF_UNIFIED_TS                            5
 #define V4L_EVENT_CAM_REQ_MGR_PF_ERROR                                  6
+
+/* Suspend to RAM and Hibernation events */
+#define V4L_EVENT_CAM_REQ_MGR_S2R_SUSPEND           10
+#define V4L_EVENT_CAM_REQ_MGR_S2R_RESUME            11
+#define V4L_EVENT_CAM_REQ_MGR_HIBERNATION_SUSPEND   12
+#define V4L_EVENT_CAM_REQ_MGR_HIBERNATION_RESUME    13
 
 /* SOF Event status */
 #define CAM_REQ_MGR_SOF_EVENT_SUCCESS           0
@@ -370,6 +376,7 @@ struct cam_req_mgr_link_properties {
 #define CAM_MEM_FLAG_EVA_NOPIXEL                (1<<15)
 #define CAM_MEM_FLAG_HW_AND_CDM_OR_SHARED       (1<<16)
 #define CAM_MEM_FLAG_UBWC_P_HEAP                (1<<17)
+#define CAM_MEM_FLAG_CP_PIXEL                   (1<<18)
 
 
 #define CAM_MEM_MMU_MAX_HANDLE                  16

@@ -292,6 +292,22 @@ camera-$(CONFIG_SPECTRA_TFE) += \
 	drivers/cam_isp/isp_hw_mgr/isp_hw/tfe_csid_hw/cam_tfe_csid.o \
 	drivers/cam_isp/isp_hw_mgr/cam_tfe_hw_mgr.o
 
+camera-$(CONFIG_MSM_AIS) += \
+    drivers/ais_isp/csid_hw/ais_ife_csid_dev.o \
+    drivers/ais_isp/csid_hw/ais_ife_csid_soc.o \
+    drivers/ais_isp/csid_hw/ais_ife_csid_core.o \
+    drivers/ais_isp/csid_hw/ais_ife_csid17x.o \
+    drivers/ais_isp/csid_hw/ais_ife_csid_lite17x.o \
+    drivers/ais_isp/vfe_hw/ais_vfe_soc.o \
+    drivers/ais_isp/vfe_hw/ais_vfe_dev.o \
+    drivers/ais_isp/vfe_hw/ais_vfe_core.o \
+    drivers/ais_isp/vfe_hw/vfe17x/ais_vfe17x.o \
+    drivers/ais_isp/utils/ais_isp_trace.o \
+    drivers/ais_isp/ais_ife_dev.o
+
+camera-$(CONFIG_V4L2_LOOPBACK_V2) += \
+    drivers/v4l2loopback-master_v2/v4l2loopback.o
+
 camera-y += drivers/camera_main.o
 
 obj-m += camera.o

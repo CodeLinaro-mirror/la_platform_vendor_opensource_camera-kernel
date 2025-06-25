@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_CSIPHY_DEV_H_
@@ -83,6 +83,8 @@
 #define PREAMBLE_PATTERN_SET_CHECKER    BIT(4)
 #define PREAMBLE_PATTERN_BIST_DONE      BIT(0)
 #define PREAMBLE_MAX_ERR_COUNT_ALLOWED  2
+
+#define CSIPHY_DIAG_STATUS_MAX 16
 
 enum cam_csiphy_state {
 	CAM_CSIPHY_INIT,
@@ -320,6 +322,16 @@ struct csiphy_ctrl_t {
 	struct csiphy_reg_t *csiphy_2ph_3ph_mode_reg;
 	enum   cam_vote_level (*getclockvoting)(struct csiphy_device *phy_dev, int32_t index);
 	struct data_rate_settings_t *data_rates_settings_table;
+};
+
+/**
+ * struct csiphy_diag_info - csiphy reg status for diagnostics
+ *
+ * @status          : stores status of csiphy_dev->num_irq_registers registers
+ *
+ */
+struct csiphy_diag_info {
+    uint32_t       status[CSIPHY_DIAG_STATUS_MAX];
 };
 
 /**
