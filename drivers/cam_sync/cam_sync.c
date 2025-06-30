@@ -4062,7 +4062,7 @@ static int cam_sync_component_bind(struct device *dev,
 	cam_sync_init_entity(sync_dev);
 	video_set_drvdata(sync_dev->vdev, sync_dev);
 
-	cam_req_mgr_worker_create("sync_worker", 5,
+	cam_req_mgr_worker_create("sync_worker", 20,
 		&sync_dev->worker, CRM_WORKER_USAGE_IRQ, 0);
 
 	if (!sync_dev->worker) {
