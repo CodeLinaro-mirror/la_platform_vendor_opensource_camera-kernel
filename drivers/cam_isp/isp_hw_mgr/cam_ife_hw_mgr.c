@@ -6062,12 +6062,6 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 	if (rc)
 		return rc;
 
-	/* Pre parse the packet*/
-	rc = cam_packet_util_get_kmd_buffer(prepare->packet,
-			&prepare_hw_data->kmd_cmd_buff_info);
-	if (rc)
-		return rc;
-
 	rc = cam_packet_util_process_patches(prepare->packet,
 		hw_mgr->mgr_common.cmd_iommu_hdl,
 		hw_mgr->mgr_common.cmd_iommu_hdl_secure);
@@ -8211,11 +8205,21 @@ static int cam_ife_mgr_v_prepare_hw_update(void *hw_mgr_priv,
 	struct cam_hw_prepare_update_args *prepare =
 		(struct cam_hw_prepare_update_args *) prepare_hw_update_args;
 	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx;
+	struct cam_isp_prepare_hw_update_data   *prepare_hw_data;
 	int rc = 0;
 
 	if (!prepare || !prepare->ctxt_to_hw_map)
 		return -EINVAL;
 	hw_mgr_ctx = (struct cam_ife_hw_mgr_ctx *) prepare->ctxt_to_hw_map;
+	prepare_hw_data = (struct cam_isp_prepare_hw_update_data  *)
+		prepare->priv;
+
+	/* Pre parse the packet*/
+	rc = cam_packet_util_get_kmd_buffer(prepare->packet,
+			&prepare_hw_data->kmd_cmd_buff_info);
+	if (rc)
+		return rc;
+
 	if (!hw_mgr_ctx->is_offline)
 		return cam_ife_mgr_prepare_hw_update(hw_mgr_priv,
 				prepare_hw_update_args);
