@@ -57,6 +57,10 @@ static int __cam_isp_ctx_check_deferred_buf_done(
 	struct cam_isp_hw_done_event_data *done,
 	uint32_t bubble_state);
 
+static int cam_isp_ctx_set_sof_freeze_on_all_affected_ctx(
+	struct cam_context               *ctx,
+	bool reset_flag);
+
 static const char *__cam_isp_evt_val_to_type(
 	uint32_t evt_id)
 {
@@ -850,6 +854,7 @@ static int __cam_isp_ctx_notify_trigger_util(
 	notify.req_id = ctx_isp->req_info.last_bufdone_req_id;
 	notify.sof_timestamp_val = ctx_isp->sof_timestamp_val;
 	notify.trigger_id = ctx_isp->trigger_id;
+	notify.sof_recovery = 0;
 
 	CAM_DBG(CAM_ISP,
 		"Notify CRM %s on frame: %llu ctx: %u link: 0x%x last_buf_done_req: %lld",
@@ -864,6 +869,17 @@ static int __cam_isp_ctx_notify_trigger_util(
 			__cam_isp_ctx_crm_trigger_point_to_string(trigger_type),
 			ctx_isp->frame_id, ctx->ctx_id, ctx->link_hdl,
 			ctx_isp->req_info.last_bufdone_req_id, rc);
+
+	if (ctx_isp->isp_external_recovery && notify.sof_recovery) {
+		CAM_INFO(CAM_ISP,"TEST_LOG Recovery done notify.sof_recovery=%d rc =%d",
+				notify.sof_recovery,rc);
+
+		ctx_isp->sof_freeze_recovery_state = 0;
+		cam_isp_ctx_set_sof_freeze_on_all_affected_ctx(ctx,true);
+
+		ctx->state = CAM_CTX_FLUSHED;
+		ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_HALT;
+	}
 
 	return rc;
 }
@@ -883,8 +899,8 @@ static int __cam_isp_ctx_notify_v4l2_error_event(
 	req_msg.u.err_msg.resource_size = 0x0;
 	req_msg.u.err_msg.error_code = error_code;
 
-	CAM_DBG(CAM_ISP,
-		"v4l2 error event [type: %u code: %u] for req: %llu in ctx: %u on link: 0x%x notified successfully",
+	CAM_INFO(CAM_ISP,
+		"TEST_LOG v4l2 error event [type: %u code: %u] for req: %llu in ctx: %u on link: 0x%x notified successfully",
 		error_type, error_code, error_request_id, ctx->ctx_id, ctx->link_hdl);
 
 	rc = cam_req_mgr_notify_message(&req_msg,
@@ -4359,6 +4375,9 @@ end:
 	if (ctx_isp->isp_external_recovery)
 		req_mgr_err_code = CAM_REQ_MGR_ISP_FATAL_ERROR;
 
+	CAM_INFO(CAM_ISP, "TEST_LOG ctx: %u, link: 0x%x isp_external_recovery=0x%x",
+		ctx->ctx_id, ctx->link_hdl, ctx_isp->isp_external_recovery);
+
 	/*
 	 * Need to send error occurred in KMD
 	 * This will help UMD to take necessary action
@@ -4369,7 +4388,7 @@ end:
 			req_mgr_err_code, error_request_id, ctx);
 
 	ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_HW_ERROR;
-	CAM_DBG(CAM_ISP, "Handling error done on ctx: %u, link: 0x%x", ctx->ctx_id, ctx->link_hdl);
+	CAM_INFO(CAM_ISP, "TEST_LOG Handling error done on ctx: %u, link: 0x%x", ctx->ctx_id, ctx->link_hdl);
 
 exit:
 	return rc;
@@ -6157,6 +6176,83 @@ static inline void __cam_isp_ctx_reset_fcg_tracker(
 		ctx->ctx_id, ctx->link_hdl);
 }
 
+
+static int __cam_isp_ctx_flush_req_external_isp(
+	struct cam_context               *ctx,
+	struct cam_req_mgr_flush_request *flush_req)
+{
+	int                               rc = 0;
+	struct cam_isp_context           *ctx_isp;
+	struct cam_req_mgr_timer_notify   timer;
+
+	ctx_isp = (struct cam_isp_context *) ctx->ctx_priv;
+	CAM_INFO(CAM_ISP, "TEST_LOG flush_req->type= %d, ctx->state=%d",flush_req->type,ctx->state);
+
+	/* Reset skipped_list for FCG config */
+	__cam_isp_ctx_reset_fcg_tracker(ctx);
+
+	if (flush_req->type == CAM_REQ_MGR_FLUSH_TYPE_ALL) {
+		if (ctx->state <= CAM_CTX_READY) {
+			ctx->state = CAM_CTX_ACQUIRED;
+			goto end;
+		}
+
+		atomic_set(&ctx_isp->flush_in_progress, 1);
+		cam_isp_ctx_flush_all_affected_ctx_stream_grp(ctx, flush_req,
+			CAM_ISP_CTX_FLUSH_AFFECTED_CTX_SET_FLUSH_IN_PROGRESS);
+
+		CAM_INFO(CAM_ISP, "Last request id to flush is %lld, ctx_id:%u link: 0x%x",
+			flush_req->req_id, ctx->ctx_id, ctx->link_hdl);
+		ctx->last_flush_req = flush_req->req_id;
+
+		__cam_isp_ctx_trigger_reg_dump(CAM_HW_MGR_CMD_REG_DUMP_ON_FLUSH, ctx);
+
+		CAM_DBG(CAM_ISP, "Flush wait and active lists, ctx_id:%u link: 0x%x",
+			 ctx->ctx_id, ctx->link_hdl);
+
+		spin_lock_bh(&ctx->lock);
+		if (!list_empty(&ctx->wait_req_list))
+			__cam_isp_ctx_flush_req(ctx, &ctx->wait_req_list,
+				flush_req);
+
+		if (!list_empty(&ctx->active_req_list))
+			__cam_isp_ctx_flush_req(ctx, &ctx->active_req_list,
+				flush_req);
+
+		ctx_isp->active_req_cnt = 0;
+		spin_unlock_bh(&ctx->lock);
+
+		rc = cam_isp_ctx_flush_all_affected_ctx_stream_grp(ctx, flush_req,
+			CAM_ISP_CTX_FLUSH_AFFECTED_CTX_REQ_LIST);
+		if (rc)
+			CAM_ERR(CAM_ISP, "Failed to flush other active HW ctx rc: %d", rc);
+
+
+		ctx_isp->init_received = false;
+	}
+
+	CAM_DBG(CAM_ISP, "Flush pending list, ctx_idx: %u, link: 0x%x", ctx->ctx_id, ctx->link_hdl);
+	/*
+	 * On occasions when we are doing a flush all, HW would get reset
+	 * shutting down any th/bh in the pipeline. If internal recovery
+	 * is triggered prior to flush, by clearing the pending list post
+	 * HW reset will ensure no stale request entities are left behind
+	 */
+	spin_lock_bh(&ctx->lock);
+	__cam_isp_ctx_flush_req(ctx, &ctx->pending_req_list, flush_req);
+	spin_unlock_bh(&ctx->lock);
+
+
+end:
+	ctx_isp->bubble_frame_cnt = 0;
+	ctx_isp->congestion_cnt = 0;
+	ctx_isp->sof_dbg_irq_en = false;
+	atomic_set(&ctx_isp->process_bubble, 0);
+	atomic_set(&ctx_isp->internal_recovery_set, 0);
+	atomic_set(&ctx_isp->flush_in_progress, 0);
+	return rc;
+}
+
 static int __cam_isp_ctx_flush_req_in_top_state(
 	struct cam_context               *ctx,
 	struct cam_req_mgr_flush_request *flush_req)
@@ -6169,6 +6265,17 @@ static int __cam_isp_ctx_flush_req_in_top_state(
 	struct cam_req_mgr_timer_notify   timer;
 
 	ctx_isp = (struct cam_isp_context *) ctx->ctx_priv;
+
+	CAM_INFO(CAM_ISP, "TEST_LOG ctx_idx: %u, sof_freeze_recovery_state=%d",
+			ctx->ctx_id, ctx_isp->sof_freeze_recovery_state);
+	if( ctx_isp->isp_external_recovery) {
+		if(ctx_isp->sof_freeze_recovery_state == 1) {
+			rc = __cam_isp_ctx_flush_req_external_isp(ctx,flush_req);
+			return rc;
+		} else {
+			ctx_isp->sof_freeze_recovery_state = 0;
+		}
+	}
 
 	/* Reset skipped_list for FCG config */
 	__cam_isp_ctx_reset_fcg_tracker(ctx);
@@ -7057,6 +7164,8 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 
 	if (ctx_isp->hw_ctx) {
 		rel_arg.ctxt_to_hw_map = ctx_isp->hw_ctx;
+		rel_arg.is_ext_isp = ctx_isp->isp_external_recovery;
+		CAM_INFO(CAM_ISP, "TEST_LOG  is_ext_isp= %d",rel_arg.is_ext_isp);
 		ctx->hw_mgr_intf->hw_release(ctx->hw_mgr_intf->hw_mgr_priv,
 			&rel_arg);
 		ctx_isp->hw_ctx = NULL;
@@ -7138,6 +7247,8 @@ static int __cam_isp_ctx_release_dev_in_top_state(struct cam_context *ctx,
 
 	if (ctx_isp->hw_ctx) {
 		rel_arg.ctxt_to_hw_map = ctx_isp->hw_ctx;
+		rel_arg.is_ext_isp = ctx_isp->isp_external_recovery;
+		CAM_INFO(CAM_ISP, "TEST_LOG  is_ext_isp= %d",rel_arg.is_ext_isp);
 		ctx->hw_mgr_intf->hw_release(ctx->hw_mgr_intf->hw_mgr_priv,
 			&rel_arg);
 		ctx_isp->hw_ctx = NULL;
@@ -7315,6 +7426,17 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 
 	packet_opcode = isp_hw_cmd_args.u.packet_info.packet_op_code;
 	hw_mgr_ctx_id = isp_hw_cmd_args.u.packet_info.hw_mgr_ctx_id;
+
+	if(packet_opcode == CAM_ISP_PACKET_INIT_DEV)
+	{
+		CAM_INFO(CAM_ISP, "TEST_LOG INIT_PACKET sof_freeze_recovery_state = %d ",ctx_isp->sof_freeze_recovery_state);
+		if(ctx_isp->isp_external_recovery && ctx_isp->sof_freeze_recovery_state == 0)
+		{
+			CAM_INFO(CAM_ISP, "TEST_LOG skipping INIT_PACKET ");
+			return 0;
+		}
+	}
+
 	if ((packet_opcode == CAM_ISP_PACKET_UPDATE_DEV)
 		&& (packet->header.request_id <= ctx->last_flush_req)) {
 		CAM_INFO(CAM_ISP,
@@ -8337,10 +8459,21 @@ static int __cam_isp_ctx_config_dev_in_flushed(struct cam_context *ctx,
 	struct cam_isp_context *ctx_isp =
 		(struct cam_isp_context *) ctx->ctx_priv;
 
+	CAM_INFO(CAM_ISP, "TEST_LOG entered RESUME path ");
+
 	if (!ctx_isp->hw_acquired) {
 		CAM_ERR(CAM_ISP, "HW is not acquired, reject packet, ctx_id %u link: 0x%x",
 			ctx->ctx_id, ctx->link_hdl);
 		rc = -EINVAL;
+		goto end;
+	}
+
+	if(ctx_isp->isp_external_recovery && ctx_isp->sof_freeze_recovery_state == 0)
+	{
+		ctx->state = CAM_CTX_ACTIVATED;
+		ctx_isp->substate_activated = ctx_isp->rdi_only_context ?
+			CAM_ISP_CTX_ACTIVATED_APPLIED : CAM_ISP_CTX_ACTIVATED_EPOCH;
+		CAM_INFO(CAM_ISP, "TEST_LOG skipping resume ");
 		goto end;
 	}
 
@@ -9064,6 +9197,67 @@ error:
 	return false;
 }
 
+static int cam_isp_ctx_set_sof_freeze_on_all_affected_ctx(
+	struct cam_context               *ctx,
+	bool reset_flag)
+{
+	uint32_t                          rc = 0;
+	struct cam_context               *active_ctx = NULL;
+	struct cam_isp_context           *ctx_isp = NULL;
+	struct cam_isp_context           *ctx_isp_main = NULL;
+	struct cam_hw_cmd_args            hw_cmd_args;
+	struct cam_isp_hw_cmd_args        isp_hw_cmd_args;
+	int                               stream_grp_cfg_index;
+	struct cam_isp_hw_active_hw_ctx   active_hw_ctx;
+	int active_hw_ctx_cnt;
+	int i;
+
+	hw_cmd_args.ctxt_to_hw_map = ctx->ctxt_to_hw_map;
+	hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+	isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_GET_ACTIVE_HW_CTX_CNT;
+	isp_hw_cmd_args.u.active_hw_ctx.hw_ctx_cnt = 0;
+
+	hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+	ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
+		&hw_cmd_args);
+
+	active_hw_ctx_cnt = isp_hw_cmd_args.u.active_hw_ctx.hw_ctx_cnt;
+	stream_grp_cfg_index = isp_hw_cmd_args.u.active_hw_ctx.stream_grp_cfg_index;
+
+	active_hw_ctx.stream_grp_cfg_index = stream_grp_cfg_index;
+	active_hw_ctx.index = 0;
+
+	hw_cmd_args.ctxt_to_hw_map = ctx->ctxt_to_hw_map;
+	hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+	isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_GET_HW_CTX;
+	isp_hw_cmd_args.cmd_data = &active_hw_ctx;
+
+	for (i = 0; i < active_hw_ctx_cnt; i++) {
+		hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+		ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
+			&hw_cmd_args);
+
+		active_ctx = (struct cam_context *)isp_hw_cmd_args.u.ptr;
+
+		if (active_ctx->ctx_id == ctx->ctx_id)
+			continue;
+
+		ctx_isp = (struct cam_isp_context *)active_ctx->ctx_priv;
+		ctx_isp_main = (struct cam_isp_context *)ctx->ctx_priv;
+		if(reset_flag){
+			ctx_isp->sof_freeze_recovery_state = 0;
+		} else {
+			ctx_isp->sof_freeze_recovery_state = 1;
+		}
+
+		CAM_INFO(CAM_ISP, "TEST_LOG ctx_isp_main->sof_freeze_recovery_state=%d, ctx_isp->sof_freeze_recovery_state =%d",
+				ctx_isp_main->sof_freeze_recovery_state, ctx_isp->sof_freeze_recovery_state);
+
+	}
+
+	return rc;
+}
+
 static int __cam_isp_ctx_process_evt(struct cam_context *ctx,
 	struct cam_req_mgr_link_evt_data *link_evt_data)
 {
@@ -9091,7 +9285,14 @@ static int __cam_isp_ctx_process_evt(struct cam_context *ctx,
 		rc =  __cam_isp_ctx_link_resume(ctx);
 		break;
 	case CAM_REQ_MGR_LINK_EVT_SOF_FREEZE:
-		rc = __cam_isp_ctx_handle_sof_freeze_evt(ctx);
+		if(ctx_isp->isp_external_recovery == 1 && ctx_isp->sof_freeze_recovery_state == 0)
+		{
+			ctx_isp->sof_freeze_recovery_state = 1;
+			cam_isp_ctx_set_sof_freeze_on_all_affected_ctx(ctx,false);
+		}
+		else {
+			rc = __cam_isp_ctx_handle_sof_freeze_evt(ctx);
+		}
 		break;
 	case CAM_REQ_MGR_LINK_EVT_STALLED: {
 		bool internal_recovery_skipped = false;
@@ -9110,6 +9311,7 @@ static int __cam_isp_ctx_process_evt(struct cam_context *ctx,
 	}
 		break;
 	case CAM_REQ_MGR_LINK_EVT_UPDATE_PROPERTIES:
+		CAM_INFO(CAM_ISP, "TEST_LOG UPDATE_PROPERTIES properties_mask=%d", link_evt_data->u.properties_mask);
 		if (link_evt_data->u.properties_mask &
 			CAM_LINK_PROPERTY_SENSOR_EXTERNAL_RECOVERY)
 			ctx_isp->isp_external_recovery = true;
