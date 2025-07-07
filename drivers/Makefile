@@ -173,6 +173,8 @@ camera-$(CONFIG_SPECTRA_SENSOR) += \
 	cam_sensor_module/cam_res_mgr/cam_res_mgr.o \
 	cam_sensor_module/cam_hdmi_bdg/cam_hdmi_bdg_dev.o \
 	cam_sensor_module/cam_hdmi_bdg/cam_hdmi_bdg_core.o \
+	cam_sensor_module/cam_dp_bdg_lt7911d/cam_dp_bdg_lt7911d_core.o \
+	cam_sensor_module/cam_dp_bdg_lt7911d/cam_dp_bdg_lt7911d_dev.o \
 	cam_sensor_module/cam_dp_bdg/cam_dp_bdg_dev.o \
 	cam_sensor_module/cam_dp_bdg/cam_dp_bdg_core.o \
 	cam_sensor_module/cam_ir_led/cam_ir_led_dev.o \
