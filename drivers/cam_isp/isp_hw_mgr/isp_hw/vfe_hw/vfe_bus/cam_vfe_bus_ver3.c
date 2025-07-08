@@ -180,6 +180,7 @@ struct cam_vfe_bus_ver3_wm_resource_data {
 	bool                 hfr_cfg_done;
 	bool                 use_wm_pack;
 	bool                 update_wm_format;
+	bool                 update_wm_stride;
 };
 
 struct cam_vfe_bus_ver3_comp_grp_data {
@@ -1491,6 +1492,7 @@ static int cam_vfe_bus_ver3_stop_wm(struct cam_isp_resource_node *wm_res)
 	rsrc_data->hfr_cfg_done = false;
 	rsrc_data->ubwc_cfg_data.ubwc_updated = false;
 	rsrc_data->update_wm_format = false;
+	rsrc_data->update_wm_stride = false;
 
 	if (rsrc_data->out_rsrc_data->mc_based || rsrc_data->out_rsrc_data->cntxt_cfg_except) {
 		for (i = 0; i < CAM_ISP_MULTI_CTXT_MAX; i++) {
@@ -3795,7 +3797,8 @@ static int cam_vfe_bus_ver3_update_wm(void *priv, void *cmd_args, uint32_t arg_s
 		if (cfg->stride != val || !wm_data->init_cfg_done ||
 			((wm_data->out_rsrc_data->mc_based ||
 			wm_data->out_rsrc_data->cntxt_cfg_except) &&
-			!wm_data->mc_data[hw_cntxt_id].init_cfg_done)) {
+			!wm_data->mc_data[hw_cntxt_id].init_cfg_done) ||
+			wm_data->update_wm_stride) {
 			val = (cfg->stride ? cfg->stride : (cfg->stride = val));
 
 			CAM_ISP_ADD_REG_VAL_PAIR(reg_val_pair, MAX_REG_VAL_PAIR_SIZE, j,
@@ -4474,7 +4477,11 @@ static int cam_vfe_bus_ver3_update_wm_config_v2(
 		/* Per req configuring port/wm as lossy/loseless */
 		cfg->rcs_en = (wm_config->param_mask & CAM_IFE_WM_RCS_EN);
 
-		cfg->stride = wm_config->stride;
+		wm_data->update_wm_stride = false;
+		if (cfg->stride != wm_config->stride) {
+			wm_data->update_wm_stride = true;
+			cfg->stride = wm_config->stride;
+		}
 
 		/*
 		 * For RAW10/RAW12/RAW14 sensor mode seamless switch case,
