@@ -1210,12 +1210,12 @@ static int cam_csiphy_cphy_data_rate_config(
 			per_lane = &drate_settings[data_rate_idx].per_lane_info[lane_idx];
 
 			for (i = 0; i < num_reg_entries; i++) {
+				bool update_cdr_value = false;
 				reg_addr = per_lane->csiphy_data_rate_regs[i].reg_addr;
 				reg_data = per_lane->csiphy_data_rate_regs[i].reg_data;
 				reg_param_type =
 					per_lane->csiphy_data_rate_regs[i].csiphy_param_type;
 				delay = per_lane->csiphy_data_rate_regs[i].delay;
-				bool update_cdr_value = false;
 				CAM_DBG(CAM_CSIPHY,
 					"param_type: %d writing reg : %x val : %x delay: %dus",
 					reg_param_type, reg_addr, reg_data, delay);
