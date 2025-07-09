@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_ISP_HW_MGR_INTF_H_
@@ -492,7 +492,7 @@ enum cam_isp_hw_mgr_command {
 	CAM_ISP_HW_MGR_UPDATE_FRAMEDROP_RECOVERY_PROGRESS,
 	CAM_HW_MGR_CMD_CHECK_RUP_APPLIED_REQ,
 	CAM_HW_MGR_CMD_GET_CSID_CID_INFO,
-	CAM_ISP_HW_MGR_GET_FOVEATION_INFO,
+	CAM_ISP_HW_MGR_GET_SETTING_ID_BUF_INFO,
 	CAM_ISP_HW_MGR_UPDATE_SCRATCH_BUF_CFG,
 	CAM_ISP_HW_MGR_GET_PRIMARY_PORT_INFO,
 	CAM_ISP_HW_MGR_FAST_RESULT_NOTIFIER_CFG,
@@ -580,9 +580,10 @@ struct cam_isp_hw_cmd_args {
 		struct {
 			uint32_t                      setting_size;
 			bool                          foveation_en;
+			bool                          settingbuf_en;
 			uint32_t                      settingbuf_res_id;
 			uintptr_t                     scratch_buf_kva;
-		} fov_info;
+		} setting_buf_info;
 		uint32_t                      max_ife_out_res;
 	} u;
 };
