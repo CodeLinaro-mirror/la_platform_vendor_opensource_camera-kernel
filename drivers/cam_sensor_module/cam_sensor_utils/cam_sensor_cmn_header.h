@@ -26,6 +26,7 @@
 #define CAM_ACTUATOR_NAME  "cam-actuator"
 #define CAM_CSIPHY_NAME    "cam-csiphy"
 #define CAM_FLASH_NAME     "cam-flash"
+#define CAM_IR_LED_NAME    "cam-irled"
 #define CAM_EEPROM_NAME    "cam-eeprom"
 #define CAM_OIS_NAME       "cam-ois"
 #define CAM_LENS_DRIVER_NAME "cam-lensdriver"
@@ -53,6 +54,10 @@ enum camera_sensor_cmd_type {
 	CAMERA_SENSOR_CMD_TYPE_RD_DATA,
 	CAMERA_SENSOR_FLASH_CMD_TYPE_INIT_FIRE,
 	CAMERA_SENSOR_LDM_CMD_TYPE_FW_INFO,
+	CAMERA_SENSOR_IRLED_CMD_TYPE_INIT_INFO,
+	CAMERA_SENSOR_IRLED_CMD_TYPE_FIRE_INFO,
+	CAMERA_SENSOR_IRCUT_CMD_TYPE_ON,
+	CAMERA_SENSOR_IRCUT_CMD_TYPE_OFF,
 	CAMERA_SENSOR_CMD_TYPE_MAX,
 };
 
