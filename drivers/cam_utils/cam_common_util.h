@@ -172,6 +172,18 @@ void cam_common_util_thread_switch_delay_detect(const char *token,
 	ktime_t scheduled_time, uint32_t threshold);
 
 /**
+ * cam_common_get_num_bits_required()
+ *
+ * @brief                  Get number of bits required to store a integer
+ *
+ * @max_val:               Maximum value of integer
+ * @scheduled_time:        Time when workq or tasklet was scheduled
+ * @threshold:             Threshold time
+ *
+ */
+int cam_common_get_num_bits_required(uint32_t max_val);
+
+/**
  * cam_common_register_mini_dump_cb()
  *
  * @brief                  common interface to register mini dump cb
