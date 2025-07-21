@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SENSOR_UTIL_H_
@@ -144,5 +144,10 @@ static inline int cam_sensor_util_aon_registration(uint32_t phy_idx, uint32_t ao
 
 void cam_sensor_utils_parse_pm_ctrl_flag(struct device_node *of_node,
 	struct camera_io_master *io_master_info);
+
+int cam_sensor_util_add_read_buf_to_list(struct list_head *read_buf_list,
+	int32_t read_buffer_handle);
+
+void cam_sensor_util_release_read_buf(struct list_head *read_buf_list);
 
 #endif /* _CAM_SENSOR_UTIL_H_ */
