@@ -60,7 +60,9 @@ int cam_req_mgr_util_init(void)
 
 bitmap_alloc_fail:
 	kfree(hdl_tbl_local);
+	spin_lock_bh(&hdl_tbl_lock);
 	hdl_tbl = NULL;
+	spin_unlock_bh(&hdl_tbl_lock);
 hdl_tbl_alloc_failed:
 hdl_tbl_check_failed:
 	return rc;
