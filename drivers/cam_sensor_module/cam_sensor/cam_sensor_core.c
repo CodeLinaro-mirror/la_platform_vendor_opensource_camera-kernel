@@ -915,7 +915,9 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			rc = cam_sensor_apply_settings(s_ctrl, 0,
 				CAM_SENSOR_PACKET_OPCODE_SENSOR_POWERON_REG);
 			if (rc < 0) {
-				if(strcmp(DP_SENSOR_LT7911D_NAME,s_ctrl->io_master_info.client->name) && strcmp(HDMI_BDG_LT6911UXE_NAME,s_ctrl->io_master_info.client->name)){
+				if (s_ctrl->io_master_info.client == NULL || s_ctrl->io_master_info.client->name == NULL ||
+					(strcmp(DP_SENSOR_LT7911D_NAME, s_ctrl->io_master_info.client->name) &&
+					strcmp(HDMI_BDG_LT6911UXE_NAME, s_ctrl->io_master_info.client->name))) {
 					CAM_ERR(CAM_SENSOR, "PowerOn REG_WR failed");
 					cam_sensor_power_down(s_ctrl);
 					goto free_power_settings;
