@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -89,6 +90,12 @@ static int cam_icp_subdev_open(struct v4l2_subdev *sd,
 	}
 
 	hw_mgr_intf = &node->hw_mgr_intf;
+	if (!(hw_mgr_intf) || !(hw_mgr_intf->hw_open)) {
+		CAM_ERR(CAM_ICP, "hw_mgr_intf is not initialized");
+		rc = -EINVAL;
+		goto end;
+	}
+
 	rc = hw_mgr_intf->hw_open(hw_mgr_intf->hw_mgr_priv, NULL);
 	if (rc < 0) {
 		CAM_ERR(CAM_ICP, "FW download failed");
