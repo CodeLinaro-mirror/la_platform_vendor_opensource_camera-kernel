@@ -1448,7 +1448,7 @@ static struct cam_vfe_bus_ver3_hw_info tfe1080_bus_hw_info = {
 							    (55 << 16) | 54},
 			.num_mid                  = 3,
 			.out_type                 = CAM_VFE_BUS_VER3_VFE_OUT_RAW_DUMP,
-			.cntxt_cfg_except         = true,
+			.mc_based                 = true,
 			.pid_mask                 = BIT_ULL(0) | BIT_ULL(1) | BIT_ULL(2),
 		},
 		/* BUS Client 10 STATS_AEC_BE */
