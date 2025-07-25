@@ -2,7 +2,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- *
  */
 
 #include <linux/module.h>
@@ -301,12 +300,9 @@ static inline int  precise_flash_timer_init(struct cam_flash_ctrl *flash_ctrl)
 
 	flash_ctrl->precise_flash.on_time_ms = 0;
 	flash_ctrl->precise_flash.off_time_ms = 0;
-	hrtimer_init(&flash_ctrl->precise_flash.on_timer,
-		CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	hrtimer_init(&flash_ctrl->precise_flash.off_timer,
-		CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	flash_ctrl->precise_flash.on_timer.function = on_timer_function;
-	flash_ctrl->precise_flash.off_timer.function = off_timer_function;
+	cam_hrtimer_setup(&flash_ctrl->precise_flash.on_timer,
+		&flash_ctrl->precise_flash.off_timer,
+		on_timer_function, off_timer_function);
 	flash_ctrl->precise_flash.enabled = false;
 	flash_ctrl->precise_flash.timer_state = TIMER_STATE_INIT;
 

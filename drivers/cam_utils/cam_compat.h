@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
@@ -119,5 +118,9 @@ uint16_t cam_get_named_gpio(struct cam_hw_soc_info *soc_info,
 inline struct icc_path *cam_icc_get_path(struct device *dev,
 	const int src_id, const int dst_id, const char *path_name, bool use_path_name);
 #endif
+void cam_hrtimer_setup(struct hrtimer *on_timer,
+	struct hrtimer *off_timer,
+	enum hrtimer_restart (*timer_func_on)(struct hrtimer *timer),
+	enum hrtimer_restart (*timer_func_off)(struct hrtimer *timer));
 
 #endif /* _CAM_COMPAT_H_ */
