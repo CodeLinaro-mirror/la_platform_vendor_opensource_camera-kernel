@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_FLASH_CORE_H_
@@ -9,6 +9,7 @@
 
 #include <media/cam_sensor.h>
 #include "cam_flash_dev.h"
+#include "cam_compat.h"
 
 int cam_flash_publish_dev_info(struct cam_req_mgr_device_info *info);
 int cam_flash_establish_link(struct cam_req_mgr_core_dev_link_setup *link);
