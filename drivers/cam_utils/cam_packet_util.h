@@ -62,6 +62,21 @@ int cam_packet_util_validate_packet(struct cam_packet *packet,
 	size_t remain_len);
 
 /**
+ * cam_packet_util_copy_pkt_to_kmd()
+ *
+ * @brief                  Copy packet from user space to kernel space and validate it
+ *
+ * @packet_u:              User space packet pointer
+ * @packet:                Pointer to store the kernel space packet address
+ * @remain_len:            Remaining buffer length for validation
+ *
+ * @return:                0 for success
+ *                         -EINVAL for Fail
+ */
+int cam_packet_util_copy_pkt_to_kmd(struct cam_packet *packet_u,
+	struct cam_packet **packet, size_t remain_len);
+
+/**
  * cam_packet_util_validate_cmd_desc()
  *
  * @brief                  Validate the packet
