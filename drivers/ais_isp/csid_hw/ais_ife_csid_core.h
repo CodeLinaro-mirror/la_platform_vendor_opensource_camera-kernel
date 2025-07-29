@@ -131,6 +131,11 @@ enum ais_ife_csid_ver2_input_core_sel {
     AIS_IFE_CSID_INPUT_CORE_SEL_MAX,
 };
 
+enum ais_ife_csid_irq_event {
+	AIS_CSID_IRQ_EVENT_SOF,
+	AIS_CSID_IRQ_EVENT_BUF_DONE,
+};
+
 struct ais_ife_csid_ver2_top_reg_info {
     uint32_t io_path_cfg0_addr[AIS_IFE_CSID_HW_NUM_MAX];
     uint32_t dual_csid_cfg0_addr[AIS_IFE_CSID_HW_NUM_MAX];
@@ -473,6 +478,7 @@ struct ais_csid_hw_work_data {
 	uint64_t           timestamp;
 	uint32_t           evt_type;
 	uint32_t           irq_status[CSID_IRQ_STATUS_MAX];
+	uint32_t           data;
 };
 
 /**
@@ -536,6 +542,15 @@ struct ais_ife_csid_path_cfg {
 	uint32_t                        prev_sof_hw_ts;
 	uint32_t                        prev_sof_boot_ts;
 	uint32_t                        epoch_cfg;
+};
+
+struct ais_csid_irq_event {
+	int irq_num;
+	int rdi_num;
+	enum ais_ife_csid_irq_event event;
+	struct cam_hw_info * vfe_hw;
+	int status_cnt;
+	uint32_t* status;
 };
 
 /**
@@ -622,6 +637,8 @@ struct ais_ife_csid_hw {
 	spinlock_t                       lock_state;
 	uint32_t                         dual_usage;
 	uint32_t                         init_frame_drop;
+	uint32_t                         rup_val_set;
+	spinlock_t                       lock_rup;
 
 	void                            *ctx;
 	struct cam_req_mgr_core_workq   *work;
@@ -629,8 +646,7 @@ struct ais_ife_csid_hw {
 	ais_ife_event_cb_func            event_cb;
 	void                            *event_cb_priv;
 
-	irqreturn_t 					(*buf_done_irq)(int irq_num, void *data,
-													uint32_t *status, int irq_cnt);
+	irqreturn_t 					(*irq_event_cb)(struct ais_csid_irq_event *irq_event);
 	void*							vfe_hw_info;
 };
 

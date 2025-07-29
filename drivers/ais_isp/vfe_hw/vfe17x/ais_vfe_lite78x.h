@@ -34,13 +34,15 @@ static struct ais_irq_controller_reg_info vfe78x_top_irq_reg_info = {
 	.global_clear_bitmask = 0x00000001,
 };
 
-static struct ais_irq_register_set vfe78x_bus_irq_reg[3] = {
+static struct ais_irq_register_set vfe78x_bus_irq_reg[1] = {
 		{
 			.mask_reg_offset   = 0x00001218,
 			.clear_reg_offset  = 0x00001220,
 			.status_reg_offset = 0x00001228,
 		},
 };
+
+static uint32_t vfe78x_bus_mask_val[1] = {0xD0000000};
 
 static struct ais_vfe_bus_ver2_hw_info vfe78x_bus_hw_info = {
 	.common_reg = {
@@ -64,8 +66,10 @@ static struct ais_vfe_bus_ver2_hw_info vfe78x_bus_hw_info = {
 		.addr_sync_frame_hdr          = 0x00000000,
 		.addr_sync_no_sync            = 0x00000000,
 		.addr_fifo_status             = 0x00000000,
-		.buf_done_shitf_val           = 14,
+		.debug_status_cfg             = 0x000012D4,
+		.buf_done_shitf_val           = 1,
 		.buf_done_rdi_mask            = 0x1C000,
+		.bus_mask_val                 = vfe78x_bus_mask_val,
 	},
 	.num_rid = 4,
 	.num_client = 4,
@@ -86,8 +90,8 @@ static struct ais_vfe_bus_ver2_hw_info vfe78x_bus_hw_info = {
 			.stride                   = 0x00001414,
 			.irq_subsample_period     = 0x00001430,
 			.irq_subsample_pattern    = 0x00001434,
-			.framedrop_period         = 0x00001438,
-			.framedrop_pattern        = 0x0000143C,
+			.framedrop_period         = 0x00000000,
+			.framedrop_pattern        = 0x00000000,
 			.frame_inc                = 0x00001408,
 			.burst_limit              = 0x0000141C,
 			.ubwc_regs                = NULL,
@@ -107,8 +111,8 @@ static struct ais_vfe_bus_ver2_hw_info vfe78x_bus_hw_info = {
 			.stride                   = 0x00001514,
 			.irq_subsample_period     = 0x00001530,
 			.irq_subsample_pattern    = 0x00001534,
-			.framedrop_period         = 0x00001538,
-			.framedrop_pattern        = 0x0000153C,
+			.framedrop_period         = 0x00000000,
+			.framedrop_pattern        = 0x00000000,
 			.frame_inc                = 0x00001508,
 			.burst_limit              = 0x0000151C,
 			.ubwc_regs                = NULL,
@@ -128,8 +132,8 @@ static struct ais_vfe_bus_ver2_hw_info vfe78x_bus_hw_info = {
 			.stride                   = 0x00001614,
 			.irq_subsample_period     = 0x00001630,
 			.irq_subsample_pattern    = 0x00001634,
-			.framedrop_period         = 0x00001638,
-			.framedrop_pattern        = 0x0000163C,
+			.framedrop_period         = 0x00000000,
+			.framedrop_pattern        = 0x00000000,
 			.frame_inc                = 0x00001608,
 			.burst_limit              = 0x0000161C,
 			.ubwc_regs                = NULL,
@@ -149,8 +153,8 @@ static struct ais_vfe_bus_ver2_hw_info vfe78x_bus_hw_info = {
 			.stride                   = 0x00001714,
 			.irq_subsample_period     = 0x00001730,
 			.irq_subsample_pattern    = 0x00001734,
-			.framedrop_period         = 0x00001738,
-			.framedrop_pattern        = 0x0000173C,
+			.framedrop_period         = 0x00000000,
+			.framedrop_pattern        = 0x00000000,
 			.frame_inc                = 0x00001708,
 			.burst_limit              = 0x0000171C,
 			.ubwc_regs                = NULL,
@@ -258,6 +262,8 @@ static struct ais_vfe_top_ver2_reg_offset_common vfe78x_top_common_reg = {
 	.three_D_cfg              = 0x00000000,
 	.violation_status         = 0x00001264,
 	.reg_update_cmd           = 0x00000000,
+	.rdi_sof_sof_irq_shitf    = 2,
+	.rdi_sof_sof_irq_mask     = 0x154,
 };
 
 static struct ais_vfe_top_ver2_hw_info vfe78x_top_hw_info = {

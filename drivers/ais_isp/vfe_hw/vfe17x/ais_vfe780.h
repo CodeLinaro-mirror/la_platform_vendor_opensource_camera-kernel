@@ -46,6 +46,8 @@ static struct ais_irq_register_set vfe780_bus_irq_reg[2] = {
 		},
 };
 
+static uint32_t vfe780_bus_mask_val[2] = {0xD0000000, 0};
+
 static struct ais_vfe_bus_ver2_hw_info vfe780_bus_hw_info = {
 	.common_reg = {
 		.hw_version                   = 0x00000C00,
@@ -72,6 +74,7 @@ static struct ais_vfe_bus_ver2_hw_info vfe780_bus_hw_info = {
 		.debug_status_0               = 0x00000CD8,
 		.buf_done_shitf_val           = 14,
 		.buf_done_rdi_mask            = 0x1C000,
+		.bus_mask_val                 = vfe780_bus_mask_val,
 	},
 	.num_rid = 3,
 	.num_client = 27,
@@ -787,6 +790,8 @@ static struct ais_vfe_top_ver2_reg_offset_common vfe780_top_common_reg = {
 	.three_D_cfg              = 0x00000000,
 	.violation_status         = 0x00000C64,
 	.reg_update_cmd           = 0x0000000,
+	.rdi_sof_sof_irq_shitf    = 8,
+	.rdi_sof_sof_irq_mask     = 0x1500,
 };
 
 static struct ais_vfe_top_ver2_hw_info vfe780_top_hw_info = {

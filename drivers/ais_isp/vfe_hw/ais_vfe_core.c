@@ -63,8 +63,8 @@
 /*VFE BUS DEFINITIONS*/
 #define AIS_VFE_BUS_SET_DEBUG_REG                0x82
 
-#define AIS_VFE_RDI_BUS_DEFAULT_WIDTH               0xFF01
-#define AIS_VFE_RDI_BUS_DEFAULT_STRIDE              0xFF01
+#define AIS_VFE_RDI_BUS_DEFAULT_WIDTH               0xFFFF
+#define AIS_VFE_RDI_BUS_DEFAULT_STRIDE              0xFFFF
 
 #define AIS_VFE_BUS_INTRA_CLIENT_MASK               0x3
 #define AIS_VFE_BUS_ADDR_SYNC_INTRA_CLIENT_SHIFT    8
@@ -76,6 +76,9 @@
 #define AIS_36BIT_INTF_GET_IOVA_OFFSET(iova) ((iova) & 0xff)
 
 #define AIS_VFE_ERR_IRQ_MASK0 						0x7F1D0
+
+#define ALIGNUP(value, alignment) \
+       ((value + alignment - 1) / alignment * alignment)
 
 static void ais_clear_rdi_path(struct ais_vfe_rdi_output *rdi_path)
 {
@@ -109,19 +112,23 @@ static int ais_vfe_bus_hw_init(struct ais_vfe_hw_core_info *core_info)
 {
 	struct ais_vfe_bus_ver2_hw_info   *bus_hw_info = NULL;
 	struct ais_irq_register_set  *bus_hw_irq_regs = NULL;
+	struct ais_irq_controller_reg_info  *top_irq_reg_info = NULL;
+	struct ais_irq_register_set  *top_irq_regs = NULL;
+	int i = 0;
 
 	bus_hw_info = core_info->vfe_hw_info->bus_hw_info;
 	bus_hw_irq_regs = bus_hw_info->common_reg.irq_reg_info.irq_reg_set;
+	top_irq_reg_info = core_info->vfe_hw_info->irq_reg_info;
+	top_irq_regs = top_irq_reg_info->irq_reg_set;
 
 	/*set IRQ mask for BUS WR*/
 	core_info->irq_mask0 |= AIS_VFE_STATUS0_BUS_WR_IRQ;
 	cam_io_w_mb(core_info->irq_mask0,
-		core_info->mem_base + AIS_VFE_IRQ_MASK0);
+		core_info->mem_base + top_irq_regs[0].mask_reg_offset);
 
-	cam_io_w_mb(0xD0000000,
-		core_info->mem_base + bus_hw_irq_regs[0].mask_reg_offset);
-	cam_io_w_mb(0x0,
-		core_info->mem_base + bus_hw_irq_regs[1].mask_reg_offset);
+	for (i = 0; i < bus_hw_info->common_reg.irq_reg_info.num_registers; i++)
+		cam_io_w_mb(bus_hw_info->common_reg.bus_mask_val[i],
+			core_info->mem_base + bus_hw_irq_regs[i].mask_reg_offset);
 
 	/*Set Debug Registers*/
 	cam_io_w_mb(AIS_VFE_BUS_SET_DEBUG_REG, core_info->mem_base +
@@ -151,19 +158,23 @@ static int ais_vfe_bus_hw_deinit(struct ais_vfe_hw_core_info *core_info)
 {
 	struct ais_vfe_bus_ver2_hw_info   *bus_hw_info = NULL;
 	struct ais_irq_register_set  *bus_hw_irq_regs = NULL;
+	struct ais_irq_controller_reg_info  *top_irq_reg_info = NULL;
+	struct ais_irq_register_set  *top_irq_regs = NULL;
+	int i = 0;
 
 	bus_hw_info = core_info->vfe_hw_info->bus_hw_info;
 	bus_hw_irq_regs = bus_hw_info->common_reg.irq_reg_info.irq_reg_set;
+	top_irq_reg_info = core_info->vfe_hw_info->irq_reg_info;
+	top_irq_regs = top_irq_reg_info->irq_reg_set;
 
 	/*set IRQ mask for BUS WR*/
 	core_info->irq_mask0 &= ~AIS_VFE_STATUS0_BUS_WR_IRQ;
 	cam_io_w_mb(core_info->irq_mask0,
-		core_info->mem_base + AIS_VFE_IRQ_MASK0);
+		core_info->mem_base + top_irq_regs[0].mask_reg_offset);
 
-	cam_io_w_mb(0xD0000000,
-		core_info->mem_base + bus_hw_irq_regs[0].mask_reg_offset);
-	cam_io_w_mb(0x0,
-		core_info->mem_base + bus_hw_irq_regs[1].mask_reg_offset);
+	for (i = 0; i < bus_hw_info->common_reg.irq_reg_info.num_registers; i++)
+		cam_io_w_mb(bus_hw_info->common_reg.bus_mask_val[i],
+			core_info->mem_base + bus_hw_irq_regs[i].mask_reg_offset);
 
 	return 0;
 }
@@ -198,6 +209,8 @@ static int ais_vfe_reset(void *hw_priv,
 	struct cam_hw_soc_info            *soc_info = NULL;
 	struct ais_vfe_hw_core_info       *core_info = NULL;
 	struct ais_vfe_top_ver2_hw_info   *top_hw_info = NULL;
+	struct ais_irq_controller_reg_info  *top_irq_reg_info = NULL;
+	struct ais_irq_register_set  *top_irq_regs = NULL;
 	uint32_t *reset_reg_args = reset_core_args;
 	uint32_t  reset_reg_val;
 	int rc = 0;
@@ -222,13 +235,16 @@ static int ais_vfe_reset(void *hw_priv,
 	soc_info = &vfe_hw->soc_info;
 	core_info = (struct ais_vfe_hw_core_info *)vfe_hw->core_info;
 	top_hw_info = core_info->vfe_hw_info->top_hw_info;
+	top_irq_reg_info = core_info->vfe_hw_info->irq_reg_info;
+	top_irq_regs = top_irq_reg_info->irq_reg_set;
 
 	if (reset_skip)
 		goto _reset_skip;
 
 	cam_io_w_mb(AIS_VFE_STATUS0_RESET_ACK_IRQ,
-		core_info->mem_base + AIS_VFE_IRQ_MASK0);
-	cam_io_w_mb(0x0, core_info->mem_base + AIS_VFE_IRQ_MASK1);
+		core_info->mem_base + top_irq_regs[0].mask_reg_offset);
+	cam_io_w_mb(0x0, core_info->mem_base +
+					top_irq_regs[1].mask_reg_offset);
 
 	reinit_completion(&vfe_hw->hw_complete);
 
@@ -256,7 +272,7 @@ static int ais_vfe_reset(void *hw_priv,
 
 _reset_skip:
 	core_info->irq_mask0 = 0x0;
-	cam_io_w_mb(0x0, core_info->mem_base + AIS_VFE_IRQ_MASK0);
+	cam_io_w_mb(0x0, core_info->mem_base + top_irq_regs[0].mask_reg_offset);
 
 	for (i = 0; i < AIS_IFE_PATH_MAX; i++) {
 		ais_clear_rdi_path(&core_info->rdi_out[i]);
@@ -274,6 +290,8 @@ static void ais_vfe_reset_rdi(void *hw_priv,
 	struct cam_hw_info *vfe_hw  = hw_priv;
 	struct ais_vfe_top_ver2_hw_info *top_hw_info = NULL;
 	struct ais_vfe_hw_core_info *core_info = NULL;
+	struct ais_irq_controller_reg_info  *top_irq_reg_info = NULL;
+	struct ais_irq_register_set  *top_irq_regs = NULL;
 	uint32_t  reset_reg_val = 0;
 	int rc = 0;
 
@@ -282,9 +300,11 @@ static void ais_vfe_reset_rdi(void *hw_priv,
 
 	core_info = (struct ais_vfe_hw_core_info *)vfe_hw->core_info;
 	top_hw_info = core_info->vfe_hw_info->top_hw_info;
+	top_irq_reg_info = core_info->vfe_hw_info->irq_reg_info;
+	top_irq_regs = top_irq_reg_info->irq_reg_set;
 
 	cam_io_w_mb(AIS_VFE_STATUS0_RESET_ACK_IRQ,
-		core_info->mem_base + AIS_VFE_IRQ_MASK0);
+		core_info->mem_base + top_irq_regs[0].mask_reg_offset);
 
 	reinit_completion(&vfe_hw->hw_complete);
 
@@ -310,7 +330,56 @@ static void ais_vfe_reset_rdi(void *hw_priv,
 
 _reset_skip:
 	core_info->irq_mask0 = 0x0;
-	cam_io_w_mb(0x0, core_info->mem_base + AIS_VFE_IRQ_MASK0);
+	cam_io_w_mb(0x0, core_info->mem_base + top_irq_regs[0].mask_reg_offset);
+}
+
+static int ais_vfe_config_rdi_wm(struct ais_vfe_rdi_output *rdi_path,
+                struct ais_ife_rdi_init_args *rdi_cfg)
+{
+	rdi_path->pack_fmt = PACKER_FMT_VER3_PLAIN_128;
+
+	switch (rdi_cfg->out_cfg.format) {
+		case CAM_FORMAT_MIPI_RAW_10:
+			rdi_path->pack_fmt = PACKER_FMT_VER3_MIPI10;
+			if (rdi_cfg->out_cfg.mode == 1) {
+				/*frame base mode*/
+				rdi_path->en_cfg = (0x1 << 16) | 0x1;
+				rdi_path->height = 0;
+				rdi_path->width = AIS_VFE_RDI_BUS_DEFAULT_WIDTH;
+				rdi_path->stride = AIS_VFE_RDI_BUS_DEFAULT_STRIDE;
+			} else {
+				/*line base mode*/
+				rdi_path->en_cfg =  0x1;
+			}
+			break;
+		case CAM_FORMAT_YUV422:
+			if (rdi_cfg->out_cfg.mode == 1) {
+				/*frame base mode*/
+				rdi_path->en_cfg = (0x1 << 16) | 0x1;
+				rdi_path->width = AIS_VFE_RDI_BUS_DEFAULT_WIDTH;
+				rdi_path->height = 0;
+				rdi_path->stride = AIS_VFE_RDI_BUS_DEFAULT_STRIDE;
+			} else {
+				/*line base mode*/
+				rdi_path->en_cfg =  0x1;
+				rdi_path->width =
+					ALIGNUP(rdi_cfg->out_cfg.width, 16) / 16;
+			}
+			break;
+		default:
+			CAM_ERR(CAM_ISP, "do not support format = 0x%x", rdi_cfg->out_cfg.format);
+			break;
+	}
+
+	CAM_DBG(CAM_ISP, "out_format = 0x%x, mode = 0x%x, pack_fmt = 0x%x, width = %d, height = %d, stride = %d, en_cfg= 0x%x",
+			rdi_cfg->out_cfg.format,
+			rdi_cfg->out_cfg.mode,
+			rdi_path->pack_fmt,
+			rdi_path->width,
+			rdi_path->height,
+			rdi_path->stride,
+			rdi_path->en_cfg);
+	return 0;
 }
 
 int ais_vfe_init_hw(void *hw_priv, void *init_hw_args, uint32_t arg_size)
@@ -460,7 +529,6 @@ void ais_isp_hw_get_timestamp(struct ais_isp_timestamp *time_stamp)
 				(time_stamp->mono_time.tv_nsec / NSEC_PER_USEC);
 }
 
-
 int ais_vfe_reserve(void *hw_priv, void *reserve_args, uint32_t arg_size)
 {
 	struct ais_vfe_hw_core_info       *core_info = NULL;
@@ -504,34 +572,22 @@ int ais_vfe_reserve(void *hw_priv, void *reserve_args, uint32_t arg_size)
 	rdi_path->height = rdi_cfg->out_cfg.height;
 	rdi_path->stride = rdi_cfg->out_cfg.stride;
 
-	/*disable pack as it is done in CSID*/
-	cam_io_w(0x0, core_info->mem_base + client_regs->packer_cfg);
+	ais_vfe_config_rdi_wm(rdi_path, rdi_cfg);
 
-	/*frame based mode*/
-	if (rdi_cfg->out_cfg.mode == 1) {
-#if 0
-		cam_io_w_mb(AIS_VFE_RDI_BUS_DEFAULT_WIDTH,
+	cam_io_w(rdi_path->pack_fmt, core_info->mem_base + client_regs->packer_cfg);
+
+	cam_io_w((rdi_path->height << 16) | rdi_path->width,
 			core_info->mem_base + client_regs->buffer_width_cfg);
-		cam_io_w(0x0,
-			core_info->mem_base + client_regs->buffer_height_cfg);
-		cam_io_w_mb(AIS_VFE_RDI_BUS_DEFAULT_STRIDE,
-			core_info->mem_base + client_regs->stride);
-		cam_io_w_mb(0x0,
-			core_info->mem_base + client_regs->frame_inc);
-		rdi_path->en_cfg = 0x10001;
-#endif
-	} else {
-		cam_io_w((rdi_cfg->out_cfg.height << 16) | rdi_cfg->out_cfg.width,
-				core_info->mem_base + client_regs->buffer_width_cfg);
-		cam_io_w_mb(rdi_cfg->out_cfg.stride,
-			core_info->mem_base + client_regs->stride);
-		rdi_path->en_cfg = 0x1;
-	}
 
-	cam_io_w_mb(rdi_cfg->out_cfg.frame_drop_period,
-		core_info->mem_base + client_regs->framedrop_period);
-	cam_io_w_mb(rdi_cfg->out_cfg.frame_drop_pattern,
-		core_info->mem_base + client_regs->framedrop_pattern);
+	cam_io_w_mb(rdi_path->stride,
+			core_info->mem_base + client_regs->stride);
+
+	if (client_regs->framedrop_period) {
+		cam_io_w_mb(rdi_cfg->out_cfg.frame_drop_period,
+			core_info->mem_base + client_regs->framedrop_period);
+		cam_io_w_mb(rdi_cfg->out_cfg.frame_drop_pattern,
+			core_info->mem_base + client_regs->framedrop_pattern);
+	}
 
 	cam_io_w_mb(0x0,
 		core_info->mem_base + client_regs->irq_subsample_period);
@@ -599,8 +655,11 @@ int ais_vfe_start(void *hw_priv, void *start_args, uint32_t arg_size)
 	struct ais_vfe_top_ver2_hw_info   *top_hw_info = NULL;
 	struct ais_vfe_bus_ver2_hw_info   *bus_hw_info = NULL;
 	struct ais_irq_register_set       *bus_hw_irq_regs = NULL;
+	struct ais_irq_controller_reg_info  *top_irq_reg_info = NULL;
+	struct ais_irq_register_set  *top_irq_regs = NULL;
 	struct ais_vfe_bus_ver2_reg_offset_bus_client  *client_regs = NULL;
 	int rc = 0;
+	int i = 0;
 
 	if (!hw_priv || !start_args ||
 		(arg_size != sizeof(struct ais_ife_rdi_start_args))) {
@@ -619,6 +678,8 @@ int ais_vfe_start(void *hw_priv, void *start_args, uint32_t arg_size)
 	top_hw_info = core_info->vfe_hw_info->top_hw_info;
 	bus_hw_info = core_info->vfe_hw_info->bus_hw_info;
 	bus_hw_irq_regs = bus_hw_info->common_reg.irq_reg_info.irq_reg_set;
+	top_irq_reg_info = core_info->vfe_hw_info->irq_reg_info;
+	top_irq_regs = top_irq_reg_info->irq_reg_set;
 	client_regs = &bus_hw_info->bus_client_reg[start_cmd->path];
 
 	mutex_lock(&vfe_hw->hw_mutex);
@@ -630,21 +691,19 @@ int ais_vfe_start(void *hw_priv, void *start_args, uint32_t arg_size)
 		goto EXIT;
 	}
 
-	cam_io_w_mb(0xd0000000,
-		core_info->mem_base + bus_hw_irq_regs[0].mask_reg_offset);
-	cam_io_w_mb(0x0,
-		core_info->mem_base + bus_hw_irq_regs[1].mask_reg_offset);
+	for (i = 0; i < bus_hw_info->common_reg.irq_reg_info.num_registers; i++)
+		cam_io_w_mb(bus_hw_info->common_reg.bus_mask_val[i],
+			core_info->mem_base + bus_hw_irq_regs[i].mask_reg_offset);
 
 	/*Update VFE mask*/
 	core_info->irq_mask0 |= AIS_VFE_ERR_IRQ_MASK0;
 
-	/*[TODO] enable SOF irq*/
-	core_info->irq_mask1 |= 0x100 << (start_cmd->path * 2);
+	core_info->irq_mask1 = 0;
 
 	cam_io_w_mb(core_info->irq_mask0,
-		core_info->mem_base + AIS_VFE_IRQ_MASK0);
+		core_info->mem_base + top_irq_regs[0].mask_reg_offset);
 	cam_io_w_mb(core_info->irq_mask1,
-		core_info->mem_base + AIS_VFE_IRQ_MASK1);
+		core_info->mem_base + top_irq_regs[1].mask_reg_offset);
 
 	/* Enable WM and reg-update*/
 	cam_io_w_mb(rdi_path->en_cfg, core_info->mem_base + client_regs->cfg);
@@ -705,9 +764,11 @@ int ais_vfe_stop(void *hw_priv, void *stop_args, uint32_t arg_size)
 	ais_clear_rdi_path(rdi_path);
 	spin_unlock(&rdi_path->buffer_lock);
 
-	core_info->bus_wr_mask1 &= ~(1 << stop_cmd->path);
-	cam_io_w_mb(core_info->bus_wr_mask1,
-		core_info->mem_base + bus_hw_irq_regs[1].mask_reg_offset);
+	if (bus_hw_info->common_reg.irq_reg_info.num_registers == 2) {
+		core_info->bus_wr_mask1 &= ~(1 << stop_cmd->path);
+		cam_io_w_mb(core_info->bus_wr_mask1,
+			core_info->mem_base + bus_hw_irq_regs[1].mask_reg_offset);
+	}
 
 	/* Disable WM and reg-update */
 	cam_io_w_mb(0x0, core_info->mem_base + client_regs->cfg);
@@ -798,9 +859,6 @@ static void ais_vfe_q_bufs_to_hw_ver2(struct ais_vfe_hw_core_info *core_info,
 		vfe_buf->bufIdx, vfe_buf->iova_addr,
 		rdi_path->num_buffer_hw_q, vfe_buf->ts_hw.cur_sof_ts);
 
-	cam_io_w_mb(0x1,
-		core_info->mem_base + client_regs->cfg);
-
 	iova_addr = AIS_36BIT_INTF_GET_IOVA_BASE(vfe_buf->iova_addr);
 	iova_offset = AIS_36BIT_INTF_GET_IOVA_OFFSET(vfe_buf->iova_addr);
 	frame_inc = rdi_path->stride * rdi_path->height;
@@ -814,9 +872,6 @@ static void ais_vfe_q_bufs_to_hw_ver2(struct ais_vfe_hw_core_info *core_info,
 
 	cam_io_w_mb(frame_inc,
 		core_info->mem_base + client_regs->frame_inc);
-
-	cam_io_w_mb(0x1,
-		core_info->mem_base + client_regs->cfg);
 
 	list_add_tail(&vfe_buf->list, &rdi_path->buffer_hw_q);
 	++rdi_path->num_buffer_hw_q;
@@ -1527,7 +1582,7 @@ static int ais_vfe_bus_handle_frame_done(
 static void ais_vfe_irq_fill_bus_done_status(
 	struct ais_vfe_hw_core_info *core_info,
 	struct ais_vfe_hw_work_data *work_data,
-	uint32_t *status, int irq_cnt)
+	uint32_t *status, int rdi_num)
 {
 	struct ais_vfe_bus_ver2_hw_info   *bus_hw_info = NULL;
 	struct ais_vfe_bus_ver2_reg_offset_bus_client  *client_regs = NULL;
@@ -1543,7 +1598,7 @@ static void ais_vfe_irq_fill_bus_done_status(
 	work_data->bus_wr_status[2] = status[CSID_IRQ_STATUS_RX];
 
 	if (work_data->bus_wr_status[1]) {
-		for (client = 0 ; client < AIS_IFE_PATH_MAX; client++) {
+		for (client = 0 ; client < rdi_num; client++) {
 			if ((work_data->bus_wr_status[1] >>
 					(common_reg->buf_done_shitf_val + client)) && 0x1) {
 				client_regs =
@@ -1779,7 +1834,13 @@ irqreturn_t ais_vfe_irq(int irq_num, void *data)
 	struct ais_vfe_bus_ver2_hw_info   *bus_hw_info = NULL;
 	struct ais_vfe_hw_info        *vfe_hw_info = NULL;
 	struct ais_irq_register_set  *bus_hw_irq_regs = NULL;
+	struct ais_irq_controller_reg_info  *top_irq_reg_info = NULL;
+	struct ais_irq_register_set  *top_irq_regs = NULL;
+	struct ais_vfe_top_ver2_hw_info   *top_hw_info = NULL;
 	uint32_t ife_status[2] = {};
+	uint32_t rdi_sof_sof_irq_shitf = 0;
+	uint32_t rdi_sof_sof_irq_mask = 0;
+	int i = 0;
 
 	if (!data)
 		return IRQ_NONE;
@@ -1787,16 +1848,27 @@ irqreturn_t ais_vfe_irq(int irq_num, void *data)
 	vfe_hw = (struct cam_hw_info *)data;
 	core_info = (struct ais_vfe_hw_core_info *)vfe_hw->core_info;
 	vfe_hw_info = core_info->vfe_hw_info;
+	top_hw_info = core_info->vfe_hw_info->top_hw_info;
 	bus_hw_info = core_info->vfe_hw_info->bus_hw_info;
 	bus_hw_irq_regs = bus_hw_info->common_reg.irq_reg_info.irq_reg_set;
+	top_irq_reg_info = core_info->vfe_hw_info->irq_reg_info;
+	top_irq_regs = top_irq_reg_info->irq_reg_set;
+	rdi_sof_sof_irq_shitf = top_hw_info->common_reg->rdi_sof_sof_irq_shitf;
+	rdi_sof_sof_irq_mask = top_hw_info->common_reg->rdi_sof_sof_irq_mask;
 
 	/* Read and Clear all IFE status regs */
-	ife_status[0] = cam_io_r_mb(core_info->mem_base + AIS_VFE_IRQ_STATUS0);
-	ife_status[1] = cam_io_r_mb(core_info->mem_base + AIS_VFE_IRQ_STATUS1);
+	ife_status[0] = cam_io_r_mb(core_info->mem_base +
+							top_irq_regs[0].status_reg_offset);
+	ife_status[1] = cam_io_r_mb(core_info->mem_base +
+							top_irq_regs[1].status_reg_offset);
 
-	cam_io_w_mb(ife_status[0], core_info->mem_base + AIS_VFE_IRQ_CLEAR0);
-	cam_io_w_mb(ife_status[1], core_info->mem_base + AIS_VFE_IRQ_CLEAR1);
-	cam_io_w_mb(0x1, core_info->mem_base + AIS_VFE_IRQ_CMD);
+	cam_io_w_mb(ife_status[0], core_info->mem_base +
+							top_irq_regs[0].clear_reg_offset);
+	cam_io_w_mb(ife_status[1], core_info->mem_base +
+							top_irq_regs[1].clear_reg_offset);
+
+	cam_io_w_mb(0x1, core_info->mem_base +
+							top_irq_reg_info->global_clear_offset);
 
 	trace_ais_isp_vfe_irq_activated(core_info->vfe_idx,
 			ife_status[0], ife_status[1]);
@@ -1809,9 +1881,11 @@ irqreturn_t ais_vfe_irq(int irq_num, void *data)
 		 * Clear All IRQs to avoid spurious IRQs immediately
 		 * after Reset Done.
 		 */
-		cam_io_w(0xFFFFFFFF, core_info->mem_base + AIS_VFE_IRQ_CLEAR0);
-		cam_io_w(0xFFFFFFFF, core_info->mem_base + AIS_VFE_IRQ_CLEAR1);
-		cam_io_w(0x1, core_info->mem_base + AIS_VFE_IRQ_CMD);
+		cam_io_w(0xFFFFFFFF, core_info->mem_base +
+								top_irq_regs[0].mask_reg_offset);
+		cam_io_w(0xFFFFFFFF, core_info->mem_base +
+								top_irq_regs[1].mask_reg_offset);
+		cam_io_w(0x1, core_info->mem_base + top_irq_reg_info->global_clear_offset);
 		CAM_DBG(CAM_ISP, "VFE%d Calling Complete for RESET CMD",
 				core_info->vfe_idx);
 		complete(&vfe_hw->hw_complete);
@@ -1824,14 +1898,14 @@ irqreturn_t ais_vfe_irq(int irq_num, void *data)
 		work_data.ts =
 			(uint64_t)((ts.tv_sec * 1000000000) + ts.tv_nsec);
 
-		if (ife_status[1] & AIS_VFE_STATUS0_RDI_SOF_IRQ) {
+		if (ife_status[1] & rdi_sof_sof_irq_mask) {
 			//RDI SOF
 			int i;
 
 			//fill HW timestamp for each RDI path
 			for (i = 0; i < AIS_IFE_PATH_MAX; i++) {
-				work_data.path |= ((ife_status[1] >> AIS_VFE_STATUS0_RDI_SOF_IRQ_SHFT) &
-					              (AIS_VFE_STATUS0_RDI_SOF_IRQ_MSK << (i * 2))) >> (1 * i);
+				work_data.path |= ((ife_status[1] >> rdi_sof_sof_irq_shitf) &
+					              (0x1 << (i * 2))) >> (1 * i);
 				if (!(work_data.path & (1 << i)))
 					continue;
 
@@ -1858,11 +1932,10 @@ irqreturn_t ais_vfe_irq(int irq_num, void *data)
 		if (ife_status[0] & AIS_VFE_ERR_IRQ_MASK0) {
 			core_info->irq_mask0 = 0;
 			cam_io_w_mb(core_info->irq_mask0,
-				core_info->mem_base + AIS_VFE_IRQ_MASK0);
-			cam_io_w_mb(0xD0000000,
-				core_info->mem_base + bus_hw_irq_regs[0].mask_reg_offset);
-			cam_io_w_mb(0x0,
-				core_info->mem_base + bus_hw_irq_regs[1].mask_reg_offset);
+				core_info->mem_base + top_irq_regs[0].mask_reg_offset);
+			for (i = 0; i < bus_hw_info->common_reg.irq_reg_info.num_registers; i++)
+				cam_io_w_mb(bus_hw_info->common_reg.bus_mask_val[i],
+					core_info->mem_base + bus_hw_irq_regs[i].mask_reg_offset);
 		}
 
 		/* [TODO] hardware different*/
@@ -1898,18 +1971,14 @@ irqreturn_t ais_vfe_irq(int irq_num, void *data)
 	return IRQ_HANDLED;
 }
 
-irqreturn_t ais_vfe_buf_done_irq(int irq_num, void *data,
-					uint32_t *irq_status, int irq_cnt)
+static int ais_vfe_buf_done(struct ais_csid_irq_event *irq_event)
 {
 	struct cam_hw_info            *vfe_hw = NULL;
 	struct ais_vfe_hw_core_info   *core_info = NULL;
 	struct ais_vfe_hw_work_data work_data;
 	struct timespec64 ts;
 
-	if (!data)
-		return IRQ_NONE;
-
-	vfe_hw = (struct cam_hw_info *)data;
+	vfe_hw = irq_event->vfe_hw;
 	core_info = (struct ais_vfe_hw_core_info *)vfe_hw->core_info;
 
 	ktime_get_boottime_ts64(&ts);
@@ -1917,10 +1986,68 @@ irqreturn_t ais_vfe_buf_done_irq(int irq_num, void *data,
 		(uint64_t)((ts.tv_sec * 1000000000) + ts.tv_nsec);
 
 	ais_vfe_irq_fill_bus_done_status(core_info, &work_data,
-										irq_status, irq_cnt);
+			irq_event->status, irq_event->rdi_num);
+
 	work_data.evt_type = AIS_VFE_HW_IRQ_EVENT_BUS_WR;
 
 	ais_vfe_dispatch_irq(vfe_hw, &work_data);
+
+	return IRQ_HANDLED;
+}
+
+static int ais_vfe_sof_done(struct ais_csid_irq_event *irq_event)
+{
+
+	struct cam_hw_info            *vfe_hw = NULL;
+	struct ais_vfe_hw_core_info   *core_info = NULL;
+	struct ais_vfe_hw_work_data work_data = {0};
+	struct ais_ife_rdi_get_timestamp_args get_ts;
+	struct timespec64 ts;
+
+	int i = 0;
+
+
+	vfe_hw = irq_event->vfe_hw;
+	core_info = (struct ais_vfe_hw_core_info *)vfe_hw->core_info;
+
+	for (i = 0; i < irq_event->rdi_num; i++) {
+		if (!(irq_event->status[CSID_IRQ_STATUS_RDI0 + i] &
+				CSID_PATH_INFO_INPUT_SOF))
+			continue;
+
+		work_data.path |= 0x1 << i;
+
+		get_ts.path = i;
+		get_ts.ts = &work_data.ts_hw[i];
+		core_info->csid_hw->hw_ops.process_cmd(
+			core_info->csid_hw->hw_priv,
+			AIS_IFE_CSID_CMD_GET_TIME_STAMP,
+			&get_ts,
+			sizeof(get_ts));
+	}
+
+	if (work_data.path) {
+		ktime_get_boottime_ts64(&ts);
+		work_data.ts =
+			(uint64_t)((ts.tv_sec * 1000000000) + ts.tv_nsec);
+		work_data.evt_type = AIS_VFE_HW_IRQ_EVENT_SOF;
+
+		ais_vfe_dispatch_irq(vfe_hw, &work_data);
+	}
+
+	return IRQ_HANDLED;
+}
+
+irqreturn_t ais_vfe_csid_irq_event_callback(struct ais_csid_irq_event *irq_event)
+{
+	switch (irq_event->event) {
+		case AIS_CSID_IRQ_EVENT_SOF:
+			ais_vfe_sof_done(irq_event);
+			break;
+		case AIS_CSID_IRQ_EVENT_BUF_DONE:
+			ais_vfe_buf_done(irq_event);
+			break;
+	}
 
 	return IRQ_HANDLED;
 }

@@ -456,18 +456,6 @@ struct ais_ife_rdi_get_timestamp_args {
  *
  * @path :   output path to update rup
  */
-struct ais_ife_rdi_update_rup_args {
-	int cnt;
-	uint32_t path[4];
-};
-
-/**
- * struct ais_ife_rdi_update_rup_args
- *
- * @brief :  update rup arguments
- *
- * @path :   output path to update rup
- */
 struct ais_ife_rdi_disable_rdi_args {
 	uint32_t path;
 };
@@ -526,6 +514,7 @@ enum ais_ife_msg_type {
 	AIS_IFE_MSG_OUTPUT_WARNING,
 	AIS_IFE_MSG_OUTPUT_ERROR,
 	AIS_IFE_MSG_CSID_WARNING,
+	AIS_IFE_MSG_CSID_RUP_DONE,
 	AIS_IFE_MSG_CSID_ERROR
 };
 

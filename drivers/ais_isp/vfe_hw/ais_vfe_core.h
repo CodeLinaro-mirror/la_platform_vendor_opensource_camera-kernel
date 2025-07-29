@@ -32,6 +32,27 @@ enum ais_vfe_hw_irq_event {
 	AIS_VFE_HW_IRQ_EVENT_ERROR,
 };
 
+enum cam_vfe_bus_ver3_packer_format {
+    PACKER_FMT_VER3_PLAIN_128,
+    PACKER_FMT_VER3_PLAIN_8,
+    PACKER_FMT_VER3_PLAIN_8_ODD_EVEN,
+    PACKER_FMT_VER3_PLAIN_8_LSB_MSB_10,
+    PACKER_FMT_VER3_PLAIN_8_LSB_MSB_10_ODD_EVEN,
+    PACKER_FMT_VER3_PLAIN_16_10BPP,
+    PACKER_FMT_VER3_PLAIN_16_12BPP,
+    PACKER_FMT_VER3_PLAIN_16_14BPP,
+    PACKER_FMT_VER3_PLAIN_16_16BPP,
+    PACKER_FMT_VER3_PLAIN_32,
+    PACKER_FMT_VER3_PLAIN_64,
+    PACKER_FMT_VER3_TP_10,
+    PACKER_FMT_VER3_MIPI10,
+    PACKER_FMT_VER3_MIPI12,
+    PACKER_FMT_VER3_MIPI14,
+    PACKER_FMT_VER3_MIPI20,
+    PACKER_FMT_VER3_PLAIN32_20BPP,
+    PACKER_FMT_VER3_MAX,
+};
+
 /**
  * struct ais_csid_hw_work_data- work data for csid
  * Later other fields can be added to this data
@@ -103,6 +124,7 @@ struct ais_vfe_rdi_output {
 	uint32_t                         width;
 	uint32_t                         height;
 	uint32_t                         stride;
+	uint32_t                         pack_fmt;
 
 	spinlock_t                       buffer_lock;
 	struct ais_vfe_buffer_t          buffers[AIS_VFE_MAX_BUF];
@@ -176,8 +198,7 @@ void ais_ife_discard_old_frame_done_event(struct ais_vfe_hw_core_info *core_info
 					struct ais_ife_event_data *evt_data);
 
 irqreturn_t ais_vfe_irq(int irq_num, void *data);
-irqreturn_t ais_vfe_buf_done_irq(int irq_num, void *data,
-					uint32_t *status, int irq_cnt);
+irqreturn_t ais_vfe_csid_irq_event_callback(struct ais_csid_irq_event *irq_event);
 
 int ais_vfe_core_init(struct ais_vfe_hw_core_info *core_info,
 	struct cam_hw_soc_info             *soc_info,

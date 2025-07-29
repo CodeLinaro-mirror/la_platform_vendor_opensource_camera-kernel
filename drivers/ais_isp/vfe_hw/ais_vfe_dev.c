@@ -217,10 +217,10 @@ int ais_vfe_hw_init(struct cam_hw_intf **vfe_hw,
 		core_info->iommu_hdl = init->iommu_hdl;
 		core_info->iommu_hdl_secure = init->iommu_hdl_secure;
 
-		//[TODO] add buffer done callback
+		/* add csid irq event callback */
 		csid_hw_info = (struct cam_hw_info*)csid_hw->hw_priv;
 		csid_core = (struct ais_ife_csid_hw*)(csid_hw_info->core_info);
-		csid_core->buf_done_irq = ais_vfe_buf_done_irq;
+		csid_core->irq_event_cb = ais_vfe_csid_irq_event_callback;
 		csid_core->vfe_hw_info = (void*)vfe_hw_info;
 
 		*vfe_hw = ais_vfe_hw_list[init->hw_idx];

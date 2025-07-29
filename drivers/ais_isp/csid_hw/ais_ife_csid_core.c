@@ -201,6 +201,10 @@ static int ais_ife_csid_path_reset(struct ais_ife_csid_hw *csid_hw,
 		return -EINVAL;
 	}
 
+	spin_lock(&csid_hw->lock_rup);
+	csid_hw->rup_val_set = 0;
+	spin_unlock(&csid_hw->lock_rup);
+
 	cam_io_w_mb(0, soc_info->reg_map[0].mem_base +
 			csid_reg->rdi_reg[id]->csid_rdi_irq_mask_addr);
 end:
@@ -559,6 +563,12 @@ static void ais_ife_csid_halt_csi2(
 		csid_reg->csi2_reg->csid_csi2_rx_cfg0_addr);
 	cam_io_w_mb(0, soc_info->reg_map[0].mem_base +
 		csid_reg->csi2_reg->csid_csi2_rx_cfg1_addr);
+
+	/* reset rup */
+	spin_lock(&csid_hw->lock_rup);
+	csid_hw->rup_val_set = 0;
+	spin_unlock(&csid_hw->lock_rup);
+
 }
 
 static int ais_ife_csid_ver_config_camif(
@@ -855,6 +865,9 @@ static int ais_ife_csid_enable_rdi_path(
 		(path_data->init_frame_drop))
 		val |= CSID_PATH_INFO_INPUT_SOF;
 
+	/* for trigger csid SOF irq */
+	val |= CSID_PATH_INFO_INPUT_SOF;
+
 	if (csid_hw->csid_debug & CSID_DEBUG_ENABLE_EOF_IRQ)
 		val |= CSID_PATH_INFO_INPUT_EOF;
 
@@ -869,7 +882,7 @@ static int ais_ife_csid_enable_rdi_path(
 	val = cam_io_r_mb(soc_info->reg_map[0].mem_base +
 		csid_reg->cmn_reg->csid_top_irq_mask_addr);
 	/*buffer done bit*/
-	val |= 2000;
+	val |= 0x2000;
 	/* RDIx */
 	val |= 0x100 << id;
 	cam_io_w_mb(val, soc_info->reg_map[0].mem_base +
@@ -942,6 +955,10 @@ static int ais_ife_csid_disable_rdi_path(
 
 	CAM_DBG(CAM_ISP, "CSID:%d RDI:%d",
 		csid_hw->hw_intf->hw_idx, id);
+
+	spin_lock(&csid_hw->lock_rup);
+	csid_hw->rup_val_set &= ~csid_reg->rdi_reg[id]->rup_aup_mask;
+	spin_unlock(&csid_hw->lock_rup);
 
 	/* disable RX */
 	cam_io_w_mb(0, soc_info->reg_map[0].mem_base +
@@ -1270,10 +1287,13 @@ static int ais_ife_csid_reserve(void *hw_priv,
 	if (rc)
 		goto disable_csi2;
 
+	spin_lock(&csid_hw->lock_state);
+	csid_hw->rup_val_set |= csid_reg->rdi_reg[rdi_cfg->path]->rup_aup_mask;
 	/*rup enable */
 	cam_io_w_mb(csid_reg->rdi_reg[rdi_cfg->path]->rup_aup_mask,
 			soc_info->reg_map[0].mem_base +
 			csid_reg->cmn_reg->rup_aup_cmd_addr);
+	spin_unlock(&csid_hw->lock_state);
 
 disable_csi2:
 	if (rc)
@@ -1669,19 +1689,14 @@ static int ais_ife_csid_get_total_pkts(
 
 static int ais_ife_csid_update_rup(
 	struct ais_ife_csid_hw   *csid_hw,
-	void *cmd_args)
+	uint32_t rup_mask)
 {
 
 	const struct ais_ife_csid_reg_offset       *csid_reg;
 	struct cam_hw_soc_info                     *soc_info;
-	struct ais_ife_rdi_update_rup_args         *rup_cmd;
-	enum ais_ife_output_path_id id = 0;
-	uint32_t rup_mask = 0;
-	int i = 0;
 
 	csid_reg = csid_hw->csid_info->csid_reg;
 	soc_info = &csid_hw->hw_info->soc_info;
-	rup_cmd = (struct ais_ife_rdi_update_rup_args*)cmd_args;
 
 	if (csid_hw->hw_info->hw_state != CAM_HW_STATE_POWER_UP) {
 		CAM_ERR(CAM_ISP, "CSID:%d Invalid dev state :%d",
@@ -1690,17 +1705,13 @@ static int ais_ife_csid_update_rup(
 		return -EINVAL;
 	}
 
-	for (i = 0; i < rup_cmd->cnt; i++)
-		rup_mask |= csid_reg->rdi_reg[rup_cmd->path[i]]->rup_aup_mask;
-
 	cam_io_w_mb(rup_mask,
 			soc_info->reg_map[0].mem_base +
 			csid_reg->cmn_reg->rup_aup_cmd_addr);
 
-	CAM_DBG(CAM_ISP, "CSID%d  rdi[%d] 0x%x",
+	CAM_DBG(CAM_ISP, "CSID%d  rup: 0x%x",
 						csid_hw->hw_intf->hw_idx,
-						id,
-						csid_reg->rdi_reg[id]->rup_aup_mask);
+						rup_mask);
 	return 0;
 }
 
@@ -1786,9 +1797,6 @@ static int ais_ife_csid_process_cmd(void *hw_priv,
 	case AIS_IFE_CSID_CMD_DIAG_INFO:
 		rc = ais_ife_csid_get_total_pkts(csid_hw, cmd_args);
 		break;
-	case AIS_IFE_CSID_CMD_UPDATE_RUP:
-		rc = ais_ife_csid_update_rup(csid_hw, cmd_args);
-		break;
 	case AIS_IFE_CSID_CMD_DISABLE_RDI:
 		rc = ais_ife_csid_disable_rdi(csid_hw, cmd_args);
 	default:
@@ -1820,24 +1828,27 @@ static int ais_csid_event_dispatch_process(void *priv, void *data)
 	}
 	work_data = (struct ais_csid_hw_work_data *)data;
 
-	CAM_ERR_RATE_LIMIT(CAM_ISP, "CSID%d [%d %d] TOP:0x%x RX:0x%x",
-			csid_hw->hw_intf->hw_idx,
-			work_data->evt_type,
-			csid_hw->csi2_rx_cfg.phy_sel,
-			work_data->irq_status[CSID_IRQ_STATUS_TOP],
-			work_data->irq_status[CSID_IRQ_STATUS_RX]);
+	if (work_data->evt_type == AIS_IFE_MSG_CSID_ERROR ||
+		work_data->evt_type == AIS_IFE_MSG_CSID_WARNING) {
+		CAM_ERR_RATE_LIMIT(CAM_ISP, "CSID%d [%d %d] TOP:0x%x RX:0x%x",
+				csid_hw->hw_intf->hw_idx,
+				work_data->evt_type,
+				csid_hw->csi2_rx_cfg.phy_sel,
+				work_data->irq_status[CSID_IRQ_STATUS_TOP],
+				work_data->irq_status[CSID_IRQ_STATUS_RX]);
 
-	CAM_ERR_RATE_LIMIT(CAM_ISP, " RDIs 0x%x 0x%x 0x%x 0x%x",
-		work_data->irq_status[CSID_IRQ_STATUS_RDI0],
-		work_data->irq_status[CSID_IRQ_STATUS_RDI1],
-		work_data->irq_status[CSID_IRQ_STATUS_RDI2],
-		work_data->irq_status[CSID_IRQ_STATUS_RDI3]);
+		CAM_ERR_RATE_LIMIT(CAM_ISP, " RDIs 0x%x 0x%x 0x%x 0x%x",
+			work_data->irq_status[CSID_IRQ_STATUS_RDI0],
+			work_data->irq_status[CSID_IRQ_STATUS_RDI1],
+			work_data->irq_status[CSID_IRQ_STATUS_RDI2],
+			work_data->irq_status[CSID_IRQ_STATUS_RDI3]);
 
-	evt_payload.msg.idx = csid_hw->hw_intf->hw_idx;
-	evt_payload.msg.boot_ts = work_data->timestamp;
-	evt_payload.msg.path = 0xF;
-	evt_payload.u.err_msg.reserved =
-		work_data->irq_status[CSID_IRQ_STATUS_RX];
+		evt_payload.msg.idx = csid_hw->hw_intf->hw_idx;
+		evt_payload.msg.boot_ts = work_data->timestamp;
+		evt_payload.msg.path = 0xF;
+		evt_payload.u.err_msg.reserved =
+			work_data->irq_status[CSID_IRQ_STATUS_RX];
+	}
 
 	switch (work_data->evt_type) {
 	case AIS_IFE_MSG_CSID_ERROR:
@@ -1852,6 +1863,9 @@ static int ais_csid_event_dispatch_process(void *priv, void *data)
 
 	case AIS_IFE_MSG_CSID_WARNING:
 		break;
+	case AIS_IFE_MSG_CSID_RUP_DONE:
+		ais_ife_csid_update_rup(csid_hw, work_data->data);
+		break;
 	default:
 		CAM_DBG(CAM_ISP, "CSID[%d] invalid error type %d",
 			csid_hw->hw_intf->hw_idx,
@@ -1862,7 +1876,7 @@ static int ais_csid_event_dispatch_process(void *priv, void *data)
 }
 
 static int ais_csid_dispatch_irq(struct ais_ife_csid_hw *csid_hw,
-	int evt_type, uint32_t *irq_status, uint64_t timestamp)
+	int evt_type, uint32_t *irq_status, uint64_t timestamp, uint32_t data)
 {
 	struct crm_workq_task *task;
 	struct ais_csid_hw_work_data *work_data;
@@ -1880,6 +1894,7 @@ static int ais_csid_dispatch_irq(struct ais_ife_csid_hw *csid_hw,
 	work_data = (struct ais_csid_hw_work_data *)task->payload;
 	work_data->evt_type = evt_type;
 	work_data->timestamp = timestamp;
+	work_data->data = data;
 	for (i = 0; i < CSID_IRQ_STATUS_MAX; i++)
 		work_data->irq_status[i] = irq_status[i];
 
@@ -1907,6 +1922,7 @@ static irqreturn_t ais_ife_csid_irq(int irq_num, void *data)
 	uint32_t irq_status[CSID_IRQ_STATUS_MAX] = {0};
 	struct timespec64 ts;
 	uint32_t rst_strobe_val = 0;
+	struct ais_csid_irq_event irq_event = {0};
 
 	if (!data) {
 		CAM_ERR(CAM_ISP, "CSID: Invalid arguments");
@@ -2052,24 +2068,43 @@ static irqreturn_t ais_ife_csid_irq(int irq_num, void *data)
 		timestamp = (uint64_t)((ts.tv_sec * 1000000000) + ts.tv_nsec);
 		ais_csid_dispatch_irq(csid_hw,
 			AIS_IFE_MSG_CSID_WARNING,
-			irq_status, timestamp);
+			irq_status, timestamp, 0);
 	}
 
 
 handle_fatal_error:
 	spin_unlock_irqrestore(&csid_hw->lock_state, flags);
 
-	/***** [TODO] workaround for rup ******/
-	cam_io_w_mb(0xF000F0,
-			soc_info->reg_map[0].mem_base +
-			csid_reg->cmn_reg->rup_aup_cmd_addr);
+	irq_event.irq_num = irq_num;
+	irq_event.vfe_hw = csid_hw->vfe_hw_info;
+	irq_event.rdi_num = csid_reg->cmn_reg->num_rdis;
+	irq_event.status_cnt = CSID_IRQ_STATUS_MAX;
+	irq_event.status = irq_status;
 
-	/*buffer done trigger*/
+	/* SOF irq trigger */
+	irq_event.event = AIS_CSID_IRQ_EVENT_SOF;
+	csid_hw->irq_event_cb(&irq_event);
+
+	/* buffer done trigger */
 	if (irq_status[CSID_IRQ_BUF_DONE] &&
-			csid_hw->buf_done_irq) {
-		csid_hw->buf_done_irq(irq_num, csid_hw->vfe_hw_info,
-								irq_status, CSID_IRQ_STATUS_MAX);
+			csid_hw->irq_event_cb) {
+		irq_event.event = AIS_CSID_IRQ_EVENT_BUF_DONE;
+
+		csid_hw->irq_event_cb(&irq_event);
 	}
+
+	/* rup aup irq */
+	spin_lock_irqsave(&csid_hw->lock_rup, flags);
+	if (csid_hw->rup_val_set) {
+		uint64_t timestamp;
+
+		timestamp = (uint64_t)((ts.tv_sec * 1000000000) + ts.tv_nsec);
+
+		ais_csid_dispatch_irq(csid_hw,
+			AIS_IFE_MSG_CSID_RUP_DONE,
+			irq_status, timestamp, csid_hw->rup_val_set);
+	}
+	spin_unlock_irqrestore(&csid_hw->lock_rup, flags);
 
 	if (fatal_err_detected) {
 		uint64_t timestamp;
@@ -2082,7 +2117,7 @@ handle_fatal_error:
 		ais_ife_csid_halt_csi2(csid_hw);
 		ais_csid_dispatch_irq(csid_hw,
 			AIS_IFE_MSG_CSID_ERROR,
-			irq_status, timestamp);
+			irq_status, timestamp, 0);
 	}
 
 	if (csid_hw->csid_debug & CSID_DEBUG_ENABLE_EOT_IRQ) {
@@ -2345,6 +2380,7 @@ int ais_ife_csid_hw_probe_init(struct cam_hw_intf  *csid_hw_intf,
 	mutex_init(&ife_csid_hw->hw_info->hw_mutex);
 	spin_lock_init(&ife_csid_hw->hw_info->hw_lock);
 	spin_lock_init(&ife_csid_hw->lock_state);
+	spin_lock_init(&ife_csid_hw->lock_rup);
 	init_completion(&ife_csid_hw->hw_info->hw_complete);
 
 	init_completion(&ife_csid_hw->csid_top_complete);

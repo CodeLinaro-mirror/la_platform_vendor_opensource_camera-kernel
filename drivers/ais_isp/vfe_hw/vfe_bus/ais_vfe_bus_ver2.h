@@ -124,6 +124,7 @@ struct ais_vfe_bus_ver2_reg_offset_common {
 	uint32_t debug_status_0;
 	uint32_t buf_done_shitf_val;
 	uint32_t buf_done_rdi_mask;
+	uint32_t *bus_mask_val;
 };
 
 /*

@@ -77,6 +77,8 @@ struct ais_vfe_top_ver2_reg_offset_common {
 	uint32_t three_D_cfg;
 	uint32_t violation_status;
 	uint32_t reg_update_cmd;
+	uint32_t rdi_sof_sof_irq_shitf;
+	uint32_t rdi_sof_sof_irq_mask;
 };
 
 struct ais_vfe_top_ver2_hw_info {
