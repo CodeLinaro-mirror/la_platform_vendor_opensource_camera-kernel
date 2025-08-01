@@ -7489,8 +7489,9 @@ static int cam_icp_mgr_prepare_hw_update(void *hw_mgr_priv,
 	packet = prepare_args->packet;
 
 	if (cam_packet_util_validate_packet(packet, prepare_args->remain_len)) {
-		mutex_unlock(&ctx_data->ctx_mutex);
-		return -EINVAL;
+		CAM_ERR(CAM_ICP, "Invalid packet, CPU buf length: %zu", prepare_args->remain_len);
+		rc = -EINVAL;
+		goto end;
 	}
 
 	rc = cam_icp_mgr_pkt_validation(ctx_data, packet);
