@@ -1,3 +1,11 @@
+CAMERA_DLKM_ENABLED := true
+ifeq ($(TARGET_KERNEL_DLKM_DISABLE), true)
+	ifeq ($(TARGET_KERNEL_DLKM_CAMERA_OVERRIDE), false)
+		CAMERA_DLKM_ENABLED := false;
+	endif
+endif
+
+ifeq ($(CAMERA_DLKM_ENABLED),true)
 ifeq ($(call is-board-platform-in-list, $(TARGET_BOARD_PLATFORM)),true)
 
 # Make target to specify building the camera.ko from within Android build system.
@@ -15,7 +23,6 @@ KBUILD_OPTIONS += BOARD_PLATFORM=$(TARGET_BOARD_PLATFORM)
 include $(CLEAR_VARS)
 # For incremental compilation support.
 LOCAL_SRC_FILES             := $(CAMERA_SRC_FILES)
-                             
 LOCAL_MODULE_PATH           := $(KERNEL_MODULES_OUT)
 LOCAL_MODULE                := camera.ko
 LOCAL_MODULE_TAGS           := optional
@@ -32,3 +39,4 @@ include $(DLKM_DIR)/Build_external_kernelmodule.mk
 endif
 
 endif # End of check for board platform
+endif # ifeq ($(CAMERA_DLKM_ENABLED),true)
