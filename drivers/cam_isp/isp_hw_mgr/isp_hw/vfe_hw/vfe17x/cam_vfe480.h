@@ -56,7 +56,6 @@ static struct cam_vfe_camif_ver3_pp_clc_reg vfe480_camif_reg = {
 	.debug_0                     = 0x000027F4,
 	.test_bus_ctrl               = 0x000027F8,
 	.spare                       = 0x000027FC,
-	.reg_update_cmd              = 0x00000034,
 };
 
 static struct cam_vfe_camif_ver3_reg_data vfe_480_camif_reg_data = {
@@ -88,6 +87,23 @@ static struct cam_vfe_camif_ver3_reg_data vfe_480_camif_reg_data = {
 	.top_debug_cfg_en                = 1,
 };
 
+static uint32_t vfe480_top_debug_reg[] = {
+	0x00000080,
+	0x00000084,
+	0x00000088,
+	0x0000008C,
+	0x0000009C,
+	0x000000A0,
+	0x000000A4,
+	0x000000A8,
+	0x000000AC,
+	0x000000B0,
+	0x000000B4,
+	0x000000B8,
+	0x000000BC,
+	0x000000C0,
+};
+
 static struct cam_vfe_top_ver3_reg_offset_common vfe480_top_common_reg = {
 	.hw_version               = 0x00000000,
 	.titan_version            = 0x00000004,
@@ -113,20 +129,8 @@ static struct cam_vfe_top_ver3_reg_offset_common vfe480_top_common_reg = {
 	.diag_sensor_status_1     = 0x00000098,
 	.bus_overflow_status      = 0x0000AA68,
 	.top_debug_cfg            = 0x000000DC,
-	.top_debug_0              = 0x00000080,
-	.top_debug_1              = 0x00000084,
-	.top_debug_2              = 0x00000088,
-	.top_debug_3              = 0x0000008C,
-	.top_debug_4              = 0x0000009C,
-	.top_debug_5              = 0x000000A0,
-	.top_debug_6              = 0x000000A4,
-	.top_debug_7              = 0x000000A8,
-	.top_debug_8              = 0x000000AC,
-	.top_debug_9              = 0x000000B0,
-	.top_debug_10             = 0x000000B4,
-	.top_debug_11             = 0x000000B8,
-	.top_debug_12             = 0x000000BC,
-	.top_debug_13             = 0x000000C0,
+	.num_top_debug_reg        = ARRAY_SIZE(vfe480_top_debug_reg),
+	.top_debug                = vfe480_top_debug_reg,
 };
 
 static struct cam_vfe_camif_lite_ver3_reg vfe480_camif_rdi[3] = {
@@ -141,7 +145,6 @@ static struct cam_vfe_camif_lite_ver3_reg vfe480_camif_rdi[3] = {
 		.lite_debug_0               = 0x9BF4,
 		.lite_test_bus_ctrl         = 0x9BF8,
 		.camif_lite_spare           = 0x9BFC,
-		.reg_update_cmd             = 0x34,
 	},
 	{
 		.lite_hw_version            = 0x9C00,
@@ -154,7 +157,6 @@ static struct cam_vfe_camif_lite_ver3_reg vfe480_camif_rdi[3] = {
 		.lite_debug_0               = 0x9DF4,
 		.lite_test_bus_ctrl         = 0x9DF8,
 		.camif_lite_spare           = 0x9DFC,
-		.reg_update_cmd             = 0x34,
 	},
 	{
 		.lite_hw_version            = 0x9E00,
@@ -167,7 +169,6 @@ static struct cam_vfe_camif_lite_ver3_reg vfe480_camif_rdi[3] = {
 		.lite_debug_0               = 0x9FF4,
 		.lite_test_bus_ctrl         = 0x9FF8,
 		.camif_lite_spare           = 0x9FFC,
-		.reg_update_cmd             = 0x34,
 	},
 };
 
@@ -227,7 +228,6 @@ static struct cam_vfe_camif_lite_ver3_reg vfe480_camif_lcr = {
 	.lite_debug_0               = 0xA1F4,
 	.lite_test_bus_ctrl         = 0xA1F8,
 	.camif_lite_spare           = 0xA1FC,
-	.reg_update_cmd             = 0x0034,
 };
 
 static struct cam_vfe_camif_lite_ver3_reg_data vfe480_camif_lcr_reg_data = {
@@ -255,7 +255,6 @@ static struct cam_vfe_camif_lite_ver3_reg vfe480_camif_pd = {
 	.lite_debug_0               = 0xA5F4,
 	.lite_test_bus_ctrl         = 0xA5F8,
 	.camif_lite_spare           = 0xA5FC,
-	.reg_update_cmd             = 0x0034,
 };
 
 static struct cam_vfe_camif_lite_ver3_reg_data vfe480_camif_pd_reg_data = {

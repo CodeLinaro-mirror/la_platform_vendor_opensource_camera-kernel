@@ -6,159 +6,10 @@
 #ifndef _CAM_TFE662_H_
 #define _CAM_TFE662_H_
 
-#include "cam_vfe_top_ver4.h"
+#include "cam_vfe_top_ver3.h"
 #include "cam_vfe_core.h"
 #include "cam_vfe_bus_ver3.h"
 #include "cam_irq_controller.h"
-
-#define CAM_TFE_BUS_VER3_662_MAX_CLIENTS     28
-
-static struct cam_vfe_top_ver4_module_desc tfe662_ipp_mod_desc[] = {
-	{
-		.id = 0,
-		.desc = "CLC_CHANNEL_GAIN_W4",
-	},
-	{
-		.id  = 1,
-		.desc = "CLC_BPC_PDPC_W0",
-	},
-	{
-		.id = 2,
-		.desc = "CLC_LSC_W2",
-	},
-	{
-		.id = 3,
-		.desc = "CLC_SHARED_LB_W0",
-	},
-	{
-		.id = 4,
-		.desc = "CLC_WB_BDS_W0",
-	},
-	{
-		.id = 5,
-		.desc = "CLC_CROP_RND_CLAMP_POST_BDS_W5",
-	},
-	{
-		.id = 6,
-		.desc = "CLC_BLS_W2",
-	},
-	{
-		.id = 7,
-		.desc = "CLC_BAYER_GLUT_W0",
-	},
-	{
-		.id = 8,
-		.desc = "CLC_BAYER_DS4_W2",
-	},
-	{
-		.id = 9,
-		.desc = "CLC_COLOR_XFORM_DS4_W7",
-	},
-	{
-		.id = 10,
-		.desc = "CLC_CHROMA_DS2_W9",
-	},
-	{
-		.id = 11,
-		.desc = "CLC_CROP_RND_CLAMP_Y_DS4_W1",
-	},
-	{
-		.id = 12,
-		.desc = "CLC_CROP_RND_CLAMP_C_DS4_W1",
-	},
-	{
-		.id = 13,
-		.desc = "CLC_R2PD_DS4_W1",
-	},
-	{
-		.id = 14,
-		.desc = "CLC_DOWNSCALE_4TO1_Y_W1",
-	},
-	{
-		.id  = 15,
-		.desc = "CLC_DOWNSCALE_4TO1_C_W5",
-	},
-	{
-		.id = 16,
-		.desc = "CLC_CROP_RND_CLAMP_Y_DS16_W1",
-	},
-	{
-		.id = 17,
-		.desc = "CLC_CROP_RND_CLAMP_C_DS16_W1",
-	},
-	{
-		.id = 18,
-		.desc = "CLC_R2PD_DS16_W3",
-	},
-	{
-		.id = 19,
-		.desc = "CLC_WB_GAIN_W3",
-	},
-	{
-		.id = 20,
-		.desc = "CLC_BAYER_DS2_W1",
-	},
-	{
-		.id = 21,
-		.desc = "CLC_GTM_W0",
-	},
-	{
-		.id = 22,
-		.desc = "CLC_COLOR_XFORM_AI_DS_W7",
-	},
-	{
-		.id = 23,
-		.desc = "CLC_DOWNSCALE_MN_Y_W7",
-	},
-	{
-		.id = 24,
-		.desc = "CLC_DOWNSCALE_MN_C_W8",
-	},
-	{
-		.id = 25,
-		.desc = "CLC_CROP_RND_CLAMP_Y_AI_DS_W1",
-	},
-	{
-		.id = 26,
-		.desc = "CLC_CROP_RND_CLAMP_C_AI_DS_W1",
-	},
-	{
-		.id = 27,
-		.desc = "CLC_CROP_RND_CLAMP_IDEAL_RAW_W5",
-	},
-	{
-		.id = 28,
-		.desc = "CLC_ABF_W0",
-	},
-	{
-		.id = 29,
-		.desc = "CLC_STATS_BG_W0",
-	},
-	{
-		.id = 30,
-		.desc = "CLC_STATS_BHIST_W0",
-	},
-	{
-		.id = 31,
-		.desc = "CLC_STATS_AWB_BG_W0",
-	},
-	{
-		.id = 32,
-		.desc = "CLC_STATS_AEC_BG_W1",
-	},
-	{
-		.id = 33,
-		.desc = "CLC_STATS_BAF_W0",
-	},
-	{
-		.id = 34,
-		.desc = "CLC_STATS_RS_W3",
-	},
-	{
-		.id = 35,
-		.desc = "CLC_DELAY_LINE_W0",
-	},
-};
 
 /*
  * Top HM registers, Offsets w.r.t top_hm_base. If top_hm_base is 0,
@@ -199,119 +50,19 @@ static struct cam_irq_controller_reg_info tfe662_top_irq_reg_info = {
 };
 
 static uint32_t tfe662_top_debug_reg[] = {
-		0xA0,
-		0xA4,
-		0xA8,
-		0xAC,
-		0xB0,
-		0xB4,
-		0xB8,
-		0xBC,
-		0xC0,
-		0xC4,
+	0xA0,
+	0xA4,
+	0xA8,
+	0xAC,
+	0xB0,
+	0xB4,
+	0xB8,
+	0xBC,
+	0xC0,
+	0xC4,
 };
 
-#define CAM_TFE_662_NUM_TOP_DBG_REG ((sizeof(tfe662_top_debug_reg))/(sizeof(uint32_t)))
-
-static struct cam_vfe_top_ver4_debug_reg_info tfe662_top_dbg_reg_info[
-	CAM_TFE_662_NUM_TOP_DBG_REG][8] = {
-	VFE_DBG_INFO_ARRAY_4bit("test_bus_reserved",
-		"test_bus_reserved",
-		"test_bus_reserved",
-		"test_bus_reserved",
-		"test_bus_reserved",
-		"test_bus_reserved",
-		"test_bus_reserved",
-		"test_bus_reserved"
-	),
-	VFE_DBG_INFO_ARRAY_4bit("STATS_BE_TINTLESS",
-		"STATS_BHIST",
-		"STATS_AEC_BG",
-		"STATS_AWB_BG",
-		"STATS_BAF",
-		"DELAY_LINE",
-		"WB_BDS",
-		"CROP_RND_CLAMP_IDLE_RAW"
-	),
-	VFE_DBG_INFO_ARRAY_4bit("LRO_IDLE",
-		"CHANNEL_GAIN",
-		"WM_9_RDI2",
-		"WM_8_RDI1",
-		"WM_7_RDI0",
-		"WM_6_STATS_BAF",
-		"WM_5_STATS_AEC_BG",
-		"WM_4_STATS_AWB_BG"
-	),
-	VFE_DBG_INFO_ARRAY_4bit("WM_3_STATS_BHIST",
-		"WM_2_STATS_BE_TINTLESS",
-		"WM_1_IDEAL_RAW",
-		"WM_0_BAYER",
-		"RDI2_CAMIF",
-		"RDI1_CAMIF",
-		"RDI0_CAMIF",
-		"PP_CAMIF"
-	),
-	VFE_DBG_INFO_ARRAY_4bit("STATS_RS",
-		"BPC_PDPC",
-		"SHARED_LB",
-		"CROP_RND_CLAMP_BAYER",
-		"BLS",
-		"GLUT",
-		"BAYER_DS4",
-		"DS4_CST"
-	),
-	VFE_DBG_INFO_ARRAY_4bit("CDS_2",
-		"CRC_DS4_Y",
-		"CRC_DS4_C",
-		"DS4_R2PD_Y",
-		"DS4_R2PD_C",
-		"Y_DS4",
-		"UV_DS4",
-		"CRC_DS16_Y"
-	),
-	VFE_DBG_INFO_ARRAY_4bit("CRC_DS16_C",
-		"DS16_R2PD_Y",
-		"DS16_R2PD_C",
-		"WB_GAIN",
-		"Bayer_DS2",
-		"GTM",
-		"AI_CST",
-		"AI_Y_MNDS"
-	),
-	VFE_DBG_INFO_ARRAY_4bit("AI_C_MNDS",
-		"CRC_AI_Y",
-		"CRC_AI_C",
-		"ABF",
-		"reserved",
-		"reserved",
-		"reserved",
-		"reserved"
-	),
-	VFE_DBG_INFO_ARRAY_4bit("backpressure_at_CLC",
-		"backpressure_at_CLC",
-		"backpressure_at_CLC",
-		"backpressure_at_CLC",
-		"backpressure_at_CLC",
-		"backpressure_at_CLC",
-		"backpressure_at_CLC",
-		"backpressure_at_CLC"
-	),
-	VFE_DBG_INFO_ARRAY_4bit("backpressure_at_CLC",
-		"backpressure_at_CLC",
-		"backpressure_at_CLC",
-		"backpressure_at_CLC",
-		"backpressure_at_CLC",
-		"backpressure_at_CLC",
-		"backpressure_at_CLC",
-		"backpressure_at_CLC"
-	),
-};
-
-static struct cam_vfe_top_ver4_reg_offset_common tfe662_common_reg = {
-	/*
-	 * Top HM registers, Offsets w.r.t top_hm_base. If top_hm_base is 0,
-	 * make these offsets relative core start address.
-	 */
+static struct cam_vfe_top_ver3_reg_offset_common tfe662_top_common_reg = {
 	.hw_version                             = 0x0,
 	.hw_capability                          = 0x4,
 	.lens_feature                           = 0x8,
@@ -323,13 +74,13 @@ static struct cam_vfe_top_ver4_reg_offset_common tfe662_common_reg = {
 	.core_cfg_0                             = 0x24,
 	.reg_update_cmd                         = 0x2C,
 	.diag_config                            = 0x60,
-	.diag_sensor_status                    = {0x64, 0x68},
-	.diag_frm_cnt_status                   = {0x6C},
-	.ipp_violation_status                   = 0x70,
+	.diag_sensor_status_0                   = 0x64,
+	.diag_sensor_status_1                   = 0x68,
+	.violation_status                       = 0x70,
 	.stats_throttle_cfg_0                   = 0x74,
 	.stats_throttle_cfg_1                   = 0x78,
 	.top_debug_cfg                          = 0xDC,
-	.num_perf_counters                           = 2,
+	.num_perf_counters                      = 2,
 	.perf_count_reg = {
 		{
 			.perf_count_cfg         = 0xE0,
@@ -350,157 +101,158 @@ static struct cam_vfe_top_ver4_reg_offset_common tfe662_common_reg = {
 			.perf_count_status      = 0x10C,
 		},
 	},
-
-	.num_top_debug_reg        = CAM_TFE_662_NUM_TOP_DBG_REG,
-	.top_debug = tfe662_top_debug_reg,
-	.pdaf_violation_status    = 0,
-	/*
-	 * Bus Wr registers, w.r.t bus_wr_base. If bus_wr_base is 0,
-	 * make these offsets relative core start address.
-	 */
-	.bus_violation_status     = 0x64,
 	.bus_overflow_status      = 0x68,
-	/* Index of top irq reg reflecting frame irqs sof, eof, epoch etc.
-	 */
-	.frame_timing_irq_reg_idx = CAM_IFE_IRQ_CAMIF_REG_STATUS1,
-	/* HW capabilities
-	 */
-	.capabilities = CAM_VFE_COMMON_CAP_SKIP_CORE_CFG,
+	.top_reset_reg            = 0x34,
+	.num_top_debug_reg        = ARRAY_SIZE(tfe662_top_debug_reg),
+	.top_debug                = tfe662_top_debug_reg,
+	.top_hm_base              = 0x1800,
+	.bus_wr_base              = 0x3000,
 };
 
-static struct cam_vfe_ver4_path_reg_data tfe662_ipp_common_reg_data = {
+static struct cam_vfe_camif_ver3_reg_data vfe_662_camif_reg_data = {
 	.sof_irq_mask                    = 0x1,
 	.eof_irq_mask                    = 0x2,
 	.epoch0_irq_mask                 = 0x4,
 	.epoch1_irq_mask                 = 0x8,
-	.ipp_violation_mask              = 0x3,
-	.pdaf_violation_mask             = 0,
-	.bayer_violation_mask            = 0,
-	.diag_violation_mask             = 0x20,
-	.diag_sensor_sel_mask            = 0x0,
-	.diag_frm_count_mask_0           = 0x10,
 	.enable_diagnostic_hw            = 0x1,
 	.top_debug_cfg_en                = 3,
-	.is_mc_path                      = false,
+	.error_irq_mask0                 = 0xF0F00,
+	.error_irq_mask2                 = 0x3F,
+	.pp_extern_reg_update_shift      = 0x0,
+	.dual_pd_extern_reg_update_shift = 0x0,
+	.extern_reg_update_mask          = 0x1,
+	.dual_ife_pix_en_shift           = 0x1,
+	.operating_mode_shift            = 0,
+	.input_mux_sel_shift             = 0,
+	.pixel_pattern_shift             = 0,
+	.pixel_pattern_mask              = 0,
+	.dsp_mode_shift                  = 0,
+	.dsp_mode_mask                   = 0,
+	.dsp_en_shift                    = 0,
+	.dsp_en_mask                     = 0,
+	.reg_update_cmd_data             = 0x1,
+	/* epoch line cfg is to program epoch_1 reg*/
+	.epoch_line_cfg                  = 0x14,
+	.subscribe_irq_mask1             = 0x7,
+	.frame_id_irq_mask               = 0,
+	.pp_camif_cfg_en_shift           = 0,
+	.pp_camif_cfg_ife_out_en_shift   = 8,
 };
 
-static struct cam_vfe_ver4_path_reg_data tfe662_vfe_full_rdi_reg_data[3] = {
+/* Using lite version structures here, no need of new structure */
+static struct cam_vfe_camif_lite_ver3_reg tfe662_camif_rdi[3] = {
 	{
+		.lite_hw_version            = 0x00,
+		.lite_hw_status             = 0x04,
+		.lite_module_config         = 0x60,
+		.lite_skip_period           = 0x68,
+		.lite_irq_subsample_pattern = 0x6C,
+		.lite_epoch_irq             = 0x70,
+		.lite_debug_1               = 0x1F0,
+		.lite_debug_0               = 0x1F4,
+		.lite_test_bus_ctrl         = 0x1F8,
+		.camif_lite_spare           = 0x1FC,
+	},
+};
+
+static struct cam_vfe_camif_lite_ver3_reg_data tfe662_camif_rdi_reg_data[3] = {
+	{
+		.extern_reg_update_shift         = 0,
+		.reg_update_cmd_data             = 0x2,
+		.epoch_line_cfg                  = 0x0,
 		.sof_irq_mask                    = 0x10,
-		.eof_irq_mask                    = 0x20,
 		.epoch0_irq_mask                 = 0x40,
 		.epoch1_irq_mask                 = 0x80,
-		.error_irq_mask                  = 0x0,
-		.diag_sensor_sel_mask            = 0x2,
-		.diag_frm_count_mask_0           = 0x20,
+		.eof_irq_mask                    = 0x20,
+		.error_irq_mask0                 = 0x20000,
+		.error_irq_mask2                 = 0x4,
+		.subscribe_irq_mask1             = 0x30,
 		.enable_diagnostic_hw            = 0x1,
-		.top_debug_cfg_en                = 3,
+		.top_debug_cfg_en                = 1,
 	},
 	{
+		.extern_reg_update_shift         = 0,
+		.reg_update_cmd_data             = 0x4,
+		.epoch_line_cfg                  = 0x0,
 		.sof_irq_mask                    = 0x100,
-		.eof_irq_mask                    = 0x200,
 		.epoch0_irq_mask                 = 0x400,
 		.epoch1_irq_mask                 = 0x800,
-		.error_irq_mask                  = 0x0,
-		.diag_sensor_sel_mask            = 0x4,
-		.diag_frm_count_mask_0           = 0x40,
+		.eof_irq_mask                    = 0x200,
+		.error_irq_mask0                 = 0x40000,
+		.error_irq_mask2                 = 0x8,
+		.subscribe_irq_mask1             = 0x300,
 		.enable_diagnostic_hw            = 0x1,
-		.top_debug_cfg_en                = 3,
+		.top_debug_cfg_en                = 1,
 	},
 	{
+		.extern_reg_update_shift         = 0,
+		.reg_update_cmd_data             = 0x8,
+		.epoch_line_cfg                  = 0x0,
 		.sof_irq_mask                    = 0x1000,
-		.eof_irq_mask                    = 0x2000,
 		.epoch0_irq_mask                 = 0x4000,
 		.epoch1_irq_mask                 = 0x8000,
-		.error_irq_mask                  = 0x0,
-		.diag_sensor_sel_mask            = 0x6,
-		.diag_frm_count_mask_0           = 0x80,
+		.eof_irq_mask                    = 0x2000,
+		.error_irq_mask0                 = 0x80000,
+		.error_irq_mask2                 = 0x10,
+		.subscribe_irq_mask1             = 0x3000,
 		.enable_diagnostic_hw            = 0x1,
-		.top_debug_cfg_en                = 3,
+		.top_debug_cfg_en                = 1,
 	},
 };
 
-struct cam_vfe_ver4_path_hw_info
-	tfe662_rdi_hw_info_arr[] = {
+struct cam_vfe_camif_lite_ver3_hw_info tfe662_rdi_hw_info_arr[3] = {
 	{
-		.common_reg     = &tfe662_common_reg,
-		.reg_data       = &tfe662_vfe_full_rdi_reg_data[0],
+		.common_reg     = &tfe662_top_common_reg,
+		.camif_lite_reg = &tfe662_camif_rdi[0],
+		.reg_data       = &tfe662_camif_rdi_reg_data[0],
+		.path_reg_base  = 0x1E00,
 	},
 	{
-		.common_reg     = &tfe662_common_reg,
-		.reg_data       = &tfe662_vfe_full_rdi_reg_data[1],
+		.common_reg     = &tfe662_top_common_reg,
+		.camif_lite_reg = &tfe662_camif_rdi[0],
+		.reg_data       = &tfe662_camif_rdi_reg_data[1],
+		.path_reg_base  = 0x2000,
+
 	},
 	{
-		.common_reg     = &tfe662_common_reg,
-		.reg_data       = &tfe662_vfe_full_rdi_reg_data[2],
+		.common_reg     = &tfe662_top_common_reg,
+		.camif_lite_reg = &tfe662_camif_rdi[0],
+		.reg_data       = &tfe662_camif_rdi_reg_data[2],
+		.path_reg_base  = 0x2200,
 	},
 };
 
-static struct cam_vfe_top_ver4_diag_reg_info tfe662_diag_reg_info[] = {
-	{
-		.bitmask = 0x3FFF,
-		.name    = "SENSOR_HBI",
-	},
-	{
-		.bitmask = 0x4000,
-		.name    = "SENSOR_NEQ_HBI",
-	},
-	{
-		.bitmask = 0x8000,
-		.name    = "SENSOR_HBI_MIN_ERROR",
-	},
-	{
-		.bitmask = 0xFFFFFF,
-		.name    = "SENSOR_VBI",
-	},
-	{
-		.bitmask = 0xFF,
-		.name    = "FRAME_CNT_PP_PIPE",
-	},
-	{
-		.bitmask = 0xFF00,
-		.name    = "FRAME_CNT_RDI_0_PIPE",
-	},
-	{
-		.bitmask = 0xFF0000,
-		.name    = "FRAME_CNT_RDI_1_PIPE",
-	},
-	{
-		.bitmask = 0xFF000000,
-		.name    = "FRAME_CNT_RDI_2_PIPE",
-	},
+static struct cam_vfe_camif_ver3_pp_clc_reg vfe662_camif_reg = {
+	.hw_version                  = 0x00,
+	.hw_status                   = 0x04,
+	.module_cfg                  = 0x60,
+	.pdaf_raw_crop_width_cfg     = 0x68,
+	.pdaf_raw_crop_height_cfg    = 0x6C,
+	.line_skip_pattern           = 0x70,
+	.pixel_skip_pattern          = 0x74,
+	.period_cfg                  = 0x78,
+	.irq_subsample_pattern       = 0x7C,
+	.epoch_irq_cfg               = 0x80,
+	.debug_1                     = 0x1F0,
+	.debug_0                     = 0x1F4,
+	.test_bus_ctrl               = 0x1F8,
+	.spare                       = 0x1FC,
 };
 
-static struct cam_vfe_top_ver4_diag_reg_fields tfe662_diag_sensor_field[] = {
-	{
-		.num_fields = 3,
-		.field      = &tfe662_diag_reg_info[0],
+static struct cam_vfe_top_ver3_hw_info tfe662_top_hw_info = {
+	.common_reg = &tfe662_top_common_reg,
+	.camif_hw_info = {
+		.common_reg     = &tfe662_top_common_reg,
+		.camif_reg      = &vfe662_camif_reg,
+		.reg_data       = &vfe_662_camif_reg_data,
+		.path_reg_base  = 0x1C00,
 	},
-	{
-		.num_fields = 1,
-		.field      = &tfe662_diag_reg_info[3],
-	},
-};
-
-static struct cam_vfe_top_ver4_diag_reg_fields tfe662_diag_frame_field[] = {
-	{
-		.num_fields = 4,
-		.field      = &tfe662_diag_reg_info[4],
-	},
-};
-
-static struct cam_vfe_top_ver4_hw_info tfe662_top_hw_info = {
-	.common_reg = &tfe662_common_reg,
-	.vfe_full_hw_info = {
-		.common_reg     = &tfe662_common_reg,
-		.reg_data       = &tfe662_ipp_common_reg_data,
-	},
-	.rdi_hw_info            = tfe662_rdi_hw_info_arr,
-	.ipp_module_desc        = tfe662_ipp_mod_desc,
-	.bayer_module_desc      = NULL,
+	.rdi_hw_info[0] = &tfe662_rdi_hw_info_arr[0],
+	.rdi_hw_info[1] = &tfe662_rdi_hw_info_arr[1],
+	.rdi_hw_info[2] = &tfe662_rdi_hw_info_arr[2],
 	.num_mux = 4,
 	.mux_type = {
-		CAM_VFE_CAMIF_VER_4_0,
+		CAM_VFE_CAMIF_VER_3_0,
 		CAM_VFE_RDI_VER_1_0,
 		CAM_VFE_RDI_VER_1_0,
 		CAM_VFE_RDI_VER_1_0,
@@ -510,27 +262,7 @@ static struct cam_vfe_top_ver4_hw_info tfe662_top_hw_info = {
 	 */
 	.num_path_port_map = 0,
 	.path_port_map = {},
-	.num_rdi                         = ARRAY_SIZE(tfe662_rdi_hw_info_arr),
-	/*
-	 * top_err_desc/num_top_errors will be NULL/0 for mimas arch.
-	 * handled through top_status_reg_info.
-	 */
-	.num_top_errors                  = 0,
-	.top_err_desc                    = NULL,
-	.num_pdaf_violation_errors       = 0,
-	.pdaf_violation_desc             = NULL,
-	.top_debug_reg_info              = &tfe662_top_dbg_reg_info,
-	.bayer_debug_reg_info            = NULL,
-	.fcg_module_info                 = NULL,
-	.fcg_mc_supported                = false,
-	.diag_sensor_info                = tfe662_diag_sensor_field,
-	.diag_frame_info                 = tfe662_diag_frame_field,
-	.top_hm_base                     = 0x1800,
-	.bayer_hm_base                   = 0x0,
-	.fcg_clc_base                    = 0x0,
-	.haf_clc_base                    = 0x0,
-	.bus_wr_base                     = 0x3000,
-	.bayer_hm_supported              = false,
+	.top_hm_base    = 0x1800,
 };
 
 /*
@@ -646,8 +378,12 @@ static struct cam_vfe_bus_ver3_hw_info tfe662_bus_hw_info = {
 			},
 		},
 	},
-	.bus_wr_base                              = 0x3000,
-	.support_dyn_offset                       = true,
+	.bus_wr_base                          = 0x3000,
+	.support_dyn_offset                   = true,
+	.supported_irq                        = CAM_VFE_HW_IRQ_CAP_BUF_DONE |
+						CAM_VFE_HW_IRQ_CAP_RUP |
+						CAM_VFE_HW_IRQ_CAP_RESET,
+
 	/*
 	 * client_base is w.r.t bus_wr_base. If bus_wr_base is 0,
 	 * make client_base relative core start address.
@@ -751,7 +487,7 @@ static struct cam_vfe_bus_ver3_hw_info tfe662_bus_hw_info = {
 			.name                     = "STATS BHIST",
 			.mid                      = {18},
 			.num_mid                  = 1,
-			.out_type                 = CAM_VFE_BUS_VER3_VFE_OUT_STATS_BHIST,
+			.out_type                 = CAM_VFE_BUS_VER3_VFE_OUT_STATS_AEC_BHIST,
 			.mc_based                 = false,
 			.pid_mask                 = BIT_ULL(6) | BIT_ULL(7),
 		},
@@ -928,7 +664,7 @@ static struct cam_vfe_bus_ver3_hw_info tfe662_bus_hw_info = {
 			.name                     = "STATS RS",
 			.mid                      = {27},
 			.num_mid                  = 1,
-			.out_type                 = CAM_VFE_BUS_VER3_VFE_OUT_STATS_RS,
+			.out_type                 = CAM_VFE_BUS_VER3_VFE_OUT_STATS_BAYER_RS,
 			.mc_based                 = false,
 			.pid_mask                 = BIT_ULL(6) | BIT_ULL(7),
 		},
@@ -1060,8 +796,7 @@ static struct cam_vfe_bus_ver3_hw_info tfe662_bus_hw_info = {
 };
 
 static struct cam_vfe_irq_hw_info tfe662_irq_hw_info = {
-	.reset_mask    = 0,
-	.supported_irq = CAM_VFE_HW_IRQ_CAP_BUF_DONE | CAM_VFE_HW_IRQ_CAP_RUP,
+	.reset_mask    = 0x1,
 	.top_irq_reg   = &tfe662_top_irq_reg_info,
 };
 
@@ -1071,7 +806,7 @@ static struct cam_vfe_hw_info cam_tfe662_hw_info = {
 	.bus_version                   = CAM_VFE_BUS_VER_3_0,
 	.bus_hw_info                   = &tfe662_bus_hw_info,
 
-	.top_version                   = CAM_VFE_TOP_VER_4_0,
+	.top_version                   = CAM_VFE_TOP_VER_3_0,
 	.top_hw_info                   = &tfe662_top_hw_info,
 };
 #endif /* _CAM_TFE662_H_ */

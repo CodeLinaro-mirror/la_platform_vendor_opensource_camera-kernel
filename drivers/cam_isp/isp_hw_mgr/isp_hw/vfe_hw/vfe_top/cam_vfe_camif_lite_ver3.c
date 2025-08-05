@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -46,6 +46,8 @@ struct cam_vfe_mux_camif_lite_data {
 	struct timespec64                            epoch_ts;
 	struct timespec64                            eof_ts;
 	struct timespec64                            error_ts;
+	uint64_t                                     path_reg_base;
+	uint8_t                                      log_buf[CAM_VFE_LEN_LOG_BUF];
 };
 
 static int cam_vfe_camif_lite_get_evt_payload(
@@ -151,9 +153,11 @@ static int cam_vfe_camif_lite_err_irq_top_half(
 		evt_payload->irq_reg_val[i] = th_payload->evt_status_arr[i];
 
 	evt_payload->irq_reg_val[i] = cam_io_r(camif_lite_priv->mem_base +
+		camif_lite_priv->common_reg->top_hm_base +
 		camif_lite_priv->common_reg->violation_status);
 
 	evt_payload->irq_reg_val[++i] = cam_io_r(camif_lite_priv->mem_base +
+		camif_lite_priv->common_reg->bus_wr_base +
 		camif_lite_priv->common_reg->bus_overflow_status);
 
 	th_payload->evt_payload_priv = evt_payload;
@@ -203,7 +207,8 @@ static int cam_vfe_camif_lite_get_reg_update(
 	}
 
 	rsrc_data = camif_lite_res->res_priv;
-	reg_val_pair[0] = rsrc_data->camif_lite_reg->reg_update_cmd;
+	reg_val_pair[0] = rsrc_data->common_reg->top_hm_base +
+		rsrc_data->common_reg->reg_update_cmd;
 	reg_val_pair[1] = rsrc_data->reg_data->reg_update_cmd_data;
 	CAM_DBG(CAM_ISP, "CAMIF LITE:%d %s reg_update_cmd 0x%X offset 0x%X",
 		camif_lite_res->res_id, camif_lite_res->res_name,
@@ -254,6 +259,7 @@ static int cam_vfe_camif_lite_resource_start(
 	int                                   rc = 0;
 	uint32_t err_irq_mask[CAM_IFE_IRQ_REGISTERS_MAX];
 	uint32_t irq_mask[CAM_IFE_IRQ_REGISTERS_MAX];
+	void __iomem                         *mem_base;
 
 	if (!camif_lite_res) {
 		CAM_ERR(CAM_ISP, "Invalid input arguments");
@@ -271,6 +277,7 @@ static int cam_vfe_camif_lite_resource_start(
 
 	rsrc_data = (struct cam_vfe_mux_camif_lite_data *)
 		camif_lite_res->res_priv;
+	mem_base  = rsrc_data->mem_base + rsrc_data->common_reg->top_hm_base;
 
 	soc_private = rsrc_data->soc_info->soc_private;
 	if (!soc_private) {
@@ -282,8 +289,7 @@ static int cam_vfe_camif_lite_resource_start(
 		goto skip_core_cfg;
 
 	/* vfe core config */
-	val = cam_io_r_mb(rsrc_data->mem_base +
-		rsrc_data->common_reg->core_cfg_0);
+	val = cam_io_r_mb(mem_base + rsrc_data->common_reg->core_cfg_0);
 
 	if (camif_lite_res->res_id == CAM_ISP_HW_VFE_IN_LCR &&
 		rsrc_data->sync_mode == CAM_ISP_HW_SYNC_SLAVE)
@@ -295,15 +301,14 @@ static int cam_vfe_camif_lite_resource_start(
 			CAM_SHIFT_TOP_CORE_CFG_MUXSEL_PDAF;
 	}
 
-	cam_io_w_mb(val, rsrc_data->mem_base +
-		rsrc_data->common_reg->core_cfg_0);
+	cam_io_w_mb(val, mem_base + rsrc_data->common_reg->core_cfg_0);
 
 	CAM_DBG(CAM_ISP, "VFE:%d core_cfg val:%d",
 		camif_lite_res->hw_intf->hw_idx, val);
 
 	/* epoch config */
 	cam_io_w_mb(rsrc_data->reg_data->epoch_line_cfg,
-		rsrc_data->mem_base +
+		rsrc_data->mem_base +  rsrc_data->path_reg_base +
 		rsrc_data->camif_lite_reg->lite_epoch_irq);
 
 	rsrc_data->error_ts.tv_sec = 0;
@@ -321,15 +326,14 @@ skip_core_cfg:
 
 	/* Reg Update */
 	cam_io_w_mb(rsrc_data->reg_data->reg_update_cmd_data,
-		rsrc_data->mem_base +
-		rsrc_data->camif_lite_reg->reg_update_cmd);
+		mem_base + rsrc_data->common_reg->reg_update_cmd);
 
 	memset(err_irq_mask, 0, sizeof(err_irq_mask));
 	memset(irq_mask, 0, sizeof(irq_mask));
 
-	val = cam_io_r(rsrc_data->mem_base + rsrc_data->common_reg->top_debug_cfg);
+	val = cam_io_r(mem_base + rsrc_data->common_reg->top_debug_cfg);
 	val |= rsrc_data->reg_data->top_debug_cfg_en;
-	cam_io_w_mb(val, rsrc_data->mem_base + rsrc_data->common_reg->top_debug_cfg);
+	cam_io_w_mb(val, mem_base + rsrc_data->common_reg->top_debug_cfg);
 
 	if (!camif_lite_res->is_rdi_primary_res)
 		goto subscribe_err;
@@ -691,7 +695,7 @@ static int cam_vfe_camif_lite_resource_stop(
 		(struct cam_vfe_mux_camif_lite_data *)camif_lite_res->res_priv;
 
 	/* Disable Camif */
-	cam_io_w_mb(0x0, rsrc_data->mem_base +
+	cam_io_w_mb(0x0, rsrc_data->mem_base + rsrc_data->path_reg_base +
 		rsrc_data->camif_lite_reg->lite_module_config);
 
 	if (camif_lite_res->res_state == CAM_ISP_RESOURCE_STATE_STREAMING)
@@ -794,54 +798,26 @@ static int cam_vfe_camif_lite_process_cmd(
 static void cam_vfe_camif_lite_overflow_debug_info(
 	struct cam_vfe_mux_camif_lite_data *camif_lite_priv)
 {
-	struct cam_vfe_soc_private *soc_private = NULL;
-	uint32_t val0, val1, val2, val3;
+	void __iomem *mem_base;
+	uint32_t i = 0, num_top_debug_reg, val;
+	size_t len = 0;
+	uint8_t *log_buf;
 
-	soc_private = camif_lite_priv->soc_info->soc_private;
+	mem_base = camif_lite_priv->mem_base + camif_lite_priv->common_reg->top_hm_base;
+	num_top_debug_reg = camif_lite_priv->common_reg->num_top_debug_reg;
+	log_buf = camif_lite_priv->log_buf;
+	memset(log_buf, 0x0, sizeof(uint8_t) * CAM_VFE_LEN_LOG_BUF);
 
-	val0 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_0);
-	val1 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_1);
-	val2 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_2);
-	val3 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_3);
-	CAM_INFO(CAM_ISP,
-		"status_0: 0x%X status_1: 0x%X status_2: 0x%X status_3: 0x%X",
-		val0, val1, val2, val3);
+	for (i = 0; i < num_top_debug_reg; i++) {
+		val = cam_io_r(mem_base + camif_lite_priv->common_reg->top_debug[i]);
+		CAM_INFO_BUF(CAM_ISP, log_buf, CAM_VFE_LEN_LOG_BUF,
+			&len, "VFE[%u] status %2d : 0x%08x",
+			camif_lite_priv->soc_info->index, i, val);
+	}
 
-	if (soc_private->is_ife_lite)
-		return;
+	CAM_INFO(CAM_ISP, "VFE[%u]: %s Debug Status: %s",
+		camif_lite_priv->soc_info->index, "TOP", log_buf);
 
-	val0 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_4);
-	val1 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_5);
-	val2 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_6);
-	val3 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_7);
-	CAM_INFO(CAM_ISP,
-		"status_4: 0x%X status_5: 0x%X status_6: 0x%X status_7: 0x%X",
-		val0, val1, val2, val3);
-	val0 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_8);
-	val1 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_9);
-	val2 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_10);
-	val3 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_11);
-	CAM_INFO(CAM_ISP,
-		"status_8: 0x%X status_9: 0x%X status_10: 0x%X status_11: 0x%X",
-		val0, val1, val2, val3);
-	val0 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_12);
-	val1 = cam_io_r(camif_lite_priv->mem_base +
-		camif_lite_priv->common_reg->top_debug_13);
-	CAM_INFO(CAM_ISP, "status_12: 0x%X status_13: 0x%X",
-		val0, val1);
 }
 
 static void cam_vfe_camif_lite_print_status(uint32_t *status,
@@ -1268,11 +1244,11 @@ int cam_vfe_camif_lite_ver3_init(
 
 	camif_lite_node->res_priv = camif_lite_priv;
 
-	camif_lite_priv->mem_base         =
-		soc_info->reg_map[VFE_CORE_BASE_IDX].mem_base;
+	camif_lite_priv->mem_base           = soc_info->reg_map[VFE_CORE_BASE_IDX].mem_base;
 	camif_lite_priv->camif_lite_reg     = camif_lite_info->camif_lite_reg;
 	camif_lite_priv->common_reg         = camif_lite_info->common_reg;
 	camif_lite_priv->reg_data           = camif_lite_info->reg_data;
+	camif_lite_priv->path_reg_base      = camif_lite_info->path_reg_base;
 	camif_lite_priv->hw_intf            = hw_intf;
 	camif_lite_priv->soc_info           = soc_info;
 	camif_lite_priv->vfe_irq_controller = vfe_irq_controller;

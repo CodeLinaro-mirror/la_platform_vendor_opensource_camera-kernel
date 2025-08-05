@@ -23,7 +23,6 @@
 
 #define CAM_SHIFT_TOP_CORE_VER_4_CFG_DSP_EN            8
 #define CAM_VFE_CAMIF_IRQ_SOF_DEBUG_CNT_MAX            2
-#define CAM_VFE_LEN_LOG_BUF                            256
 #define CAM_VFE_QTIMER_DIV_FACTOR                      10000
 
 struct cam_vfe_top_ver4_common_data {
@@ -632,6 +631,7 @@ static void cam_vfe_top_ver4_print_debug_reg_status(
 	common_reg =  top_priv->common_data.common_reg;
 	base       =  soc_info->reg_map[VFE_CORE_BASE_IDX].mem_base;
 	log_buf    =  top_priv->log_buf;
+	memset(log_buf, 0x0, sizeof(uint8_t) * CAM_VFE_LEN_LOG_BUF);
 
 	switch (reg_type) {
 	case VFE_TOP_DEBUG_REG:
