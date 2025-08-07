@@ -12,6 +12,10 @@
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
 #include <linux/dma-heap.h>
 #endif
+#ifdef CONFIG_ARCH_QTI_VM
+#include "cam_compat.h"
+#endif
+
 #include <media/cam_req_mgr.h>
 #include "cam_mem_mgr_api.h"
 

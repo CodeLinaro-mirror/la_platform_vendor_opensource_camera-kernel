@@ -8,6 +8,7 @@
 #include <linux/dma-buf.h>
 #include <linux/of_address.h>
 #include <linux/slab.h>
+#include <linux/of.h>
 
 #include <soc/qcom/rpmh.h>
 
@@ -113,17 +114,17 @@ int cam_cpas_drv_channel_switch_for_dev(const struct device *dev)
 
 unsigned long cam_update_dma_map_attributes(unsigned long attrs)
 {
-#ifdef CONFIG_SPECTRA_SECURE
+#ifdef CONFIG_SPECTRA_SECURE_CAMERA_25
 	attrs |= DMA_ATTR_QTI_SMMU_PROXY_MAP;
-#endif /* CONFIG_SPECTRA_SECURE */
+#endif /* CONFIG_SPECTRA_SECURE_CAMERA_25 */
 	return attrs;
 }
 
 size_t cam_align_dma_buf_size(size_t len)
 {
-#ifdef CONFIG_SPECTRA_SECURE
+#ifdef CONFIG_SPECTRA_SECURE_CAMERA_25
 	len = ALIGN(len, SMMU_PROXY_MEM_ALIGNMENT);
-#endif /* CONFIG_SPECTRA_SECURE */
+#endif /* CONFIG_SPECTRA_SECURE_CAMERA_25 */
 	return len;
 }
 
