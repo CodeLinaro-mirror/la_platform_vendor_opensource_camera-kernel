@@ -12,6 +12,10 @@
 #include <linux/version.h>
 #include <linux/debugfs.h>
 #include <linux/hashtable.h>
+#if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
+#include <linux/mem-buf.h>
+#include <soc/qcom/secure_buffer.h>
+#endif
 
 #include "cam_compat.h"
 #include "cam_req_mgr_util.h"
@@ -20,6 +24,7 @@
 #include "cam_debug_util.h"
 #include "cam_trace.h"
 #include "cam_common_util.h"
+#include "cam_mem_mgr_api.h"
 
 static struct cam_mem_table tbl;
 static atomic_t cam_mem_mgr_state = ATOMIC_INIT(CAM_MEM_MGR_UNINITIALIZED);
