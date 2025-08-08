@@ -2671,16 +2671,17 @@ static int process_output_cmd(struct v4l2_loopback_device *dev,
 	}
 	case AIS_V4L2_OUTPUT_PRIV_FORCE_RELEASE: {
 		mutex_lock(&dev->dev_mutex);
-		if (dev->open_count.counter > 0) {
-			atomic_dec(&dev->open_count);
-			if (dev->open_count.counter < max_openers)
-				dev->state = V4L2L_READY_FOR_CAPTURE;
-		} else {
-			CAM_WARN(CAM_V4L2, "opener counter is aleady 0!");
-		}
 		if (opener->data) {
+			if (dev->open_count.counter > 0) {
+				atomic_dec(&dev->open_count);
+				if (dev->open_count.counter < max_openers)
+					dev->state = V4L2L_READY_FOR_CAPTURE;
+			} else {
+				CAM_WARN(CAM_V4L2, "opener counter is aleady 0!");
+			}
 			free_stream_data(opener->data);
 			opener->data = NULL;
+			opener->connected_opener->data = NULL;
 		}
 		if (opener->connected_opener)
 		{
@@ -3028,6 +3029,7 @@ static int v4l2_loopback_close(struct file *file)
 			if (opener->data) {
 				free_stream_data(opener->data);
 				opener->data = NULL;
+				opener->connected_opener->data = NULL;
 			}
 			opener->connected_opener = NULL;
 		} else {
