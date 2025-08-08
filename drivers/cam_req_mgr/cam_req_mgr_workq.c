@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_req_mgr_workq.h"
@@ -228,7 +229,7 @@ int cam_req_mgr_workq_create(char *name, int32_t num_tasks,
 		}
 
 		/* Workq attributes initialization */
-		strlcpy(crm_workq->workq_name, buf, sizeof(crm_workq->workq_name));
+		strscpy(crm_workq->workq_name, buf, sizeof(crm_workq->workq_name));
 		INIT_WORK(&crm_workq->work, func);
 		spin_lock_init(&crm_workq->lock_bh);
 		CAM_DBG(CAM_CRM, "LOCK_DBG workq %s lock %pK",
