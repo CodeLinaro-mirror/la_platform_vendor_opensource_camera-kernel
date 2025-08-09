@@ -973,10 +973,16 @@ static const struct component_master_ops cam_req_mgr_component_master_ops = {
 	.unbind = cam_req_mgr_component_master_unbind,
 };
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_req_mgr_remove(struct platform_device *pdev)
+#else
+static void cam_req_mgr_remove(struct platform_device *pdev)
+#endif
 {
 	component_master_del(&pdev->dev, &cam_req_mgr_component_master_ops);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static int cam_req_mgr_probe(struct platform_device *pdev)
