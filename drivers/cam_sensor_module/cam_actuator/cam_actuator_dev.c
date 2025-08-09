@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_actuator_dev.h"
@@ -492,11 +493,10 @@ const static struct component_ops cam_actuator_platform_component_ops = {
 	.unbind = cam_actuator_platform_component_unbind,
 };
 
-static int32_t cam_actuator_platform_remove(
+static void cam_actuator_platform_remove(
 	struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &cam_actuator_platform_component_ops);
-	return 0;
 }
 
 static const struct of_device_id cam_actuator_driver_dt_match[] = {

@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -154,10 +155,9 @@ int cam_ife_csid_probe(struct platform_device *pdev)
 	return rc;
 }
 
-int cam_ife_csid_remove(struct platform_device *pdev)
+void cam_ife_csid_remove(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &cam_ife_csid_component_ops);
-	return 0;
 }
 
 int cam_ife_csid_hw_init(struct cam_hw_intf **ife_csid_hw,
