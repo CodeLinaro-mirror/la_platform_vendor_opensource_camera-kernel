@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -110,7 +111,7 @@ err:
 	return rc;
 }
 
-static int cam_custom_csid_remove(struct platform_device *pdev)
+static void cam_custom_csid_remove(struct platform_device *pdev)
 {
 	struct cam_ife_csid_hw         *csid_dev = NULL;
 	struct cam_hw_intf             *csid_hw_intf;
@@ -129,9 +130,7 @@ static int cam_custom_csid_remove(struct platform_device *pdev)
 	kfree(csid_dev);
 	kfree(csid_hw_info);
 	kfree(csid_hw_intf);
-	return 0;
 }
-
 static const struct of_device_id cam_custom_csid_dt_match[] = {
 	{
 		.compatible = "qcom,csid-custom480",

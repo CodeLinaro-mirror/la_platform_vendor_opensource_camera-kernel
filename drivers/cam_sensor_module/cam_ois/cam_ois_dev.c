@@ -147,16 +147,15 @@ static int cam_ois_init_subdev_param(struct cam_ois_ctrl_t *o_ctrl)
 	return rc;
 }
 
-static int cam_ois_i2c_driver_probe(struct i2c_client *client,
-	 const struct i2c_device_id *id)
+static int cam_ois_i2c_driver_probe(struct i2c_client *client)
 {
 	int                          rc = 0;
 	struct cam_ois_ctrl_t       *o_ctrl = NULL;
 	struct cam_ois_soc_private  *soc_private = NULL;
 
-	if (client == NULL || id == NULL) {
-		CAM_ERR(CAM_OIS, "Invalid Args client: %pK id: %pK",
-			client, id);
+	if (client == NULL){
+		CAM_ERR(CAM_OIS, "Invalid Args client: %pK",
+			client);
 		return -EINVAL;
 	}
 
@@ -210,7 +209,7 @@ probe_failure:
 	return rc;
 }
 
-static int cam_ois_i2c_driver_remove(struct i2c_client *client)
+static void cam_ois_i2c_driver_remove(struct i2c_client *client)
 {
 	int                             i;
 	struct cam_ois_ctrl_t          *o_ctrl = i2c_get_clientdata(client);
@@ -220,7 +219,6 @@ static int cam_ois_i2c_driver_remove(struct i2c_client *client)
 
 	if (!o_ctrl) {
 		CAM_ERR(CAM_OIS, "ois device is NULL");
-		return -EINVAL;
 	}
 
 	CAM_INFO(CAM_OIS, "i2c driver remove invoked");
@@ -242,7 +240,6 @@ static int cam_ois_i2c_driver_remove(struct i2c_client *client)
 	v4l2_set_subdevdata(&o_ctrl->v4l2_dev_str.sd, NULL);
 	kfree(o_ctrl);
 
-	return 0;
 }
 
 static int32_t cam_ois_platform_driver_probe(
@@ -314,7 +311,7 @@ free_o_ctrl:
 	return rc;
 }
 
-static int cam_ois_platform_driver_remove(struct platform_device *pdev)
+static void cam_ois_platform_driver_remove(struct platform_device *pdev)
 {
 	int                             i;
 	struct cam_ois_ctrl_t          *o_ctrl;
@@ -325,7 +322,6 @@ static int cam_ois_platform_driver_remove(struct platform_device *pdev)
 	o_ctrl = platform_get_drvdata(pdev);
 	if (!o_ctrl) {
 		CAM_ERR(CAM_OIS, "ois device is NULL");
-		return -EINVAL;
 	}
 
 	CAM_INFO(CAM_OIS, "platform driver remove invoked");
@@ -348,9 +344,7 @@ static int cam_ois_platform_driver_remove(struct platform_device *pdev)
 	v4l2_set_subdevdata(&o_ctrl->v4l2_dev_str.sd, NULL);
 	kfree(o_ctrl);
 
-	return 0;
 }
-
 static const struct of_device_id cam_ois_dt_match[] = {
 	{ .compatible = "qcom,ois" },
 	{ }

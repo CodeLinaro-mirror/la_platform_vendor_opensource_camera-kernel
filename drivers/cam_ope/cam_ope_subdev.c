@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -218,7 +218,7 @@ hw_alloc_fail:
 	return rc;
 }
 
-static int cam_ope_subdev_remove(struct platform_device *pdev)
+static void cam_ope_subdev_remove(struct platform_device *pdev)
 {
 	int i;
 	struct v4l2_subdev *sd;
@@ -226,19 +226,16 @@ static int cam_ope_subdev_remove(struct platform_device *pdev)
 
 	if (!pdev) {
 		CAM_ERR(CAM_OPE, "pdev is NULL");
-		return -ENODEV;
 	}
 
 	sd = platform_get_drvdata(pdev);
 	if (!sd) {
 		CAM_ERR(CAM_OPE, "V4l2 subdev is NULL");
-		return -ENODEV;
 	}
 
 	subdev = v4l2_get_subdevdata(sd);
 	if (!subdev) {
 		CAM_ERR(CAM_OPE, "cam subdev is NULL");
-		return -ENODEV;
 	}
 
 	for (i = 0; i < OPE_CTX_MAX; i++)
@@ -247,7 +244,6 @@ static int cam_ope_subdev_remove(struct platform_device *pdev)
 	cam_subdev_remove(&g_ope_dev.sd);
 	mutex_destroy(&g_ope_dev.ope_lock);
 
-	return 0;
 }
 
 static const struct of_device_id cam_ope_dt_match[] = {
