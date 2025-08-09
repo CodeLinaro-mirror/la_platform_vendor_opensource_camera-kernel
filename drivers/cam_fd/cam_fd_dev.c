@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/device.h>
@@ -153,7 +154,7 @@ unregister_subdev:
 	return rc;
 }
 
-static int cam_fd_dev_remove(struct platform_device *pdev)
+static void cam_fd_dev_remove(struct platform_device *pdev)
 {
 	int i, rc;
 
@@ -174,8 +175,6 @@ static int cam_fd_dev_remove(struct platform_device *pdev)
 
 	mutex_destroy(&g_fd_dev.lock);
 	g_fd_dev.probe_done = false;
-
-	return rc;
 }
 
 static const struct of_device_id cam_fd_dt_match[] = {

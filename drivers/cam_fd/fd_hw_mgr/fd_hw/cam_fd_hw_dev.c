@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/platform_device.h>
@@ -149,7 +150,7 @@ free_memory:
 	return rc;
 }
 
-static int cam_fd_hw_dev_remove(struct platform_device *pdev)
+static void cam_fd_hw_dev_remove(struct platform_device *pdev)
 {
 	int rc = 0;
 	struct cam_hw_intf *fd_hw_intf;
@@ -159,20 +160,17 @@ static int cam_fd_hw_dev_remove(struct platform_device *pdev)
 	fd_hw_intf = platform_get_drvdata(pdev);
 	if (!fd_hw_intf) {
 		CAM_ERR(CAM_FD, "Invalid fd_hw_intf from pdev");
-		return -EINVAL;
 	}
 
 	fd_hw = fd_hw_intf->hw_priv;
 	if (!fd_hw) {
 		CAM_ERR(CAM_FD, "Invalid fd_hw from fd_hw_intf");
-		rc = -ENODEV;
 		goto free_fd_hw_intf;
 	}
 
 	fd_core = (struct cam_fd_core *)fd_hw->core_info;
 	if (!fd_core) {
 		CAM_ERR(CAM_FD, "Invalid fd_core from fd_hw");
-		rc = -EINVAL;
 		goto deinit_platform_res;
 	}
 
@@ -189,7 +187,6 @@ deinit_platform_res:
 free_fd_hw_intf:
 	kfree(fd_hw_intf);
 
-	return rc;
 }
 
 static const struct of_device_id cam_fd_hw_dt_match[] = {

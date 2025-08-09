@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -92,7 +93,7 @@ static const struct v4l2_subdev_internal_ops cam_custom_subdev_internal_ops = {
 	.open = cam_custom_subdev_open,
 };
 
-static int cam_custom_dev_remove(struct platform_device *pdev)
+static void cam_custom_dev_remove(struct platform_device *pdev)
 {
 	int rc = 0;
 	int i;
@@ -110,7 +111,6 @@ static int cam_custom_dev_remove(struct platform_device *pdev)
 		CAM_ERR(CAM_CUSTOM, "Unregister failed");
 
 	memset(&g_custom_dev, 0, sizeof(g_custom_dev));
-	return 0;
 }
 
 static int cam_custom_dev_probe(struct platform_device *pdev)
@@ -171,7 +171,6 @@ unregister:
 err:
 	return rc;
 }
-
 
 static struct platform_driver custom_driver = {
 	.probe = cam_custom_dev_probe,

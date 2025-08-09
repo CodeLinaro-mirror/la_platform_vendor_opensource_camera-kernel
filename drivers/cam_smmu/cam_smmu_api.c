@@ -4134,7 +4134,7 @@ static int cam_smmu_probe(struct platform_device *pdev)
 	return rc;
 }
 
-static int cam_smmu_remove(struct platform_device *pdev)
+static void cam_smmu_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 
@@ -4150,7 +4150,6 @@ static int cam_smmu_remove(struct platform_device *pdev)
 
 	debugfs_remove_recursive(iommu_cb_set.dentry);
 	iommu_cb_set.dentry = NULL;
-	return 0;
 }
 
 static struct platform_driver cam_smmu_driver = {
