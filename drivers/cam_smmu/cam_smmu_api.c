@@ -4352,7 +4352,11 @@ static int cam_smmu_probe(struct platform_device *pdev)
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_smmu_remove(struct platform_device *pdev)
+#else
+static void cam_smmu_remove(struct platform_device *pdev)
+#endif
 {
 	struct device *dev = &pdev->dev;
 
@@ -4369,10 +4373,14 @@ static int cam_smmu_remove(struct platform_device *pdev)
 		component_del(&pdev->dev, &cam_smmu_fw_dev_component_ops);
 	} else {
 		CAM_ERR(CAM_SMMU, "Unrecognized child device: %s", pdev->name);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 		return -ENODEV;
+#endif
 	}
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 struct platform_driver cam_smmu_driver = {
