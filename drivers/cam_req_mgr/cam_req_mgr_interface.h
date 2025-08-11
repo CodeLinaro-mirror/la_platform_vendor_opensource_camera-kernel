@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_REQ_MGR_INTERFACE_H
@@ -208,6 +208,7 @@ enum cam_req_mgr_device_id {
 	CAM_REQ_MGR_DEVICE,
 	CAM_REQ_MGR_DEVICE_SENSOR,
 	CAM_REQ_MGR_DEVICE_FLASH,
+	CAM_REQ_MGR_DEVICE_IRLED,
 	CAM_REQ_MGR_DEVICE_ACTUATOR,
 	CAM_REQ_MGR_DEVICE_IFE,
 	CAM_REQ_MGR_DEVICE_CUSTOM_HW,
