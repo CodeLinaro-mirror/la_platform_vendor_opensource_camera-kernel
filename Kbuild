@@ -249,6 +249,9 @@ camera-$(CONFIG_SPECTRA_SENSOR) += \
 	drivers/cam_sensor_module/cam_hdmi_bdg/cam_hdmi_bdg_core.o \
 	drivers/cam_sensor_module/cam_hdmi_bdg_uxe/cam_hdmi_bdg_uxe_dev.o \
 	drivers/cam_sensor_module/cam_hdmi_bdg_uxe/cam_hdmi_bdg_uxe_core.o \
+	drivers/cam_sensor_module/cam_ir_led/cam_ir_led_dev.o \
+	drivers/cam_sensor_module/cam_ir_led/cam_ir_led_soc.o \
+	drivers/cam_sensor_module/cam_ir_led/cam_ir_led_core.o \
 	drivers/cam_sensor_module/cam_dp_bdg/cam_dp_bdg_dev.o \
 	drivers/cam_sensor_module/cam_dp_bdg/cam_dp_bdg_core.o
 

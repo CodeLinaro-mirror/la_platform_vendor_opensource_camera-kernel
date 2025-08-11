@@ -10248,19 +10248,37 @@ free_mem:
 		break;
 	case CAM_ISP_GENERIC_BLOB_TYPE_BW_CONFIG_V3: {
 		struct cam_isp_bw_config_v3    *bw_config;
+		struct cam_isp_bw_config_v3    *bw_config_u;
 		struct cam_isp_prepare_hw_update_data   *prepare_hw_data;
 		struct cam_cpas_axi_per_path_bw_vote *path_vote;
+		size_t bw_config_size;
 
 		if (blob_size < sizeof(struct cam_isp_bw_config_v3)) {
 			CAM_ERR(CAM_ISP, "Invalid blob size %u", blob_size);
 			return -EINVAL;
 		}
 
-		bw_config = (struct cam_isp_bw_config_v3 *)blob_data;
+		bw_config_u = (struct cam_isp_bw_config_v3 *)blob_data;
 
-		if (bw_config->num_paths > CAM_ISP_MAX_PER_PATH_VOTES || !bw_config->num_paths) {
-			CAM_ERR(CAM_ISP, "Invalid num paths %d", bw_config->num_paths);
+		if (bw_config_u->num_paths > CAM_ISP_MAX_PER_PATH_VOTES || !bw_config_u->num_paths) {
+			CAM_ERR(CAM_ISP, "Invalid num paths %d", bw_config_u->num_paths);
 			return -EINVAL;
+		}
+
+		bw_config_size = sizeof(struct cam_isp_bw_config_v3) + ((bw_config_u->num_paths-1) *
+					sizeof(struct cam_axi_per_path_bw_vote_v2));
+
+		rc = cam_common_mem_kdup((void **)&bw_config, bw_config_u, bw_config_size);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "Alloc and copy request bw_config failed");
+			return rc;
+		}
+
+		if (bw_config_u->num_paths != bw_config->num_paths) {
+			CAM_ERR(CAM_ISP, "num_paths changed,userspace:%d, kernel:%d", bw_config_u->num_paths,
+					bw_config->num_paths);
+			rc = -EINVAL;
+			goto free_mem_kdup;
 		}
 
 		/* Check for integer overflow */
@@ -10272,7 +10290,8 @@ free_mem:
 					"Size exceeds limit paths:%u size per path:%lu",
 					bw_config->num_paths - 1,
 					sizeof(struct cam_axi_per_path_bw_vote_v2));
-				return -EINVAL;
+				rc = -EINVAL;
+				goto free_mem_kdup;
 			}
 		}
 
@@ -10285,14 +10304,16 @@ free_mem:
 				blob_size, bw_config->num_paths,
 				sizeof(struct cam_isp_bw_config_v3),
 				sizeof(struct cam_axi_per_path_bw_vote_v2));
-			return -EINVAL;
+			rc = -EINVAL;
+			goto free_mem_kdup;
 		}
 
 		if (!prepare || !prepare->priv ||
 			(bw_config->usage_type >= CAM_ISP_HW_USAGE_TYPE_MAX)) {
 			CAM_ERR(CAM_ISP, "Invalid inputs usage type %d",
 				bw_config->usage_type);
-			return -EINVAL;
+			rc = -EINVAL;
+			goto free_mem_kdup;
 		}
 
 		prepare_hw_data = (struct cam_isp_prepare_hw_update_data  *) prepare->priv;
@@ -10313,6 +10334,9 @@ free_mem:
 
 		ife_mgr_ctx->bw_config_version = CAM_ISP_BW_CONFIG_V3;
 		prepare_hw_data->bw_clk_config.bw_config_valid = true;
+free_mem_kdup:
+		cam_common_mem_free(bw_config);
+		return rc;
 	}
 		break;
 

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_LINUX_CAM_REQ_MGR_H
@@ -35,6 +35,7 @@
 #define CAM_TFE_DEVICE_TYPE       (CAM_DEVICE_TYPE_BASE + 16)
 #define CAM_CRE_DEVICE_TYPE       (CAM_DEVICE_TYPE_BASE + 17)
 #define CAM_TPG_DEVICE_TYPE       (CAM_DEVICE_TYPE_BASE + 18)
+#define CAM_IRLED_DEVICE_TYPE     (CAM_DEVICE_TYPE_BASE + 19)
 
 /* cam_req_mgr hdl info */
 #define CAM_REQ_MGR_HDL_IDX_POS           8
@@ -109,13 +110,13 @@
  * @tv_usec: timestamp in micro seconds
  */
 struct cam_req_mgr_event_data {
-	__s32   session_hdl;
-	__s32   link_hdl;
-	__s32   frame_id;
-	__s32   reserved;
-	__s64   req_id;
-	__u64  tv_sec;
-	__u64  tv_usec;
+    __s32   session_hdl;
+    __s32   link_hdl;
+    __s32   frame_id;
+    __s32   reserved;
+    __s64   req_id;
+    __u64  tv_sec;
+    __u64  tv_usec;
 };
 
 /**
@@ -125,8 +126,8 @@ struct cam_req_mgr_event_data {
  * @opcode2: CAM_REQ_MGR_DESTROY_SESSION
  */
 struct cam_req_mgr_session_info {
-	__s32 session_hdl;
-	__s32 reserved;
+    __s32 session_hdl;
+    __s32 reserved;
 };
 
 /**
@@ -138,25 +139,25 @@ struct cam_req_mgr_session_info {
  * @opcode: CAM_REQ_MGR_LINK
  */
 struct cam_req_mgr_link_info {
-	__s32 session_hdl;
-	__u32 num_devices;
-	__s32 dev_hdls[CAM_REQ_MGR_MAX_HANDLES];
-	__s32 link_hdl;
+    __s32 session_hdl;
+    __u32 num_devices;
+    __s32 dev_hdls[CAM_REQ_MGR_MAX_HANDLES];
+    __s32 link_hdl;
 };
 
 struct cam_req_mgr_link_info_v2 {
-	__s32 session_hdl;
-	__u32 num_devices;
-	__s32 dev_hdls[CAM_REQ_MGR_MAX_HANDLES_V2];
-	__s32 link_hdl;
+    __s32 session_hdl;
+    __u32 num_devices;
+    __s32 dev_hdls[CAM_REQ_MGR_MAX_HANDLES_V2];
+    __s32 link_hdl;
 };
 
 struct cam_req_mgr_ver_info {
-	__u32 version;
-	union {
-		struct cam_req_mgr_link_info link_info_v1;
-		struct cam_req_mgr_link_info_v2 link_info_v2;
-	} u;
+    __u32 version;
+    union {
+    	struct cam_req_mgr_link_info link_info_v1;
+    	struct cam_req_mgr_link_info_v2 link_info_v2;
+    } u;
 };
 /**
  * struct cam_req_mgr_unlink_info
@@ -165,8 +166,8 @@ struct cam_req_mgr_ver_info {
  * @opcode: CAM_REQ_MGR_UNLINK
  */
 struct cam_req_mgr_unlink_info {
-	__s32 session_hdl;
-	__s32 link_hdl;
+    __s32 session_hdl;
+    __s32 link_hdl;
 };
 
 /**
@@ -185,11 +186,11 @@ struct cam_req_mgr_unlink_info {
  * @opcode: CAM_REQ_MGR_FLUSH_REQ
  */
 struct cam_req_mgr_flush_info {
-	__s32 session_hdl;
-	__s32 link_hdl;
-	__u32 flush_type;
-	__u32 reserved;
-	__s64 req_id;
+    __s32 session_hdl;
+    __s32 link_hdl;
+    __u32 flush_type;
+    __u32 reserved;
+    __s64 req_id;
 };
 
 /** struct cam_req_mgr_sched_request
@@ -207,13 +208,13 @@ struct cam_req_mgr_flush_info {
  * @req_id: Input Param - Request Id from which all requests will be flushed
  */
 struct cam_req_mgr_sched_request {
-	__s32 session_hdl;
-	__s32 link_hdl;
-	__s32 bubble_enable;
-	__s32 sync_mode;
-	__s32 additional_timeout;
-	__s32 reserved;
-	__s64 req_id;
+    __s32 session_hdl;
+    __s32 link_hdl;
+    __s32 bubble_enable;
+    __s32 sync_mode;
+    __s32 additional_timeout;
+    __s32 reserved;
+    __s64 req_id;
 };
 
 /** struct cam_req_mgr_sched_request_v2
@@ -235,18 +236,18 @@ struct cam_req_mgr_sched_request {
  * @params: parameters passed from user space
  */
 struct cam_req_mgr_sched_request_v2 {
-	__s32 version;
-	__s32 session_hdl;
-	__s32 link_hdl;
-	__s32 bubble_enable;
-	__s32 sync_mode;
-	__s32 additional_timeout;
-	__s32 num_links;
-	__s32 num_valid_params;
-	__s64 req_id;
-	__s32 link_hdls[MAX_LINKS_PER_SESSION];
-	__s32 param_mask;
-	__s32 params[5];
+    __s32 version;
+    __s32 session_hdl;
+    __s32 link_hdl;
+    __s32 bubble_enable;
+    __s32 sync_mode;
+    __s32 additional_timeout;
+    __s32 num_links;
+    __s32 num_valid_params;
+    __s64 req_id;
+    __s32 link_hdls[MAX_LINKS_PER_SESSION];
+    __s32 param_mask;
+    __s32 params[5];
 };
 
 /**
@@ -265,12 +266,12 @@ struct cam_req_mgr_sched_request_v2 {
  * @opcode: CAM_REQ_MGR_SYNC_MODE
  */
 struct cam_req_mgr_sync_mode {
-	__s32 session_hdl;
-	__s32 sync_mode;
-	__s32 num_links;
-	__s32 link_hdls[MAX_LINKS_PER_SESSION];
-	__s32 master_link_hdl;
-	__s32 reserved;
+    __s32 session_hdl;
+    __s32 sync_mode;
+    __s32 num_links;
+    __s32 link_hdls[MAX_LINKS_PER_SESSION];
+    __s32 master_link_hdl;
+    __s32 reserved;
 };
 
 /**
@@ -287,12 +288,12 @@ struct cam_req_mgr_sync_mode {
  * @opcode: CAM_REQ_MGR_LINK_CONTROL
  */
 struct cam_req_mgr_link_control {
-	__s32 ops;
-	__s32 session_hdl;
-	__s32 num_links;
-	__s32 reserved;
-	__s32 init_timeout[MAX_LINKS_PER_SESSION];
-	__s32 link_hdls[MAX_LINKS_PER_SESSION];
+    __s32 ops;
+    __s32 session_hdl;
+    __s32 num_links;
+    __s32 reserved;
+    __s32 init_timeout[MAX_LINKS_PER_SESSION];
+    __s32 link_hdls[MAX_LINKS_PER_SESSION];
 };
 
 /**
@@ -308,13 +309,13 @@ struct cam_req_mgr_link_control {
  */
 /* CAM_REQ_MGR_LINK_PROPERTIES */
 struct cam_req_mgr_link_properties {
-	__s32 version;
-	__s32 session_hdl;
-	__s32 link_hdl;
-	__u32 properties_mask;
-	__s32 num_valid_params;
-	__u32 param_mask;
-	__s32 params[6];
+    __s32 version;
+    __s32 session_hdl;
+    __s32 link_hdl;
+    __u32 properties_mask;
+    __s32 num_valid_params;
+    __u32 param_mask;
+    __s32 params[6];
 };
 
 /**
@@ -386,21 +387,21 @@ struct cam_req_mgr_link_properties {
 #define CAM_MEM_MGR_HDL_IDX_MASK      ((1 << CAM_MEM_MGR_HDL_IDX_SIZE) - 1)
 
 #define GET_MEM_HANDLE(idx, fd) \
-	((idx & CAM_MEM_MGR_HDL_IDX_MASK) | \
-	(fd << (CAM_MEM_MGR_HDL_FD_END_POS - CAM_MEM_MGR_HDL_FD_SIZE))) \
+    ((idx & CAM_MEM_MGR_HDL_IDX_MASK) | \
+    (fd << (CAM_MEM_MGR_HDL_FD_END_POS - CAM_MEM_MGR_HDL_FD_SIZE))) \
 
 #define GET_FD_FROM_HANDLE(hdl) \
-	(hdl >> (CAM_MEM_MGR_HDL_FD_END_POS - CAM_MEM_MGR_HDL_FD_SIZE)) \
+    (hdl >> (CAM_MEM_MGR_HDL_FD_END_POS - CAM_MEM_MGR_HDL_FD_SIZE)) \
 
 #define CAM_MEM_MGR_GET_HDL_IDX(hdl) (hdl & CAM_MEM_MGR_HDL_IDX_MASK)
 
 #define CAM_MEM_MGR_SET_SECURE_HDL(hdl, flag) \
-	((flag) ? (hdl |= (1 << CAM_MEM_MGR_SECURE_BIT_POS)) : \
-	((hdl) &= ~(1 << CAM_MEM_MGR_SECURE_BIT_POS)))
+    ((flag) ? (hdl |= (1 << CAM_MEM_MGR_SECURE_BIT_POS)) : \
+    ((hdl) &= ~(1 << CAM_MEM_MGR_SECURE_BIT_POS)))
 
 #define CAM_MEM_MGR_IS_SECURE_HDL(hdl) \
-	(((hdl) & \
-	(1<<CAM_MEM_MGR_SECURE_BIT_POS)) >> CAM_MEM_MGR_SECURE_BIT_POS)
+    (((hdl) & \
+    (1<<CAM_MEM_MGR_SECURE_BIT_POS)) >> CAM_MEM_MGR_SECURE_BIT_POS)
 
 /**
  * memory allocation type
@@ -443,11 +444,11 @@ struct cam_req_mgr_link_properties {
  * @params:           Additional params
  */
 struct cam_req_mgr_query_cap {
-	__u32   version;
-	__u64   feature_mask;
-	__u32   num_valid_params;
-	__u32   valid_param_mask;
-	__s32   params[5];
+    __u32   version;
+    __u64   feature_mask;
+    __u32   num_valid_params;
+    __u32   valid_param_mask;
+    __s32   params[5];
 };
 
 /**
@@ -457,9 +458,9 @@ struct cam_req_mgr_query_cap {
  * @vaddr: virtual address pointer
  */
 struct cam_mem_alloc_out_params {
-	__u32 buf_handle;
-	__s32 fd;
-	__u64 vaddr;
+    __u32 buf_handle;
+    __s32 fd;
+    __u64 vaddr;
 };
 
 /**
@@ -469,9 +470,9 @@ struct cam_mem_alloc_out_params {
  * @vaddr: virtual address pointer
  */
 struct cam_mem_map_out_params {
-	__u32 buf_handle;
-	__u32 size;
-	__u64 vaddr;
+    __u32 buf_handle;
+    __u32 size;
+    __u64 vaddr;
 };
 
 /**
@@ -485,12 +486,12 @@ struct cam_mem_map_out_params {
  */
 /* CAM_REQ_MGR_ALLOC_BUF */
 struct cam_mem_mgr_alloc_cmd {
-	__u64                           len;
-	__u64                           align;
-	__s32                           mmu_hdls[CAM_MEM_MMU_MAX_HANDLE];
-	__u32                           num_hdl;
-	__u32                           flags;
-	struct cam_mem_alloc_out_params out;
+    __u64                           len;
+    __u64                           align;
+    __s32                           mmu_hdls[CAM_MEM_MMU_MAX_HANDLE];
+    __u32                           num_hdl;
+    __u32                           flags;
+    struct cam_mem_alloc_out_params out;
 };
 
 /**
@@ -510,18 +511,18 @@ struct cam_mem_mgr_alloc_cmd {
  */
 /* CAM_REQ_MGR_ALLOC_BUF_V2 */
 struct cam_mem_mgr_alloc_cmd_v2 {
-	__u32                           version;
-	__u32                           num_hdl;
-	__s32                           mmu_hdls[CAM_MEM_MMU_MAX_HANDLE];
-	__u64                           len;
-	__u64                           align;
-	__u64                           vmids;
-	char                            buf_name[CAM_DMA_BUF_NAME_LEN];
-	__u32                           flags;
-	__u32                           num_valid_params;
-	__u32                           valid_param_mask;
-	__s32                           params[5];
-	struct cam_mem_alloc_out_params out;
+    __u32                           version;
+    __u32                           num_hdl;
+    __s32                           mmu_hdls[CAM_MEM_MMU_MAX_HANDLE];
+    __u64                           len;
+    __u64                           align;
+    __u64                           vmids;
+    char                            buf_name[CAM_DMA_BUF_NAME_LEN];
+    __u32                           flags;
+    __u32                           num_valid_params;
+    __u32                           valid_param_mask;
+    __s32                           params[5];
+    struct cam_mem_alloc_out_params out;
 };
 
 /**
@@ -536,12 +537,12 @@ struct cam_mem_mgr_alloc_cmd_v2 {
 
 /* CAM_REQ_MGR_MAP_BUF */
 struct cam_mem_mgr_map_cmd {
-	__s32                         mmu_hdls[CAM_MEM_MMU_MAX_HANDLE];
-	__u32                         num_hdl;
-	__u32                         flags;
-	__s32                         fd;
-	__u32                         reserved;
-	struct cam_mem_map_out_params out;
+    __s32                         mmu_hdls[CAM_MEM_MMU_MAX_HANDLE];
+    __u32                         num_hdl;
+    __u32                         flags;
+    __s32                         fd;
+    __u32                         reserved;
+    struct cam_mem_map_out_params out;
 };
 
 /**
@@ -561,17 +562,17 @@ struct cam_mem_mgr_map_cmd {
 
 /* CAM_REQ_MGR_MAP_BUF_V2 */
 struct cam_mem_mgr_map_cmd_v2 {
-	__u32                         version;
-	__s32                         fd;
-	__s32                         mmu_hdls[CAM_MEM_MMU_MAX_HANDLE];
-	__u32                         num_hdl;
-	__u32                         flags;
-	__u64                         vmids;
-	char                          buf_name[CAM_DMA_BUF_NAME_LEN];
-	__u32                         num_valid_params;
-	__u32                         valid_param_mask;
-	__s32                         params[4];
-	struct cam_mem_map_out_params out;
+    __u32                         version;
+    __s32                         fd;
+    __s32                         mmu_hdls[CAM_MEM_MMU_MAX_HANDLE];
+    __u32                         num_hdl;
+    __u32                         flags;
+    __u64                         vmids;
+    char                          buf_name[CAM_DMA_BUF_NAME_LEN];
+    __u32                         num_valid_params;
+    __u32                         valid_param_mask;
+    __s32                         params[4];
+    struct cam_mem_map_out_params out;
 };
 
 
@@ -582,8 +583,8 @@ struct cam_mem_mgr_map_cmd_v2 {
  */
 /* CAM_REQ_MGR_RELEASE_BUF */
 struct cam_mem_mgr_release_cmd {
-	__s32 buf_handle;
-	__u32 reserved;
+    __s32 buf_handle;
+    __u32 reserved;
 };
 
 /**
@@ -593,8 +594,8 @@ struct cam_mem_mgr_release_cmd {
  */
 /* CAM_REQ_MGR_CACHE_OPS */
 struct cam_mem_cache_ops_cmd {
-	__s32 buf_handle;
-	__u32 mem_cache_ops;
+    __s32 buf_handle;
+    __u32 mem_cache_ops;
 };
 
 /**
@@ -615,13 +616,13 @@ struct cam_mem_cache_ops_cmd {
  */
 /* CAM_REQ_MGR_MEM_CPU_ACCESS_OP */
 struct cam_mem_cpu_access_op {
-	__u32   version;
-	__s32   buf_handle;
-	__u32   access;
-	__u32   access_type;
-	__u32   num_valid_params;
-	__u32   valid_param_mask;
-	__s32   params[4];
+    __u32   version;
+    __s32   buf_handle;
+    __u32   access;
+    __u32   access_type;
+    __u32   num_valid_params;
+    __u32   valid_param_mask;
+    __s32   params[4];
 };
 
 /**
@@ -691,12 +692,12 @@ struct cam_mem_cpu_access_op {
  *              Note: This field is a bit field.
  */
 struct cam_req_mgr_error_msg {
-	__u32 error_type;
-	__u32 request_id;
-	__s32 device_hdl;
-	__s32 link_hdl;
-	__u32 resource_size;
-	__u32 error_code;
+    __u32 error_type;
+    __u32 request_id;
+    __s32 device_hdl;
+    __s32 link_hdl;
+    __u32 resource_size;
+    __u32 error_code;
 };
 
 /**
@@ -711,13 +712,13 @@ struct cam_req_mgr_error_msg {
  * @reserved: reserved
  */
 struct cam_req_mgr_frame_msg {
-	__u64 request_id;
-	__u64 frame_id;
-	__u64 timestamp;
-	__s32 link_hdl;
-	__u32 sof_status;
-	__u32 frame_id_meta;
-	__u32 reserved;
+    __u64 request_id;
+    __u64 frame_id;
+    __u64 timestamp;
+    __s32 link_hdl;
+    __u32 sof_status;
+    __u32 frame_id_meta;
+    __u32 reserved;
 };
 
 /**
@@ -729,9 +730,9 @@ struct cam_req_mgr_frame_msg {
  *
  */
 enum cam_req_msg_timestamp_type {
-	CAM_REQ_SOF_QTIMER_TIMESTAMP = 0,
-	CAM_REQ_BOOT_TIMESTAMP,
-	CAM_REQ_TIMESTAMP_MAX
+    CAM_REQ_SOF_QTIMER_TIMESTAMP = 0,
+    CAM_REQ_BOOT_TIMESTAMP,
+    CAM_REQ_TIMESTAMP_MAX
 };
 
 /**
@@ -745,12 +746,12 @@ enum cam_req_msg_timestamp_type {
  * @reserved: reserved for future addtions and max size for structure can be 64 bytes
  */
 struct cam_req_mgr_frame_msg_v2 {
-	__u64 request_id;
-	__u64 frame_id;
-	__u64 timestamps[CAM_REQ_TIMESTAMP_MAX];
-	__s32 link_hdl;
-	__u32 frame_id_meta;
-	__u32 reserved[4];
+    __u64 request_id;
+    __u64 frame_id;
+    __u64 timestamps[CAM_REQ_TIMESTAMP_MAX];
+    __s32 link_hdl;
+    __u32 frame_id_meta;
+    __u32 reserved[4];
 };
 
 /**
@@ -763,12 +764,12 @@ struct cam_req_mgr_frame_msg_v2 {
  * @custom_data: custom data
  */
 struct cam_req_mgr_custom_msg {
-	__u32 custom_type;
-	__u64 request_id;
-	__u64 frame_id;
-	__u64 timestamp;
-	__s32 link_hdl;
-	__u64 custom_data;
+    __u32 custom_type;
+    __u64 request_id;
+    __u64 frame_id;
+    __u64 timestamp;
+    __s32 link_hdl;
+    __u64 custom_data;
 };
 
 /**
@@ -798,13 +799,13 @@ struct cam_req_mgr_custom_msg {
 * @reserved            : Reserved field
 */
 struct cam_req_mgr_node_msg {
-	__s32 device_hdl;
-	__s32 link_hdl;
-	__u32 event_type;
-	__u32 event_cause;
-	__u64 request_id;
-	__u64 custom_data;
-	__u32 reserved[2];
+    __s32 device_hdl;
+    __s32 link_hdl;
+    __u32 event_type;
+    __u32 event_cause;
+    __u64 request_id;
+    __u64 custom_data;
+    __u32 reserved[2];
 };
 
 /**
@@ -862,21 +863,21 @@ struct cam_req_mgr_node_msg {
  * @reserved            : reserved fields
  */
 struct cam_req_mgr_pf_err_msg {
-	__s32 device_hdl;
-	__s32 link_hdl;
-	__u8 pf_evt;
-	__u8 pf_type;
-	__u8 pf_stage;
-	__u8 patch_id;
-	__s32 buf_hdl;
-	__u32 offset;
-	__u32 port_id;
-	__u64 far_delta;
-	__u64 req_id;
-	__u8 bid;
-	__u8 pid;
-	__u16 mid;
-	__u32 reserved[3];
+    __s32 device_hdl;
+    __s32 link_hdl;
+    __u8 pf_evt;
+    __u8 pf_type;
+    __u8 pf_stage;
+    __u8 patch_id;
+    __s32 buf_hdl;
+    __u32 offset;
+    __u32 port_id;
+    __u64 far_delta;
+    __u64 req_id;
+    __u8 bid;
+    __u8 pid;
+    __u16 mid;
+    __u32 reserved[3];
 };
 
 /**
@@ -886,15 +887,15 @@ struct cam_req_mgr_pf_err_msg {
  * @u: union which can either be error/frame/custom/node message/page fault message
  */
 struct cam_req_mgr_message {
-	__s32 session_hdl;
-	__s32 reserved;
-	union {
-		struct cam_req_mgr_error_msg err_msg;
-		struct cam_req_mgr_frame_msg frame_msg;
-		struct cam_req_mgr_frame_msg_v2 frame_msg_v2;
-		struct cam_req_mgr_custom_msg custom_msg;
-		struct cam_req_mgr_node_msg node_msg;
-		struct cam_req_mgr_pf_err_msg pf_err_msg;
-	} u;
+    __s32 session_hdl;
+    __s32 reserved;
+    union {
+    	struct cam_req_mgr_error_msg err_msg;
+    	struct cam_req_mgr_frame_msg frame_msg;
+    	struct cam_req_mgr_frame_msg_v2 frame_msg_v2;
+    	struct cam_req_mgr_custom_msg custom_msg;
+    	struct cam_req_mgr_node_msg node_msg;
+    	struct cam_req_mgr_pf_err_msg pf_err_msg;
+    } u;
 };
 #endif /* __UAPI_LINUX_CAM_REQ_MGR_H */

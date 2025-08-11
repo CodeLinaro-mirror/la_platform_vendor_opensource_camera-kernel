@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_DEBUG_UTIL_H_
@@ -22,99 +22,101 @@ extern unsigned int debug_drv;
 
 /* Module IDs used for debug logging */
 enum cam_debug_module_id {
-	CAM_CDM,                 /* bit 0 */
-	CAM_CORE,                /* bit 1 */
-	CAM_CPAS,                /* bit 2 */
-	CAM_ISP,                 /* bit 3 */
-	CAM_CRM,                 /* bit 4 */
-	CAM_SENSOR,              /* bit 5 */
-	CAM_SMMU,                /* bit 6 */
-	CAM_SYNC,                /* bit 7 */
-	CAM_ICP,                 /* bit 8 */
-	CAM_JPEG,                /* bit 9 */
-	CAM_FD,                  /* bit 10 */
-	CAM_LRME,                /* bit 11 */
-	CAM_FLASH,               /* bit 12 */
-	CAM_ACTUATOR,            /* bit 13 */
-	CAM_CCI,                 /* bit 14 */
-	CAM_CSIPHY,              /* bit 15 */
-	CAM_EEPROM,              /* bit 16 */
-	CAM_UTIL,                /* bit 17 */
-	CAM_HFI,                 /* bit 18 */
-	CAM_CTXT,                /* bit 19 */
-	CAM_OIS,                 /* bit 20 */
-	CAM_RES,                 /* bit 21 */
-	CAM_MEM,                 /* bit 22 */
-	CAM_IRQ_CTRL,            /* bit 23 */
-	CAM_REQ,                 /* bit 24 */
-	CAM_PERF,                /* bit 25 */
-	CAM_CUSTOM,              /* bit 26 */
-	CAM_PRESIL,              /* bit 27 */
-	CAM_OPE,                 /* bit 28 */
-	CAM_IO_ACCESS,           /* bit 29 */
-	CAM_SFE,                 /* bit 30 */
-	CAM_CRE,                 /* bit 31 */
-	CAM_PRESIL_CORE,         /* bit 32 */
-	CAM_TPG,                 /* bit 33 */
-	CAM_DMA_FENCE,           /* bit 34 */
-	CAM_DBG_MOD_MAX
+    CAM_CDM,                 /* bit 0 */
+    CAM_CORE,                /* bit 1 */
+    CAM_CPAS,                /* bit 2 */
+    CAM_ISP,                 /* bit 3 */
+    CAM_CRM,                 /* bit 4 */
+    CAM_SENSOR,              /* bit 5 */
+    CAM_SMMU,                /* bit 6 */
+    CAM_SYNC,                /* bit 7 */
+    CAM_ICP,                 /* bit 8 */
+    CAM_JPEG,                /* bit 9 */
+    CAM_FD,                  /* bit 10 */
+    CAM_LRME,                /* bit 11 */
+    CAM_FLASH,               /* bit 12 */
+    CAM_ACTUATOR,            /* bit 13 */
+    CAM_CCI,                 /* bit 14 */
+    CAM_CSIPHY,              /* bit 15 */
+    CAM_EEPROM,              /* bit 16 */
+    CAM_UTIL,                /* bit 17 */
+    CAM_HFI,                 /* bit 18 */
+    CAM_CTXT,                /* bit 19 */
+    CAM_OIS,                 /* bit 20 */
+    CAM_RES,                 /* bit 21 */
+    CAM_MEM,                 /* bit 22 */
+    CAM_IRQ_CTRL,            /* bit 23 */
+    CAM_REQ,                 /* bit 24 */
+    CAM_PERF,                /* bit 25 */
+    CAM_CUSTOM,              /* bit 26 */
+    CAM_PRESIL,              /* bit 27 */
+    CAM_OPE,                 /* bit 28 */
+    CAM_IO_ACCESS,           /* bit 29 */
+    CAM_SFE,                 /* bit 30 */
+    CAM_CRE,                 /* bit 31 */
+    CAM_PRESIL_CORE,         /* bit 32 */
+    CAM_TPG,                 /* bit 33 */
+    CAM_DMA_FENCE,           /* bit 34 */
+    CAM_IR_LED,              /* bit 35 */
+    CAM_DBG_MOD_MAX
 };
 
 /* Log level types */
 enum cam_debug_log_level {
-	CAM_TYPE_TRACE,
-	CAM_TYPE_ERR,
-	CAM_TYPE_WARN,
-	CAM_TYPE_INFO,
-	CAM_TYPE_DBG,
-	CAM_TYPE_MAX,
+    CAM_TYPE_TRACE,
+    CAM_TYPE_ERR,
+    CAM_TYPE_WARN,
+    CAM_TYPE_INFO,
+    CAM_TYPE_DBG,
+    CAM_TYPE_MAX,
 };
 
 /*
  * enum cam_debug_priority - Priority of debug log (0 = Lowest)
  */
 enum cam_debug_priority {
-	CAM_DBG_PRIORITY_0,
-	CAM_DBG_PRIORITY_1,
-	CAM_DBG_PRIORITY_2,
+    CAM_DBG_PRIORITY_0,
+    CAM_DBG_PRIORITY_1,
+    CAM_DBG_PRIORITY_2,
 };
 
 static const char *cam_debug_mod_name[CAM_DBG_MOD_MAX] = {
-	[CAM_CDM]         = "CAM-CDM",
-	[CAM_CORE]        = "CAM-CORE",
-	[CAM_CRM]         = "CAM-CRM",
-	[CAM_CPAS]        = "CAM-CPAS",
-	[CAM_ISP]         = "CAM-ISP",
-	[CAM_SENSOR]      = "CAM-SENSOR",
-	[CAM_SMMU]        = "CAM-SMMU",
-	[CAM_SYNC]        = "CAM-SYNC",
-	[CAM_ICP]         = "CAM-ICP",
-	[CAM_JPEG]        = "CAM-JPEG",
-	[CAM_FD]          = "CAM-FD",
-	[CAM_LRME]        = "CAM-LRME",
-	[CAM_FLASH]       = "CAM-FLASH",
-	[CAM_ACTUATOR]    = "CAM-ACTUATOR",
-	[CAM_CCI]         = "CAM-CCI",
-	[CAM_CSIPHY]      = "CAM-CSIPHY",
-	[CAM_EEPROM]      = "CAM-EEPROM",
-	[CAM_UTIL]        = "CAM-UTIL",
-	[CAM_CTXT]        = "CAM-CTXT",
-	[CAM_HFI]         = "CAM-HFI",
-	[CAM_OIS]         = "CAM-OIS",
-	[CAM_IRQ_CTRL]    = "CAM-IRQ-CTRL",
-	[CAM_MEM]         = "CAM-MEM",
-	[CAM_PERF]        = "CAM-PERF",
-	[CAM_REQ]         = "CAM-REQ",
-	[CAM_CUSTOM]      = "CAM-CUSTOM",
-	[CAM_OPE]         = "CAM-OPE",
-	[CAM_PRESIL]      = "CAM-PRESIL",
-	[CAM_RES]         = "CAM-RES",
-	[CAM_IO_ACCESS]   = "CAM-IO-ACCESS",
-	[CAM_SFE]         = "CAM-SFE",
-	[CAM_CRE]         = "CAM-CRE",
-	[CAM_PRESIL_CORE] = "CAM-CORE-PRESIL",
-	[CAM_TPG]         = "CAM-TPG",
-	[CAM_DMA_FENCE]   = "CAM_DMA_FENCE",
+    [CAM_CDM]         = "CAM-CDM",
+    [CAM_CORE]        = "CAM-CORE",
+    [CAM_CRM]         = "CAM-CRM",
+    [CAM_CPAS]        = "CAM-CPAS",
+    [CAM_ISP]         = "CAM-ISP",
+    [CAM_SENSOR]      = "CAM-SENSOR",
+    [CAM_SMMU]        = "CAM-SMMU",
+    [CAM_SYNC]        = "CAM-SYNC",
+    [CAM_ICP]         = "CAM-ICP",
+    [CAM_JPEG]        = "CAM-JPEG",
+    [CAM_FD]          = "CAM-FD",
+    [CAM_LRME]        = "CAM-LRME",
+    [CAM_FLASH]       = "CAM-FLASH",
+    [CAM_ACTUATOR]    = "CAM-ACTUATOR",
+    [CAM_CCI]         = "CAM-CCI",
+    [CAM_CSIPHY]      = "CAM-CSIPHY",
+    [CAM_EEPROM]      = "CAM-EEPROM",
+    [CAM_UTIL]        = "CAM-UTIL",
+    [CAM_CTXT]        = "CAM-CTXT",
+    [CAM_HFI]         = "CAM-HFI",
+    [CAM_OIS]         = "CAM-OIS",
+    [CAM_IRQ_CTRL]    = "CAM-IRQ-CTRL",
+    [CAM_MEM]         = "CAM-MEM",
+    [CAM_PERF]        = "CAM-PERF",
+    [CAM_REQ]         = "CAM-REQ",
+    [CAM_CUSTOM]      = "CAM-CUSTOM",
+    [CAM_OPE]         = "CAM-OPE",
+    [CAM_PRESIL]      = "CAM-PRESIL",
+    [CAM_RES]         = "CAM-RES",
+    [CAM_IO_ACCESS]   = "CAM-IO-ACCESS",
+    [CAM_SFE]         = "CAM-SFE",
+    [CAM_CRE]         = "CAM-CRE",
+    [CAM_PRESIL_CORE] = "CAM-CORE-PRESIL",
+    [CAM_TPG]         = "CAM-TPG",
+    [CAM_DMA_FENCE]   = "CAM_DMA_FENCE",
+    [CAM_IR_LED]      = "CAM_IR_LED",
 };
 
 #define ___CAM_DBG_MOD_NAME(module_id)                                      \
@@ -153,6 +155,7 @@ __builtin_choose_expr(((module_id) == CAM_CRE), "CAM-CRE",                  \
 __builtin_choose_expr(((module_id) == CAM_PRESIL_CORE), "CAM-CORE-PRESIL",  \
 __builtin_choose_expr(((module_id) == CAM_TPG), "CAM-TPG",                  \
 __builtin_choose_expr(((module_id) == CAM_DMA_FENCE), "CAM-DMA-FENCE",      \
+__builtin_choose_expr(((module_id) == CAM_IR_LED), "CAM-IR-LED",            \
 "CAMERA")))))))))))))))))))))))))))))))))))
 
 #define CAM_DBG_MOD_NAME(module_id) \
@@ -160,32 +163,32 @@ __builtin_choose_expr(((module_id) == CAM_DMA_FENCE), "CAM-DMA-FENCE",      \
 
 #define __CAM_DBG_MOD_NAME(module_id) \
 __builtin_choose_expr(__builtin_constant_p((module_id)), ___CAM_DBG_MOD_NAME(module_id), \
-	CAM_DBG_MOD_NAME(module_id))
+    CAM_DBG_MOD_NAME(module_id))
 
 static const char *cam_debug_tag_name[CAM_TYPE_MAX] = {
-	[CAM_TYPE_TRACE] = "CAM_TRACE",
-	[CAM_TYPE_ERR]   = "CAM_ERR",
-	[CAM_TYPE_WARN]  = "CAM_WARN",
-	[CAM_TYPE_INFO]  = "CAM_INFO",
-	[CAM_TYPE_DBG]   = "CAM_DBG",
+    [CAM_TYPE_TRACE] = "CAM_TRACE",
+    [CAM_TYPE_ERR]   = "CAM_ERR",
+    [CAM_TYPE_WARN]  = "CAM_WARN",
+    [CAM_TYPE_INFO]  = "CAM_INFO",
+    [CAM_TYPE_DBG]   = "CAM_DBG",
 };
 
 #define ___CAM_LOG_TAG_NAME(tag)                     \
 ({                                                  \
-	static_assert(tag < CAM_TYPE_MAX);          \
-	cam_debug_tag_name[tag];                    \
+    static_assert(tag < CAM_TYPE_MAX);          \
+    cam_debug_tag_name[tag];                    \
 })
 
 #define CAM_LOG_TAG_NAME(tag) ((tag < CAM_TYPE_MAX) ? cam_debug_tag_name[tag] : "CAM_LOG")
 
 #define __CAM_LOG_TAG_NAME(tag) \
 __builtin_choose_expr(__builtin_constant_p((tag)), ___CAM_LOG_TAG_NAME(tag), \
-	CAM_LOG_TAG_NAME(tag))
+    CAM_LOG_TAG_NAME(tag))
 
 enum cam_log_print_type {
-	CAM_PRINT_LOG   = 0x1,
-	CAM_PRINT_TRACE = 0x2,
-	CAM_PRINT_BOTH  = 0x3,
+    CAM_PRINT_LOG   = 0x1,
+    CAM_PRINT_TRACE = 0x2,
+    CAM_PRINT_BOTH  = 0x3,
 };
 
 #define __CAM_LOG_FMT KERN_INFO "%s: %s: %s: %d: %s "
@@ -203,13 +206,13 @@ enum cam_log_print_type {
  */
 
 void cam_print_log(int type, int module, int tag, const char *func,
-	int line, const char *fmt, ...);
+    int line, const char *fmt, ...);
 
 #define __CAM_LOG(type, tag, module_id, fmt, args...)                               \
 ({                                                                                  \
-	cam_print_log(type,                                      \
-		module_id, tag, __func__,   \
-		__LINE__,  fmt, ##args);                                                  \
+    cam_print_log(type,                                      \
+        module_id, tag, __func__,   \
+        __LINE__,  fmt, ##args);                                                  \
 })
 
 #define CAM_LOG(tag, module_id, fmt, args...) \
@@ -217,9 +220,9 @@ __CAM_LOG(CAM_PRINT_BOTH, tag, module_id, fmt, ##args)
 
 #define CAM_LOG_RL_CUSTOM(type, module_id, interval, burst, fmt, args...)                \
 ({                                                                                       \
-	static DEFINE_RATELIMIT_STATE(_rs, (interval * HZ), burst);                      \
-	__CAM_LOG(__ratelimit(&_rs) ? CAM_PRINT_BOTH : CAM_PRINT_TRACE,                  \
-		type, module_id, fmt, ##args);                                           \
+    static DEFINE_RATELIMIT_STATE(_rs, (interval * HZ), burst);                      \
+    __CAM_LOG(__ratelimit(&_rs) ? CAM_PRINT_BOTH : CAM_PRINT_TRACE,                  \
+        type, module_id, fmt, ##args);                                           \
 })
 
 #define CAM_LOG_RL(type, module_id, fmt, args...)                                        \
@@ -228,9 +231,9 @@ fmt, ##args)
 
 #define __CAM_DBG(module_id, priority, fmt, args...)                                              \
 ({                                                                                                \
-	if (unlikely((debug_mdl & BIT_ULL(module_id)) && (priority >= debug_priority))) {         \
-		CAM_LOG(CAM_TYPE_DBG, module_id, fmt, ##args);                                    \
-	}                                                                                         \
+    if (unlikely((debug_mdl & BIT_ULL(module_id)) && (priority >= debug_priority))) {         \
+        CAM_LOG(CAM_TYPE_DBG, module_id, fmt, ##args);                                    \
+    }                                                                                         \
 })
 
 /**
@@ -275,13 +278,13 @@ __CAM_LOG(CAM_PRINT_TRACE, CAM_TYPE_TRACE, __module, fmt, ##args)
  * @args:     Arguments to match with format
  */
 #define CAM_ERR_RATE_LIMIT_CUSTOM(__module, interval, burst, fmt, args...)  \
-	CAM_LOG_RL_CUSTOM(CAM_TYPE_ERR, __module, interval, burst, fmt, ##args)
+    CAM_LOG_RL_CUSTOM(CAM_TYPE_ERR, __module, interval, burst, fmt, ##args)
 
 #define CAM_WARN_RATE_LIMIT_CUSTOM(__module, interval, burst, fmt, args...) \
-	CAM_LOG_RL_CUSTOM(CAM_TYPE_WARN, __module, interval, burst, fmt, ##args)
+    CAM_LOG_RL_CUSTOM(CAM_TYPE_WARN, __module, interval, burst, fmt, ##args)
 
 #define CAM_INFO_RATE_LIMIT_CUSTOM(__module, interval, burst, fmt, args...) \
-	CAM_LOG_RL_CUSTOM(CAM_TYPE_INFO, __module, interval, burst, fmt, ##args)
+    CAM_LOG_RL_CUSTOM(CAM_TYPE_INFO, __module, interval, burst, fmt, ##args)
 
 /*
  * CAM_DBG
@@ -310,7 +313,7 @@ __CAM_LOG(CAM_PRINT_TRACE, CAM_TYPE_TRACE, __module, fmt, ##args)
  * @args:          Arguments which needs to be print in log
  */
 void cam_print_to_buffer(char *buf, const size_t buf_size, size_t *len, unsigned int tag,
-	unsigned long long module_id, const char *fmt, ...);
+    unsigned long long module_id, const char *fmt, ...);
 
 /**
  * CAM_[ERR/WARN/INFO]_BUF
@@ -324,11 +327,11 @@ void cam_print_to_buffer(char *buf, const size_t buf_size, size_t *len, unsigned
  * @args:          Arguments which needs to be print in log
  */
 #define CAM_ERR_BUF(module_id, buf, buf_size, len, fmt, args...)                                   \
-	cam_print_to_buffer(buf, buf_size, len, CAM_TYPE_ERR, module_id, fmt, ##args)
+    cam_print_to_buffer(buf, buf_size, len, CAM_TYPE_ERR, module_id, fmt, ##args)
 #define CAM_WARN_BUF(module_id, buf, buf_size, len, fmt, args...)                                  \
-	cam_print_to_buffer(buf, buf_size, len, CAM_TYPE_WARN, module_id, fmt, ##args)
+    cam_print_to_buffer(buf, buf_size, len, CAM_TYPE_WARN, module_id, fmt, ##args)
 #define CAM_INFO_BUF(module_id, buf, buf_size, len, fmt, args...)                                  \
-	cam_print_to_buffer(buf, buf_size, len, CAM_TYPE_INFO, module_id, fmt, ##args)
+    cam_print_to_buffer(buf, buf_size, len, CAM_TYPE_INFO, module_id, fmt, ##args)
 
 #define CAM_BOOL_TO_YESNO(val) ((val) ? "Y" : "N")
 
@@ -336,17 +339,17 @@ void cam_print_to_buffer(char *buf, const size_t buf_size, size_t *len, unsigned
  * struct cam_cpas_debug_settings - Sysfs debug settings for cpas driver
  */
 struct cam_cpas_debug_settings {
-	uint64_t mnoc_hf_0_ab_bw;
-	uint64_t mnoc_hf_0_ib_bw;
-	uint64_t mnoc_hf_1_ab_bw;
-	uint64_t mnoc_hf_1_ib_bw;
-	uint64_t mnoc_sf_0_ab_bw;
-	uint64_t mnoc_sf_0_ib_bw;
-	uint64_t mnoc_sf_1_ab_bw;
-	uint64_t mnoc_sf_1_ib_bw;
-	uint64_t mnoc_sf_icp_ab_bw;
-	uint64_t mnoc_sf_icp_ib_bw;
-	uint64_t camnoc_bw;
+    uint64_t mnoc_hf_0_ab_bw;
+    uint64_t mnoc_hf_0_ib_bw;
+    uint64_t mnoc_hf_1_ab_bw;
+    uint64_t mnoc_hf_1_ib_bw;
+    uint64_t mnoc_sf_0_ab_bw;
+    uint64_t mnoc_sf_0_ib_bw;
+    uint64_t mnoc_sf_1_ab_bw;
+    uint64_t mnoc_sf_1_ib_bw;
+    uint64_t mnoc_sf_icp_ab_bw;
+    uint64_t mnoc_sf_icp_ib_bw;
+    uint64_t camnoc_bw;
 };
 
 /**
@@ -355,7 +358,7 @@ struct cam_cpas_debug_settings {
  * @cpas_settings: Debug settings for cpas driver.
  */
 struct camera_debug_settings {
-	struct cam_cpas_debug_settings cpas_settings;
+    struct cam_cpas_debug_settings cpas_settings;
 };
 
 /**
@@ -369,7 +372,7 @@ const struct camera_debug_settings *cam_debug_get_settings(void);
  * @return Number of bytes read from buffer on success, or -EPERM on error.
  */
 ssize_t cam_debug_sysfs_node_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count);
+        struct device_attribute *attr, const char *buf, size_t count);
 
 /**
  * cam_debugfs_init()
@@ -419,11 +422,11 @@ int cam_debugfs_lookup_subdir(const char *name, struct dentry **subdir);
  */
 static inline bool cam_debugfs_available(void)
 {
-	#if defined(CONFIG_DEBUG_FS)
-		return true;
-	#else
-		return false;
-	#endif
+    #if defined(CONFIG_DEBUG_FS)
+        return true;
+    #else
+        return false;
+    #endif
 }
 
 #endif /* _CAM_DEBUG_UTIL_H_ */

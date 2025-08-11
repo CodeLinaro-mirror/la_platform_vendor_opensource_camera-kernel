@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_SENSOR_CMN_HEADER_
@@ -32,6 +32,7 @@
 #define CAM_ACTUATOR_NAME  "cam-actuator"
 #define CAM_CSIPHY_NAME    "cam-csiphy"
 #define CAM_FLASH_NAME     "cam-flash"
+#define CAM_IR_LED_NAME    "cam-irled"
 #define CAM_EEPROM_NAME    "cam-eeprom"
 #define CAM_OIS_NAME       "cam-ois"
 #define CAM_TPG_NAME       "cam-tpg"
@@ -93,6 +94,7 @@ enum sensor_sub_module {
 	SUB_MODULE_CSID,
 	SUB_MODULE_CSIPHY,
 	SUB_MODULE_OIS,
+	SUB_MODULE_IR_LED,
 	SUB_MODULE_EXT,
 	SUB_MODULE_MAX,
 };
