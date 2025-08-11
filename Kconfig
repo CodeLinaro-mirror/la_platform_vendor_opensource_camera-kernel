@@ -110,6 +110,14 @@ config SPECTRA_POWER_DOMAIN_SET_HW_MODE
 		of GDSC control between the software and the hardware
 		when power domains are used.
 
+config RT_MAP_WORKER_WORKQ
+	bool "enable workqueue bottom half to replace default tasklet"
+	help
+		This config enables the use of workqueue within worker wrapper
+		for realtime needs.
+		Which supports the replacement of the default tasklet option
+		with workqueue for bottom half.
+
 config SPECTRA_SECURE_MINK_API
 	bool "enable MINK based APIs"
 	default y if SPECTRA_DOMAIN_ID_SECURE_CAMERA || SPECTRA_SECURE_CAMERA_25

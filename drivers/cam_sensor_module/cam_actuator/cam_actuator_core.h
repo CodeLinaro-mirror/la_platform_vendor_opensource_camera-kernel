@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_ACTUATOR_CORE_H_
@@ -65,11 +65,4 @@ int32_t cam_actuator_driver_cmd(struct cam_actuator_ctrl_t *a_ctrl, void *arg);
 void cam_actuator_shutdown(struct cam_actuator_ctrl_t *a_ctrl);
 
 struct completion *cam_actuator_get_i3c_completion(uint32_t index);
-
-/**
- * @w: Workq process work structure
- *
- * This API handles the actuator workq process
- */
-void cam_actuator_process_workq(struct work_struct *w);
 #endif /* _CAM_ACTUATOR_CORE_H_ */

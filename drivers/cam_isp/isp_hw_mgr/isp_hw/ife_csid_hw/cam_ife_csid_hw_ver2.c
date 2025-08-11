@@ -21,13 +21,13 @@
 #include "cam_debug_util.h"
 #include "cam_cpas_api.h"
 #include "cam_irq_controller.h"
-#include "cam_tasklet_util.h"
 #include "cam_cdm_util.h"
 #include "cam_common_util.h"
 #include "cam_subdev.h"
 #include "cam_compat.h"
 #include "cam_vmrm_interface.h"
 #include "cam_mem_mgr_api.h"
+#include "cam_worker_wrapper_api.h"
 
 /* CSIPHY TPG VC/DT values */
 #define CAM_IFE_CPHY_TPG_VC_VAL                         0x0
@@ -4742,7 +4742,7 @@ int cam_ife_csid_ver2_reserve(void *hw_priv,
 	reserve->node_res = res;
 	res->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
 	csid_hw->event_cb = reserve->event_cb;
-	csid_hw->tasklet  = reserve->tasklet;
+	csid_hw->worker_ctx  = reserve->worker_ctx;
 	csid_hw->token  = reserve->cb_priv;
 	reserve->buf_done_controller = csid_hw->buf_done_irq_controller;
 	reserve->mc_comp_buf_done_controller =
@@ -5419,8 +5419,8 @@ static inline int cam_ife_csid_ver2_subscribe_sof_for_discard(
 		res,
 		top_half_handler,
 		bottom_half_handler,
-		csid_hw->tasklet,
-		&tasklet_bh_api,
+		csid_hw->worker_ctx,
+		&worker_bh_api,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (path_data->path_cfg.discard_irq_handle < 1) {
@@ -5459,8 +5459,8 @@ static int cam_ife_csid_ver2_mc_irq_subscribe(struct cam_ife_csid_ver2_hw  *csid
 		res,
 		cam_ife_csid_ver2_mc_top_half,
 		cam_ife_csid_ver2_get_path_bh(res->res_id),
-		csid_hw->tasklet,
-		&tasklet_bh_api,
+		csid_hw->worker_ctx,
+		&worker_bh_api,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->top_mc_irq_handle < 1) {
@@ -5558,8 +5558,8 @@ static int cam_ife_csid_ver2_path_irq_subscribe(
 		res,
 		cam_ife_csid_ver2_path_top_half,
 		cam_ife_csid_ver2_get_path_bh(res->res_id),
-		csid_hw->tasklet,
-		&tasklet_bh_api,
+		csid_hw->worker_ctx,
+		&worker_bh_api,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (path_data->path_cfg.irq_handle < 1) {
@@ -5576,8 +5576,8 @@ static int cam_ife_csid_ver2_path_irq_subscribe(
 			res,
 			cam_ife_csid_ver2_path_err_top_half,
 			cam_ife_csid_ver2_get_path_bh(res->res_id),
-			csid_hw->tasklet,
-			&tasklet_bh_api,
+			csid_hw->worker_ctx,
+			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 	if (path_data->path_cfg.err_irq_handle < 1) {
@@ -6137,8 +6137,8 @@ static int cam_ife_csid_ver2_top2_irq_subscribe(struct cam_ife_csid_ver2_hw *csi
 						csid_hw,
 						cam_ife_csid_ver2_top2_err_top_half,
 						cam_ife_csid_ver2_top2_err_irq_bottom_half,
-						csid_hw->tasklet,
-						&tasklet_bh_api,
+						csid_hw->worker_ctx,
+						&worker_bh_api,
 						CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->top_err_irq_handle[CAM_IFE_CSID_TOP2_IRQ_STATUS_REG1] < 1) {
@@ -6159,8 +6159,8 @@ static int cam_ife_csid_ver2_top2_irq_subscribe(struct cam_ife_csid_ver2_hw *csi
 						csid_hw,
 						cam_ife_csid_ver2_top2_info_irq_top_half,
 						cam_ife_csid_ver2_top2_info_irq_bottom_half,
-						csid_hw->tasklet,
-						&tasklet_bh_api,
+						csid_hw->worker_ctx,
+						&worker_bh_api,
 						CAM_IRQ_EVT_GROUP_0);
 
 		if (csid_hw->top_info_irq_handle[CAM_IFE_CSID_TOP2_IRQ_STATUS_REG1] < 1) {
@@ -6262,8 +6262,8 @@ static int cam_ife_csid_ver2_csi2_rx2_irq_subscribe(struct cam_ife_csid_ver2_hw 
 						csid_hw,
 						cam_ife_csid_ver2_rx2_err_top_half,
 						cam_ife_csid_ver2_rx2_err_bottom_half,
-						csid_hw->tasklet,
-						&tasklet_bh_api,
+						csid_hw->worker_ctx,
+						&worker_bh_api,
 						CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->rx_cfg.err_irq_handle[CAM_IFE_CSID_RX2_IRQ_STATUS_REG1] < 1) {
@@ -6378,8 +6378,8 @@ static int cam_ife_csid_ver2_csi2_irq_subscribe(struct cam_ife_csid_ver2_hw *csi
 						csid_hw,
 						cam_ife_csid_ver2_rx_err_top_half,
 						cam_ife_csid_ver2_rx_err_bottom_half,
-						csid_hw->tasklet,
-						&tasklet_bh_api,
+						csid_hw->worker_ctx,
+						&worker_bh_api,
 						CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->rx_cfg.err_irq_handle[CAM_IFE_CSID_RX_IRQ_STATUS_REG0] < 1) {
@@ -6885,8 +6885,8 @@ static int cam_ife_csid_ver2_enable_hw(
 		csid_hw,
 		cam_ife_csid_ver2_top_err_irq_top_half,
 		cam_ife_csid_ver2_top_err_irq_bottom_half,
-		csid_hw->tasklet,
-		&tasklet_bh_api,
+		csid_hw->worker_ctx,
+		&worker_bh_api,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->top_err_irq_handle[CAM_IFE_CSID_TOP_IRQ_STATUS_REG0] < 1) {
@@ -6919,8 +6919,8 @@ static int cam_ife_csid_ver2_enable_hw(
 						csid_hw,
 						cam_ife_csid_ver2_top_info_irq_top_half,
 						cam_ife_csid_ver2_top_info_irq_bottom_half,
-						csid_hw->tasklet,
-						&tasklet_bh_api,
+						csid_hw->worker_ctx,
+						&worker_bh_api,
 						CAM_IRQ_EVT_GROUP_0);
 
 		if (csid_hw->top_info_irq_handle[CAM_IFE_CSID_TOP_IRQ_STATUS_REG0] < 1) {

@@ -16,7 +16,6 @@
 #include "cam_hw_intf.h"
 #include "hfi_session_defs.h"
 #include "hfi_intf.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_mem_mgr.h"
 #include "cam_smmu_api.h"
 #include "cam_soc_util.h"
@@ -30,9 +29,9 @@
 #define CAM_MAX_OUT_RES         14
 #define CAM_MAX_IN_RES          16
 
-#define ICP_WORKQ_NUM_TASK      100
-#define ICP_WORKQ_TASK_CMD_TYPE 1
-#define ICP_WORKQ_TASK_MSG_TYPE 2
+#define ICP_WORKER_NUM_TASK      100
+#define ICP_WORKER_TASK_CMD_TYPE 1
+#define ICP_WORKER_TASK_MSG_TYPE 2
 
 #define ICP_PACKET_SIZE         0
 #define ICP_PACKET_TYPE         1
@@ -483,9 +482,9 @@ struct cam_icp_hw_ctx_data {
  * @hfi_handle: hfi handle for this ICP hw mgr
  * @synx_core_id: Synx core ID if applicable
  * @hfi_mem: Memory for hfi
- * @cmd_work: Work queue for hfi commands
- * @msg_work: Work queue for hfi messages
- * @timer_work: Work queue for timer watchdog
+ * @cmd_worker_ctx: Worker ctx for hfi commands
+ * @mgs_worker_ctx: Worker ctx for hfi messages
+ * @timer_worker_ctx: Worker ctx for timer watchdog
  * @msg_buf: Drain Buffer for message data from firmware
  *           Buffer is an array of type __u32, total size
  *           would be sizeof(_u32) * queue_size
@@ -550,9 +549,9 @@ struct cam_icp_hw_mgr {
 	int32_t hfi_handle;
 	enum cam_sync_synx_supported_cores synx_core_id;
 	struct icp_hfi_mem_info hfi_mem;
-	struct cam_req_mgr_core_workq *cmd_work;
-	struct cam_req_mgr_core_workq *msg_work;
-	struct cam_req_mgr_core_workq *timer_work;
+	void *cmd_worker_ctx;
+	void *msg_worker_ctx;
+	void *timer_worker_ctx;
 	uint32_t msg_buf[ICP_MSG_BUF_SIZE_IN_WORDS];
 	uint32_t dbg_buf[ICP_DBG_BUF_SIZE_IN_WORDS];
 	struct completion icp_complete;

@@ -12,7 +12,6 @@
 #include "cam_isp_hw_mgr.h"
 #include "cam_vfe_hw_intf.h"
 #include "cam_ife_csid_hw_intf.h"
-#include "cam_tasklet_util.h"
 #include "cam_cdm_intf_api.h"
 #include "cam_cpas_api.h"
 
@@ -309,7 +308,7 @@ struct cam_ife_hw_mgr_ctx_scratch_buf_info {
  *                         only rdi and PD resource without PIX port.
  * @dynamic_drv_supported: Indicate if the dynamic drv is supported
  * @skip_reg_dump_buf_put: Set if put_cpu_buf for reg dump buf is already called
- * @is_hw_ctx_acq:       If acquire for ife ctx is having hw ctx acquired
+ * @is_hw_ctx_acq:         If acquire for ife ctx is having hw ctx acquired
  *
  */
 struct cam_ife_hw_mgr_ctx_flags {
@@ -684,7 +683,7 @@ enum cam_isp_irq_inject_common_param_pos {
  * @ctx_pool:              context storage
  * @csid_hw_caps           csid hw capability stored per core
  * @ife_dev_caps           ife device capability per core
- * @work q                 work queue for IFE hw manager
+ * @worker_ctx             worker ctx for IFE hw manager
  * @debug_cfg              debug configuration
  * @ctx_lock               context lock
  * @isp_caps               Capability of underlying SFE/IFE HW
@@ -720,7 +719,7 @@ struct cam_ife_hw_mgr {
 	struct cam_ife_csid_hw_caps       csid_hw_caps[
 						CAM_IFE_CSID_HW_NUM_MAX];
 	struct cam_vfe_hw_get_hw_cap      ife_dev_caps[CAM_IFE_HW_NUM_MAX];
-	struct cam_req_mgr_core_workq    *workq;
+	void                             *worker_ctx;
 	struct cam_ife_hw_mgr_debug       debug_cfg;
 	spinlock_t                        ctx_lock;
 	struct cam_isp_hw_caps            isp_caps;

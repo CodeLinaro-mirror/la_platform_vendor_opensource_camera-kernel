@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/timer.h>
 #include "cam_lrme_hw_core.h"
 #include "cam_lrme_hw_soc.h"
 #include "cam_smmu_api.h"
+#include "cam_worker_wrapper_api.h"
 
 static void cam_lrme_dump_registers(void __iomem *base)
 {
@@ -1308,7 +1309,7 @@ irqreturn_t cam_lrme_hw_irq(int irq_num, void *data)
 	struct cam_lrme_core *lrme_core;
 	struct cam_hw_soc_info *soc_info;
 	struct cam_lrme_hw_info   *hw_info;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args task;
 	struct cam_lrme_hw_work_data *work_data;
 	uint32_t top_irq_status, fe_irq_status, we_irq_status0, we_irq_status1;
 	int rc;
@@ -1373,19 +1374,27 @@ irqreturn_t cam_lrme_hw_irq(int irq_num, void *data)
 
 	if (top_irq_status || fe_irq_status ||
 		we_irq_status0 || we_irq_status1) {
-		task = cam_req_mgr_workq_get_task(lrme_core->work);
-		if (!task) {
+		rc = cam_worker_wrapper_get(lrme_core->worker_ctx, &task);
+		if (rc) {
 			CAM_ERR(CAM_LRME, "no empty task available");
 			return IRQ_NONE;
 		}
-		work_data = (struct cam_lrme_hw_work_data *)task->payload;
+
+		work_data = (struct cam_lrme_hw_work_data *)
+			cam_worker_wrapper_get_task_payload(lrme_core->worker_ctx, &task);
+		if (!work_data) {
+			CAM_ERR(CAM_LRME, "get task payload failed.");
+			return IRQ_NONE;
+		}
+
 		work_data->top_irq_status = top_irq_status;
 		work_data->fe_irq_status = fe_irq_status;
 		work_data->we_irq_status[0] = we_irq_status0;
 		work_data->we_irq_status[1] = we_irq_status1;
-		task->process_cb = cam_lrme_hw_process_irq;
-		rc = cam_req_mgr_workq_enqueue_task(task, data,
-			CRM_TASK_PRIORITY_0);
+
+		task.task_priority = WORKER_TASK_PRIORITY_0;
+		rc = cam_worker_wrapper_enqueue(lrme_core->worker_ctx, &task,
+			data, work_data, cam_lrme_hw_process_irq);
 		if (rc)
 			CAM_ERR(CAM_LRME,
 				"Failed in enqueue work task, rc=%d", rc);

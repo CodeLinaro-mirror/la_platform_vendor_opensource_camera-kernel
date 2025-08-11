@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_qrtr_comms.h"
 #include "cam_mem_mgr_api.h"
+#include "cam_worker_wrapper_api.h"
 
 static int cam_qrtr_handle_ctrl_message_locked(struct cam_inter_vm_comms_handle *handle,
 	struct qrtr_ctrl_pkt *pkt)
@@ -76,7 +77,7 @@ static int cam_qrtr_send_response_locked(struct cam_inter_vm_comms_handle *handl
 	return cam_qrtr_send_message_locked(handle, data, size);
 }
 
-static void cam_qrtr_handle_incoming_message(struct work_struct *work)
+static int cam_qrtr_handle_incoming_message(void *priv, void *data)
 {
 	struct cam_inter_vm_comms_handle *handle;
 	ssize_t msg_len;
@@ -87,18 +88,19 @@ static void cam_qrtr_handle_incoming_message(struct work_struct *work)
 	struct cam_qrtr_comms_data *qrtr_data;
 	struct cam_intervm_response response;
 
-	handle = container_of(work, struct cam_inter_vm_comms_handle, msg_recv_work);
+	handle = (struct cam_inter_vm_comms_handle *)priv;
 	if (unlikely(!handle)) {
 		CAM_ERR(CAM_VMRM, "Invalid work data");
-		return;
+		return -EINVAL;
 	}
 
 	mutex_lock(&handle->comms_lock);
 	if (handle->is_comms_terminated) {
 		CAM_ERR(CAM_VMRM, "Connection nas been terminated");
 		mutex_unlock(&handle->comms_lock);
-		return;
+		return -ENOTCONN;
 	}
+
 	/* Read the messages until the queue is exhausted */
 	for (;;) {
 		qrtr_data = (struct cam_qrtr_comms_data *)handle->comms_protocol_data;
@@ -112,7 +114,7 @@ static void cam_qrtr_handle_incoming_message(struct work_struct *work)
 		if (msg_len <= 0) {
 			CAM_ERR(CAM_VMRM, "Invalid message received");
 			mutex_unlock(&handle->comms_lock);
-			return;
+			return -EINVAL;
 		}
 
 		CAM_DBG(CAM_VMRM, "New message received. is_server_vm = %d", handle->is_server_vm);
@@ -151,11 +153,15 @@ static void cam_qrtr_handle_incoming_message(struct work_struct *work)
 		}
 	}
 	mutex_unlock(&handle->comms_lock);
+
+	return 0;
 }
 
 static void cam_qrtr_sock_data_ready(struct sock *sk)
 {
 	struct cam_inter_vm_comms_handle *handle = sk->sk_user_data;
+	struct cam_worker_wrapper_taskdata_args task;
+	int rc;
 
 	/* The 'handle' becomes NULL when the connection is terminated */
 	if (unlikely(!handle)) {
@@ -164,7 +170,19 @@ static void cam_qrtr_sock_data_ready(struct sock *sk)
 	}
 
 	CAM_DBG(CAM_VMRM, "Submit an offline work to process the message");
-	queue_work(handle->msg_recv_wq, &handle->msg_recv_work);
+	rc = cam_worker_wrapper_get(handle->worker_ctx, &task);
+	if (rc) {
+		CAM_ERR(CAM_VMRM, "Failed to get worker.");
+		return;
+	}
+
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(handle->worker_ctx, &task,
+		handle, NULL, cam_qrtr_handle_incoming_message);
+	if (rc)
+		CAM_ERR(CAM_VMRM, "Failed to enqueue task.");
+
+	return rc;
 }
 
 int cam_qrtr_initialize_connection(void **hdl, size_t msg_size,
@@ -176,6 +194,7 @@ int cam_qrtr_initialize_connection(void **hdl, size_t msg_size,
 	struct msghdr msg = { };
 	struct kvec iv = { &pkt, sizeof(pkt) };
 	struct cam_inter_vm_comms_handle *handle;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	if (!hdl) {
 		CAM_ERR(CAM_VMRM, "Invalid handle holder");
@@ -209,13 +228,19 @@ int cam_qrtr_initialize_connection(void **hdl, size_t msg_size,
 	}
 	handle->comms_protocol_data = (void *) qrtr_data;
 
-	INIT_WORK(&handle->msg_recv_work, cam_qrtr_handle_incoming_message);
-	handle->msg_recv_wq = alloc_workqueue(CAM_INTER_VM_COMMS_WQ_NAME,
-		WQ_HIGHPRI | WQ_UNBOUND, CAM_INTER_VM_COMMS_MAX_PENDING_WORKS);
-	if (!handle->msg_recv_wq) {
+	worker_init_args.name = CAM_INTER_VM_COMMS_WORKER_NAME;
+	worker_init_args.num_tasks = CAM_INTER_VM_COMMS_NUM_TASK;
+	worker_init_args.max_active = CAM_INTER_VM_COMMS_MAX_PENDING_WORKS;
+	worker_init_args.in_irq = WORKER_USAGE_NON_IRQ;
+	worker_init_args.flag = CAM_WORKER_FLAG_UNBOUND | CAM_WORKER_FLAG_HIGHPRI;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &handle->worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
+	if (rc) {
 		CAM_ERR(CAM_VMRM, "Failed to allocate the work queue");
 		ret = -ENOMEM;
-		goto wq_alloc_failed;
+		goto worker_alloc_failed;
 	}
 
 	mutex_init(&handle->comms_lock);
@@ -289,8 +314,8 @@ int cam_qrtr_initialize_connection(void **hdl, size_t msg_size,
 late_init_failed:
 	sock_release(qrtr_data->sock);
 early_init_failed:
-	destroy_workqueue(handle->msg_recv_wq);
-wq_alloc_failed:
+	cam_worker_wrapper_deinit(handle->worker_ctx);
+worker_alloc_failed:
 	CAM_MEM_FREE(handle->msg_buffer);
 	CAM_MEM_FREE(handle->comms_protocol_data);
 	CAM_MEM_FREE(handle);
@@ -359,8 +384,8 @@ int cam_qrtr_terminate_connection(void *hdl)
 	sock_release(qrtr_data->sock);
 	qrtr_data->sock = NULL;
 
-	flush_workqueue(handle->msg_recv_wq);
-	destroy_workqueue(handle->msg_recv_wq);
+	cam_worker_wrapper_flush(handle->worker_ctx);
+	cam_worker_wrapper_deinit(handle->worker_ctx);
 	CAM_MEM_FREE(handle->msg_buffer);
 	CAM_MEM_FREE(handle->comms_protocol_data);
 	mutex_unlock(&handle->comms_lock);

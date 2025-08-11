@@ -308,7 +308,7 @@ enum cam_isp_hw_cmd_type {
  * @res_priv:                     Private data of the resource
  * @list:                         list_head node for this resource
  * @cdm_ops:                      CDM operation functions
- * @tasklet_info:                 Tasklet structure that will be used to
+ * @worker_ctx:                   Worker structure that will be used to
  *                                schedule IRQ events related to this resource
  * @irq_handle:                   handle returned on subscribing for IRQ event
  * @init:                         function pointer to init the HW resource
@@ -331,7 +331,7 @@ struct cam_isp_resource_node {
 	void                          *res_priv;
 	struct list_head               list;
 	void                          *cdm_ops;
-	void                          *tasklet_info;
+	void                          *worker_ctx;
 	int                            irq_handle;
 
 	int (*init)(struct cam_isp_resource_node *rsrc_node,

@@ -14,12 +14,12 @@
 #include "cam_vfe_top.h"
 #include "cam_vfe_top_ver3.h"
 #include "cam_irq_controller.h"
-#include "cam_tasklet_util.h"
 #include "cam_vfe_camif_lite_ver3.h"
 #include "cam_debug_util.h"
 #include "cam_cdm_util.h"
 #include "cam_cpas_api.h"
 #include "cam_mem_mgr_api.h"
+#include "cam_worker_wrapper_api.h"
 
 struct cam_vfe_mux_camif_lite_data {
 	void __iomem                                *mem_base;
@@ -351,8 +351,8 @@ skip_core_cfg:
 			camif_lite_res,
 			camif_lite_res->top_half_handler,
 			camif_lite_res->bottom_half_handler,
-			camif_lite_res->tasklet_info,
-			&tasklet_bh_api,
+			camif_lite_res->worker_ctx,
+			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 		if (rsrc_data->irq_handle < 1) {
 			CAM_ERR(CAM_ISP, "IRQ handle subscribe failure");
@@ -372,8 +372,8 @@ skip_core_cfg:
 			camif_lite_res,
 			camif_lite_res->top_half_handler,
 			camif_lite_res->bottom_half_handler,
-			camif_lite_res->tasklet_info,
-			&tasklet_bh_api,
+			camif_lite_res->worker_ctx,
+			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 		if (rsrc_data->sof_irq_handle < 1) {
 			CAM_ERR(CAM_ISP, "IRQ handle subscribe failure");
@@ -397,8 +397,8 @@ subscribe_err:
 			camif_lite_res,
 			cam_vfe_camif_lite_err_irq_top_half,
 			camif_lite_res->bottom_half_handler,
-			camif_lite_res->tasklet_info,
-			&tasklet_bh_api,
+			camif_lite_res->worker_ctx,
+			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (rsrc_data->irq_err_handle < 1) {

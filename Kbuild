@@ -138,7 +138,6 @@ camera-y := \
 	drivers/cam_req_mgr/cam_req_mgr_dev.o \
 	drivers/cam_req_mgr/cam_req_mgr_util.o \
 	drivers/cam_req_mgr/cam_mem_mgr.o \
-	drivers/cam_req_mgr/cam_req_mgr_workq.o \
 	drivers/cam_req_mgr/cam_req_mgr_timer.o \
 	drivers/cam_req_mgr/cam_req_mgr_debug.o \
 	drivers/cam_utils/cam_soc_util.o \
@@ -147,6 +146,10 @@ camera-y := \
 	drivers/cam_utils/cam_trace.o \
 	drivers/cam_utils/cam_common_util.o \
 	drivers/cam_utils/cam_compat.o \
+	drivers/cam_utils/cam_worker/cam_tasklet/cam_tasklet_util.o \
+	drivers/cam_utils/cam_worker/cam_workq/cam_workq.o \
+	drivers/cam_utils/cam_worker/cam_worker_wrapper.o \
+	drivers/cam_utils/irq_controller/cam_irq_controller.o \
 	drivers/cam_core/cam_context.o \
 	drivers/cam_core/cam_context_utils.o \
 	drivers/cam_core/cam_node.o \
@@ -183,9 +186,7 @@ camera-$(CONFIG_QCOM_BUS_SCALING) += drivers/cam_utils/cam_soc_bus.o
 camera-$(CONFIG_INTERCONNECT_QCOM) += drivers/cam_utils/cam_soc_icc.o
 
 camera-$(CONFIG_SPECTRA_ISP) += \
-	drivers/cam_isp/isp_hw_mgr/hw_utils/cam_tasklet_util.o \
 	drivers/cam_isp/isp_hw_mgr/hw_utils/cam_isp_packet_parser.o \
-	drivers/cam_isp/isp_hw_mgr/hw_utils/irq_controller/cam_irq_controller.o \
 	drivers/cam_isp/isp_hw_mgr/isp_hw/ife_csid_hw/cam_ife_csid_dev.o \
 	drivers/cam_isp/isp_hw_mgr/isp_hw/ife_csid_hw/cam_ife_csid_soc.o \
 	drivers/cam_isp/isp_hw_mgr/isp_hw/ife_csid_hw/cam_ife_csid_common.o \

@@ -18,15 +18,15 @@
 #include "cam_common_util.h"
 #include "cam_compat.h"
 #include "camera_main.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_mem_mgr_api.h"
 #include "cam_req_mgr_dev.h"
+#include "cam_worker_wrapper_api.h"
 
 struct sync_device *sync_dev;
 
 /*
  * Flag to determine whether to enqueue cb of a
- * signaled fence onto the workq or invoke it
+ * signaled fence onto the worker or invoke it
  * directly in the same context
  */
 static bool trigger_cb_without_switch;
@@ -146,7 +146,7 @@ int cam_sync_register_callback(sync_callback cb_func,
 {
 	struct sync_callback_info *sync_cb;
 	struct sync_table_row *row = NULL;
-	struct crm_workq_task *task = NULL;
+	struct cam_worker_wrapper_taskdata_args task;
 	int status = 0, rc = 0;
 
 	if ((sync_obj >= CAM_SYNC_MAX_OBJS) || (sync_obj <= 0) || (!cb_func))
@@ -195,20 +195,21 @@ int cam_sync_register_callback(sync_callback cb_func,
 			CAM_DBG(CAM_SYNC, "Enqueue callback for sync object:%s[%d]",
 				row->name,
 				sync_cb->sync_obj);
-			sync_cb->workq_scheduled_ts = ktime_get_boottime();
+			sync_cb->worker_scheduled_ts = ktime_get_boottime();
 
-			task = cam_req_mgr_workq_get_task(sync_dev->workq);
-			if (!task) {
+			rc = cam_worker_wrapper_get(sync_dev->worker_ctx, &task);
+			if (rc) {
 				CAM_ERR(CAM_SYNC,
-					"Failed to get workq taks for sync object:%s[%d]",
+					"Failed to get worker task for sync object:%s[%d]",
 					row->name,
 					sync_cb->sync_obj);
 				spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 				return -ENOMEM;
 			}
-			task->process_cb = cam_sync_util_cb_dispatch;
-			rc = cam_req_mgr_workq_enqueue_task(
-				task, sync_cb, CRM_TASK_PRIORITY_0);
+
+			task.task_priority = WORKER_TASK_PRIORITY_0;
+			rc = cam_worker_wrapper_enqueue(sync_dev->worker_ctx, &task,
+				sync_cb, NULL, cam_sync_util_cb_dispatch);
 			if (rc)
 				CAM_ERR(CAM_SYNC,
 					"Failed to enqueue tassk for sync object:%s[%d]",
@@ -2494,10 +2495,10 @@ static int cam_sync_close(struct file *filep)
 		}
 
 		/*
-		 * Flush the work queue to wait for pending signal callbacks to
+		 * Flush the worker to wait for pending signal callbacks to
 		 * finish
 		 */
-		cam_req_mgr_workq_flush(sync_dev->workq);
+		cam_worker_wrapper_flush(sync_dev->worker_ctx);
 
 		/*
 		 * Now that all callbacks worker threads have finished,
@@ -2783,11 +2784,6 @@ static void cam_sync_configure_synx_obj(struct synx_register_params *object)
 }
 #endif
 
-void cam_sync_workq_handler(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
 static int cam_sync_component_bind(struct device *dev,
 	struct device *master_dev, void *data)
 {
@@ -2795,6 +2791,7 @@ static int cam_sync_component_bind(struct device *dev,
 	struct platform_device *pdev = to_platform_device(dev);
 	struct timespec64 ts_start, ts_end;
 	long microsec = 0;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	CAM_GET_TIMESTAMP(ts_start);
 	sync_dev = CAM_MEM_ZALLOC(sizeof(*sync_dev), GFP_KERNEL);
@@ -2856,8 +2853,15 @@ static int cam_sync_component_bind(struct device *dev,
 	 */
 	set_bit(0, sync_dev->bitmap);
 
-	rc = cam_req_mgr_workq_create(CAM_SYNC_WORKQ_NAME, CAM_SYNC_WORKQ_NUM_TASK,
-		&sync_dev->workq, CRM_WORKQ_USAGE_NON_IRQ, 0, cam_sync_workq_handler);
+	worker_init_args.name = CAM_SYNC_WORKER_NAME;
+	worker_init_args.num_tasks = CAM_SYNC_WORKER_NUM_TASK;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &sync_dev->worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc) {
 		CAM_ERR(CAM_SYNC,
 			"Error: high priority work queue creation failed");
@@ -2865,15 +2869,16 @@ static int cam_sync_component_bind(struct device *dev,
 		goto v4l2_fail;
 	}
 
-	for (idx = 0; idx < CAM_SYNC_WORKQ_NUM_TASK; idx++)
-		sync_dev->workq->task.pool[idx].payload = sync_dev;
+	for (idx = 0; idx < CAM_SYNC_WORKER_NUM_TASK; idx++)
+		cam_worker_wrapper_payload_bind(
+			sync_dev->worker_ctx, sync_dev, idx);
 
 	/* Initialize dma fence driver */
 	rc = cam_dma_fence_driver_init();
 	if (rc) {
 		CAM_ERR(CAM_SYNC,
 			"DMA fence driver initialization failed rc: %d", rc);
-		goto workq_destroy;
+		goto worker_destroy;
 	}
 
 	trigger_cb_without_switch = false;
@@ -2905,8 +2910,8 @@ static int cam_sync_component_bind(struct device *dev,
 dma_driver_deinit:
 	cam_dma_fence_driver_deinit();
 #endif
-workq_destroy:
-	cam_req_mgr_workq_destroy(&sync_dev->workq);
+worker_destroy:
+	cam_worker_wrapper_deinit(sync_dev->worker_ctx);
 v4l2_fail:
 	v4l2_device_unregister(sync_dev->vdev->v4l2_dev);
 register_fail:

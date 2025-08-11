@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_FD_HW_MGR_H_
@@ -15,11 +16,10 @@
 #include "cam_cpas_api.h"
 #include "cam_debug_util.h"
 #include "cam_hw_mgr_intf.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_fd_hw_intf.h"
 
 #define CAM_FD_HW_MAX            1
-#define CAM_FD_WORKQ_NUM_TASK    10
+#define CAM_FD_WORKER_NUM_TASK   10
 
 /*
  * Response time threshold in ms beyond which a request is not expected to be
@@ -156,7 +156,7 @@ struct cam_fd_mgr_work_data {
  * @supported_modes           : Supported modes by this driver
  * @ctx_pool                  : List of context
  * @frame_req                 : List of frame requests
- * @work                      : Worker handle
+ * @worker_ctx                : Worker handle
  * @work_data                 : Worker data
  * @fd_caps                   : FD driver capabilities
  * @num_pending_frames        : Number of total frames pending for processing
@@ -181,8 +181,8 @@ struct cam_fd_hw_mgr {
 	uint32_t                           supported_modes;
 	struct cam_fd_hw_mgr_ctx           ctx_pool[CAM_CTX_MAX];
 	struct cam_fd_mgr_frame_request    frame_req[CAM_CTX_REQ_MAX];
-	struct cam_req_mgr_core_workq     *work;
-	struct cam_fd_mgr_work_data        *work_data;
+	void                              *worker_ctx;
+	struct cam_fd_mgr_work_data       *work_data;
 	struct cam_fd_query_cap_cmd        fd_caps;
 	uint32_t                           num_pending_frames;
 };
