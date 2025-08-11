@@ -10,6 +10,7 @@
 #include "tpg_hw/tpg_hw_v_1_0/tpg_hw_v_1_0_data.h"
 #include "tpg_hw/tpg_hw_v_1_2/tpg_hw_v_1_2_data.h"
 #include "tpg_hw/tpg_hw_v_1_3/tpg_hw_v_1_3_data.h"
+#include <linux/of_device.h>
 
 static int cam_tpg_subdev_close(struct v4l2_subdev *sd,
 	struct v4l2_subdev_fh *fh)
