@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -4479,7 +4479,8 @@ static void cam_smmu_release_cb(struct platform_device *pdev)
 	for (i = 0; i < iommu_cb_set.cb_num; i++)
 		cam_smmu_deinit_cb(&iommu_cb_set.cb_info[i]);
 
-	devm_kfree(&pdev->dev, iommu_cb_set.cb_info);
+	CAM_MEM_FREE(iommu_cb_set.cb_info);
+	iommu_cb_set.cb_info = NULL;
 	iommu_cb_set.cb_num = 0;
 }
 
@@ -4606,9 +4607,8 @@ static int cam_alloc_smmu_context_banks(struct device *dev)
 	}
 
 	/* allocate memory for the context banks */
-	iommu_cb_set.cb_info = devm_kzalloc(dev,
-		iommu_cb_set.cb_num * sizeof(struct cam_context_bank_info),
-		GFP_KERNEL);
+	iommu_cb_set.cb_info = CAM_MEM_ZALLOC_ARRAY(iommu_cb_set.cb_num,
+		sizeof(struct cam_context_bank_info), GFP_KERNEL);
 
 	if (!iommu_cb_set.cb_info) {
 		CAM_ERR(CAM_SMMU, "Error: cannot allocate context banks");
