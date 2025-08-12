@@ -1736,6 +1736,14 @@ static int cam_csiphy_cphy_data_rate_config(struct csiphy_device *csiphy_device,
 				cam_io_w_mb((settle_cnt >> 8) & 0xFF,
 					csiphybase + reg_addr);
 			break;
+			case CSIPHY_EDGE_CASE_REG_ADDR_SETTING:
+				if (csiphy_device->ctrl_reg->csiphy_reg_addr_func) {
+					reg_addr = csiphy_device->ctrl_reg->csiphy_reg_addr_func(
+						config_params[i].reg_addr, lane_reg_offset);
+					cam_io_w_mb(reg_data,
+						csiphybase + reg_addr);
+				}
+			break;
 			default:
 				CAM_DBG(CAM_CSIPHY, "Do Nothing");
 			break;
@@ -1860,6 +1868,14 @@ static int cam_csiphy_program_lane_settings(struct csiphy_device *csiphy_dev,
 		case CSIPHY_2PH_SEC_CLK_LN_SETTINGS:
 			if (csiphy_dev->csiphy_info[index].use_sec_dphy_clk_lane)
 				cam_io_w_mb((CLK_SEC_SEL | BIST_CLK_SEL), csiphybase + reg_addr);
+		break;
+		case CSIPHY_EDGE_CASE_REG_ADDR_SETTING:
+			if (csiphy_dev->ctrl_reg->csiphy_reg_addr_func) {
+				reg_addr = csiphy_dev->ctrl_reg->csiphy_reg_addr_func(
+					reg_array[i].reg_addr, lane_reg_offset);
+				cam_io_w_mb(reg_array[i].reg_data,
+					csiphybase + reg_addr);
+			 }
 		break;
 		default:
 			CAM_DBG(CAM_CSIPHY, "Do Nothing");

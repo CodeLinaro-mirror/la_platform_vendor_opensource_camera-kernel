@@ -42,24 +42,25 @@
 #define CAM_CSIPHY_RX_CLK_SRC       "cphy_rx_clk_src"
 #define CAM_CSIPHY_TIMER_CLK_SRC    "phytimer_clk_src"
 
-#define CSIPHY_DEFAULT_PARAMS            BIT(0)
-#define CSIPHY_LANE_ENABLE               BIT(1)
-#define CSIPHY_SETTLE_CNT_LOWER_BYTE     BIT(2)
-#define CSIPHY_SETTLE_CNT_HIGHER_BYTE    BIT(3)
-#define CSIPHY_2PH_REGS                  BIT(4)
-#define CSIPHY_3PH_REGS                  BIT(5)
-#define CSIPHY_SKEW_CAL                  BIT(6)
-#define CSIPHY_2PH_COMBO_REGS            BIT(7)
-#define CSIPHY_3PH_COMBO_REGS            BIT(8)
-#define CSIPHY_2PH_3PH_COMBO_REGS        BIT(9)
-#define CSIPHY_AUXILIARY_SETTING         BIT(10)
-#define CSIPHY_CDR_LN_SETTINGS           BIT(11)
-#define CSIPHY_SHORT_CHANNEL_PARAMS      BIT(12)
-#define CSIPHY_STANDARD_CHANNEL_PARAMS   BIT(13)
-#define CSIPHY_DNP_PARAMS                BIT(14)
-#define CSIPHY_2PH_SEC_CLK_LN_SETTINGS   BIT(15)
+#define CSIPHY_DEFAULT_PARAMS              BIT(0)
+#define CSIPHY_LANE_ENABLE                 BIT(1)
+#define CSIPHY_SETTLE_CNT_LOWER_BYTE       BIT(2)
+#define CSIPHY_SETTLE_CNT_HIGHER_BYTE      BIT(3)
+#define CSIPHY_2PH_REGS                    BIT(4)
+#define CSIPHY_3PH_REGS                    BIT(5)
+#define CSIPHY_SKEW_CAL                    BIT(6)
+#define CSIPHY_2PH_COMBO_REGS              BIT(7)
+#define CSIPHY_3PH_COMBO_REGS              BIT(8)
+#define CSIPHY_2PH_3PH_COMBO_REGS          BIT(9)
+#define CSIPHY_AUXILIARY_SETTING           BIT(10)
+#define CSIPHY_CDR_LN_SETTINGS             BIT(11)
+#define CSIPHY_SHORT_CHANNEL_PARAMS        BIT(12)
+#define CSIPHY_STANDARD_CHANNEL_PARAMS     BIT(13)
+#define CSIPHY_DNP_PARAMS                  BIT(14)
+#define CSIPHY_2PH_SEC_CLK_LN_SETTINGS     BIT(15)
+#define CSIPHY_EDGE_CASE_REG_ADDR_SETTING  BIT(16)
 
-#define CSIPHY_MAX_INSTANCES_PER_PHY     3
+#define CSIPHY_MAX_INSTANCES_PER_PHY         3
 
 #define CAM_CSIPHY_MAX_DPHY_LANES            4
 #define CAM_CSIPHY_MAX_CPHY_LANES            3
@@ -316,6 +317,7 @@ struct bist_reg_settings_t {
  * @getclockvoting            : function pointer which is used to find the clock
  *                               voting for the sensor output data rate
  * @data_rate_settings_table  : Table which maintains the resgister settings specific to data rate
+ * @csiphy_reg_addr_func      : CSIPhy register address function pointer
  */
 struct csiphy_ctrl_t {
 	struct csiphy_reg_parms_t *csiphy_reg;
@@ -331,6 +333,7 @@ struct csiphy_ctrl_t {
 	uint32_t csiphy_ln_offsets[CAM_CSIPHY_MAX_DPHY_LANES + CAM_CSIPHY_MAX_CPHY_LANES + 1];
 	enum   cam_vote_level (*getclockvoting)(struct csiphy_device *phy_dev, int32_t index);
 	struct data_rate_settings_t *data_rates_settings_table;
+	uint32_t (*csiphy_reg_addr_func)(uint32_t partial_offset, uint32_t lane_offset);
 };
 
 /**
