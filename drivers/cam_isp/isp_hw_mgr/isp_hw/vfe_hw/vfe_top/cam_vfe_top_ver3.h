@@ -82,6 +82,7 @@ struct cam_vfe_top_ver3_reg_offset_common {
 	uint32_t *top_debug;
 	uint64_t top_hm_base;
 	uint64_t bus_wr_base;
+	uint32_t capabilities;
 	struct cam_vfe_top_ver3_perf_count_reg_offset
 		perf_count_reg[CAM_VFE_PERF_CNT_MAX];
 };
@@ -98,6 +99,23 @@ struct cam_vfe_camif_common_cfg {
 	uint32_t     input_mux_sel_pdaf;
 	uint32_t     input_mux_sel_pp;
 	uint32_t     input_pp_fmt;
+};
+
+struct cam_vfe_top_ver3_common_data {
+	struct cam_vfe_top_ver3_hw_info            *hw_info;
+	struct cam_hw_intf                         *hw_intf;
+	struct cam_vfe_top_ver3_reg_offset_common  *common_reg;
+};
+
+struct cam_vfe_top_ver3_prim_sof_ts_reg_addr {
+	void __iomem  *curr0_ts_addr;
+	void __iomem  *curr1_ts_addr;
+};
+
+struct cam_vfe_top_ver3_priv {
+	struct cam_vfe_top_ver3_common_data           common_data;
+	struct cam_vfe_top_priv_common                top_common;
+	struct cam_vfe_top_ver3_prim_sof_ts_reg_addr  sof_ts_reg_addr;
 };
 
 struct cam_vfe_top_ver3_hw_info {

@@ -107,6 +107,7 @@ static struct cam_vfe_top_ver3_reg_offset_common tfe662_top_common_reg = {
 	.top_debug                = tfe662_top_debug_reg,
 	.top_hm_base              = 0x1800,
 	.bus_wr_base              = 0x3000,
+	.capabilities             = CAM_VFE_COMMON_CAP_SKIP_CORE_CFG,
 };
 
 static struct cam_vfe_camif_ver3_reg_data vfe_662_camif_reg_data = {

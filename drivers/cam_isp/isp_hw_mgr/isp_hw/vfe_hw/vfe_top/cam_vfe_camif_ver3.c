@@ -32,6 +32,7 @@ struct cam_vfe_mux_camif_ver3_data {
 	struct cam_vfe_camif_ver3_reg_data          *reg_data;
 	struct cam_hw_soc_info                      *soc_info;
 	struct cam_vfe_camif_common_cfg             cam_common_cfg;
+	struct cam_vfe_top_ver3_priv                *top_priv;
 
 	cam_hw_mgr_event_cb_func             event_cb;
 	void                                *priv;
@@ -413,6 +414,9 @@ static int cam_vfe_camif_ver3_resource_start(
 	val |= rsrc_data->reg_data->top_debug_cfg_en;
 	cam_io_w_mb(val, mem_base + rsrc_data->common_reg->top_debug_cfg);
 
+	if (rsrc_data->common_reg->capabilities & CAM_VFE_COMMON_CAP_SKIP_CORE_CFG)
+		goto skip_core_cfg;
+
 	val = cam_io_r_mb(mem_base + rsrc_data->common_reg->core_cfg_0);
 
 	/* AF stitching by hw disabled by default
@@ -514,6 +518,8 @@ static int cam_vfe_camif_ver3_resource_start(
 			return -EINVAL;
 		break;
 	}
+
+skip_core_cfg:
 
 	camif_res->res_state = CAM_ISP_RESOURCE_STATE_STREAMING;
 
@@ -720,6 +726,9 @@ static int cam_vfe_camif_ver3_resource_stop(
 	camif_priv = (struct cam_vfe_mux_camif_ver3_data *)camif_res->res_priv;
 	mem_base   = camif_priv->mem_base + camif_priv->common_reg->top_hm_base;
 
+	if (camif_priv->common_reg->capabilities & CAM_VFE_COMMON_CAP_SKIP_CORE_CFG)
+		goto skip_core_decfg;
+
 	if ((camif_priv->dsp_mode >= CAM_ISP_DSP_MODE_ONE_WAY) &&
 		(camif_priv->dsp_mode <= CAM_ISP_DSP_MODE_ROUND)) {
 		val = cam_io_r_mb(mem_base + camif_priv->common_reg->core_cfg_0);
@@ -727,6 +736,7 @@ static int cam_vfe_camif_ver3_resource_stop(
 		cam_io_w_mb(val, mem_base + camif_priv->common_reg->core_cfg_0);
 	}
 
+skip_core_decfg:
 	if (camif_res->res_state == CAM_ISP_RESOURCE_STATE_STREAMING)
 		camif_res->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
 
@@ -1304,6 +1314,13 @@ static int cam_vfe_camif_ver3_handle_irq_top_half(uint32_t evt_id,
 
 	if (th_payload->evt_status_arr[CAM_IFE_IRQ_CAMIF_REG_STATUS1]
 			& camif_priv->reg_data->sof_irq_mask) {
+		if (camif_priv->top_priv->sof_ts_reg_addr.curr0_ts_addr &&
+			camif_priv->top_priv->sof_ts_reg_addr.curr1_ts_addr) {
+			evt_payload->ts.sof_ts =
+				cam_io_r_mb(camif_priv->top_priv->sof_ts_reg_addr.curr1_ts_addr);
+			evt_payload->ts.sof_ts = (evt_payload->ts.sof_ts << 32) |
+				cam_io_r_mb(camif_priv->top_priv->sof_ts_reg_addr.curr0_ts_addr);
+		}
 		trace_cam_log_event("SOF", "TOP_HALF",
 		th_payload->evt_status_arr[CAM_IFE_IRQ_CAMIF_REG_STATUS1],
 		camif_node->hw_intf->hw_idx);
@@ -1338,6 +1355,7 @@ static int cam_vfe_camif_ver3_handle_irq_bottom_half(void *handler_priv,
 	struct cam_isp_hw_error_event_info err_evt_info;
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_vfe_soc_private *soc_private = NULL;
+	struct cam_isp_sof_ts_data sof_and_boot_time;
 	uint32_t irq_status[CAM_IFE_IRQ_REGISTERS_MAX] = {0};
 	void __iomem *mem_base;
 	struct timespec64 ts;
@@ -1362,12 +1380,16 @@ static int cam_vfe_camif_ver3_handle_irq_bottom_half(void *handler_priv,
 	for (i = 0; i < CAM_IFE_IRQ_REGISTERS_MAX; i++)
 		irq_status[i] = payload->irq_reg_val[i];
 
+	sof_and_boot_time.boot_time = payload->ts.mono_time;
+	sof_and_boot_time.sof_ts = payload->ts.sof_ts;
+
 	evt_info.hw_type  = CAM_ISP_HW_TYPE_VFE;
 	evt_info.hw_idx   = camif_node->hw_intf->hw_idx;
 	evt_info.res_id   = camif_node->res_id;
 	evt_info.res_type = camif_node->res_type;
 	evt_info.reg_val = 0;
 	evt_info.hw_type = CAM_ISP_HW_TYPE_VFE;
+	evt_info.event_data = &sof_and_boot_time;
 
 	if (irq_status[CAM_IFE_IRQ_CAMIF_REG_STATUS1]
 		& camif_priv->reg_data->sof_irq_mask) {
@@ -1503,6 +1525,7 @@ static int cam_vfe_camif_ver3_handle_irq_bottom_half(void *handler_priv,
 }
 
 int cam_vfe_camif_ver3_init(
+	void                          *top_priv,
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
 	void                          *camif_hw_info,
@@ -1527,6 +1550,7 @@ int cam_vfe_camif_ver3_init(
 	camif_priv->hw_intf     = hw_intf;
 	camif_priv->soc_info    = soc_info;
 	camif_priv->path_reg_base      = camif_info->path_reg_base;
+	camif_priv->top_priv    = (struct cam_vfe_top_ver3_priv *)top_priv;
 	camif_priv->vfe_irq_controller = vfe_irq_controller;
 
 	camif_node->init    = cam_vfe_camif_ver3_resource_init;

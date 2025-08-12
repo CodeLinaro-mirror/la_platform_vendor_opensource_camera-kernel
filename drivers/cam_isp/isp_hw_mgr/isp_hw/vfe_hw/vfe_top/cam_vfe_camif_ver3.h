@@ -78,6 +78,7 @@ int cam_vfe_camif_ver3_acquire_resource(
 	void                          *acquire_param);
 
 int cam_vfe_camif_ver3_init(
+	void                          *top_priv,
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
 	void                          *camif_hw_info,

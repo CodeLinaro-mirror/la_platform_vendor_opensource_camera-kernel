@@ -30,6 +30,7 @@ struct cam_vfe_mux_camif_lite_data {
 	struct cam_hw_soc_info                      *soc_info;
 	enum cam_isp_hw_sync_mode                    sync_mode;
 	struct cam_vfe_camif_common_cfg              cam_common_cfg;
+	struct cam_vfe_top_ver3_priv                *top_priv;
 
 	cam_hw_mgr_event_cb_func                     event_cb;
 	void                                        *priv;
@@ -1041,6 +1042,34 @@ static int cam_vfe_camif_lite_handle_irq_top_half(uint32_t evt_id,
 
 	th_payload->evt_payload_priv = evt_payload;
 
+	if (th_payload->evt_status_arr[CAM_IFE_IRQ_CAMIF_REG_STATUS1]
+			& camif_lite_priv->reg_data->sof_irq_mask) {
+		if (camif_lite_priv->top_priv->sof_ts_reg_addr.curr0_ts_addr &&
+			camif_lite_priv->top_priv->sof_ts_reg_addr.curr1_ts_addr) {
+			evt_payload->ts.sof_ts = cam_io_r_mb(
+				camif_lite_priv->top_priv->sof_ts_reg_addr.curr1_ts_addr);
+			evt_payload->ts.sof_ts = (evt_payload->ts.sof_ts << 32) | cam_io_r_mb(
+				camif_lite_priv->top_priv->sof_ts_reg_addr.curr0_ts_addr);
+		}
+		trace_cam_log_event("SOF", "TOP_HALF",
+			th_payload->evt_status_arr[CAM_IFE_IRQ_CAMIF_REG_STATUS1],
+			camif_lite_node->hw_intf->hw_idx);
+	}
+
+	if (th_payload->evt_status_arr[CAM_IFE_IRQ_CAMIF_REG_STATUS1]
+			& camif_lite_priv->reg_data->epoch0_irq_mask) {
+		trace_cam_log_event("EPOCH0", "TOP_HALF",
+			th_payload->evt_status_arr[CAM_IFE_IRQ_CAMIF_REG_STATUS1],
+			camif_lite_priv->hw_intf->hw_idx);
+	}
+
+	if (th_payload->evt_status_arr[CAM_IFE_IRQ_CAMIF_REG_STATUS1]
+			& camif_lite_priv->reg_data->eof_irq_mask) {
+		trace_cam_log_event("EOF", "TOP_HALF",
+			th_payload->evt_status_arr[CAM_IFE_IRQ_CAMIF_REG_STATUS1],
+			camif_lite_priv->hw_intf->hw_idx);
+	}
+
 	CAM_DBG(CAM_ISP, "Exit");
 	return rc;
 }
@@ -1222,6 +1251,7 @@ static int cam_vfe_camif_lite_handle_irq_bottom_half(
 }
 
 int cam_vfe_camif_lite_ver3_init(
+	void                          *top_priv,
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
 	void                          *camif_lite_hw_info,
@@ -1252,6 +1282,7 @@ int cam_vfe_camif_lite_ver3_init(
 	camif_lite_priv->hw_intf            = hw_intf;
 	camif_lite_priv->soc_info           = soc_info;
 	camif_lite_priv->vfe_irq_controller = vfe_irq_controller;
+	camif_lite_priv->top_priv           = (struct cam_vfe_top_ver3_priv *)top_priv;
 
 	camif_lite_node->init    = NULL;
 	camif_lite_node->deinit  = NULL;
