@@ -715,6 +715,10 @@ int cam_vfe_top_ver3_process_cmd(void *device_priv, uint32_t cmd_type,
 	case CAM_ISP_HW_CMD_APPLY_CLK_BW_UPDATE:
 		rc = cam_vfe_top_apply_clk_bw_update(&top_priv->top_common, cmd_args, arg_size);
 		break;
+	case CAM_ISP_HW_CMD_IFE_DEBUG_CFG:
+		/*Not supported for v3*/
+		rc = 0;
+		break;
 	default:
 		rc = -EINVAL;
 		CAM_ERR(CAM_ISP, "Error, Invalid cmd:%d", cmd_type);

@@ -83,3 +83,35 @@ int cam_vfe_top_read_hw_query(struct cam_hw_soc_info *soc_info,
 
 	return rc;
 }
+
+int cam_vfe_top_get_top_hm_base(void *top_hw_info,
+	uint32_t version, uint64_t *top_hm_base)
+{
+	if (!top_hw_info || !top_hm_base) {
+		CAM_ERR(CAM_ISP, "Invalid input parameters");
+		return -EINVAL;
+	}
+
+	switch (version) {
+	case CAM_VFE_TOP_VER_2_0:
+		break;
+	case CAM_VFE_TOP_VER_3_0: {
+		struct cam_vfe_top_ver3_hw_info *hw_info = top_hw_info;
+
+		*top_hm_base = hw_info->top_hm_base;
+	}
+		break;
+	case CAM_VFE_TOP_VER_4_0: {
+		struct cam_vfe_top_ver4_hw_info *hw_info = top_hw_info;
+
+		*top_hm_base = hw_info->top_hm_base;
+	}
+		break;
+	default:
+		CAM_ERR(CAM_ISP, "Error! Unsupported Version %x", version);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+

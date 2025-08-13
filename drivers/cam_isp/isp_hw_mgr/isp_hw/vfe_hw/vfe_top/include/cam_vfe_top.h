@@ -52,4 +52,7 @@ int cam_vfe_top_deinit(uint32_t        top_version,
 
 int cam_vfe_top_read_hw_query(struct cam_hw_soc_info *soc_info,
 	void *top_hw_info, uint32_t version);
+
+int cam_vfe_top_get_top_hm_base(void *top_hw_info, uint32_t version, uint64_t *top_hm_base);
+
 #endif /* _CAM_VFE_TOP_H_*/
