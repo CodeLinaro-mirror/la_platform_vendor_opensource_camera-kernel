@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #if !defined(_CAM_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
@@ -88,7 +88,7 @@ TRACE_EVENT(cam_rpmsg_isp,
 		__assign_str(pckt_type, pckt_type);
 	),
 	TP_printk(
-		"%s: %s req_id=%d sensor_id=0x%x pckt_size=%d pckt_type=%s",
+		"%s: %s req_id=%lld sensor_id=0x%x pckt_size=%d pckt_type=%s",
 			__get_str(dev_name), __get_str(dir),
 			__entry->req_id, __entry->sensor_id,
 			__entry->pckt_size, __get_str(pckt_type)
@@ -479,7 +479,7 @@ TRACE_EVENT(cam_delay_detect,
 		__entry->rc          = rc;
 	),
 	TP_printk(
-		"%s: %s request=%lld ctx_id=%d link_hdl=0x%x session_hdl=0x%x rc=%d",
+		"%s: %s request=%lld ctx_id=%lld link_hdl=0x%x session_hdl=0x%x rc=%d",
 			__get_str(entity), __get_str(text), __entry->req_id,
 			__entry->ctx_id, __entry->link_hdl,
 			__entry->session_hdl, __entry->rc
