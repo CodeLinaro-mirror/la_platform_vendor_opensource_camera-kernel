@@ -159,6 +159,17 @@ void cam_common_util_thread_switch_delay_detect(
 	}
 }
 
+int cam_common_get_num_bits_required(uint32_t max_val)
+{
+	int i = 0;
+
+	while (max_val != 0) {
+		max_val >>= 1;
+		i++;
+	}
+	return i;
+}
+
 #if IS_REACHABLE(CONFIG_QCOM_VA_MINIDUMP)
 static void cam_common_mini_dump_handler(void *dst, unsigned long len)
 {

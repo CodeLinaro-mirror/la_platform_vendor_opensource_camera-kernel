@@ -43,6 +43,7 @@ struct cam_sync_signal_param {
  *  The newly created sync obj is assigned to sync_obj.
  *  sync object.
  *
+ * @param sync_manager_idx : Index of sync manager
  * @param sync_obj   : Pointer to int referencing the sync object.
  * @param name : Optional parameter associating a name with the sync object for
  * debug purposes. Only first SYNC_DEBUG_NAME_LEN bytes are accepted,
@@ -53,7 +54,7 @@ struct cam_sync_signal_param {
  * -ENOMEM will be returned if the kernel can't allocate space for
  * sync object.
  */
-int cam_sync_create(int32_t *sync_obj, const char *name);
+int cam_sync_create(uint32_t sync_manager_idx, int32_t *sync_obj, const char *name);
 
 /**
  * @brief: Registers a callback with a sync object
