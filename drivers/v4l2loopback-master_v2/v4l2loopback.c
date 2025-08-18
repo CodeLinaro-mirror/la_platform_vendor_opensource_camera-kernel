@@ -2137,6 +2137,7 @@ static int vidioc_dqbuf(struct file *file,
 			}
 
 			wait_event_interruptible(dev->read_event, can_read(dev, opener));
+			return -EAGAIN;
 		}
 
 		return rc;
