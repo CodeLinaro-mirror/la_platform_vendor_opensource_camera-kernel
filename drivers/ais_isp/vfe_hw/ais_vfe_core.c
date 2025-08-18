@@ -122,7 +122,7 @@ static int ais_vfe_bus_hw_init(struct ais_vfe_hw_core_info *core_info)
 	top_irq_regs = top_irq_reg_info->irq_reg_set;
 
 	/*set IRQ mask for BUS WR*/
-	core_info->irq_mask0 |= AIS_VFE_STATUS0_BUS_WR_IRQ;
+	core_info->irq_mask0 = 0;
 	cam_io_w_mb(core_info->irq_mask0,
 		core_info->mem_base + top_irq_regs[0].mask_reg_offset);
 
@@ -1876,7 +1876,8 @@ irqreturn_t ais_vfe_irq(int irq_num, void *data)
 			ife_status[0], ife_status[1]);
 
 	//process any reset inetrrupt
-	if (ife_status[0] & AIS_VFE_STATUS0_RESET_ACK_IRQ) {
+	if ((vfe_hw_info->top_version != AIS_VFE_TOP_VER_4_0) &&
+			(ife_status[0] & AIS_VFE_STATUS0_RESET_ACK_IRQ)) {
 		/*
 		 * Clear All IRQs to avoid spurious IRQs immediately
 		 * after Reset Done.

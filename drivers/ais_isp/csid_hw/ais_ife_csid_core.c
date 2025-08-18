@@ -116,15 +116,15 @@ static int ais_ife_csid_global_reset(struct ais_ife_csid_hw *csid_hw)
 
 	/* enable the IPP and RDI format measure */
 	if (csid_reg->cmn_reg->num_pix)
-		cam_io_w_mb(0x1, soc_info->reg_map[0].mem_base +
+		cam_io_w_mb(0x0, soc_info->reg_map[0].mem_base +
 			csid_reg->ipp_reg->csid_pxl_cfg0_addr);
 
 	if (csid_reg->cmn_reg->num_ppp)
-		cam_io_w_mb(0x1, soc_info->reg_map[0].mem_base +
+		cam_io_w_mb(0x0, soc_info->reg_map[0].mem_base +
 			csid_reg->ppp_reg->csid_pxl_cfg0_addr);
 
 	for (i = 0; i < csid_reg->cmn_reg->num_rdis; i++)
-		cam_io_w_mb(0x2, soc_info->reg_map[0].mem_base +
+		cam_io_w_mb(0x0, soc_info->reg_map[0].mem_base +
 			csid_reg->rdi_reg[i]->csid_rdi_cfg0_addr);
 
 	cam_io_w_mb(0x11,
@@ -200,10 +200,6 @@ static int ais_ife_csid_path_reset(struct ais_ife_csid_hw *csid_hw,
 				reset_path);
 		return -EINVAL;
 	}
-
-	spin_lock(&csid_hw->lock_rup);
-	csid_hw->rup_val_set = 0;
-	spin_unlock(&csid_hw->lock_rup);
 
 	cam_io_w_mb(0, soc_info->reg_map[0].mem_base +
 			csid_reg->rdi_reg[id]->csid_rdi_irq_mask_addr);
@@ -956,20 +952,12 @@ static int ais_ife_csid_disable_rdi_path(
 	CAM_DBG(CAM_ISP, "CSID:%d RDI:%d",
 		csid_hw->hw_intf->hw_idx, id);
 
-	spin_lock(&csid_hw->lock_rup);
-	csid_hw->rup_val_set &= ~csid_reg->rdi_reg[id]->rup_aup_mask;
-	spin_unlock(&csid_hw->lock_rup);
-
-	/* disable RX */
-	cam_io_w_mb(0, soc_info->reg_map[0].mem_base +
-		csid_reg->rdi_reg[id]->csid_rdi_irq_mask_addr);
-
-	/* disable the RDI path*/
+	/* Halt the RDI path */
 	val = cam_io_r_mb(soc_info->reg_map[0].mem_base +
-			csid_reg->rdi_reg[id]->csid_rdi_cfg0_addr);
-	val &= ~(1 << csid_reg->cmn_reg->path_en_shift_val);
+		csid_reg->rdi_reg[id]->csid_rdi_ctrl_addr);
+	val &= ~0x3;
 	cam_io_w_mb(val, soc_info->reg_map[0].mem_base +
-			csid_reg->rdi_reg[id]->csid_rdi_cfg0_addr);
+		csid_reg->rdi_reg[id]->csid_rdi_ctrl_addr);
 
 	/* disable buf done */
 	val = cam_io_r_mb(soc_info->reg_map[0].mem_base +
@@ -978,19 +966,6 @@ static int ais_ife_csid_disable_rdi_path(
 	cam_io_w_mb(val, soc_info->reg_map[0].mem_base +
 					csid_reg->cmn_reg->csid_buf_done_irq_mask_addr);
 
-	cam_io_w_mb(0, soc_info->reg_map[0].mem_base +
-		csid_reg->rdi_reg[id]->csid_rdi_irq_mask_addr);
-
-#if 0
-	/* Halt the RDI path */
-	val = cam_io_r_mb(soc_info->reg_map[0].mem_base +
-		csid_reg->rdi_reg[id]->csid_rdi_ctrl_addr);
-	val &= ~0x3;
-	val |= stop_cmd;
-	cam_io_w_mb(val, soc_info->reg_map[0].mem_base +
-		csid_reg->rdi_reg[id]->csid_rdi_ctrl_addr);
-#endif
-
 	/* disable top irq */
 	val = cam_io_r_mb(soc_info->reg_map[0].mem_base +
 		csid_reg->cmn_reg->csid_top_irq_mask_addr);
@@ -998,6 +973,10 @@ static int ais_ife_csid_disable_rdi_path(
 	val &= ~(0x100 << id);
 	cam_io_w_mb(val, soc_info->reg_map[0].mem_base +
 		csid_reg->cmn_reg->csid_top_irq_mask_addr);
+
+	spin_lock(&csid_hw->lock_rup);
+	csid_hw->rup_val_set &= ~csid_reg->rdi_reg[id]->rup_aup_mask;
+	spin_unlock(&csid_hw->lock_rup);
 
 	path_data->state = AIS_ISP_RESOURCE_STATE_INIT_HW;
 
@@ -1290,7 +1269,7 @@ static int ais_ife_csid_reserve(void *hw_priv,
 	spin_lock(&csid_hw->lock_state);
 	csid_hw->rup_val_set |= csid_reg->rdi_reg[rdi_cfg->path]->rup_aup_mask;
 	/*rup enable */
-	cam_io_w_mb(csid_reg->rdi_reg[rdi_cfg->path]->rup_aup_mask,
+	cam_io_w_mb(csid_hw->rup_val_set,
 			soc_info->reg_map[0].mem_base +
 			csid_reg->cmn_reg->rup_aup_cmd_addr);
 	spin_unlock(&csid_hw->lock_state);
@@ -1468,6 +1447,7 @@ static int ais_ife_csid_stop(void *hw_priv,
 	struct cam_hw_info                   *csid_hw_info;
 	const struct ais_ife_csid_reg_offset *csid_reg;
 	struct ais_ife_rdi_stop_args         *stop_cmd;
+	struct cam_hw_soc_info                *soc_info;
 	uint32_t  res_mask = 0;
 
 	if (!hw_priv || !stop_args ||
@@ -1480,6 +1460,7 @@ static int ais_ife_csid_stop(void *hw_priv,
 	csid_hw = (struct ais_ife_csid_hw   *)csid_hw_info->core_info;
 	csid_reg = csid_hw->csid_info->csid_reg;
 	stop_cmd = (struct ais_ife_rdi_stop_args  *) stop_args;
+	soc_info = &csid_hw->hw_info->soc_info;
 
 	if (stop_cmd->path >= csid_reg->cmn_reg->num_rdis ||
 		!csid_reg->rdi_reg[stop_cmd->path]) {
@@ -1492,6 +1473,10 @@ static int ais_ife_csid_stop(void *hw_priv,
 	CAM_DBG(CAM_ISP, "CSID:%d RDI %d",
 		csid_hw->hw_intf->hw_idx,
 		stop_cmd->path);
+
+	cam_io_w_mb(0x01,
+		soc_info->reg_map[0].mem_base +
+		csid_reg->cmn_reg->csid_reset_addr);
 
 	/* Stop the resource first */
 	rc = ais_ife_csid_disable_rdi_path(csid_hw, stop_cmd,
