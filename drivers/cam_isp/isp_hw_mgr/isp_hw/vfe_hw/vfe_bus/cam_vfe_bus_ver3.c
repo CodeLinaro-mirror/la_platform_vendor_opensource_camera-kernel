@@ -5368,9 +5368,18 @@ static int cam_vfe_bus_ver3_dump_wm_mid_info(
 
 found:
 	out_rsrc_data = (struct cam_vfe_bus_ver3_vfe_out_data *)bus_priv->vfe_out[i].res_priv;
+	if (!out_rsrc_data) {
+		CAM_ERR(CAM_ISP, "Invalid vfe bus resource private, client reg index: %d.", i);
+		return -EINVAL;
+	}
+
 	get_res->out_res_id = bus_priv->vfe_out[i].res_id;
 	for (num_wm = 0; num_wm < out_rsrc_data->num_wm; num_wm++) {
 		wm_data = out_rsrc_data->wm_res[num_wm]->res_priv;
+
+		if (!wm_data)
+			continue;
+
 		if (wm_data->index == i) {
 			CAM_INFO(CAM_ISP, "MID:%d PID:%d pid_mask:0x%lx match for WM[%u: %s] ctxt:%d is_meta %s",
 				get_res->mid, get_res->pid, c_reg->pid_mask, i, c_reg->name, j,
