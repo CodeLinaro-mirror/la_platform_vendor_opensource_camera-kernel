@@ -4611,8 +4611,8 @@ static int cam_soc_util_dump_cont_reg_range_user_buf(
 	int                            rc = 0;
 	size_t                         buf_len;
 	uint8_t                       *dst;
-	size_t                         remain_len;
-	uint32_t                       min_len, reg_map_size = 0;
+	size_t                         remain_len, min_len;
+	uint32_t                       reg_map_size = 0;
 	uint32_t                      *waddr, *start;
 	uintptr_t                      cpu_addr;
 	struct cam_hw_soc_dump_header  *hdr;
@@ -4622,6 +4622,14 @@ static int cam_soc_util_dump_cont_reg_range_user_buf(
 			"Invalid input args soc_info: %pK, dump_out_buffer: %pK reg_read: %pK",
 			soc_info, dump_args, reg_read);
 		return -EINVAL;
+	}
+
+	/* Validate num_values to prevent overflow */
+	if (reg_read->num_values >
+		((SIZE_MAX - sizeof(struct cam_hw_soc_dump_header) - sizeof(uint32_t)) /
+		(2 * sizeof(uint32_t)))) {
+		CAM_ERR(CAM_UTIL, "num_values too large: %u", reg_read->num_values);
+		return -EOVERFLOW;
 	}
 
 	rc = cam_mem_get_cpu_buf(dump_args->buf_handle, &cpu_addr, &buf_len);
