@@ -1,4 +1,5 @@
 /* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,6 +26,8 @@
 #include "cam_sync_api.h"
 #include "cam_trace.h"
 #include "cam_debug_util.h"
+#include "cam_packet_util.h"
+#include "cam_common_util.h"
 
 static uint cam_debug_ctx_req_list;
 module_param(cam_debug_ctx_req_list, uint, 0644);
@@ -274,7 +277,9 @@ int32_t cam_context_config_dev_to_hw(
 	size_t len;
 	struct cam_hw_stream_setttings cfg;
 	uintptr_t packet_addr;
-	struct cam_packet *packet;
+	struct cam_packet *packet_u;
+	struct cam_packet *packet = NULL;
+	size_t remain_len = 0;
 
 	if (!ctx || !cmd) {
 		CAM_ERR(CAM_CTXT, "Invalid input params %pK %pK", ctx, cmd);
@@ -310,8 +315,15 @@ int32_t cam_context_config_dev_to_hw(
 		return -EINVAL;
 
 	}
-	packet = (struct cam_packet *) ((uint8_t *)packet_addr +
+	packet_u = (struct cam_packet *) ((uint8_t *)packet_addr +
 		(uint32_t)cmd->offset);
+	remain_len = len - (uint32_t)cmd->offset;
+
+	rc = cam_packet_util_copy_pkt_to_kmd(packet_u, &packet, remain_len);
+	if (rc) {
+		CAM_ERR(CAM_CTXT, "Copying packet to KMD failed");
+		goto put_ref;
+	}
 
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.packet = packet;
@@ -327,7 +339,10 @@ int32_t cam_context_config_dev_to_hw(
 			ctx->dev_name, ctx->ctx_id);
 		rc = -EFAULT;
 	}
-
+	cam_common_mem_free(packet);
+	packet = NULL;
+put_ref:
+        cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
 	return rc;
 }
 
@@ -338,7 +353,7 @@ int32_t cam_context_prepare_dev_to_hw(struct cam_context *ctx,
 	struct cam_ctx_request *req = NULL;
 	struct cam_hw_prepare_update_args cfg;
 	uintptr_t packet_addr;
-	struct cam_packet *packet;
+	struct cam_packet *packet = NULL;
 	size_t len = 0;
 	size_t remain_len = 0;
 	int32_t i = 0, j = 0;
@@ -439,6 +454,7 @@ int32_t cam_context_prepare_dev_to_hw(struct cam_context *ctx,
 	req->request_id = packet->header.request_id;
 	req->status = 1;
 	req->req_priv = cfg.priv;
+	req->packet = packet;
 
 	for (i = 0; i < req->num_out_map_entries; i++) {
 		rc = cam_sync_get_obj_ref(req->out_map_entries[i].sync_id);
@@ -517,6 +533,10 @@ free_cpu_buf:
 		CAM_WARN(CAM_CTXT, "[%s][%d] Can not put packet address",
 			ctx->dev_name, ctx->ctx_id);
 free_req:
+	if (packet)
+		cam_common_mem_free(packet);
+
+	req->packet = NULL;
 	spin_lock(&ctx->lock);
 	list_add_tail(&req->list, &ctx->free_req_list);
 	req->ctx = NULL;
@@ -761,7 +781,6 @@ int32_t cam_context_flush_ctx_to_hw(struct cam_context *ctx)
 				}
 			}
 		}
-
 		spin_lock(&ctx->lock);
 		list_add_tail(&req->list, &ctx->free_req_list);
 		spin_unlock(&ctx->lock);
