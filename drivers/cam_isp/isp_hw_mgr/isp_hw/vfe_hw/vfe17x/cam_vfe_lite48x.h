@@ -12,6 +12,58 @@
 #include "cam_vfe_top_ver3.h"
 #include "cam_vfe_core.h"
 
+
+static struct cam_vfe_top_err_irq_desc vfe48x_camif_rdi_top_violation_irq_err_desc[] = {
+	{
+		.bitmask = BIT(2),
+		.err_name  = "RDI0_CAMIF_VIOLATION_IRQ",
+		.desc = "CCIF protocol violation within camif of RDI0 pipeline.",
+	},
+	{
+		.bitmask = BIT(3),
+		.err_name  = "RDI1_CAMIF_VIOLATION_IRQ",
+		.desc = "CCIF protocol violation within camif of RDI1 pipeline.",
+	},
+	{
+		.bitmask  = BIT(4),
+		.err_name  = "RDI2_CAMIF_VIOLATION_IRQ",
+		.desc = "CCIF protocol violation within camif of RDI2 pipeline.",
+	},
+};
+
+static struct cam_vfe_top_err_irq_desc vfe48x_camif_rdi_top_overflow_irq_err_desc[] = {
+	{
+		.bitmask = BIT(17),
+		.err_name = "RDI0_OVERFLOW_IRQ",
+		.desc = "overflow in the RDI0 Pipe.",
+	},
+	{
+		.bitmask = BIT(18),
+		.err_name  = "RDI1_OVERFLOW_IRQ",
+		.desc = "overflow in the RDI1 Pipe.",
+	},
+	{
+		.bitmask = BIT(19),
+		.err_name  = "RDI2_OVERFLOW_IRQ",
+		.desc = "overflow in the RDI2 Pipe.",
+	},
+};
+
+static struct cam_vfe_top_err_irq_desc vfe48x_camif_rdi_bus_overflow_irq_err_desc[] = {
+	{
+		.bitmask = BIT(7),
+		.err_name = "RDI0 BUS OVERFLOW",
+	},
+	{
+		.bitmask = BIT(8),
+		.err_name  = "RDI1 BUS OVERFLOW",
+	},
+	{
+		.bitmask = BIT(9),
+		.err_name  = "RDI2 BUS OVERFLOW",
+	},
+};
+
 static struct cam_irq_register_set vfe48x_top_irq_reg_set[3] = {
 	{
 		.mask_reg_offset   = 0x00000028,
@@ -178,21 +230,65 @@ static struct cam_vfe_camif_lite_ver3_hw_info
 		.common_reg     = &vfe48x_top_common_reg,
 		.camif_lite_reg = &vfe48x_camif_rdi[0],
 		.reg_data       = &vfe48x_camif_rdi_reg_data[0],
+		.num_top_violation_errors  =
+					ARRAY_SIZE(vfe48x_camif_rdi_top_violation_irq_err_desc),
+		.top_violation_err_desc    = vfe48x_camif_rdi_top_violation_irq_err_desc,
+		.num_top_overflow_errors   =
+					ARRAY_SIZE(vfe48x_camif_rdi_top_overflow_irq_err_desc),
+		.top_overflow_err_desc     = vfe48x_camif_rdi_top_overflow_irq_err_desc,
+		.num_bus_overflow_errors   =
+					ARRAY_SIZE(vfe48x_camif_rdi_bus_overflow_irq_err_desc),
+		.bus_overflow_err_desc     = vfe48x_camif_rdi_bus_overflow_irq_err_desc,
+		.lcr_violation_mask        = 0x3F00,
+		.pd_violation_mask         = 0x0F0000,
 	},
 	{
 		.common_reg     = &vfe48x_top_common_reg,
 		.camif_lite_reg = &vfe48x_camif_rdi[1],
 		.reg_data       = &vfe48x_camif_rdi_reg_data[1],
+		.num_top_violation_errors  =
+					ARRAY_SIZE(vfe48x_camif_rdi_top_violation_irq_err_desc),
+		.top_violation_err_desc    = vfe48x_camif_rdi_top_violation_irq_err_desc,
+		.num_top_overflow_errors   =
+					ARRAY_SIZE(vfe48x_camif_rdi_top_overflow_irq_err_desc),
+		.top_overflow_err_desc     = vfe48x_camif_rdi_top_overflow_irq_err_desc,
+		.num_bus_overflow_errors   =
+					ARRAY_SIZE(vfe48x_camif_rdi_bus_overflow_irq_err_desc),
+		.bus_overflow_err_desc     = vfe48x_camif_rdi_bus_overflow_irq_err_desc,
+		.lcr_violation_mask        = 0x3F00,
+		.pd_violation_mask         = 0x0F0000,
 	},
 	{
 		.common_reg     = &vfe48x_top_common_reg,
 		.camif_lite_reg = &vfe48x_camif_rdi[2],
 		.reg_data       = &vfe48x_camif_rdi_reg_data[2],
+		.num_top_violation_errors  =
+					ARRAY_SIZE(vfe48x_camif_rdi_top_violation_irq_err_desc),
+		.top_violation_err_desc    = vfe48x_camif_rdi_top_violation_irq_err_desc,
+		.num_top_overflow_errors   =
+					ARRAY_SIZE(vfe48x_camif_rdi_top_overflow_irq_err_desc),
+		.top_overflow_err_desc     = vfe48x_camif_rdi_top_overflow_irq_err_desc,
+		.num_bus_overflow_errors   =
+					ARRAY_SIZE(vfe48x_camif_rdi_bus_overflow_irq_err_desc),
+		.bus_overflow_err_desc     = vfe48x_camif_rdi_bus_overflow_irq_err_desc,
+		.lcr_violation_mask        = 0x3F00,
+		.pd_violation_mask         = 0x0F0000,
 	},
 	{
 		.common_reg     = &vfe48x_top_common_reg,
 		.camif_lite_reg = &vfe48x_camif_rdi[3],
 		.reg_data       = &vfe48x_camif_rdi_reg_data[3],
+		.num_top_violation_errors  =
+					ARRAY_SIZE(vfe48x_camif_rdi_top_violation_irq_err_desc),
+		.top_violation_err_desc    = vfe48x_camif_rdi_top_violation_irq_err_desc,
+		.num_top_overflow_errors   =
+					ARRAY_SIZE(vfe48x_camif_rdi_top_overflow_irq_err_desc),
+		.top_overflow_err_desc     = vfe48x_camif_rdi_top_overflow_irq_err_desc,
+		.num_bus_overflow_errors   =
+					ARRAY_SIZE(vfe48x_camif_rdi_bus_overflow_irq_err_desc),
+		.bus_overflow_err_desc     = vfe48x_camif_rdi_bus_overflow_irq_err_desc,
+		.lcr_violation_mask        = 0x3F00,
+		.pd_violation_mask         = 0x0F0000,
 	},
 };
 
