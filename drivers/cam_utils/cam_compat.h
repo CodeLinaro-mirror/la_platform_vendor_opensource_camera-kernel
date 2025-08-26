@@ -178,6 +178,10 @@ void cam_hrtimer_setup(struct hrtimer *on_timer,
 	enum hrtimer_restart (*timer_func_on)(struct hrtimer *timer),
 	enum hrtimer_restart (*timer_func_off)(struct hrtimer *timer));
 
+void __iomem *cam_compat_ioremap(bool mem_block_rw_prop,
+	unsigned long mem_block_start,
+	unsigned long mem_block_size);
+
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
 #ifdef CONFIG_ARCH_QTI_VM
 void *cam_mem_heap_add_kernel_pool(struct dma_heap *heap, size_t size);
