@@ -5760,9 +5760,9 @@ int cam_req_mgr_sync_config_v2(struct cam_req_mgr_sync_mode_v2 *sync_info)
 	}
 
 	for (i = 0; i < sync_info->num_links; i++) {
-		if (!sync_info->links[i].link_hdl) {
+		if (!sync_info->links_flex[i].link_hdl) {
 			CAM_WARN(CAM_CRM, "Invalid link hdl %d, hdl 0x%x", i,
-					sync_info->links[i].link_hdl);
+					sync_info->links_flex[i].link_hdl);
 			rc = -EINVAL;
 		}
 	}
@@ -5784,10 +5784,10 @@ int cam_req_mgr_sync_config_v2(struct cam_req_mgr_sync_mode_v2 *sync_info)
 	mutex_lock(&cam_session->lock);
 
 	for (i = 0; i < sync_info->num_links; i++) {
-		link[i] = cam_get_link_priv(sync_info->links[i].link_hdl);
-		if (!link[i] || (link[i]->link_hdl != sync_info->links[i].link_hdl)) {
+		link[i] = cam_get_link_priv(sync_info->links_flex[i].link_hdl);
+		if (!link[i] || (link[i]->link_hdl != sync_info->links_flex[i].link_hdl)) {
 			CAM_ERR(CAM_CRM, "link: %s, sync_info->link_hdl:%x, link->link_hdl:%x",
-				CAM_IS_NULL_TO_STR(link), sync_info->links[i].link_hdl,
+				CAM_IS_NULL_TO_STR(link), sync_info->links_flex[i].link_hdl,
 				(!link[i]) ? CAM_REQ_MGR_DEFAULT_HDL_VAL : link[i]->link_hdl);
 			rc = -EINVAL;
 			goto done;

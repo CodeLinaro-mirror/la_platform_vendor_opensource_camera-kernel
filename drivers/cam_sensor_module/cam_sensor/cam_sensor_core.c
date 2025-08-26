@@ -1081,7 +1081,7 @@ static int32_t cam_sensor_cmd_buffer(struct cam_sensor_ctrl_t *s_ctrl,
 	uint32_t *offset = NULL;
 	struct cam_cmd_buf_desc *cmd_desc = NULL;
 
-	offset = (uint32_t *)&csl_packet->payload;
+	offset = (uint32_t *)&csl_packet->payload_flex;
 	offset += csl_packet->cmd_buf_offset / 4;
 	cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 
@@ -1288,7 +1288,7 @@ static int32_t cam_sensor_i2c_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 	csl_packet_u = (struct cam_packet *)(generic_ptr +
 		(uint32_t)config.offset);
 
-	offset = (uint32_t *)&csl_packet_u->payload;
+	offset = (uint32_t *)&csl_packet_u->payload_flex;
 	offset += csl_packet_u->cmd_buf_offset / 4;
 	cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 
@@ -1460,7 +1460,7 @@ static int32_t cam_sensor_i2c_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 		}
 
 		io_cfg = (struct cam_buf_io_cfg *) ((uint8_t *)
-			&csl_packet->payload +
+			&csl_packet->payload_flex +
 			csl_packet->io_configs_offset);
 
 		if (io_cfg == NULL) {
@@ -1946,7 +1946,7 @@ int32_t cam_handle_mem_ptr(uint64_t handle, uint32_t cmd,
 	}
 
 	cmd_desc = (struct cam_cmd_buf_desc *)
-		((uint32_t *)&pkt->payload + pkt->cmd_buf_offset/4);
+		((uint32_t *)&pkt->payload_flex + pkt->cmd_buf_offset/4);
 	if (cmd_desc == NULL) {
 		CAM_ERR(CAM_SENSOR, "command descriptor pos is invalid");
 		rc = -EINVAL;
@@ -2888,7 +2888,7 @@ int cam_sensor_no_crm_add_req_ul(
 		return -EINVAL;
 	}
 
-	offset   = (uint32_t *)&packet->payload;
+	offset   = (uint32_t *)&packet->payload_flex;
 	offset  += packet->cmd_buf_offset / 4;
 	cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 
