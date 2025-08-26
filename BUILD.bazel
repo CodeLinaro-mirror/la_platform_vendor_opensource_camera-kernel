@@ -115,6 +115,7 @@ driver_includes = [
     "drivers/cam_utils/cam_worker",
     "drivers/cam_utils/cam_worker/cam_workq",
     "drivers/cam_utils/cam_worker/cam_tasklet",
+    "drivers/cam_utils/cam_worker/cam_kthread",
     "drivers/cam_utils/cam_worker/include",
     "drivers/cam_vmrm",
     "drivers/cam_vmrm/qrtr",

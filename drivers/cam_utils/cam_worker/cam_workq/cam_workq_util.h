@@ -1,11 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
-#ifndef _CAM_WORKQ_H_
-#define _CAM_WORKQ_H_
+#ifndef _CAM_WORKQ_UTIL_H_
+#define _CAM_WORKQ_UTIL_H_
 
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -72,22 +71,21 @@ struct cam_workq_task {
 };
 
 /** struct cam_core_workq
- * @work        : work token used by workqueue
- * @job         : workqueue internal job struct
- * @lock_bh     : lock for task structs
- * @in_irq      : set true if workque can be used in irq context
- * @flush       : used to track if flush has been called on workqueue
- * @work_q_name : name of the workq
+ * @work              : work token used by workqueue
+ * @job               : workqueue internal job struct
+ * @lock_bh           : lock for task structs
+ * @in_irq            : set true if workque can be used in irq context
+ * @flush             : used to track if flush has been called on workqueue
+ * @work_q_name       : name of the workq
  * @workq_scheduled_ts: enqueue time of workq
  * task -
- * @lock        : Current task's lock handle
- * @pending_cnt : # of tasks left in queue
- * @free_cnt    : # of free/available tasks
- * @process_head:
- * @empty_head  : list  head of available taska which can be used
- *                or acquired in order to enqueue a task to workq
- * @pool        : pool of tasks used for handling events in workq context
- * @num_task    : size of tasks pool
+ * @pending_cnt       : Number of tasks left in queue
+ * @free_cnt          : Number of free/available tasks
+ * @process_head      : List of tasks enqueued to be executed
+ * @empty_head        : list  head of available taska which can be used
+ *                      or acquired in order to enqueue a task to workq
+ * @pool              : pool of tasks used for handling events in workq context
+ * @num_task          : size of tasks pool
  */
 struct cam_core_workq {
 	struct work_struct         work;
@@ -100,7 +98,6 @@ struct cam_core_workq {
 
 	/* tasks */
 	struct {
-		struct mutex           lock;
 		atomic_t               pending_cnt;
 		atomic_t               free_cnt;
 

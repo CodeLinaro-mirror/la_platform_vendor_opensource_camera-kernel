@@ -68,7 +68,6 @@ struct cam_worker_wrapper_taskdata_args {
  * @flag:               Bitwise OR of Flags for worker behavior.
  * @priv_data:          Priv data of hw mgr
  * @index:              Index of hw mgr
- *
  * @worker_ctx_priv:    Wrapper worker ctx
  */
 struct cam_worker_wrapper_init_args {
@@ -226,6 +225,22 @@ void cam_worker_wrapper_dump_info_cb(
 	void                                *worker_ctx_priv,
 	struct cam_worker_wrapper_mini_dump *worker_dump_info);
 
+/**
+ * cam_worker_wrapper_prop_update_init()
+ *
+ * @brief:               Create debugfs and corresponding worker for thread property update
+ * @return:              0-Success
+ *                       Negative-Failure
+ */
+int cam_worker_wrapper_prop_update_init(void);
+
+/**
+ * cam_worker_wrapper_prop_update_deinit()
+ *
+ * @brief:               Remove debugfs and corresponding worker for thread property update
+ * @return:              Void
+ */
+void cam_worker_wrapper_prop_update_deinit(void);
 
 extern struct cam_worker_irq_bh_api worker_bh_api;
 

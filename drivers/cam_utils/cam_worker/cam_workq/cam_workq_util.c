@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
-#include "cam_workq.h"
+#include "cam_workq_util.h"
 #include "cam_debug_util.h"
 #include "cam_common_util.h"
 #include "cam_mem_mgr_api.h"

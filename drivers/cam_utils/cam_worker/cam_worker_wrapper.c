@@ -10,13 +10,19 @@
 #include "cam_common_util.h"
 #include "cam_mem_mgr_api.h"
 
-#ifdef CONFIG_RT_MAP_WORKER_WORKQ
-#define CONFIG_RT_MAP_WORKER_TYPE WORKER_TYPE_WORKQ
-#else
-#define CONFIG_RT_MAP_WORKER_TYPE WORKER_TYPE_TASKLET
-#endif
+#define CONFIG_RT_MAP_WORKER_TYPE                                           \
+	(IS_ENABLED(CONFIG_RT_MAP_WORKER_WORKQ) ? WORKER_TYPE_WORKQ :       \
+	IS_ENABLED(CONFIG_RT_MAP_WORKER_KTHREAD) ? WORKER_TYPE_KTHREAD :    \
+						WORKER_TYPE_TASKLET)
 
-#define CONFIG_NRT_MAP_WORKER_TYPE WORKER_TYPE_WORKQ
+#define CONFIG_NRT_MAP_WORKER_TYPE                                          \
+	(IS_ENABLED(CONFIG_NRT_MAP_WORKER_KTHREAD) ? WORKER_TYPE_KTHREAD :  \
+						WORKER_TYPE_WORKQ)
+
+#define IS_KTHREAD_IN_USE                                                   \
+	(IS_ENABLED(CONFIG_NRT_MAP_WORKER_KTHREAD) ? true :                 \
+	IS_ENABLED(CONFIG_RT_MAP_WORKER_KTHREAD) ? true :                   \
+						false)
 
 static int cam_worker_wrapper_create(
 	struct cam_worker_wrapper_create_args *init_args,
@@ -59,6 +65,16 @@ static int cam_worker_wrapper_create(
 
 		if (rc < 0)
 			CAM_ERR(CAM_WORKER, "Tasklet Init failed");
+
+		break;
+	case WORKER_TYPE_KTHREAD:
+		init_args->worker_ctx->worker_type = worker_type;
+		rc = cam_kthread_create(init_args->kthread_create_para.name,
+			init_args->kthread_create_para.num_tasks,
+			&init_args->worker_ctx->u.kthread,
+			init_args->kthread_create_para.in_irq);
+		if (rc)
+			CAM_ERR(CAM_WORKER, "Kthread creation failed");
 
 		break;
 	default:
@@ -123,6 +139,13 @@ int cam_worker_wrapper_init(
 			worker_wrapper_init_para->index;
 		worker_create_args.tasklet_create_para.priv_data =
 			worker_wrapper_init_para->priv_data;
+	} else if (worker_type == WORKER_TYPE_KTHREAD) {
+		/* Prepare parameters for worker wrapper type is KTHREAD*/
+		worker_create_args.kthread_create_para.name = worker_wrapper_init_para->name;
+		worker_create_args.kthread_create_para.num_tasks =
+			worker_wrapper_init_para->num_tasks;
+		worker_create_args.kthread_create_para.in_irq =
+			(enum cam_kthread_context) worker_wrapper_init_para->in_irq;
 	}
 
 	rc = cam_worker_wrapper_create(&worker_create_args, worker_type);
@@ -148,6 +171,9 @@ static void cam_worker_wrapper_destroy(
 		break;
 	case WORKER_TYPE_TASKLET:
 		cam_tasklet_deinit(&worker_ctx->u.tasklet);
+		break;
+	case WORKER_TYPE_KTHREAD:
+		cam_kthread_destroy(&worker_ctx->u.kthread);
 		break;
 	default:
 		CAM_ERR(CAM_WORKER, "Invalid worker type: %d when worker destroy",
@@ -206,6 +232,15 @@ int cam_worker_wrapper_get(
 			rc = -EINVAL;
 
 		break;
+	case WORKER_TYPE_KTHREAD:
+		taskdata_args->task_priority = WORKER_TASK_PRIORITY_0;
+		taskdata_args->task_data = (void *)
+			cam_kthread_get_task(worker_get_args->u.kthread);
+
+		if (!taskdata_args->task_data)
+			rc = -EINVAL;
+
+		break;
 	default:
 		CAM_ERR(CAM_WORKER, "Invalid worker type: %d when get worker",
 			worker_get_args->worker_type);
@@ -246,6 +281,9 @@ void cam_worker_wrapper_put(
 			cam_tasklet_put_cmd(worker_ctx_put->u.tasklet,
 				&taskdata_args->task_data);
 		break;
+	case WORKER_TYPE_KTHREAD:
+		CAM_DBG(CAM_WORKER, "NULL put func for kthread type worker");
+		break;
 	default:
 		CAM_ERR(CAM_WORKER, "Invalid worker type: %d when put worker",
 			worker_ctx_put->worker_type);
@@ -261,8 +299,9 @@ int cam_worker_wrapper_enqueue(
 	CAM_IRQ_HANDLER_BOTTOM_HALF  bottom_half_handler)
 {
 	struct cam_worker_wrapper_taskdata_args *taskdata_temp_args = taskdata;
-	struct cam_worker_wrapper_ctx  *temp_worker = worker_ctx_priv;
-	struct cam_workq_task *workq_task = NULL;
+	struct cam_worker_wrapper_ctx           *temp_worker = worker_ctx_priv;
+	struct cam_workq_task                   *workq_task;
+	struct cam_kthread_task                 *kthread_task;
 	int rc = 0;
 
 	switch (temp_worker->worker_type) {
@@ -283,6 +322,17 @@ int cam_worker_wrapper_enqueue(
 			handler_priv,
 			evt_payload_priv,
 			bottom_half_handler);
+		break;
+	case WORKER_TYPE_KTHREAD:
+		kthread_task = (struct cam_kthread_task *)taskdata_temp_args->task_data;
+		kthread_task->process_cb = bottom_half_handler;
+		kthread_task->payload = evt_payload_priv;
+		rc = cam_kthread_enqueue_task(
+			kthread_task,
+			handler_priv,
+			taskdata_temp_args->task_priority);
+		if (rc)
+			CAM_ERR(CAM_WORKER, "worker enqueue for kthread failed");
 		break;
 	default:
 		CAM_ERR(CAM_WORKER, "Invalid worker type: %d when enqueue worker task",
@@ -310,6 +360,10 @@ int cam_worker_wrapper_start(void *worker_ctx_priv)
 		break;
 	case WORKER_TYPE_TASKLET:
 		rc = cam_tasklet_start(worker_ctx->u.tasklet);
+		break;
+	case WORKER_TYPE_KTHREAD:
+		CAM_DBG(CAM_WORKER, "Current bottom half does not support start, worker type: %d",
+			worker_ctx->worker_type);
 		break;
 	default:
 		CAM_ERR(CAM_WORKER, "Invalid Worker Type: %d during start",
@@ -339,6 +393,10 @@ void cam_worker_wrapper_stop(void *worker_ctx_priv)
 	case WORKER_TYPE_TASKLET:
 		cam_tasklet_stop(worker_ctx->u.tasklet);
 		break;
+	case WORKER_TYPE_KTHREAD:
+		CAM_DBG(CAM_WORKER, "Current bottom half does not support stop, worker type: %d",
+			worker_ctx->worker_type);
+		break;
 	default:
 		CAM_ERR(CAM_WORKER, "Invalid Worker Type: %d when stop",
 			worker_ctx->worker_type);
@@ -365,6 +423,9 @@ void cam_worker_wrapper_flush(void *worker_ctx_priv)
 		CAM_DBG(CAM_WORKER, "Current bottom half does not support flush, worker type: %d",
 			worker_ctx->worker_type);
 		break;
+	case WORKER_TYPE_KTHREAD:
+		cam_kthread_flush(worker_ctx->u.kthread);
+		break;
 	default:
 		CAM_ERR(CAM_WORKER, "Invalid worker type: %d when worker flush",
 			worker_ctx->worker_type);
@@ -380,6 +441,7 @@ void *cam_worker_wrapper_get_task_payload(
 	struct cam_worker_wrapper_taskdata_args *taskdata_args = taskdata;
 	void                                    *payload = NULL;
 	struct cam_workq_task                   *workq_task;
+	struct cam_kthread_task                 *kthread_task;
 
 	if (!worker_ctx || !taskdata_args) {
 		CAM_ERR(CAM_WORKER, "NULL taskdata or worker_ctx for get payload");
@@ -394,6 +456,10 @@ void *cam_worker_wrapper_get_task_payload(
 	case WORKER_TYPE_TASKLET:
 		CAM_DBG(CAM_WORKER, "No task paylaod for current worker: %d",
 			worker_ctx->worker_type);
+		break;
+	case WORKER_TYPE_KTHREAD:
+		kthread_task = (struct cam_kthread_task *)taskdata_args->task_data;
+		payload = kthread_task->payload;
 		break;
 	default:
 		CAM_ERR(CAM_WORKER, "Invalid Worker Type: %d when get payload",
@@ -425,6 +491,9 @@ int cam_worker_wrapper_payload_bind(
 		CAM_ERR(CAM_WORKER, "Invalid payload bind, worker type: %d",
 			worker_ctx->worker_type);
 		rc = -EINVAL;
+		break;
+	case WORKER_TYPE_KTHREAD:
+		worker_ctx->u.kthread->task.pool[work_data_idx].payload = work_data;
 		break;
 	default:
 		CAM_ERR(CAM_WORKER, "Invalid Worker Type: %d when payload bind",
@@ -466,11 +535,48 @@ void cam_worker_wrapper_dump_info_cb(
 	case WORKER_TYPE_TASKLET:
 		CAM_DBG(CAM_WORKER, "No support for tasklet info dump");
 		break;
+	case WORKER_TYPE_KTHREAD:
+		worker_dump_info->worker_scheduled_ts =
+			worker_ctx->u.kthread->worker_scheduled_ts;
+		worker_dump_info->task.pending_cnt =
+			atomic_read(&worker_ctx->u.kthread->task.pending_cnt);
+		worker_dump_info->task.free_cnt =
+			atomic_read(&worker_ctx->u.kthread->task.free_cnt);
+		worker_dump_info->task.num_task = worker_ctx->u.kthread->task.num_task;
+		break;
 	default:
 		CAM_ERR(CAM_WORKER, "Invalid Worker Type: %d when payload bind",
 			worker_ctx->worker_type);
 		break;
 	}
+}
+
+int cam_worker_wrapper_prop_update_init(void)
+{
+	int rc;
+
+	/* Only when kthread is in use, thread property can be tuned */
+	if (!IS_KTHREAD_IN_USE) {
+		CAM_INFO(CAM_WORKER, "Kthread is not in use, not available to tune property");
+		return -EOPNOTSUPP;
+	}
+
+	rc = cam_kthread_property_update_init();
+	if (rc)
+		CAM_ERR(CAM_WORKER, "Failed at setting up kthread property update, rc: %d", rc);
+
+	return rc;
+}
+
+void cam_worker_wrapper_prop_update_deinit(void)
+{
+	/* Only when kthread is in use, thread property can be tuned */
+	if (!IS_KTHREAD_IN_USE) {
+		CAM_INFO(CAM_WORKER, "Kthread is not in use, not available to tune property");
+		return;
+	}
+
+	cam_kthread_property_update_deinit();
 }
 
 struct cam_worker_irq_bh_api worker_bh_api = {

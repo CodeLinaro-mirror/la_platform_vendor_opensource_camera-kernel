@@ -147,7 +147,8 @@ camera-y := \
 	drivers/cam_utils/cam_common_util.o \
 	drivers/cam_utils/cam_compat.o \
 	drivers/cam_utils/cam_worker/cam_tasklet/cam_tasklet_util.o \
-	drivers/cam_utils/cam_worker/cam_workq/cam_workq.o \
+	drivers/cam_utils/cam_worker/cam_workq/cam_workq_util.o \
+	drivers/cam_utils/cam_worker/cam_kthread/cam_kthread_util.o \
 	drivers/cam_utils/cam_worker/cam_worker_wrapper.o \
 	drivers/cam_utils/irq_controller/cam_irq_controller.o \
 	drivers/cam_core/cam_context.o \
