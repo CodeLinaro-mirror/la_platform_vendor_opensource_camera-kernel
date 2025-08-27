@@ -3628,7 +3628,7 @@ static int cam_sync_open(struct file *filep)
 				"Error: Unable to create syncmanager reached max!");
 			return -EALREADY;
 		}
-		CAM_INFO(CAM_SYNC, "Sync manager Index location available at idx: %ld", idx);
+		CAM_DBG(CAM_SYNC, "Sync manager Index location available at idx: %ld", idx);
 		bit = test_and_set_bit(idx, sync_dev->bitmap_syncmanager);
 	} while (bit);
 
