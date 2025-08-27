@@ -372,7 +372,7 @@ int hfi_cmd_ubwc_config(uint32_t *ubwc_cfg)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	prop_ref_data = &dbg_prop->prop_data[0];
+	prop_ref_data = &dbg_prop->prop_data_flex[0];
 	prop_ref_data[0] = HFI_PROP_SYS_UBWC_CFG;
 	prop_ref_data[1] = ubwc_cfg[0];
 	prop_ref_data[2] = ubwc_cfg[1];
@@ -407,7 +407,7 @@ int hfi_cmd_ubwc_config_ext(uint32_t *ubwc_ipe_cfg,
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	prop_ref_data = &dbg_prop->prop_data[0];
+	prop_ref_data = &dbg_prop->prop_data_flex[0];
 	prop_ref_data[0] = HFI_PROPERTY_SYS_UBWC_CONFIG_EX;
 	prop_ref_data[1] = ubwc_bps_cfg[0];
 	prop_ref_data[2] = ubwc_bps_cfg[1];
@@ -439,7 +439,7 @@ int hfi_enable_ipe_bps_pc(bool enable, uint32_t core_info)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	prop_ref_data = &dbg_prop->prop_data[0];
+	prop_ref_data = &dbg_prop->prop_data_flex[0];
 	prop_ref_data[0] = HFI_PROP_SYS_IPEBPS_PC;
 	prop_ref_data[1] = enable;
 	prop_ref_data[2] = core_info;
@@ -483,7 +483,7 @@ int hfi_set_debug_level(u64 icp_dbg_type, uint32_t lvl)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	prop_ref_data = &dbg_prop->prop_data[0];
+	prop_ref_data = &dbg_prop->prop_data_flex[0];
 	prop_ref_data[0] = HFI_PROP_SYS_DEBUG_CFG;
 	prop_ref_data[1] = lvl;
 	prop_ref_data[2] = icp_dbg_type;
@@ -513,7 +513,7 @@ int hfi_set_fw_dump_levels(uint32_t hang_dump_lvl,
 	fw_dump_level_switch_prop->size = size;
 	fw_dump_level_switch_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	fw_dump_level_switch_prop->num_prop = 1;
-	prop_ref_data = &fw_dump_level_switch_prop->prop_data[0];
+	prop_ref_data = &fw_dump_level_switch_prop->prop_data_flex[0];
 	prop_ref_data[0] = HFI_PROP_SYS_FW_DUMP_CFG;
 	prop_ref_data[1] = hang_dump_lvl;
 
@@ -560,7 +560,7 @@ int hfi_send_freq_info(int32_t freq)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	prof_ref_data = &dbg_prop->prop_data[0];
+	prof_ref_data = &dbg_prop->prop_data_flex[0];
 	prof_ref_data[0] = HFI_PROPERTY_SYS_ICP_HW_FREQUENCY;
 	prof_ref_data[1] = freq;
 
@@ -610,7 +610,7 @@ void hfi_send_system_cmd(uint32_t type, uint64_t data, uint32_t size)
 			prop.size = sizeof(struct hfi_cmd_prop);
 			prop.pkt_type = type;
 			prop.num_prop = 1;
-			prop.prop_data[0] = HFI_PROP_SYS_DEBUG_CFG;
+			prop.prop_data_flex[0] = HFI_PROP_SYS_DEBUG_CFG;
 			hfi_write_cmd(&prop);
 		}
 	}
