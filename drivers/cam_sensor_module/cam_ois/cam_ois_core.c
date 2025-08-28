@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -519,19 +519,18 @@ static int cam_ois_pkt_parse(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 		CAM_ERR(CAM_OIS,
 			"Inval cam_packet strut size: %zu, len_of_buff: %zu",
 			 sizeof(struct cam_packet), pkt_len);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto put_ref;
 	}
 
 	remain_len -= (size_t)dev_config.offset;
 	csl_packet = (struct cam_packet *)
 		(generic_pkt_addr + (uint32_t)dev_config.offset);
-
-	if (cam_packet_util_validate_packet(csl_packet,
-		remain_len)) {
-		CAM_ERR(CAM_OIS, "Invalid packet params");
-		return -EINVAL;
+	rc = cam_packet_util_copy_pkt_to_kmd(csl_packet, &csl_packet, remain_len);
+	if (rc) {
+		CAM_ERR(CAM_OIS, "Copying packet to KMD failed");
+		goto put_ref;
 	}
-
 
 	switch (csl_packet->header.op_code & 0xFFFFFF) {
 	case CAM_OIS_PACKET_OPCODE_INIT:
@@ -853,6 +852,8 @@ static int cam_ois_pkt_parse(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 		return rc;
 pwr_dwn:
 	cam_ois_power_down(o_ctrl);
+put_ref:
+	cam_mem_put_cpu_buf(dev_config.packet_handle);
 	return rc;
 }
 
