@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef _CAMHDMIBDGCORE_H_
 #define _CAMHDMIBDGCORE_H_
@@ -8,10 +8,13 @@
 #include <linux/firmware.h>
 #include "cam_sensor_dev.h"
 
-#define HDMI_BDG_SENSOR_ID 0x1901
+#define HDMI_GXC_SENSOR_ID 0x1901
+#define HDMI_UXC_SENSOR_ID 0x1704
 #define HDMI_BDG_HDMI_CONNECTED    0x01
 #define HDMI_BDG_HDMI_DISCONNECTED 0x00
-#define HDMI_SENSOR_NAME "lt6911gxc"
+#define HDMI_GXC_SENSOR_NAME "lt6911gxc"
+#define HDMI_UXC_SENSOR_NAME "lt6911uxc"
+#define HDMI_UXC_SENSOR_SLAVE_ADDR 0x56
 
 enum lt6911_fw_status {
 	UPDATE_SUCCESS = 0,
