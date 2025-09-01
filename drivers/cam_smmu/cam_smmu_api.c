@@ -2575,8 +2575,7 @@ int cam_smmu_reserve_buf_region(enum cam_smmu_region_id region,
 		goto err_put;
 	}
 
-	buf_info->table = dma_buf_map_attachment(buf_info->attach,
-		DMA_BIDIRECTIONAL);
+	buf_info->table = cam_compat_dmabuf_map_attach(buf_info->attach, DMA_BIDIRECTIONAL);
 	if (IS_ERR_OR_NULL(buf_info->table)) {
 		rc = PTR_ERR(buf_info->table);
 		CAM_ERR(CAM_SMMU, "Error: dma buf map attachment failed");
@@ -2608,7 +2607,7 @@ int cam_smmu_reserve_buf_region(enum cam_smmu_region_id region,
 	return rc;
 
 err_unmap_sg:
-	dma_buf_unmap_attachment(buf_info->attach,
+	cam_compat_dmabuf_unmap_attach(buf_info->attach,
 		buf_info->table,
 		DMA_BIDIRECTIONAL);
 err_detach:
@@ -2716,7 +2715,7 @@ int cam_smmu_release_buf_region(enum cam_smmu_region_id region,
 			region_info->iova_len);
 	}
 
-	dma_buf_unmap_attachment(buf_info->attach,
+	cam_compat_dmabuf_unmap_attach(buf_info->attach,
 		buf_info->table, DMA_BIDIRECTIONAL);
 	dma_buf_detach(buf_info->buf, buf_info->attach);
 	*is_buf_allocated = false;
@@ -2765,7 +2764,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 	}
 
 	if (region_id == CAM_SMMU_REGION_SHARED) {
-		table = dma_buf_map_attachment(attach, dma_dir);
+		table = cam_compat_dmabuf_map_attach(attach, dma_dir);
 		if (IS_ERR_OR_NULL(table)) {
 			rc = PTR_ERR(table);
 			CAM_ERR(CAM_SMMU, "Error: dma map attachment failed");
@@ -2816,7 +2815,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 		if (!dis_delayed_unmap)
 			attach->dma_map_attrs |= DMA_ATTR_DELAYED_UNMAP;
 
-		table = dma_buf_map_attachment(attach, dma_dir);
+		table = cam_compat_dmabuf_map_attach(attach, dma_dir);
 		if (IS_ERR_OR_NULL(table)) {
 			rc = PTR_ERR(table);
 			CAM_ERR(CAM_SMMU,
@@ -2891,7 +2890,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 
 	/* Unmap the mapping in dma region as this is not used anyway */
 	if (region_id == CAM_SMMU_REGION_SHARED)
-		dma_buf_unmap_attachment(attach, table, dma_dir);
+		cam_compat_dmabuf_unmap_attach(attach, table, dma_dir);
 
 	return 0;
 
@@ -2904,7 +2903,7 @@ err_alloc:
 			*paddr_ptr, *len_ptr);
 	}
 err_unmap_sg:
-	dma_buf_unmap_attachment(attach, table, dma_dir);
+	cam_compat_dmabuf_unmap_attach(attach, table, dma_dir);
 err_detach:
 	dma_buf_detach(buf, attach);
 err_out:
@@ -3042,7 +3041,7 @@ static int cam_smmu_unmap_buf_and_remove_from_list(
 			mapping_info->attach->dma_map_attrs |=
 				DMA_ATTR_SKIP_CPU_SYNC;
 
-		dma_buf_unmap_attachment(mapping_info->attach,
+		cam_compat_dmabuf_unmap_attach(mapping_info->attach,
 			mapping_info->table, mapping_info->dir);
 		iommu_cb_set.cb_info[idx].io_mapping_size -= mapping_info->len;
 	}
@@ -3551,7 +3550,7 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 		attach->dma_map_attrs =
 			cam_update_dma_map_attributes(attach->dma_map_attrs);
 
-	table = dma_buf_map_attachment(attach, dma_dir);
+	table = cam_compat_dmabuf_map_attach(attach, dma_dir);
 	if (IS_ERR_OR_NULL(table)) {
 		CAM_ERR(CAM_SMMU, "Error: dma buf map attachment failed");
 		rc = PTR_ERR(table);
@@ -3599,7 +3598,7 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 	return rc;
 
 err_unmap_sg:
-	dma_buf_unmap_attachment(attach, table, dma_dir);
+	cam_compat_dmabuf_unmap_attach(attach, table, dma_dir);
 err_detach:
 	dma_buf_detach(dmabuf, attach);
 err_out:
@@ -3694,7 +3693,7 @@ static int cam_smmu_secure_unmap_buf_and_remove_from_list(
 	mapping_info->attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
 
 	/* iommu buffer clean up */
-	dma_buf_unmap_attachment(mapping_info->attach,
+	cam_compat_dmabuf_unmap_attach(mapping_info->attach,
 		mapping_info->table, mapping_info->dir);
 	dma_buf_detach(mapping_info->buf, mapping_info->attach);
 	mapping_info->buf = NULL;
