@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -790,15 +791,15 @@ static int32_t cam_cci_data_queue(struct cci_device *cci_dev,
 					case CAMERA_SENSOR_I2C_TYPE_DWORD:
 						data[i++] = (i2c_cmd->reg_data &
 							0xFF000000) >> 24;
-						/* fallthrough */
+						fallthrough;
 					case CAMERA_SENSOR_I2C_TYPE_3B:
 						data[i++] = (i2c_cmd->reg_data &
 							0x00FF0000) >> 16;
-						/* fallthrough */
+						fallthrough;
 					case CAMERA_SENSOR_I2C_TYPE_WORD:
 						data[i++] = (i2c_cmd->reg_data &
 							0x0000FF00) >> 8;
-						/* fallthrough */
+						fallthrough;
 					case CAMERA_SENSOR_I2C_TYPE_BYTE:
 						data[i++] = i2c_cmd->reg_data &
 							0x000000FF;
