@@ -1030,8 +1030,15 @@ struct cam_flush_dev_cmd {
 struct cam_ubwc_config {
 	__u32   api_version;
 	__u32   num_ports;
-	struct cam_ubwc_plane_cfg_v1
-		   ubwc_plane_cfg[1][CAM_PACKET_MAX_PLANES - 1];
+	union {
+		struct cam_ubwc_plane_cfg_v1
+			ubwc_plane_cfg[1][CAM_PACKET_MAX_PLANES - 1];
+		struct {
+			struct { } __empty_ubwc_plane_cfg_array_flex;
+			struct cam_ubwc_plane_cfg_v1
+				ubwc_plane_cfg_array_flex[][CAM_PACKET_MAX_PLANES - 1];
+		};
+	};
 };
 
 /**
@@ -1048,8 +1055,15 @@ struct cam_ubwc_config {
 struct cam_ubwc_config_v2 {
 	__u32   api_version;
 	__u32   num_ports;
-	struct cam_ubwc_plane_cfg_v2
-		ubwc_plane_cfg[1][CAM_PACKET_MAX_PLANES - 1];
+	union {
+		struct cam_ubwc_plane_cfg_v2
+			ubwc_plane_cfg[1][CAM_PACKET_MAX_PLANES - 1];
+		struct {
+			struct { } __empty_ubwc_plane_cfg_array_flex;
+			struct cam_ubwc_plane_cfg_v2
+				ubwc_plane_cfg_array_flex[][CAM_PACKET_MAX_PLANES - 1];
+		};
+	};
 };
 
 /**
