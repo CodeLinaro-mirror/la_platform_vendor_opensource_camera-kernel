@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -2136,8 +2136,13 @@ int cam_hw_cdm_probe(struct platform_device *pdev)
 
 		init_completion(&cdm_core->bl_fifo[i].bl_complete);
 
-		len = strlcpy(work_q_name, cdm_core->name,
-				sizeof(cdm_core->name));
+		len = strscpy(work_q_name, cdm_core->name,
+				sizeof(work_q_name));
+				if (len < 0 || len >= sizeof(work_q_name)) {
+					CAM_ERR(CAM_CDM, "CDM name too long for workqueue naming");
+					rc = -EINVAL;
+					goto failed_workq_create;
+					}
 		snprintf(work_q_name + len, sizeof(work_q_name) - len, "%d", i);
 		cdm_core->bl_fifo[i].work_queue = alloc_workqueue(work_q_name,
 				WQ_UNBOUND | WQ_MEM_RECLAIM | WQ_SYSFS,
@@ -2162,7 +2167,7 @@ int cam_hw_cdm_probe(struct platform_device *pdev)
 	cpas_parms.cell_index = cdm_hw->soc_info.index;
 	cpas_parms.dev = &pdev->dev;
 	cpas_parms.userdata = cdm_hw_intf;
-	strlcpy(cpas_parms.identifier, cdm_hw->soc_info.label_name,
+	strscpy(cpas_parms.identifier, cdm_hw->soc_info.label_name,
 		CAM_HW_IDENTIFIER_LENGTH);
 	rc = cam_cpas_register_client(&cpas_parms);
 	if (rc) {
