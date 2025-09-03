@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_eeprom_dev.h"
@@ -136,7 +137,7 @@ static int cam_eeprom_init_subdev(struct cam_eeprom_ctrl_t *e_ctrl)
 
 	e_ctrl->v4l2_dev_str.internal_ops = &cam_eeprom_internal_ops;
 	e_ctrl->v4l2_dev_str.ops = &cam_eeprom_subdev_ops;
-	strlcpy(e_ctrl->device_name, CAM_EEPROM_NAME,
+	strscpy(e_ctrl->device_name, CAM_EEPROM_NAME,
 		sizeof(e_ctrl->device_name));
 	e_ctrl->v4l2_dev_str.name = e_ctrl->device_name;
 	e_ctrl->v4l2_dev_str.sd_flags =
