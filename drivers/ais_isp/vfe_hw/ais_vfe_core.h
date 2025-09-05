@@ -133,6 +133,8 @@ struct ais_vfe_rdi_output {
 	struct list_head                 buffer_hw_q;
 	struct list_head                 free_buffer_list;
 
+	uint8_t                          flush;
+
 	uint64_t                         frame_cnt;
 
 	uint8_t                          num_sof_info_q;

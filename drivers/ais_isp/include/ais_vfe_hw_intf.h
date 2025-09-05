@@ -27,7 +27,8 @@
 #define VFE_BUS_BASE_IDX              1
 
 enum ais_vfe_hw_cmd_type {
-	AIS_VFE_CMD_ENQ_BUFFER = 0
+	AIS_VFE_CMD_ENQ_BUFFER  = 0,
+	AIS_VFE_CMD_FLUSH_HW_Q  = 1
 };
 
 enum ais_vfe_hw_irq_status {

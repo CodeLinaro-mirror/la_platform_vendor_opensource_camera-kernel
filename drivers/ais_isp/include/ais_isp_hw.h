@@ -424,6 +424,17 @@ struct ais_ife_enqueue_buffer_args {
 };
 
 /**
+ * struct ais_ife_rdi_flush_args
+ *
+ * @brief Flush RDI path
+ *
+ * @path : output path
+ */
+struct ais_ife_rdi_flush_hw_q_args {
+	enum ais_ife_output_path_id path;
+};
+
+/**
  * struct ais_ife_rdi_timestamps
  *
  * @brief :  timestamps for RDI path
@@ -515,7 +526,8 @@ enum ais_ife_msg_type {
 	AIS_IFE_MSG_OUTPUT_ERROR,
 	AIS_IFE_MSG_CSID_WARNING,
 	AIS_IFE_MSG_CSID_RUP_DONE,
-	AIS_IFE_MSG_CSID_ERROR
+	AIS_IFE_MSG_CSID_ERROR,
+	AIS_IFE_MSG_FLUSH_DONE
 };
 
 struct ais_ife_event_common_data {

@@ -448,6 +448,22 @@ static int ais_ife_driver_cmd(struct ais_ife_dev *p_ife_dev, void *arg)
 		}
 	}
 		break;
+	case AIS_IFE_FLUSH_HW_Q: {
+		struct ais_ife_rdi_flush_hw_q_args flush;
+		if (cmd->size != sizeof(flush)) {
+			CAM_ERR(CAM_ISP, "Invalid cmd size");
+			rc = -EINVAL;
+		} else if (copy_from_user(&flush,
+				u64_to_user_ptr(cmd->handle),
+				cmd->size)) {
+			rc = -EFAULT;
+		} else {
+			rc = vfe_drv->hw_ops.process_cmd(vfe_drv->hw_priv,
+					AIS_VFE_CMD_FLUSH_HW_Q, &flush,
+					cmd->size);
+		}
+	}
+		break;
 	case AIS_IFE_DIAG_INFO: {
 		struct ais_ife_diag_info ife_diag;
 
