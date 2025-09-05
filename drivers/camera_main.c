@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
+
 #include <linux/module.h>
 #include <linux/build_bug.h>
 
@@ -25,7 +26,9 @@
 #include "cam_eeprom_dev.h"
 #include "cam_ois_dev.h"
 #include "cam_hdmi_bdg_core.h"
+#include "cam_hdmi_bdg_lt6911uxe_core.h"
 #include "cam_dp_bdg_core.h"
+#include "cam_dp_bdg_lt7911d_core.h"
 #include "cam_ir_led_dev.h"
 #include "cam_lens_driver_dev.h"
 
@@ -114,7 +117,9 @@ static const struct camera_submodule_component camera_sensor[] = {
 	{&cam_eeprom_driver_init, &cam_eeprom_driver_exit},
 	{&cam_ois_driver_init, &cam_ois_driver_exit},
 	{&hdmi_bdg_irq_handler_init, &hdmi_bdg_irq_handler_exit},
+	{&hdmi_bdg_lt6911uxe_irq_handler_init, &hdmi_bdg_lt6911uxe_irq_handler_exit},
 	{&dp_bdg_irq_handler_init, &dp_bdg_irq_handler_exit},
+	{&dp_bdg_lt7911d_irq_handler_init, &dp_bdg_lt7911d_irq_handler_exit},
 #if IS_REACHABLE(CONFIG_LEDS_QPNP_FLASH_V2) || \
 	IS_REACHABLE(CONFIG_LEDS_QTI_FLASH)
 	{&cam_flash_init_module, &cam_flash_exit_module},
