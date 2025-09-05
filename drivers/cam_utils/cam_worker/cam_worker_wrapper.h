@@ -99,9 +99,11 @@ struct cam_worker_wrapper_ctx {
  */
 struct cam_worker_wrapper_create_args {
 	struct cam_worker_wrapper_ctx *worker_ctx;
-	struct cam_workq_create_args   workq_create_para;
-	struct cam_tasklet_create_args tasklet_create_para;
-	struct cam_kthread_create_args kthread_create_para;
+	union {
+		struct cam_workq_create_args   workq_create_para;
+		struct cam_tasklet_create_args tasklet_create_para;
+		struct cam_kthread_create_args kthread_create_para;
+	} u;
 };
 
 #endif

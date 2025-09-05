@@ -718,7 +718,6 @@ static int cam_vfe_bus_start_vfe_bus_rd(
 		cam_vfe_bus_rd_handle_irq_top_half,
 		cam_vfe_bus_rd_handle_irq_bottom_half,
 		vfe_bus_rd->worker_ctx,
-		&worker_bh_api,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (rsrc_data->irq_handle < 1) {
@@ -1137,7 +1136,6 @@ static int cam_vfe_bus_init_hw(void *hw_priv,
 		top_irq_reg_mask,
 		bus_priv,
 		cam_vfe_bus_rd_ver1_handle_irq,
-		NULL,
 		NULL,
 		NULL,
 		CAM_IRQ_EVT_GROUP_0);

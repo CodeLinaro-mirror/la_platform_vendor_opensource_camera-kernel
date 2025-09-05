@@ -1560,7 +1560,6 @@ static int cam_sfe_bus_start_sfe_out(
 		sfe_out->top_half_handler,
 		sfe_out->bottom_half_handler,
 		sfe_out->worker_ctx,
-		&worker_bh_api,
 		CAM_IRQ_EVT_GROUP_0);
 	if (sfe_out->irq_handle < 1) {
 		CAM_ERR(CAM_SFE, "Subscribe IRQ failed for sfe out_res: %d",
@@ -2384,7 +2383,6 @@ static int cam_sfe_bus_subscribe_error_irq(
 		cam_sfe_bus_wr_handle_bus_irq,
 		NULL,
 		NULL,
-		NULL,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (bus_priv->bus_irq_handle < 1) {
@@ -2407,7 +2405,6 @@ static int cam_sfe_bus_subscribe_error_irq(
 			cam_sfe_bus_wr_handle_err_irq_top_half,
 			cam_sfe_bus_wr_handle_err_irq_bottom_half,
 			bus_priv->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (bus_priv->error_irq_handle < 1) {

@@ -271,7 +271,7 @@ int cam_vfe_reset(void *hw_priv, void *reset_core_args, uint32_t arg_size)
 		top_reset_irq_reg_mask,
 		vfe_hw,
 		cam_vfe_reset_irq_top_half,
-		NULL, NULL, NULL, CAM_IRQ_EVT_GROUP_0);
+		NULL, NULL, CAM_IRQ_EVT_GROUP_0);
 
 	if (irq_info->reset_irq_handle < 1) {
 		CAM_ERR(CAM_ISP, "subscribe irq controller failed");

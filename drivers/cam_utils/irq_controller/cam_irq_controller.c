@@ -33,7 +33,6 @@
  * @bottom_half_handler:    Bottom half Handler callback function
  * @bottom_half:            Pointer to bottom_half implementation on which to
  *                          enqueue the event for further handling
- * @irq_bh_api:             Function used to enqueue the bottom_half event
  * @list_node:              list_head struct used for overall handler List
  * @th_list_node:           list_head struct used for top half handler List
  * @index:                  Unique id of the event
@@ -46,7 +45,6 @@ struct cam_irq_evt_handler {
 	CAM_IRQ_HANDLER_TOP_HALF           top_half_handler;
 	CAM_IRQ_HANDLER_BOTTOM_HALF        bottom_half_handler;
 	void                              *bottom_half;
-	struct cam_worker_irq_bh_api       irq_bh_api;
 	struct list_head                   list_node;
 	struct list_head                   th_list_node;
 	int                                index;
@@ -558,7 +556,6 @@ int cam_irq_controller_subscribe_irq(void *irq_controller,
 	CAM_IRQ_HANDLER_TOP_HALF           top_half_handler,
 	CAM_IRQ_HANDLER_BOTTOM_HALF        bottom_half_handler,
 	void                              *bottom_half,
-	struct cam_worker_irq_bh_api      *irq_bh_api,
 	enum cam_irq_event_group           evt_grp)
 {
 	struct cam_irq_controller  *controller  = irq_controller;
@@ -579,25 +576,10 @@ int cam_irq_controller_subscribe_irq(void *irq_controller,
 		return -EINVAL;
 	}
 
-	if (bottom_half_handler &&
-		(!bottom_half || !irq_bh_api)) {
-		CAM_ERR(CAM_IRQ_CTRL,
-			"Invalid params: bh_handler=%pK bh=%pK bh_enq_f=%pK",
+	if (bottom_half_handler && !bottom_half) {
+		CAM_ERR(CAM_IRQ_CTRL, "Invalid params: bh_handler=%pK bh=%pK",
 			bottom_half_handler,
-			bottom_half,
-			irq_bh_api);
-		return -EINVAL;
-	}
-
-	if (irq_bh_api &&
-		(!irq_bh_api->bottom_half_enqueue_func ||
-		!irq_bh_api->get_bh_payload_func ||
-		!irq_bh_api->put_bh_payload_func)) {
-		CAM_ERR(CAM_IRQ_CTRL,
-			"Invalid: enqueue_func=%pK get_bh=%pK put_bh=%pK",
-			irq_bh_api->bottom_half_enqueue_func,
-			irq_bh_api->get_bh_payload_func,
-			irq_bh_api->put_bh_payload_func);
+			bottom_half);
 		return -EINVAL;
 	}
 
@@ -634,9 +616,6 @@ int cam_irq_controller_subscribe_irq(void *irq_controller,
 	evt_handler->bottom_half              = bottom_half;
 	evt_handler->index                    = controller->hdl_idx++;
 	evt_handler->group                    = evt_grp;
-
-	if (irq_bh_api)
-		evt_handler->irq_bh_api       = *irq_bh_api;
 
 	/* Avoid rollover to negative values */
 	if (controller->hdl_idx > 0x3FFFFFFF)
@@ -845,7 +824,6 @@ static void __cam_irq_controller_th_processing(
 	int                                      rc = -EINVAL;
 	int                                      i;
 	struct cam_worker_wrapper_taskdata_args  taskdata_args;
-	struct cam_worker_irq_bh_api            *irq_bh_api = NULL;
 
 	CAM_DBG(CAM_IRQ_CTRL, "Enter");
 
@@ -869,20 +847,6 @@ static void __cam_irq_controller_th_processing(
 				evt_handler->evt_bit_mask_arr[i];
 		}
 
-		irq_bh_api = &evt_handler->irq_bh_api;
-
-		if (evt_handler->bottom_half_handler) {
-			rc = irq_bh_api->get_bh_payload_func(evt_handler->bottom_half,
-				&taskdata_args);
-
-			if (rc) {
-				CAM_ERR(CAM_IRQ_CTRL,
-					"No payload, IRQ handling frozen for %s",
-					controller->name);
-				continue;
-			}
-		}
-
 		/*
 		 * irq_status_arr[0] is dummy argument passed. the entire
 		 * status array is passed in th_payload.
@@ -891,18 +855,21 @@ static void __cam_irq_controller_th_processing(
 			rc = evt_handler->top_half_handler(
 				controller->irq_status_arr[0],
 				(void *)th_payload);
-
-			if (rc) {
-				irq_bh_api->put_bh_payload_func(evt_handler->bottom_half,
-					&taskdata_args);
+			if (rc)
 				continue;
-			}
 		}
 
 		if (evt_handler->bottom_half_handler) {
-			CAM_DBG(CAM_IRQ_CTRL, "Enqueuing bottom half for %s",
-				controller->name);
-			irq_bh_api->bottom_half_enqueue_func(evt_handler->bottom_half,
+			rc = cam_worker_wrapper_get(evt_handler->bottom_half, &taskdata_args);
+			if (rc) {
+				CAM_ERR(CAM_IRQ_CTRL,
+					"No payload, IRQ handling frozen for %s",
+					controller->name);
+				continue;
+			}
+
+			CAM_DBG(CAM_IRQ_CTRL, "Enqueuing bottom half for %s", controller->name);
+			cam_worker_wrapper_enqueue(evt_handler->bottom_half,
 				&taskdata_args,
 				evt_handler->handler_priv,
 				th_payload->evt_payload_priv,
@@ -1325,7 +1292,7 @@ int cam_irq_controller_test_irq_line(void *irq_controller, const char *fmt, ...)
 
 	handle = cam_irq_controller_subscribe_irq(controller, CAM_IRQ_PRIORITY_0,
 		mask, test_priv, cam_irq_controller_test_irq_line_top_half,
-		NULL, NULL, NULL, CAM_IRQ_EVT_GROUP_0);
+		NULL, NULL, CAM_IRQ_EVT_GROUP_0);
 	if (handle < 0) {
 		CAM_ERR(CAM_IRQ_CTRL, "%s: failed to subscribe to test irq line",
 			controller->name);

@@ -2007,6 +2007,8 @@ int cam_fd_hw_mgr_deinit(struct device_node *of_node)
 	CAM_DBG(CAM_FD, "HW Mgr Deinit");
 
 	cam_worker_wrapper_deinit(g_fd_hw_mgr.worker_ctx);
+	CAM_MEM_FREE(g_fd_hw_mgr.work_data);
+	g_fd_hw_mgr.work_data = NULL;
 
 	cam_smmu_destroy_handle(g_fd_hw_mgr.device_iommu.non_secure);
 	g_fd_hw_mgr.device_iommu.non_secure = -1;
@@ -2179,6 +2181,11 @@ int cam_fd_hw_mgr_init(struct device_node *of_node,
 
 	g_fd_hw_mgr.work_data = CAM_MEM_ZALLOC_ARRAY(CAM_FD_WORKER_NUM_TASK,
 		sizeof(struct cam_fd_mgr_work_data), GFP_KERNEL);
+	if (!g_fd_hw_mgr.work_data) {
+		CAM_ERR(CAM_FD, "Failed at allocating memory for FD mgr work data");
+		rc = -ENOMEM;
+		goto worker_deinit;
+	}
 
 	for (i = 0; i < CAM_FD_WORKER_NUM_TASK; i++)
 		cam_worker_wrapper_payload_bind(
@@ -2217,6 +2224,8 @@ int cam_fd_hw_mgr_init(struct device_node *of_node,
 
 	return rc;
 
+worker_deinit:
+	cam_worker_wrapper_deinit(g_fd_hw_mgr.worker_ctx);
 detach_smmu:
 	cam_smmu_destroy_handle(g_fd_hw_mgr.device_iommu.non_secure);
 	g_fd_hw_mgr.device_iommu.non_secure = -1;

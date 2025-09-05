@@ -8432,7 +8432,7 @@ static int cam_ife_mgr_stop_hw_in_overflow(void *stop_hw_args)
 
 
 	/* Stop worker for context */
-	cam_worker_wrapper_stop(ctx->common.worker_ctx);
+	cam_worker_wrapper_flush(ctx->common.worker_ctx);
 	CAM_DBG(CAM_ISP, "Exit...ctx id:%u rc :%d", ctx->ctx_index, rc);
 
 	return rc;
@@ -8657,7 +8657,7 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res);
 	}
 
-	cam_worker_wrapper_stop(ctx->common.worker_ctx);
+	cam_worker_wrapper_flush(ctx->common.worker_ctx);
 
 	/* reset scratch buffer/mup expect INIT again for UMD triggered stop/flush */
 	if (!stop_isp->is_internal_stop) {
@@ -9320,7 +9320,7 @@ deinit_hw:
 	cam_ife_hw_mgr_deinit_hw(ctx);
 
 worker_stop:
-	cam_worker_wrapper_stop(ctx->common.worker_ctx);
+	cam_worker_wrapper_flush(ctx->common.worker_ctx);
 
 	return rc;
 }

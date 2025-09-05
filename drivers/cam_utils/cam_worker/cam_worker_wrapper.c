@@ -45,23 +45,23 @@ static int cam_worker_wrapper_create(
 	switch (worker_type) {
 	case WORKER_TYPE_WORKQ:
 		init_args->worker_ctx->worker_type = worker_type;
-		rc = cam_workq_create(init_args->workq_create_para.name,
-			init_args->workq_create_para.num_tasks,
-			init_args->workq_create_para.max_active,
+		rc = cam_workq_create(init_args->u.workq_create_para.name,
+			init_args->u.workq_create_para.num_tasks,
+			init_args->u.workq_create_para.max_active,
 			&init_args->worker_ctx->u.workq,
-			init_args->workq_create_para.in_irq,
-			init_args->workq_create_para.flag,
+			init_args->u.workq_create_para.in_irq,
+			init_args->u.workq_create_para.flag,
 			cam_workq_process);
 		if (rc < 0)
 			CAM_ERR(CAM_WORKER, "Workq Create failed, worker name: %s",
-				init_args->workq_create_para.name);
+				init_args->u.workq_create_para.name);
 
 		break;
 	case WORKER_TYPE_TASKLET:
 		init_args->worker_ctx->worker_type = worker_type;
 		rc = cam_tasklet_init(&init_args->worker_ctx->u.tasklet,
-			init_args->tasklet_create_para.priv_data,
-			init_args->tasklet_create_para.idx);
+			init_args->u.tasklet_create_para.priv_data,
+			init_args->u.tasklet_create_para.idx);
 
 		if (rc < 0)
 			CAM_ERR(CAM_WORKER, "Tasklet Init failed");
@@ -69,12 +69,13 @@ static int cam_worker_wrapper_create(
 		break;
 	case WORKER_TYPE_KTHREAD:
 		init_args->worker_ctx->worker_type = worker_type;
-		rc = cam_kthread_create(init_args->kthread_create_para.name,
-			init_args->kthread_create_para.num_tasks,
+		rc = cam_kthread_create(init_args->u.kthread_create_para.name,
+			init_args->u.kthread_create_para.num_tasks,
 			&init_args->worker_ctx->u.kthread,
-			init_args->kthread_create_para.in_irq);
+			init_args->u.kthread_create_para.in_irq);
 		if (rc)
-			CAM_ERR(CAM_WORKER, "Kthread creation failed");
+			CAM_ERR(CAM_WORKER, "Kthread creation failed, worker name: %s",
+				init_args->u.kthread_create_para.name);
 
 		break;
 	default:
@@ -125,26 +126,26 @@ int cam_worker_wrapper_init(
 	worker_create_args.worker_ctx = worker_ctx_temp;
 	if (worker_type == WORKER_TYPE_WORKQ) {
 		/* Prepare parameters for worker wrapper type is WORKQ */
-		worker_create_args.workq_create_para.name =
+		worker_create_args.u.workq_create_para.name =
 			worker_wrapper_init_para->name;
-		worker_create_args.workq_create_para.num_tasks =
+		worker_create_args.u.workq_create_para.num_tasks =
 			worker_wrapper_init_para->num_tasks;
-		worker_create_args.workq_create_para.in_irq =
+		worker_create_args.u.workq_create_para.in_irq =
 			(enum cam_workq_context) worker_wrapper_init_para->in_irq;
-		worker_create_args.workq_create_para.flag =
+		worker_create_args.u.workq_create_para.flag =
 			worker_wrapper_init_para->flag;
 	} else if (worker_type == WORKER_TYPE_TASKLET) {
 		/* Prepare parameters for worker wrapper type is TASKLET */
-		worker_create_args.tasklet_create_para.idx =
+		worker_create_args.u.tasklet_create_para.idx =
 			worker_wrapper_init_para->index;
-		worker_create_args.tasklet_create_para.priv_data =
+		worker_create_args.u.tasklet_create_para.priv_data =
 			worker_wrapper_init_para->priv_data;
 	} else if (worker_type == WORKER_TYPE_KTHREAD) {
 		/* Prepare parameters for worker wrapper type is KTHREAD*/
-		worker_create_args.kthread_create_para.name = worker_wrapper_init_para->name;
-		worker_create_args.kthread_create_para.num_tasks =
+		worker_create_args.u.kthread_create_para.name = worker_wrapper_init_para->name;
+		worker_create_args.u.kthread_create_para.num_tasks =
 			worker_wrapper_init_para->num_tasks;
-		worker_create_args.kthread_create_para.in_irq =
+		worker_create_args.u.kthread_create_para.in_irq =
 			(enum cam_kthread_context) worker_wrapper_init_para->in_irq;
 	}
 
@@ -255,42 +256,6 @@ int cam_worker_wrapper_get(
 	return rc;
 }
 
-void cam_worker_wrapper_put(
-	void *worker_ctx_priv,
-	void *taskdata)
-{
-	struct cam_worker_wrapper_ctx *worker_ctx_put = worker_ctx_priv;
-	struct cam_worker_wrapper_taskdata_args *taskdata_args = taskdata;
-
-	if (!worker_ctx_put) {
-		CAM_ERR(CAM_WORKER, "NULL worker ctx for put");
-		return;
-	}
-
-	switch (worker_ctx_put->worker_type) {
-	case WORKER_TYPE_WORKQ:
-		CAM_DBG(CAM_WORKER, "NULL put func for workq type worker");
-		break;
-	case WORKER_TYPE_TASKLET:
-		if (!taskdata_args) {
-			CAM_ERR(CAM_WORKER, "NULL taskdata for put");
-			return;
-		}
-
-		if (taskdata_args->task_data)
-			cam_tasklet_put_cmd(worker_ctx_put->u.tasklet,
-				&taskdata_args->task_data);
-		break;
-	case WORKER_TYPE_KTHREAD:
-		CAM_DBG(CAM_WORKER, "NULL put func for kthread type worker");
-		break;
-	default:
-		CAM_ERR(CAM_WORKER, "Invalid worker type: %d when put worker",
-			worker_ctx_put->worker_type);
-		break;
-	}
-}
-
 int cam_worker_wrapper_enqueue(
 	void                        *worker_ctx_priv,
 	void                        *taskdata,
@@ -352,7 +317,6 @@ int cam_worker_wrapper_start(void *worker_ctx_priv)
 	if (!worker_ctx)
 		return -EINVAL;
 
-	/* start task for tasklet type worker and no action for workq type */
 	switch (worker_ctx->worker_type) {
 	case WORKER_TYPE_WORKQ:
 		CAM_DBG(CAM_WORKER, "Current bottom half does not support start, worker type: %d",
@@ -375,35 +339,6 @@ int cam_worker_wrapper_start(void *worker_ctx_priv)
 	return rc;
 }
 
-void cam_worker_wrapper_stop(void *worker_ctx_priv)
-{
-	struct cam_worker_wrapper_ctx *worker_ctx = worker_ctx_priv;
-
-	if (!worker_ctx) {
-		CAM_ERR(CAM_WORKER, "Invalid worker ctx priv");
-		return;
-	}
-
-	/* stop task for tasklet type worker and no action for workq type */
-	switch (worker_ctx->worker_type) {
-	case WORKER_TYPE_WORKQ:
-		CAM_DBG(CAM_WORKER, "Current bottom half does not support stop, worker type: %d",
-			worker_ctx->worker_type);
-		break;
-	case WORKER_TYPE_TASKLET:
-		cam_tasklet_stop(worker_ctx->u.tasklet);
-		break;
-	case WORKER_TYPE_KTHREAD:
-		CAM_DBG(CAM_WORKER, "Current bottom half does not support stop, worker type: %d",
-			worker_ctx->worker_type);
-		break;
-	default:
-		CAM_ERR(CAM_WORKER, "Invalid Worker Type: %d when stop",
-			worker_ctx->worker_type);
-		break;
-	}
-}
-
 void cam_worker_wrapper_flush(void *worker_ctx_priv)
 {
 	struct cam_worker_wrapper_ctx *worker_ctx = worker_ctx_priv;
@@ -413,15 +348,13 @@ void cam_worker_wrapper_flush(void *worker_ctx_priv)
 		return;
 	}
 
-	CAM_DBG(CAM_WORKER, "Worker Wrapper flush, worker type: %d",
-		worker_ctx->worker_type);
+	CAM_DBG(CAM_WORKER, "Worker Wrapper flush, worker type: %d", worker_ctx->worker_type);
 	switch (worker_ctx->worker_type) {
 	case WORKER_TYPE_WORKQ:
 		cam_workq_flush(worker_ctx->u.workq);
 		break;
 	case WORKER_TYPE_TASKLET:
-		CAM_DBG(CAM_WORKER, "Current bottom half does not support flush, worker type: %d",
-			worker_ctx->worker_type);
+		cam_tasklet_stop(worker_ctx->u.tasklet);
 		break;
 	case WORKER_TYPE_KTHREAD:
 		cam_kthread_flush(worker_ctx->u.kthread);
@@ -451,7 +384,7 @@ void *cam_worker_wrapper_get_task_payload(
 	switch (worker_ctx->worker_type) {
 	case WORKER_TYPE_WORKQ:
 		workq_task = (struct cam_workq_task *)taskdata_args->task_data;
-		payload = workq_task->payload;
+		payload = cam_workq_get_task_payload(worker_ctx->u.workq, workq_task);
 		break;
 	case WORKER_TYPE_TASKLET:
 		CAM_DBG(CAM_WORKER, "No task paylaod for current worker: %d",
@@ -459,7 +392,7 @@ void *cam_worker_wrapper_get_task_payload(
 		break;
 	case WORKER_TYPE_KTHREAD:
 		kthread_task = (struct cam_kthread_task *)taskdata_args->task_data;
-		payload = kthread_task->payload;
+		payload = cam_kthread_get_task_payload(worker_ctx->u.kthread, kthread_task);
 		break;
 	default:
 		CAM_ERR(CAM_WORKER, "Invalid Worker Type: %d when get payload",
@@ -578,9 +511,3 @@ void cam_worker_wrapper_prop_update_deinit(void)
 
 	cam_kthread_property_update_deinit();
 }
-
-struct cam_worker_irq_bh_api worker_bh_api = {
-	.bottom_half_enqueue_func = cam_worker_wrapper_enqueue,
-	.get_bh_payload_func = cam_worker_wrapper_get,
-	.put_bh_payload_func = cam_worker_wrapper_put,
-};

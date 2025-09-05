@@ -2397,7 +2397,6 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 			cam_vfe_bus_ver3_handle_mc_comp_done_top_half,
 			vfe_out->bottom_half_handler,
 			vfe_out->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (rsrc_data->mc_comp_irq_handle < 1) {
@@ -2415,7 +2414,6 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 			vfe_out->top_half_handler,
 			vfe_out->bottom_half_handler,
 			vfe_out->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 		if (vfe_out->irq_handle < 1) {
 			CAM_ERR(CAM_ISP, "Subscribe IRQ failed for VFE out_res %d, VFE:%u",
@@ -2443,7 +2441,6 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 			vfe_out->top_half_handler,
 			vfe_out->bottom_half_handler,
 			rsrc_data->bus_priv->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (rsrc_data->early_done_irq_handle < 1) {
@@ -2479,7 +2476,6 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 				cam_vfe_bus_ver3_handle_rup_top_half,
 				cam_vfe_bus_ver3_handle_rup_bottom_half,
 				vfe_out->worker_ctx,
-				&worker_bh_api,
 				CAM_IRQ_EVT_GROUP_1);
 
 		if (common_data->rup_irq_handle[source_group] < 1) {
@@ -3610,7 +3606,6 @@ static int cam_vfe_bus_ver3_subscribe_init_irq(
 		cam_vfe_bus_ver3_handle_bus_irq,
 		NULL,
 		NULL,
-		NULL,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (bus_priv->bus_irq_handle < 1) {
@@ -3634,7 +3629,6 @@ static int cam_vfe_bus_ver3_subscribe_init_irq(
 			cam_vfe_bus_ver3_handle_err_irq_top_half,
 			cam_vfe_bus_ver3_handle_err_irq_bottom_half,
 			bus_priv->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (bus_priv->error_irq_handle < 1) {
@@ -3652,7 +3646,6 @@ static int cam_vfe_bus_ver3_subscribe_init_irq(
 			top_irq_reg_mask,
 			bus_priv,
 			cam_vfe_bus_ver3_handle_rup_irq,
-			NULL,
 			NULL,
 			NULL,
 			CAM_IRQ_EVT_GROUP_0);

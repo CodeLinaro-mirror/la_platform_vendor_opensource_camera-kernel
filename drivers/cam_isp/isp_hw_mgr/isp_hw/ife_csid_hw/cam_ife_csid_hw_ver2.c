@@ -5422,7 +5422,6 @@ static inline int cam_ife_csid_ver2_subscribe_sof_for_discard(
 		top_half_handler,
 		bottom_half_handler,
 		csid_hw->worker_ctx,
-		&worker_bh_api,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (path_data->path_cfg.discard_irq_handle < 1) {
@@ -5462,7 +5461,6 @@ static int cam_ife_csid_ver2_mc_irq_subscribe(struct cam_ife_csid_ver2_hw  *csid
 		cam_ife_csid_ver2_mc_top_half,
 		cam_ife_csid_ver2_get_path_bh(res->res_id),
 		csid_hw->worker_ctx,
-		&worker_bh_api,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->top_mc_irq_handle < 1) {
@@ -5538,7 +5536,7 @@ static int cam_ife_csid_ver2_path_irq_subscribe(
 		top_irq_mask,
 		res,
 		cam_ife_csid_ver2_handle_path_irq,
-		NULL, NULL, NULL, CAM_IRQ_EVT_GROUP_0);
+		NULL, NULL, CAM_IRQ_EVT_GROUP_0);
 
 	if (path_data->path_cfg.top_irq_handle < 1) {
 		CAM_ERR(CAM_ISP, "CSID[%u] subscribe top irq fail %s",
@@ -5561,7 +5559,6 @@ static int cam_ife_csid_ver2_path_irq_subscribe(
 		cam_ife_csid_ver2_path_top_half,
 		cam_ife_csid_ver2_get_path_bh(res->res_id),
 		csid_hw->worker_ctx,
-		&worker_bh_api,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (path_data->path_cfg.irq_handle < 1) {
@@ -5579,7 +5576,6 @@ static int cam_ife_csid_ver2_path_irq_subscribe(
 			cam_ife_csid_ver2_path_err_top_half,
 			cam_ife_csid_ver2_get_path_bh(res->res_id),
 			csid_hw->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 	if (path_data->path_cfg.err_irq_handle < 1) {
@@ -6112,7 +6108,7 @@ static int cam_ife_csid_ver2_top2_irq_subscribe(struct cam_ife_csid_ver2_hw *csi
 		&top_top2_irq_mask,
 		csid_hw,
 		cam_ife_csid_ver2_handle_top2_irq,
-		NULL, NULL, NULL, CAM_IRQ_EVT_GROUP_0);
+		NULL, NULL, CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->top_top2_irq_handle < 1) {
 		CAM_ERR(CAM_ISP, "CSID[%d] Top2 Subscribe Top Irq fail",
@@ -6140,7 +6136,6 @@ static int cam_ife_csid_ver2_top2_irq_subscribe(struct cam_ife_csid_ver2_hw *csi
 						cam_ife_csid_ver2_top2_err_top_half,
 						cam_ife_csid_ver2_top2_err_irq_bottom_half,
 						csid_hw->worker_ctx,
-						&worker_bh_api,
 						CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->top_err_irq_handle[CAM_IFE_CSID_TOP2_IRQ_STATUS_REG1] < 1) {
@@ -6162,7 +6157,6 @@ static int cam_ife_csid_ver2_top2_irq_subscribe(struct cam_ife_csid_ver2_hw *csi
 						cam_ife_csid_ver2_top2_info_irq_top_half,
 						cam_ife_csid_ver2_top2_info_irq_bottom_half,
 						csid_hw->worker_ctx,
-						&worker_bh_api,
 						CAM_IRQ_EVT_GROUP_0);
 
 		if (csid_hw->top_info_irq_handle[CAM_IFE_CSID_TOP2_IRQ_STATUS_REG1] < 1) {
@@ -6210,7 +6204,6 @@ static int cam_ife_csid_ver2_csi2_rx2_irq_subscribe(struct cam_ife_csid_ver2_hw 
 						cam_ife_csid_ver2_handle_rx2_irq,
 						NULL,
 						NULL,
-						NULL,
 						CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->rx_cfg.rx2_irq_handle < 1) {
@@ -6240,7 +6233,6 @@ static int cam_ife_csid_ver2_csi2_rx2_irq_subscribe(struct cam_ife_csid_ver2_hw 
 						cam_ife_csid_ver2_rx2_top_half,
 						NULL,
 						NULL,
-						NULL,
 						CAM_IRQ_EVT_GROUP_0);
 
 		if (csid_hw->rx_cfg.irq_handle[CAM_IFE_CSID_RX2_IRQ_STATUS_REG1] < 1) {
@@ -6265,7 +6257,6 @@ static int cam_ife_csid_ver2_csi2_rx2_irq_subscribe(struct cam_ife_csid_ver2_hw 
 						cam_ife_csid_ver2_rx2_err_top_half,
 						cam_ife_csid_ver2_rx2_err_bottom_half,
 						csid_hw->worker_ctx,
-						&worker_bh_api,
 						CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->rx_cfg.err_irq_handle[CAM_IFE_CSID_RX2_IRQ_STATUS_REG1] < 1) {
@@ -6333,7 +6324,7 @@ static int cam_ife_csid_ver2_csi2_irq_subscribe(struct cam_ife_csid_ver2_hw *csi
 		top_irq_mask,
 		csid_hw,
 		cam_ife_csid_ver2_handle_rx_irq,
-		NULL, NULL, NULL, CAM_IRQ_EVT_GROUP_0);
+		NULL, NULL, CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->rx_cfg.top_irq_handle < 1) {
 		CAM_ERR(CAM_ISP, "CSID[%u] RX Subscribe Top Irq fail",
@@ -6360,7 +6351,6 @@ static int cam_ife_csid_ver2_csi2_irq_subscribe(struct cam_ife_csid_ver2_hw *csi
 						cam_ife_csid_ver2_rx_top_half,
 						NULL,
 						NULL,
-						NULL,
 						CAM_IRQ_EVT_GROUP_0);
 
 		if (csid_hw->rx_cfg.irq_handle[CAM_IFE_CSID_RX_IRQ_STATUS_REG0] < 1) {
@@ -6381,7 +6371,6 @@ static int cam_ife_csid_ver2_csi2_irq_subscribe(struct cam_ife_csid_ver2_hw *csi
 						cam_ife_csid_ver2_rx_err_top_half,
 						cam_ife_csid_ver2_rx_err_bottom_half,
 						csid_hw->worker_ctx,
-						&worker_bh_api,
 						CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->rx_cfg.err_irq_handle[CAM_IFE_CSID_RX_IRQ_STATUS_REG0] < 1) {
@@ -6693,7 +6682,6 @@ static int cam_ife_csid_ver2_enable_core(struct cam_ife_csid_ver2_hw *csid_hw)
 		cam_ife_csid_ver2_reset_irq_top_half,
 		NULL,
 		NULL,
-		NULL,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->reset_irq_handle < 1) {
@@ -6865,7 +6853,6 @@ static int cam_ife_csid_ver2_enable_hw(
 		cam_ife_csid_ver2_handle_buf_done_irq,
 		NULL,
 		NULL,
-		NULL,
 		CAM_IRQ_EVT_GROUP_0);
 	if (csid_hw->buf_done_irq_handle < 1) {
 		CAM_ERR(CAM_ISP, "CSID[%u] buf done irq subscribe fail",
@@ -6888,7 +6875,6 @@ static int cam_ife_csid_ver2_enable_hw(
 		cam_ife_csid_ver2_top_err_irq_top_half,
 		cam_ife_csid_ver2_top_err_irq_bottom_half,
 		csid_hw->worker_ctx,
-		&worker_bh_api,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (csid_hw->top_err_irq_handle[CAM_IFE_CSID_TOP_IRQ_STATUS_REG0] < 1) {
@@ -6922,7 +6908,6 @@ static int cam_ife_csid_ver2_enable_hw(
 						cam_ife_csid_ver2_top_info_irq_top_half,
 						cam_ife_csid_ver2_top_info_irq_bottom_half,
 						csid_hw->worker_ctx,
-						&worker_bh_api,
 						CAM_IRQ_EVT_GROUP_0);
 
 		if (csid_hw->top_info_irq_handle[CAM_IFE_CSID_TOP_IRQ_STATUS_REG0] < 1) {

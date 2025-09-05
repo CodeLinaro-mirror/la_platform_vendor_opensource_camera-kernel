@@ -65,6 +65,33 @@ static void cam_workq_put_task(struct cam_workq_task *task)
 	WORKQ_RELEASE_LOCK(workq, flags);
 }
 
+void *cam_workq_get_task_payload(struct cam_core_workq *workq,
+	struct cam_workq_task *workq_task)
+{
+	void *payload;
+
+	if (!workq) {
+		CAM_ERR(CAM_WORKER, "Invalid workq");
+		return NULL;
+	}
+
+	if (!workq_task) {
+		CAM_ERR(CAM_WORKER, "Invalid workq task, worker name: %s",
+			workq->workq_name);
+		return NULL;
+	}
+
+	payload = workq_task->payload;
+	if (!payload) {
+		CAM_ERR(CAM_WORKER,
+			"Invalid payload, bind payload should happen before get task payload, worker name: %s",
+			workq->workq_name);
+		cam_workq_put_task(workq_task);
+	}
+
+	return payload;
+}
+
 void cam_workq_flush(struct cam_core_workq *workq)
 {
 	if (!workq) {
@@ -295,8 +322,7 @@ void cam_workq_destroy(struct cam_core_workq **cam_workq)
 			destroy_workqueue(job);
 			WORKQ_ACQUIRE_LOCK(workq, flags);
 		}
-		/* Destroy workq payload data */
-		CAM_MEM_FREE(workq->task.pool[0].payload);
+
 		CAM_MEM_FREE(workq->task.pool);
 
 		/* Leave lists in stable state after freeing pool */

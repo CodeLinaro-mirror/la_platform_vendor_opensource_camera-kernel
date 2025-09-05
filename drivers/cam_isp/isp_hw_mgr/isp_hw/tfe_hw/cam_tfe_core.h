@@ -267,8 +267,8 @@ struct cam_tfe_hw_core_info {
 	struct cam_tfe_hw_info             *tfe_hw_info;
 	void                               *top_priv;
 	struct cam_tfe_bus                 *tfe_bus;
-	void                               *tasklet_info;
-	struct cam_tfe_irq_evt_payload  evt_payload[CAM_TFE_EVT_MAX];
+	void                               *worker_ctx;
+	struct cam_tfe_irq_evt_payload      evt_payload[CAM_TFE_EVT_MAX];
 	struct list_head                    free_payload_list;
 	bool                                irq_err_config;
 	uint32_t                            irq_err_config_cnt;

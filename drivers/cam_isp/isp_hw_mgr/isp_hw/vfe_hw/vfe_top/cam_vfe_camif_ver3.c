@@ -565,7 +565,6 @@ skip_core_cfg:
 			camif_res->top_half_handler,
 			camif_res->bottom_half_handler,
 			camif_res->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (rsrc_data->irq_handle < 1) {
@@ -589,7 +588,6 @@ skip_core_cfg:
 			camif_res->top_half_handler,
 			camif_res->bottom_half_handler,
 			camif_res->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (rsrc_data->sof_irq_handle < 1) {
@@ -608,7 +606,6 @@ subscribe_err:
 			cam_vfe_camif_ver3_err_irq_top_half,
 			camif_res->bottom_half_handler,
 			camif_res->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (rsrc_data->irq_err_handle < 1) {

@@ -871,7 +871,7 @@ static void cam_icp_ctx_timer_cb(struct timer_list *timer_data)
 	task_data = (struct clk_work_data *)cam_worker_wrapper_get_task_payload(
 		hw_mgr->timer_worker_ctx, &task);
 	if (!task_data) {
-		CAM_ERR(CAM_ICP, "get task payload failed.");
+		CAM_ERR(CAM_ICP, "Get task payload failed");
 		CAM_MEM_FREE(ctx_info);
 		spin_unlock_irqrestore(&hw_mgr->hw_mgr_lock, flags);
 		return;
@@ -10000,8 +10000,16 @@ cmd_work_failed:
 void cam_icp_mgr_destroy_worker(struct cam_icp_hw_mgr *hw_mgr)
 {
 	cam_worker_wrapper_deinit(hw_mgr->timer_worker_ctx);
+	CAM_MEM_FREE(hw_mgr->timer_work_data);
+	hw_mgr->timer_work_data = NULL;
+
 	cam_worker_wrapper_deinit(hw_mgr->msg_worker_ctx);
+	CAM_MEM_FREE(hw_mgr->msg_work_data);
+	hw_mgr->msg_work_data = NULL;
+
 	cam_worker_wrapper_deinit(hw_mgr->cmd_worker_ctx);
+	CAM_MEM_FREE(hw_mgr->cmd_work_data);
+	hw_mgr->cmd_work_data = NULL;
 }
 
 static void cam_icp_mgr_dump_pf_data(struct cam_icp_hw_mgr *hw_mgr,

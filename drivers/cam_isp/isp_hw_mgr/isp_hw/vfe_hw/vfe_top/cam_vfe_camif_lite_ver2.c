@@ -299,7 +299,6 @@ static int cam_vfe_camif_lite_resource_start(
 			cam_vfe_camif_lite_err_irq_top_half,
 			camif_lite_res->bottom_half_handler,
 			camif_lite_res->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 		if (rsrc_data->irq_err_handle < 1) {
 			CAM_ERR(CAM_ISP, "Error IRQ handle subscribe failure");

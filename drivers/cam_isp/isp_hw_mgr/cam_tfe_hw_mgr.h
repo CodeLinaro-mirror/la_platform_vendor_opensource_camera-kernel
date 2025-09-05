@@ -12,7 +12,6 @@
 #include "cam_isp_hw_mgr.h"
 #include "cam_tfe_hw_intf.h"
 #include "cam_tfe_csid_hw_intf.h"
-#include "cam_tasklet_util.h"
 #include "cam_cdm_intf_api.h"
 
 /* TFE resource constants */

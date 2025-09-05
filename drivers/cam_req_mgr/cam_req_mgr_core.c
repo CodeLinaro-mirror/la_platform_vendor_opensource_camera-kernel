@@ -123,35 +123,35 @@ void cam_req_mgr_handle_core_shutdown(void)
 	}
 }
 
-static int __cam_req_mgr_setup_payload(void *worker_ctx_priv)
+static int __cam_req_mgr_setup_payload(struct cam_req_mgr_core_link *link)
 {
-	int32_t                  i = 0;
-	int                      rc = 0;
-	struct crm_task_payload *task_data = NULL;
+	int                                 rc = 0, i;
+	struct crm_task_payload            *task_data;
 	struct cam_worker_wrapper_mini_dump worker_dump_info = {0};
 
-	if (!worker_ctx_priv) {
+	if (!link || !link->worker_ctx) {
 		CAM_ERR(CAM_CRM, "Setup payload failed since NULL worker.");
 		return -EINVAL;
 	}
 
-	cam_worker_wrapper_dump_info_cb(worker_ctx_priv, &worker_dump_info);
+	cam_worker_wrapper_dump_info_cb(link->worker_ctx, &worker_dump_info);
 	task_data = CAM_MEM_ZALLOC_ARRAY(
 		worker_dump_info.task.num_task, sizeof(*task_data), GFP_KERNEL);
 	if (!task_data) {
-		CAM_ERR(CAM_CRM, "No valid mem for task data.");
+		CAM_ERR(CAM_CRM, "No valid mem for task data");
 		return -ENOMEM;
 	}
 
 	for (i = 0; i < worker_dump_info.task.num_task; i++) {
-		rc = cam_worker_wrapper_payload_bind(worker_ctx_priv, &task_data[i], i);
+		rc = cam_worker_wrapper_payload_bind(link->worker_ctx, &task_data[i], i);
 		if (rc) {
 			CAM_ERR(CAM_CRM, "Failed to bind payload for task %d", i);
 			CAM_MEM_FREE(task_data);
-			break;
+			return rc;
 		}
 	}
 
+	link->task_data = task_data;
 	return rc;
 }
 
@@ -5103,8 +5103,10 @@ static int __cam_req_mgr_unlink(
 	spin_unlock_bh(&link->link_state_spin_lock);
 	/* Release session mutex for worker processing */
 	mutex_unlock(&session->lock);
-	/* Destroy worker of link */
+	/* Destroy worker of link and corresponding task data */
 	cam_worker_wrapper_deinit(link->worker_ctx);
+	CAM_MEM_FREE(link->task_data);
+	link->task_data = NULL;
 	/* Acquire session mutex after worker flush */
 	mutex_lock(&session->lock);
 	/* Cleanup request tables and unlink devices */
@@ -5280,7 +5282,7 @@ int cam_req_mgr_link(struct cam_req_mgr_ver_info *link_info)
 	}
 
 	/* Assign payload to worker tasks */
-	rc = __cam_req_mgr_setup_payload(link->worker_ctx);
+	rc = __cam_req_mgr_setup_payload(link);
 	if (rc < 0) {
 		__cam_req_mgr_destroy_link_info(link);
 		cam_worker_wrapper_deinit(link->worker_ctx);
@@ -5398,7 +5400,7 @@ int cam_req_mgr_link_v2(struct cam_req_mgr_ver_info *link_info)
 	}
 
 	/* Assign payload to worker tasks */
-	rc = __cam_req_mgr_setup_payload(link->worker_ctx);
+	rc = __cam_req_mgr_setup_payload(link);
 	if (rc < 0) {
 		__cam_req_mgr_destroy_link_info(link);
 		cam_worker_wrapper_deinit(link->worker_ctx);

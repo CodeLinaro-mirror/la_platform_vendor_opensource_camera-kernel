@@ -257,7 +257,6 @@ static int cam_vfe_rdi_resource_start(
 			cam_vfe_rdi_err_irq_top_half,
 			rdi_res->bottom_half_handler,
 			rdi_res->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 		if (rsrc_data->irq_err_handle < 1) {
 			CAM_ERR(CAM_ISP, "Error IRQ handle subscribe failure");
@@ -286,7 +285,6 @@ static int cam_vfe_rdi_resource_start(
 			rdi_res->top_half_handler,
 			rdi_res->bottom_half_handler,
 			rdi_res->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 		if (rsrc_data->irq_handle < 1) {
 			CAM_ERR(CAM_ISP, "IRQ handle subscribe failure");

@@ -450,6 +450,7 @@ struct cam_req_mgr_connected_device {
  * @max_mswitch_delay           : Max of modeswitch delay of all connected devs
  * @min_mswitch_delay           : Min of modeswitch delay of all connected devs
  * @worker_ctx                  : Pointer to handle worker related jobs
+ * @task_data                   : Pointer to an array of task data to be processed by worker cb
  * @pd_mask                     : each set bit indicates the device with pd equal to
  *                                bit position is available.
  * - List of connected devices
@@ -512,6 +513,7 @@ struct cam_req_mgr_core_link {
 	enum cam_modeswitch_delay            max_mswitch_delay;
 	enum cam_modeswitch_delay            min_mswitch_delay;
 	void                                *worker_ctx;
+	void                                *task_data;
 	int32_t                              pd_mask;
 	struct cam_req_mgr_connected_device *l_dev;
 	struct cam_req_mgr_req_data          req;

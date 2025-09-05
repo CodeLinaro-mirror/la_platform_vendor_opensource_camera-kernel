@@ -917,7 +917,6 @@ static int cam_sfe_bus_subscribe_error_irq(
 		cam_sfe_bus_rd_handle_irq,
 		NULL,
 		NULL,
-		NULL,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (bus_priv->irq_handle < 1) {
@@ -941,7 +940,6 @@ static int cam_sfe_bus_subscribe_error_irq(
 			cam_sfe_bus_rd_handle_err_irq_top_half,
 			cam_sfe_bus_rd_handle_err_irq_bottom_half,
 			bus_priv->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (bus_priv->error_irq_handle < 1) {
@@ -1185,7 +1183,6 @@ static int cam_sfe_bus_start_bus_rd(
 			cam_sfe_bus_rd_out_done_top_half,
 			cam_sfe_bus_rd_out_done_bottom_half,
 			sfe_bus_rd->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (sfe_bus_rd->irq_handle < 1) {

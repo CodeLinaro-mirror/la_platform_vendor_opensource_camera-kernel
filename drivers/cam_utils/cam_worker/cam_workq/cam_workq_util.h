@@ -162,7 +162,18 @@ struct cam_workq_task *cam_workq_get_task(
 	struct cam_core_workq *workq);
 
 /**
+ * cam_workq_get_task_payload()
+ *
+ * @brief      : Get payload of the worker task
+ * @workq      : Pointer to workq struct
+ * @workq_task : Workq task used for processing
+ */
+void *cam_workq_get_task_payload(struct cam_core_workq *workq,
+	struct cam_workq_task *workq_task);
+
+/**
  * cam_workq_flush()
+ *
  * @brief: Flushes the work queue. Function will sleep until any active task is complete.
  * @workq: pointer to worker data struct
  */

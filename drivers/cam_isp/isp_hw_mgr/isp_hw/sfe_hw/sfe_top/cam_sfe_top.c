@@ -2081,7 +2081,6 @@ int cam_sfe_top_start(
 			cam_sfe_top_handle_err_irq_top_half,
 			cam_sfe_top_handle_err_irq_bottom_half,
 			sfe_res->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (top_priv->error_irq_handle < 1) {
@@ -2108,7 +2107,6 @@ int cam_sfe_top_start(
 				cam_sfe_top_handle_irq_top_half,
 				cam_sfe_top_handle_irq_bottom_half,
 				sfe_res->worker_ctx,
-				&worker_bh_api,
 				CAM_IRQ_EVT_GROUP_0);
 
 			if (path_data->sof_eof_handle < 1) {

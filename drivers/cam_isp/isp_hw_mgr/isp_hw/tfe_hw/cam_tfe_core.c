@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -12,7 +12,6 @@
 #include <media/cam_tfe.h>
 
 #include "cam_cdm_util.h"
-#include "cam_tasklet_util.h"
 #include "cam_isp_hw_mgr_intf.h"
 #include "cam_tfe_soc.h"
 #include "cam_tfe_core.h"
@@ -40,25 +39,24 @@ struct cam_tfe_top_common_data {
 };
 
 struct cam_tfe_top_priv {
-	struct cam_tfe_top_common_data      common_data;
-	struct cam_isp_resource_node        in_rsrc[CAM_TFE_TOP_IN_PORT_MAX];
-	unsigned long                       hw_clk_rate;
-	struct cam_axi_vote                 applied_axi_vote;
-	struct cam_axi_vote             req_axi_vote[CAM_TFE_TOP_IN_PORT_MAX];
-	unsigned long                   req_clk_rate[CAM_TFE_TOP_IN_PORT_MAX];
-	struct cam_axi_vote             last_vote[CAM_TFE_TOP_IN_PORT_MAX *
-					CAM_TFE_DELAY_BW_REDUCTION_NUM_FRAMES];
-	uint32_t                        last_counter;
-	uint64_t                        total_bw_applied;
-	enum cam_tfe_bw_control_action
-		axi_vote_control[CAM_TFE_TOP_IN_PORT_MAX];
-	uint32_t                          irq_prepared_mask[3];
-	void                            *tasklet_info;
-	struct timespec64                    sof_ts;
-	struct timespec64                    epoch_ts;
-	struct timespec64                    eof_ts;
-	struct timespec64                    error_ts;
-	uint32_t                             top_debug;
+	struct cam_tfe_top_common_data common_data;
+	struct cam_isp_resource_node   in_rsrc[CAM_TFE_TOP_IN_PORT_MAX];
+	unsigned long                  hw_clk_rate;
+	struct cam_axi_vote            applied_axi_vote;
+	struct cam_axi_vote            req_axi_vote[CAM_TFE_TOP_IN_PORT_MAX];
+	unsigned long                  req_clk_rate[CAM_TFE_TOP_IN_PORT_MAX];
+	struct cam_axi_vote            last_vote[CAM_TFE_TOP_IN_PORT_MAX *
+					CAM_TFE_DELAY_BW_REDUCTION_FRAMES];
+	uint32_t                       last_counter;
+	uint64_t                       total_bw_applied;
+	enum cam_tfe_bw_control_action axi_vote_control[CAM_TFE_TOP_IN_PORT_MAX];
+	uint32_t                       irq_prepared_mask[3];
+	void                          *worker_ctx;
+	struct timespec64              sof_ts;
+	struct timespec64              epoch_ts;
+	struct timespec64              eof_ts;
+	struct timespec64              error_ts;
+	uint32_t                       top_debug;
 };
 
 struct cam_tfe_camif_data {
@@ -899,7 +897,7 @@ irqreturn_t cam_tfe_irq(int irq_num, void *data)
 	rc  = cam_tfe_get_evt_payload(core_info, &evt_payload);
 	if (rc) {
 		CAM_ERR_RATE_LIMIT(CAM_ISP,
-			"No tasklet_cmd is free in queue");
+			"No worker_cmd is free in queue");
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "IRQ status0=0x%x status2=0x%x",
 			top_irq_status[0], top_irq_status[1]);
 		goto end;
@@ -920,8 +918,8 @@ irqreturn_t cam_tfe_irq(int irq_num, void *data)
 	evt_payload->core_index = core_info->core_index;
 	evt_payload->core_info  = core_info;
 
-	rc = tasklet_bh_api.get_bh_payload_func(
-		top_priv->tasklet_info, &bh_cmd);
+	rc = cam_worker_wrapper_get(
+		top_priv->worker_ctx, &bh_cmd);
 	if (rc || !bh_cmd) {
 		CAM_ERR_RATE_LIMIT(CAM_ISP,
 			"No payload, IRQ handling frozen");
@@ -929,8 +927,8 @@ irqreturn_t cam_tfe_irq(int irq_num, void *data)
 		goto end;
 	}
 
-	tasklet_bh_api.bottom_half_enqueue_func(
-		top_priv->tasklet_info,
+	cam_worker_wrapper_enqueue(
+		top_priv->worker_ctx,
 		bh_cmd,
 		core_info,
 		evt_payload,
@@ -1958,10 +1956,10 @@ int cam_tfe_top_reserve(void *device_priv,
 			}
 
 			top_priv->in_rsrc[i].cdm_ops = acquire_args->cdm_ops;
-			top_priv->in_rsrc[i].tasklet_info = args->tasklet;
+			top_priv->in_rsrc[i].worker_ctx = args->worker_ctx;
 			top_priv->in_rsrc[i].res_state =
 				CAM_ISP_RESOURCE_STATE_RESERVED;
-			top_priv->tasklet_info = args->tasklet;
+			top_priv->worker_ctx = args->worker_ctx;
 			acquire_args->rsrc_node =
 				&top_priv->in_rsrc[i];
 			rc = 0;
@@ -1996,7 +1994,7 @@ int cam_tfe_top_release(void *device_priv,
 	}
 	in_res->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 	in_res->cdm_ops = NULL;
-	in_res->tasklet_info = NULL;
+	in_res->worker_ctx = NULL;
 	in_res->is_rdi_primary_res = 0;
 
 	return 0;
@@ -2829,7 +2827,7 @@ int cam_tfe_start(void *hw_priv, void *start_args, uint32_t arg_size)
 
 	core_info = (struct cam_tfe_hw_core_info *)tfe_hw->core_info;
 	start_res = (struct cam_isp_resource_node  *)start_args;
-	core_info->tasklet_info = start_res->tasklet_info;
+	core_info->worker_ctx = start_res->worker_ctx;
 
 	mutex_lock(&tfe_hw->hw_mutex);
 	if (start_res->res_type == CAM_ISP_RESOURCE_TFE_IN) {

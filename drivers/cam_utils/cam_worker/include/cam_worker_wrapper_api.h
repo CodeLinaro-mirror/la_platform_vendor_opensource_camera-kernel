@@ -18,6 +18,7 @@
 
 /**
  * enum cam_worker_wrapper_usage_irq
+ *
  * @codes: used from irq context or not
  */
 enum cam_worker_wrapper_usage_irq {
@@ -28,6 +29,7 @@ enum cam_worker_wrapper_usage_irq {
 
 /**
  * enum cam_worker_wrapper_task_priority
+ *
  * @codes: Task priorities, lower the number higher the priority
  */
 enum cam_worker_wrapper_task_priority {
@@ -38,6 +40,7 @@ enum cam_worker_wrapper_task_priority {
 
 /**
  * enum cam_worker_wrapper_class_type
+ *
  * @codes: to identify worker wrapper class in which type
  */
 enum cam_worker_wrapper_class_type {
@@ -48,6 +51,7 @@ enum cam_worker_wrapper_class_type {
 
 /**
  * struct cam_worker_wrapper_taskdata_args
+ *
  * @brief:          Taskdata containing worker type and related
  *                  task data
  * @task_priority:  Worker Task priority
@@ -60,6 +64,7 @@ struct cam_worker_wrapper_taskdata_args {
 
 /**
  * struct cam_worker_wrapper_init_args
+ *
  * @brief:              Parameters for worker wrapper initialization
  * @name:               Name of the worker to be allocated,
  * @num_tasks:          Num_tasks to be allocated for worker
@@ -83,6 +88,7 @@ struct cam_worker_wrapper_init_args {
 
 /**
  * struct cam_worker_wrapper_mini_dump
+ *
  * @worker_scheduled_ts: Scheduled ts
  * task -
  * @pending_cnt:         Pending count of tasks left in worker
@@ -101,6 +107,7 @@ struct cam_worker_wrapper_mini_dump {
 
 /**
  * cam_worker_wrapper_init()
+ *
  * @brief:                      Initialize a wrapper worker
  * @worker_init_args:           Worker wrapper initialization parameters
  * @worker_class_type:          Indicate RT/NRT wrapper worker class
@@ -113,6 +120,7 @@ int cam_worker_wrapper_init(
 
 /**
  * cam_worker_wrapper_deinit()
+ *
  * @brief:              Destroy a wrapper worker
  * @worker_ctx_priv:    Wrapper worker ctx
  * @return:             Void
@@ -122,6 +130,7 @@ void cam_worker_wrapper_deinit(
 
 /**
  * cam_worker_wrapper_start()
+ *
  * @brief:              Enable or disable worker schedule for task run
  * @worker_ctx_priv:    Wrapper worker ctx
  * @return:             0-Success
@@ -131,16 +140,8 @@ int cam_worker_wrapper_start(
 	void *worker_ctx_priv);
 
 /**
- * cam_worker_wrapper_stop()
- * @brief:              Enable or disable worker schedule for task run.
- * @worker_ctx_priv:    Wrapper worker ctx
- * @return:             Void
- */
-void cam_worker_wrapper_stop(
-	void *worker_ctx_priv);
-
-/**
  * cam_worker_wrapper_flush()
+ *
  * @brief:              Flush the worker.
  * @worker_ctx_priv:    Wrapper worker ctx
  */
@@ -149,6 +150,7 @@ void cam_worker_wrapper_flush(
 
 /**
  * cam_worker_wrapper_get()
+ *
  * @brief:              Get task and key taskdata based on worker wrapper
  *                      ctx, update task info in taskdata and return.
  * @worker_ctx_priv:    Wrapper worker ctx
@@ -162,6 +164,7 @@ int cam_worker_wrapper_get(
 
 /**
  * cam_worker_wrapper_put()
+ *
  * @brief:              Release task and key taskdata based on worker wrapper
  *                      ctx, update task info in taskdata and return.
  * @worker_ctx_priv:    Wrapper worker ctx
@@ -174,6 +177,7 @@ void cam_worker_wrapper_put(
 
 /**
  * cam_worker_wrapper_enqueue()
+ *
  * @brief:                 Enqueue task within payload and process task
  * @worker_ctx_priv:       Wrapper worker ctx
  * @taskdata:              Taskdata w.r.t. specific worker task.
@@ -192,6 +196,7 @@ int cam_worker_wrapper_enqueue(
 
 /**
  * cam_worker_wrapper_get_task_payload()
+ *
  * @brief:               Get payload based on wrapper worker and provide to taskdata
  * @taskdata:            Taskdata including task priority info
  * @return:              Void
@@ -202,6 +207,7 @@ void *cam_worker_wrapper_get_task_payload(
 
 /**
  * cam_worker_wrapper_payload_bind()
+ *
  * @brief:               Get payload based on wrapper worker and provide to taskdata.
  * @worker_ctx_priv:     Wrapper worker ctx
  * @work_data:           Taskdata w.r.t. specific worker task
@@ -216,6 +222,7 @@ int cam_worker_wrapper_payload_bind(
 
 /**
  * cam_worker_wrapper_dump_info_cb()
+ *
  * @brief:               Dump some worker data info to client
  * @worker_ctx_priv:     Wrapper worker ctx
  * @worker_dump_info:    Worker dump info details
@@ -241,7 +248,5 @@ int cam_worker_wrapper_prop_update_init(void);
  * @return:              Void
  */
 void cam_worker_wrapper_prop_update_deinit(void);
-
-extern struct cam_worker_irq_bh_api worker_bh_api;
 
 #endif

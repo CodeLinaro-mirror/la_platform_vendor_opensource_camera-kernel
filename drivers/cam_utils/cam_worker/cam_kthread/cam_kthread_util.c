@@ -66,19 +66,11 @@ static void cam_kthread_put_task(struct cam_kthread_task *task)
 	unsigned long            flags = 0;
 
 	KTHREAD_ACQUIRE_LOCK(kthread, flags);
-	if (kthread->is_paused) {
-		CAM_ERR(CAM_WORKER, "kthread is paused, worker name: %s",
-			kthread->worker_name);
-		goto end;
-	}
 	cam_kthread_put_task_unlocked(task);
-
-end:
 	KTHREAD_RELEASE_LOCK(kthread, flags);
 
-	CAM_DBG(CAM_WORKER, "PUT task kthread %s, free_cnt %d, is_pause %s",
-		kthread->worker_name, atomic_read(&kthread->task.free_cnt),
-		CAM_BOOL_TO_YESNO(kthread->is_paused));
+	CAM_DBG(CAM_WORKER, "PUT task kthread %s, free_cnt %d",
+		kthread->worker_name, atomic_read(&kthread->task.free_cnt));
 }
 
 inline void cam_kthread_flush(struct cam_core_kthread *kthread)
@@ -190,11 +182,6 @@ struct cam_kthread_task *cam_kthread_get_task(struct cam_core_kthread *kthread)
 		return NULL;
 
 	KTHREAD_ACQUIRE_LOCK(kthread, flags);
-	if (kthread->is_paused) {
-		task = ERR_PTR(-EIO);
-		goto end;
-	}
-
 	if (list_empty(&kthread->task.empty_head))
 		goto end;
 
@@ -208,11 +195,37 @@ struct cam_kthread_task *cam_kthread_get_task(struct cam_core_kthread *kthread)
 end:
 	KTHREAD_RELEASE_LOCK(kthread, flags);
 
-	CAM_DBG(CAM_WORKER, "GET task kthread %s, free_cnt %d, is_pause %s",
-		kthread->worker_name, atomic_read(&kthread->task.free_cnt),
-		CAM_BOOL_TO_YESNO(kthread->is_paused));
+	CAM_DBG(CAM_WORKER, "GET task kthread %s, free_cnt %d",
+		kthread->worker_name, atomic_read(&kthread->task.free_cnt));
 
 	return task;
+}
+
+void *cam_kthread_get_task_payload(struct cam_core_kthread *kthread,
+	struct cam_kthread_task *kthread_task)
+{
+	void *payload;
+
+	if (!kthread) {
+		CAM_ERR(CAM_WORKER, "Invalid kthread");
+		return NULL;
+	}
+
+	if (!kthread_task) {
+		CAM_ERR(CAM_WORKER, "Invalid kthread task, worker name: %s",
+			kthread->worker_name);
+		return NULL;
+	}
+
+	payload = kthread_task->payload;
+	if (!payload) {
+		CAM_ERR(CAM_WORKER,
+			"Invalid payload, bind payload should happen before get task payload, worker name: %s",
+			kthread->worker_name);
+		cam_kthread_put_task(kthread_task);
+	}
+
+	return payload;
 }
 
 int cam_kthread_enqueue_task(struct cam_kthread_task *task,
@@ -423,7 +436,6 @@ int cam_kthread_create(char *name, int32_t num_tasks,
 	INIT_LIST_HEAD(&cam_kthread->task.empty_head);
 	atomic_set(&cam_kthread->flush_in_process, 0);
 
-	cam_kthread->is_paused = false;
 	cam_kthread->in_irq = in_irq;
 	cam_kthread->task.num_task = num_tasks;
 	cam_kthread->task.pool = CAM_MEM_ZALLOC_ARRAY(cam_kthread->task.num_task,
@@ -560,8 +572,7 @@ void cam_kthread_destroy(struct cam_core_kthread **cam_kthread)
 		kthread_destroy_worker(job);
 		KTHREAD_ACQUIRE_LOCK(kthread, flags);
 	}
-	/* Destroy kthread payload data */
-	CAM_MEM_FREE(kthread->task.pool[0].payload);
+
 	CAM_MEM_FREE(kthread->task.pool);
 
 	/* Leave lists in stable state after freeing pool */
@@ -585,28 +596,6 @@ void cam_kthread_destroy(struct cam_core_kthread **cam_kthread)
 	mutex_unlock(&g_cam_kthread_info.kthread_list_mutex);
 
 	CAM_MEM_FREE(kthread);
-}
-
-void cam_kthread_pause(struct cam_core_kthread *kthread)
-{
-	unsigned long flags = 0;
-
-	KTHREAD_ACQUIRE_LOCK(kthread, flags);
-	kthread->is_paused = true;
-	KTHREAD_RELEASE_LOCK(kthread, flags);
-	CAM_DBG(CAM_WORKER, "Pause kthread %s, free_cnt %d",
-		kthread->worker_name, atomic_read(&kthread->task.free_cnt));
-}
-
-void cam_kthread_resume(struct cam_core_kthread *kthread)
-{
-	unsigned long flags = 0;
-
-	KTHREAD_ACQUIRE_LOCK(kthread, flags);
-	kthread->is_paused = false;
-	KTHREAD_RELEASE_LOCK(kthread, flags);
-	CAM_DBG(CAM_WORKER, "Resume kthread %s, free_cnt %d",
-		kthread->worker_name, atomic_read(&kthread->task.free_cnt));
 }
 
 static int cam_kthread_update_thread_property_dbg(struct inode *inode, struct file *flip)

@@ -70,7 +70,6 @@ struct cam_kthread_task {
  * @lock_bh             : Lock for task structs
  * @mutex_lock          : Mutex lock for task structs
  * @in_irq              : Kthread context, non zero value if kthread is used in irq context
- * @is_paused           : Flag to indicate if worker is paused or not
  * @worker_scheduled_ts : Enqueue time of worker
  * @flush_in_process    : Used to track if flush has been called on kthread
  * @worker_name         : Name of the worker
@@ -90,7 +89,6 @@ struct cam_core_kthread {
 	spinlock_t               lock_bh;
 	struct mutex             mutex_lock;
 	enum cam_kthread_context in_irq;
-	bool                     is_paused;
 	ktime_t                  worker_scheduled_ts;
 	atomic_t                 flush_in_process;
 	char                     worker_name[128];
@@ -169,6 +167,16 @@ void cam_kthread_process(struct kthread_work *w);
 struct cam_kthread_task *cam_kthread_get_task(struct cam_core_kthread *kthread);
 
 /**
+ * cam_kthread_get_task_payload()
+ *
+ * @brief        : Get payload of the worker task
+ * @kthread      : Pointer to kthread struct
+ * @kthread_task : Kthread task used for processing
+ */
+void *cam_kthread_get_task_payload(struct cam_core_kthread *kthread,
+	struct cam_kthread_task *kthread_task);
+
+/**
  * cam_kthread_enqueue_task()
  *
  * @brief : Enqueue task in kthread queue
@@ -198,24 +206,6 @@ int cam_kthread_create(char *name, int32_t num_tasks,
  * @cam_kthread : Pointer to kthread data structure
  */
 void cam_kthread_destroy(struct cam_core_kthread **cam_kthread);
-
-/**
- * cam_kthread_pause()
- *
- * @brief   : Pause kthread execution, following get_task() or put_task()
- *            are failed until resume is called
- * @kthread : Kthread to be paused
- */
-void cam_kthread_pause(struct cam_core_kthread *kthread);
-
-/**
- * cam_kthread_resume()
- *
- * @brief   : Resume kthread execution, following get_task() or put_task()
- *            are accepted
- * @kthread : Kthread to be resumed
- */
-void cam_kthread_resume(struct cam_core_kthread *kthread);
 
 /**
  * cam_kthread_property_update_init()

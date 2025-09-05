@@ -2309,7 +2309,7 @@ static int cam_vfe_bus_start_vfe_out(
 		common_data->bus_irq_controller, CAM_IRQ_PRIORITY_1,
 		bus_irq_reg_mask, vfe_out, vfe_out->top_half_handler,
 		vfe_out->bottom_half_handler, vfe_out->worker_ctx,
-		&worker_bh_api, CAM_IRQ_EVT_GROUP_0);
+		CAM_IRQ_EVT_GROUP_0);
 
 	if (vfe_out->irq_handle < 1) {
 		CAM_ERR(CAM_ISP, "Subscribe IRQ failed for res_id %d",
@@ -3557,7 +3557,6 @@ static int cam_vfe_bus_init_hw(void *hw_priv,
 		cam_vfe_bus_ver2_handle_irq,
 		NULL,
 		NULL,
-		NULL,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (bus_priv->irq_handle < 1) {
@@ -3575,7 +3574,6 @@ static int cam_vfe_bus_init_hw(void *hw_priv,
 			cam_vfe_bus_error_irq_top_half,
 			cam_vfe_bus_err_bottom_half,
 			bus_priv->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (bus_priv->error_irq_handle < 1) {

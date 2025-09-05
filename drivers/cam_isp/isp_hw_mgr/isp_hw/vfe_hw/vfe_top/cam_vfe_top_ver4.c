@@ -2719,7 +2719,6 @@ skip_core_cfg:
 			vfe_res->top_half_handler,
 			vfe_res->bottom_half_handler,
 			vfe_res->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (rsrc_data->frame_irq_handle < 1) {
@@ -2742,7 +2741,6 @@ skip_frame_irq_subscribe:
 			vfe_res->top_half_handler,
 			vfe_res->bottom_half_handler,
 			vfe_res->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 		if (rsrc_data->sof_irq_handle < 1) {
 			CAM_ERR(CAM_ISP, "VFE:%u SOF IRQ handle subscribe failed");
@@ -2762,7 +2760,6 @@ skip_frame_irq_subscribe:
 			cam_vfe_ver4_err_irq_top_half,
 			vfe_res->bottom_half_handler,
 			vfe_res->worker_ctx,
-			&worker_bh_api,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (rsrc_data->irq_err_handle < 1) {

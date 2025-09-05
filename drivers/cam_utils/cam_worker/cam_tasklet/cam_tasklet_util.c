@@ -22,7 +22,7 @@
 /* Threshold for execution delay in ms */
 #define CAM_TASKLET_EXE_TIME_THRESHOLD          10
 
-#define CAM_TASKLETQ_SIZE                          256
+#define CAM_TASKLETQ_SIZE                       256
 
 static void cam_tasklet_action(unsigned long data);
 
@@ -75,12 +75,6 @@ struct cam_tasklet_info {
 	struct cam_tasklet_queue_cmd       cmd_queue[CAM_TASKLETQ_SIZE];
 
 	void                              *ctx_priv;
-};
-
-struct cam_irq_bh_api tasklet_bh_api = {
-	.bottom_half_enqueue_func = cam_tasklet_enqueue_cmd,
-	.get_bh_payload_func = cam_tasklet_get_cmd,
-	.put_bh_payload_func = cam_tasklet_put_cmd,
 };
 
 int cam_tasklet_get_cmd(
@@ -214,6 +208,7 @@ void cam_tasklet_enqueue_cmd(
 	if (!atomic_read(&tasklet->tasklet_active)) {
 		CAM_ERR_RATE_LIMIT(CAM_WORKER, "Tasklet is not active idx:%d",
 			tasklet->index);
+		cam_tasklet_put_cmd(tasklet, (void **)(&tasklet_cmd));
 		return;
 	}
 
@@ -229,7 +224,7 @@ void cam_tasklet_enqueue_cmd(
 		spin_unlock_irqrestore(&tasklet->tasklet_lock, flags);
 		tasklet_hi_schedule(&tasklet->tasklet);
 	} else {
-		cam_presil_enqueue_presil_irq_tasklet(bottom_half_handler,
+		cam_presil_enqueue_presil_irq_worker(bottom_half_handler,
 			handler_priv,
 			evt_payload_priv);
 	}
@@ -329,7 +324,7 @@ void cam_tasklet_stop(void  *tasklet_info)
 /*
  * cam_tasklet_action()
  *
- * @brief:              Process function that will be called  when tasklet runs
+ * @brief:              Process function that will be called when tasklet runs
  *                      on CPU
  *
  * @data:               Tasklet Info structure that is passed in tasklet_init
