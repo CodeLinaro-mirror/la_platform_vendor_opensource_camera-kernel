@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/init.h>
@@ -146,6 +146,7 @@ int cam_sync_register_callback(sync_callback cb_func,
 {
 	struct sync_callback_info *sync_cb;
 	struct sync_table_row *row = NULL;
+	struct crm_workq_task *task = NULL;
 	int status = 0, rc = 0;
 
 	if ((sync_obj >= CAM_SYNC_MAX_OBJS) || (sync_obj <= 0) || (!cb_func))
@@ -190,25 +191,38 @@ int cam_sync_register_callback(sync_callback cb_func,
 			sync_cb->callback_func = cb_func;
 			sync_cb->cb_data = userdata;
 			sync_cb->sync_obj = sync_obj;
-			INIT_WORK(&sync_cb->cb_dispatch_work,
-				cam_sync_util_cb_dispatch);
 			sync_cb->status = row->state;
 			CAM_DBG(CAM_SYNC, "Enqueue callback for sync object:%s[%d]",
 				row->name,
 				sync_cb->sync_obj);
 			sync_cb->workq_scheduled_ts = ktime_get_boottime();
-			queue_work(sync_dev->work_queue,
-				&sync_cb->cb_dispatch_work);
+
+			task = cam_req_mgr_workq_get_task(sync_dev->workq);
+			if (!task) {
+				CAM_ERR(CAM_SYNC,
+					"Failed to get workq taks for sync object:%s[%d]",
+					row->name,
+					sync_cb->sync_obj);
+				spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
+				return -ENOMEM;
+			}
+			task->process_cb = cam_sync_util_cb_dispatch;
+			rc = cam_req_mgr_workq_enqueue_task(
+				task, sync_cb, CRM_TASK_PRIORITY_0);
+			if (rc)
+				CAM_ERR(CAM_SYNC,
+					"Failed to enqueue tassk for sync object:%s[%d]",
+					row->name,
+					sync_cb->sync_obj);
 			spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 		}
 
-		return 0;
+		return rc;
 	}
 
 	sync_cb->callback_func = cb_func;
 	sync_cb->cb_data = userdata;
 	sync_cb->sync_obj = sync_obj;
-	INIT_WORK(&sync_cb->cb_dispatch_work, cam_sync_util_cb_dispatch);
 	list_add_tail(&sync_cb->list, &row->callback_list);
 
 	if (test_bit(CAM_GENERIC_FENCE_TYPE_SYNC_OBJ, &cam_sync_monitor_mask))
@@ -2483,7 +2497,7 @@ static int cam_sync_close(struct file *filep)
 		 * Flush the work queue to wait for pending signal callbacks to
 		 * finish
 		 */
-		flush_workqueue(sync_dev->work_queue);
+		cam_req_mgr_workq_flush(sync_dev->workq);
 
 		/*
 		 * Now that all callbacks worker threads have finished,
@@ -2769,6 +2783,11 @@ static void cam_sync_configure_synx_obj(struct synx_register_params *object)
 }
 #endif
 
+void cam_sync_workq_handler(struct work_struct *w)
+{
+	cam_req_mgr_process_workq(w);
+}
+
 static int cam_sync_component_bind(struct device *dev,
 	struct device *master_dev, void *data)
 {
@@ -2837,15 +2856,17 @@ static int cam_sync_component_bind(struct device *dev,
 	 */
 	set_bit(0, sync_dev->bitmap);
 
-	sync_dev->work_queue = alloc_workqueue(CAM_SYNC_WORKQUEUE_NAME,
-		WQ_HIGHPRI | WQ_UNBOUND, 1);
-
-	if (!sync_dev->work_queue) {
+	rc = cam_req_mgr_workq_create(CAM_SYNC_WORKQ_NAME, CAM_SYNC_WORKQ_NUM_TASK,
+		&sync_dev->workq, CRM_WORKQ_USAGE_NON_IRQ, 0, cam_sync_workq_handler);
+	if (rc) {
 		CAM_ERR(CAM_SYNC,
 			"Error: high priority work queue creation failed");
 		rc = -ENOMEM;
 		goto v4l2_fail;
 	}
+
+	for (idx = 0; idx < CAM_SYNC_WORKQ_NUM_TASK; idx++)
+		sync_dev->workq->task.pool[idx].payload = sync_dev;
 
 	/* Initialize dma fence driver */
 	rc = cam_dma_fence_driver_init();
@@ -2885,7 +2906,7 @@ dma_driver_deinit:
 	cam_dma_fence_driver_deinit();
 #endif
 workq_destroy:
-	destroy_workqueue(sync_dev->work_queue);
+	cam_req_mgr_workq_destroy(&sync_dev->workq);
 v4l2_fail:
 	v4l2_device_unregister(sync_dev->vdev->v4l2_dev);
 register_fail:

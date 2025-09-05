@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __CAM_SYNC_PRIVATE_H__
@@ -43,7 +43,9 @@
 #define CAM_SYNC_DEBUG_BUF_SIZE         32
 #define CAM_SYNC_PAYLOAD_WORDS          2
 #define CAM_SYNC_NAME                   "cam_sync"
-#define CAM_SYNC_WORKQUEUE_NAME         "HIPRIO_SYNC_WORK_QUEUE"
+#define CAM_SYNC_WORKQ_NAME             "HIPRIO_SYNC_WORK_QUEUE"
+#define CAM_SYNC_WORKQ_NUM_TASK         100
+
 
 #define CAM_SYNC_TYPE_INDV              0
 #define CAM_SYNC_TYPE_GROUP             1
@@ -350,7 +352,7 @@ struct cam_signalable_info {
  * @table_lock      : Mutex used to lock the table
  * @open_cnt        : Count of file open calls made on the sync driver
  * @dentry          : Debugfs entry
- * @work_queue      : Work queue used for dispatching kernel callbacks
+ * @workq           : Work queue used for dispatching kernel callbacks
  * @cam_sync_eventq : Event queue used to dispatch user payloads to user space
  * @bitmap          : Bitmap representation of all sync objects
  * @mon_data        : Objects monitor data
@@ -365,7 +367,7 @@ struct sync_device {
 	struct mutex table_lock;
 	int open_cnt;
 	struct dentry *dentry;
-	struct workqueue_struct *work_queue;
+	struct cam_req_mgr_core_workq *workq;
 	struct v4l2_fh *cam_sync_eventq;
 	spinlock_t cam_sync_eventq_lock;
 	DECLARE_BITMAP(bitmap, CAM_SYNC_MAX_OBJS);
