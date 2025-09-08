@@ -209,7 +209,7 @@ int cam_sensor_lite_publish_dev_info(
 	}
 
 	info->dev_id = CAM_REQ_MGR_DEVICE_SENSOR_LITE;
-	strlcpy(info->name, CAM_SENSOR_LITE_NAME, sizeof(info->name));
+	strscpy(info->name, CAM_SENSOR_LITE_NAME, sizeof(info->name));
 	/* Hard code for now, piline delay should come from umd */
 	info->p_delay = 2;
 	info->trigger = CAM_TRIGGER_POINT_SOF;

@@ -41,7 +41,7 @@ int cam_tpg_publish_dev_info(
 	}
 
 	info->dev_id = CAM_REQ_MGR_DEVICE_TPG;
-	strlcpy(info->name, CAM_TPG_NAME, sizeof(info->name));
+	strscpy(info->name, CAM_TPG_NAME, sizeof(info->name));
 	info->p_delay = CAM_TPG_PIPELINE_DELAY;
 	info->trigger = CAM_TRIGGER_POINT_SOF;
 
