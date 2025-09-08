@@ -1103,7 +1103,7 @@ int cam_sync_get_obj_ref(int32_t sync_var)
 	if (uid_validity == SYNC_UID_NEW) {
 		cam_sync_reinit_object(sync_dev->sync_table, sync_var);
 	} else if (uid_validity == SYNC_UID_OLD) {
-		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
+		spin_unlock(&sync_dev->row_spinlocks[sync_obj]);
 		CAM_ERR(CAM_SYNC, " Called for invalid fence, sync obj: %d, uid: %d",
 			sync_obj,
 			sync_uid);
