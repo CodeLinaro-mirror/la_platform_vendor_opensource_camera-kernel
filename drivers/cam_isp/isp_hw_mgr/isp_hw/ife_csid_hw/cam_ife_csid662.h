@@ -65,6 +65,7 @@ static struct cam_ife_csid_ver1_path_reg_info
 		.halt_frame_boundary              = 0,
 		.resume_frame_boundary            = 1,
 		.halt_immediate                   = 2,
+		.bin_h_en_shift_val               = 2,
 		.bin_en_shift_val                 = 2,
 		.bin_qcfa_en_shift_val            = 30,
 		.binning_supported                = 0x3,

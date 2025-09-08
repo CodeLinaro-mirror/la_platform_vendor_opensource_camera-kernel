@@ -2568,7 +2568,7 @@ static int cam_ife_csid_ver1_init_config_pxl_path(
 		path_cfg->qcfa_bin)
 		val |=  1 << path_reg->bin_qcfa_en_shift_val;
 
-	if ((path_cfg->qcfa_bin || path_cfg->vertical_bin ||
+	if ((path_cfg->vertical_bin ||
 		path_cfg->horizontal_bin) && path_reg->binning_supported)
 		val |= 1 << path_reg->bin_en_shift_val;
 
