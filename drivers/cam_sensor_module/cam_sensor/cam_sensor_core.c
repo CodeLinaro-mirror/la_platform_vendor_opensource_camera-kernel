@@ -215,6 +215,14 @@ static int cam_sensor_handle_res_info(struct cam_sensor_res_info *res_info,
 
 	idx = s_ctrl->last_updated_req % MAX_PER_FRAME_ARRAY;
 
+	/*
+	 * The res_info with req id 0 must be followed by a resolution configuration.
+	 * So, we need to update last_applied_req to 0, then correct last applied
+	 * info can be fetched.
+	 */
+	if (s_ctrl->last_updated_req == 0)
+		s_ctrl->last_applied_req = 0;
+
 	s_ctrl->sensor_res[idx].res_index = res_info->res_index;
 	strscpy(s_ctrl->sensor_res[idx].caps, res_info->caps,
 		sizeof(s_ctrl->sensor_res[idx].caps));
@@ -290,6 +298,72 @@ static int cam_sensor_handle_frame_info(struct cam_sensor_ctrl_t *s_ctrl,
 	return rc;
 }
 
+static int32_t cam_sensor_find_table_idx(struct cam_sensor_ctrl_t *s_ctrl,
+	uint64_t req_id)
+{
+	int32_t idx = -1, i, tmp_idx;
+
+	for (i = 0; i < MAX_PER_FRAME_ARRAY; i++) {
+		tmp_idx = s_ctrl->req_table_wr_idx;
+		cam_common_dec_idx(&tmp_idx, i, MAX_PER_FRAME_ARRAY);
+		if (s_ctrl->req_table[tmp_idx] == req_id)
+			idx = tmp_idx;
+	}
+
+	return idx;
+}
+
+static int cam_sensor_fill_last_applied_info(struct cam_sensor_ctrl_t *s_ctrl,
+	struct cam_sensor_last_applied_info *last_applied_info)
+{
+	uint32_t idx, delta;
+	uint64_t prev_req_id;
+
+	if (s_ctrl->pipeline_delay < s_ctrl->modeswitch_delay) {
+		CAM_ERR(CAM_SENSOR, "Invalid pipeline delay info, p_delay:%d m_delay:%d",
+			s_ctrl->pipeline_delay, s_ctrl->modeswitch_delay);
+		return -EINVAL;
+	}
+
+	delta = s_ctrl->pipeline_delay - s_ctrl->modeswitch_delay;
+
+	if (s_ctrl->last_applied_req > delta) {
+		idx = cam_sensor_find_table_idx(s_ctrl, s_ctrl->last_applied_req);
+		if (idx < 0) {
+			CAM_ERR(CAM_SENSOR, "Sensor[%d] can't find req:%llu in req table",
+				s_ctrl->soc_info.index, s_ctrl->last_applied_req);
+			return -EINVAL;
+		}
+
+		cam_common_dec_idx(&idx, delta, MAX_PER_FRAME_ARRAY);
+		prev_req_id = s_ctrl->req_table[idx];
+
+		if (prev_req_id == 0)
+			idx = s_ctrl->last_applied_req % MAX_PER_FRAME_ARRAY;
+		else
+			idx = prev_req_id % MAX_PER_FRAME_ARRAY;
+	} else if ((s_ctrl->last_applied_req > 0) && (s_ctrl->last_applied_req < delta)) {
+		idx = cam_sensor_find_table_idx(s_ctrl, s_ctrl->last_applied_req);
+		if (idx < 0) {
+			CAM_ERR(CAM_SENSOR, "Sensor[%d] can't find req:%llu in req table",
+				s_ctrl->soc_info.index, s_ctrl->last_applied_req);
+			return -EINVAL;
+		}
+	} else {
+		idx = 0;
+	}
+
+	last_applied_info->req_id = s_ctrl->last_applied_req;
+	last_applied_info->feature_mask = s_ctrl->sensor_res[idx].feature_mask;
+	last_applied_info->res_index = s_ctrl->sensor_res[idx].res_index;
+
+	CAM_INFO(CAM_SENSOR, "Sensor[%d] last applied info, req:%lld feature_mask:0x%x res_idx:%d",
+		s_ctrl->soc_info.index, last_applied_info->req_id,
+		last_applied_info->feature_mask, last_applied_info->res_index);
+
+	return 0;
+}
+
 static int32_t cam_sensor_generic_blob_handler(void *user_data,
 	uint32_t blob_type, uint32_t blob_size, uint8_t *blob_data)
 {
@@ -330,27 +404,34 @@ static int32_t cam_sensor_generic_blob_handler(void *user_data,
 		rc = cam_sensor_handle_frame_info(s_ctrl, frame_info);
 		break;
 	}
+	case CAM_SENSOR_GENERIC_BLOB_QUERY_LAST_APPLIED_INFO: {
+		struct cam_sensor_last_applied_info *last_applied_info =
+			(struct cam_sensor_last_applied_info *) blob_data;
+
+		if (blob_size < sizeof(struct cam_sensor_last_applied_info)) {
+			CAM_ERR(CAM_SENSOR,
+				"Sensor:%d QUERY_LAST_APPLIED_INFO: Invalid blob size expected: 0x%x actual: 0x%x",
+				s_ctrl->soc_info.index, sizeof(struct cam_sensor_last_applied_info),
+				blob_size);
+			return -EINVAL;
+		}
+
+		if ((s_ctrl->sensor_state != CAM_SENSOR_ACQUIRE) &&
+			(s_ctrl->sensor_state != CAM_SENSOR_STANDBY) &&
+			(s_ctrl->sensor_state != CAM_SENSOR_CONFIG)) {
+			CAM_WARN(CAM_SENSOR, "sensor:%d get last applied info in state:%d",
+				s_ctrl->soc_info.index, s_ctrl->sensor_state);
+		}
+
+		rc = cam_sensor_fill_last_applied_info(s_ctrl, last_applied_info);
+		break;
+	}
 	default:
 		CAM_WARN(CAM_SENSOR, "Invalid blob type %d", blob_type);
 		break;
 	}
 
 	return rc;
-}
-
-static int32_t cam_sensor_find_table_idx(struct cam_sensor_ctrl_t *s_ctrl,
-	uint64_t req_id)
-{
-	int32_t idx = -1, i, tmp_idx;
-
-	for (i = 0; i < MAX_PER_FRAME_ARRAY; i++) {
-		tmp_idx = s_ctrl->req_table_wr_idx;
-		cam_common_dec_idx(&tmp_idx, i, MAX_PER_FRAME_ARRAY);
-		if (s_ctrl->req_table[tmp_idx] == req_id)
-			idx = tmp_idx;
-	}
-
-	return idx;
 }
 
 static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
@@ -1295,7 +1376,6 @@ int cam_sensor_stream_off(struct cam_sensor_ctrl_t *s_ctrl)
 	s_ctrl->last_flush_req = 0;
 	s_ctrl->sensor_state = CAM_SENSOR_ACQUIRE;
 	s_ctrl->stream_off_on_flush = false;
-	memset(s_ctrl->sensor_res, 0, sizeof(s_ctrl->sensor_res));
 
 	CAM_GET_TIMESTAMP(ts);
 	CAM_CONVERT_TIMESTAMP_FORMAT(ts, hrs, min, sec, ms);
@@ -1809,6 +1889,40 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		}
 	}
 		break;
+	case CAM_QUERY_HW_DEV_INFO: {
+		void *blob_data = CAM_MEM_ZALLOC(cmd->size, GFP_KERNEL);
+
+		if (!blob_data) {
+			rc = -ENOMEM;
+			CAM_ERR(CAM_SENSOR, "Failed to allocate memory for blob_data, size: %u",
+				cmd->size);
+			goto release_mutex;
+		}
+
+		rc = copy_from_user(blob_data, u64_to_user_ptr(cmd->handle),
+			cmd->size);
+		if (rc) {
+			CAM_MEM_FREE(blob_data);
+			CAM_ERR(CAM_SENSOR, "Failed in copy from user, rc=%d",
+				rc);
+			goto release_mutex;
+		}
+
+		rc = cam_packet_util_process_generic_blob(cmd->size, blob_data,
+			cam_sensor_generic_blob_handler, s_ctrl);
+		if (rc) {
+			CAM_MEM_FREE(blob_data);
+			goto release_mutex;
+		}
+
+		rc = copy_to_user(u64_to_user_ptr(cmd->handle), blob_data,
+			cmd->size);
+		if (rc)
+			CAM_ERR(CAM_SENSOR, "Failed in copy to user, rc=%d", rc);
+
+		CAM_MEM_FREE(blob_data);
+		break;
+	}
 	default:
 		CAM_ERR(CAM_SENSOR, "%s: Invalid Opcode: %d",
 			s_ctrl->sensor_name, cmd->op_code);
@@ -2691,6 +2805,7 @@ int cam_sensor_dump_request(struct cam_req_mgr_dump_info *dump)
 	int                       i, idx;
 	uint64_t                  req_id;
 	struct cam_sensor_ctrl_t *s_ctrl = NULL;
+	struct cam_sensor_last_applied_info last_applied_info;
 
 	s_ctrl = (struct cam_sensor_ctrl_t *)
 		cam_get_device_priv(dump->dev_hdl);
@@ -2698,6 +2813,8 @@ int cam_sensor_dump_request(struct cam_req_mgr_dump_info *dump)
 		CAM_ERR(CAM_SENSOR, "Device data is NULL");
 		return -EINVAL;
 	}
+
+	cam_sensor_fill_last_applied_info(s_ctrl, &last_applied_info);
 
 	CAM_INFO(CAM_SENSOR,
 		"Sensor:[%s-%d] dump req_info, last applied sensor req:%llu error_req:%llu",

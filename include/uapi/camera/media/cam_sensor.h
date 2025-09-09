@@ -45,8 +45,9 @@
 #define CAM_SENSOR_PACKET_BUBBLE_UPD_I2C_COMMANDS_META  4
 
 /* SENSOR blob types */
-#define CAM_SENSOR_GENERIC_BLOB_RES_INFO           0
-#define CAM_SENSOR_GENERIC_BLOB_FRAME_INFO         1
+#define CAM_SENSOR_GENERIC_BLOB_RES_INFO                 0
+#define CAM_SENSOR_GENERIC_BLOB_FRAME_INFO               1
+#define CAM_SENSOR_GENERIC_BLOB_QUERY_LAST_APPLIED_INFO  2
 
 #define CAM_OIS_FWINFO_VERSION_1  1
 #define CAM_OIS_FWINFO_VERSION_2  2
@@ -422,6 +423,27 @@ struct cam_sensor_frame_info {
 	__u64 frame_sync_shift;
 	__u64 frame_duration;
 	__u64 blanking_duration;
+	__u32 num_valid_params;
+	__u32 valid_param_mask;
+	__u64 params[4];
+} __attribute__((packed));
+
+/**
+ * struct cam_sensor_last_applied_info - Contains sensor last applied related info
+ *
+ * @version          : Version info
+ * @res_index        : Last applied resolution index
+ * @feature_mask     : The feature mask of last applied req
+ * @req_id           : Last applied request id
+ * @num_valid_params : Number of valid params
+ * @valid_param_mask : Valid param mask
+ * @params           : params
+ */
+struct cam_sensor_last_applied_info {
+	__u32 version;
+	__u16 res_index;
+	__u16 feature_mask;
+	__u64 req_id;
 	__u32 num_valid_params;
 	__u32 valid_param_mask;
 	__u64 params[4];
