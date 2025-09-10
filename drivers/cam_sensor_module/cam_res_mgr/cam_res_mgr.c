@@ -970,10 +970,16 @@ static int cam_res_mgr_probe(struct platform_device *pdev)
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_res_mgr_remove(struct platform_device *pdev)
+#else
+static void cam_res_mgr_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_res_mgr_component_ops);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_res_mgr_dt_match[] = {
