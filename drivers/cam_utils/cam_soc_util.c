@@ -11,7 +11,6 @@
 #include <linux/of_gpio.h>
 #include "cam_soc_util.h"
 #include "cam_debug_util.h"
-#include "cam_cx_ipeak.h"
 #include "cam_mem_mgr.h"
 #include "cam_compat.h"
 #include "cam_compat.h"
@@ -464,10 +463,10 @@ int cam_soc_util_set_src_clk_rate(struct cam_hw_soc_info *soc_info,
 		soc_info->clk_name[src_clk_idx], clk_rate,
 		soc_info->dev_name, apply_level);
 
-	if ((soc_info->cam_cx_ipeak_enable) && (clk_rate >= 0)) {
+	/*if ((soc_info->cam_cx_ipeak_enable) && (clk_rate >= 0)) {
 		cam_cx_ipeak_update_vote_cx_ipeak(soc_info,
 			apply_level);
-	}
+	}*/
 
 	rc = cam_soc_util_set_clk_rate(clk,
 		soc_info->clk_name[src_clk_idx], clk_rate);
@@ -657,8 +656,8 @@ int cam_soc_util_clk_enable_default(struct cam_hw_soc_info *soc_info,
 	if (rc)
 		return rc;
 
-	if (soc_info->cam_cx_ipeak_enable)
-		cam_cx_ipeak_update_vote_cx_ipeak(soc_info, apply_level);
+	/*if (soc_info->cam_cx_ipeak_enable)
+		cam_cx_ipeak_update_vote_cx_ipeak(soc_info, apply_level);*/
 
 	for (i = 0; i < soc_info->num_clk; i++) {
 		rc = cam_soc_util_clk_enable(soc_info->clk[i],
@@ -666,21 +665,21 @@ int cam_soc_util_clk_enable_default(struct cam_hw_soc_info *soc_info,
 			soc_info->clk_rate[apply_level][i]);
 		if (rc)
 			goto clk_disable;
-		if (soc_info->cam_cx_ipeak_enable) {
+		/*if (soc_info->cam_cx_ipeak_enable) {
 			CAM_DBG(CAM_UTIL,
 			"dev name = %s clk name = %s idx = %d\n"
 			"apply_level = %d clc idx = %d",
 			soc_info->dev_name, soc_info->clk_name[i], i,
 			apply_level, i);
-		}
+		}*/
 
 	}
 
 	return rc;
 
 clk_disable:
-	if (soc_info->cam_cx_ipeak_enable)
-		cam_cx_ipeak_update_vote_cx_ipeak(soc_info, 0);
+	/*if (soc_info->cam_cx_ipeak_enable)
+		cam_cx_ipeak_update_vote_cx_ipeak(soc_info, 0);*/
 	for (i--; i >= 0; i--) {
 		cam_soc_util_clk_disable(soc_info->clk[i],
 			soc_info->clk_name[i]);
@@ -706,8 +705,8 @@ void cam_soc_util_clk_disable_default(struct cam_hw_soc_info *soc_info)
 	if (soc_info->num_clk == 0)
 		return;
 
-	if (soc_info->cam_cx_ipeak_enable)
-		cam_cx_ipeak_unvote_cx_ipeak(soc_info);
+	/*if (soc_info->cam_cx_ipeak_enable)
+		cam_cx_ipeak_unvote_cx_ipeak(soc_info);*/
 	for (i = soc_info->num_clk - 1; i >= 0; i--)
 		cam_soc_util_clk_disable(soc_info->clk[i],
 			soc_info->clk_name[i]);
@@ -936,8 +935,8 @@ int cam_soc_util_set_clk_rate_level(struct cam_hw_soc_info *soc_info,
 	if (rc)
 		return rc;
 
-	if (soc_info->cam_cx_ipeak_enable)
-		cam_cx_ipeak_update_vote_cx_ipeak(soc_info, apply_level);
+	/*if (soc_info->cam_cx_ipeak_enable)
+		cam_cx_ipeak_update_vote_cx_ipeak(soc_info, apply_level);*/
 
 	for (i = 0; i < soc_info->num_clk; i++) {
 		rc = cam_soc_util_set_clk_rate(soc_info->clk[i],
@@ -949,8 +948,8 @@ int cam_soc_util_set_clk_rate_level(struct cam_hw_soc_info *soc_info,
 				"apply_level = %d",
 				soc_info->dev_name, soc_info->clk_name[i],
 				i, apply_level);
-			if (soc_info->cam_cx_ipeak_enable)
-				cam_cx_ipeak_update_vote_cx_ipeak(soc_info, 0);
+			/*if (soc_info->cam_cx_ipeak_enable)
+				cam_cx_ipeak_update_vote_cx_ipeak(soc_info, 0);*/
 			break;
 		}
 	}
@@ -1335,8 +1334,8 @@ int cam_soc_util_get_dt_properties(struct cam_hw_soc_info *soc_info)
 	if (rc)
 		return rc;
 
-	if (of_find_property(of_node, "qcom,cam-cx-ipeak", NULL))
-		rc = cam_cx_ipeak_register_cx_ipeak(soc_info);
+	/*if (of_find_property(of_node, "qcom,cam-cx-ipeak", NULL))
+		rc = cam_cx_ipeak_register_cx_ipeak(soc_info);*/
 
 	return rc;
 }
