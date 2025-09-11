@@ -668,7 +668,6 @@ static int cam_mem_mgr_get_dma_heaps(void)
 		rc = PTR_ERR(tbl.secure_pixel_heap);
 		CAM_ERR(CAM_MEM, "qcom,secure-pixel heap not found, rc=%d", rc);
 		tbl.secure_pixel_heap = NULL;
-		goto put_heaps;
 	}
 
 	tbl.camera_uncached_heap = dma_heap_find("qcom,camera-uncached");
@@ -680,10 +679,11 @@ static int cam_mem_mgr_get_dma_heaps(void)
 	}
 
 	CAM_INFO(CAM_MEM,
-		"Heaps : system=%pK, system_uncached=%pK, camera=%pK, camera-uncached=%pK, secure_display=%pK, ubwc_p_heap=%pK",
+		"Heaps : system=%pK, system_uncached=%pK, camera=%pK, camera-uncached=%pK, secure_display=%pK, ubwc_p_heap=%pK, secure_pixel=%pK",
 		tbl.system_heap, tbl.system_uncached_heap,
 		tbl.camera_heap, tbl.camera_uncached_heap,
-		tbl.secure_display_heap, tbl.ubwc_p_heap);
+		tbl.secure_display_heap, tbl.ubwc_p_heap,
+		tbl.secure_pixel_heap);
 
 	return 0;
 put_heaps:

@@ -1266,13 +1266,13 @@ static int ais_ife_csid_reserve(void *hw_priv,
 	if (rc)
 		goto disable_csi2;
 
-	spin_lock(&csid_hw->lock_state);
+	spin_lock(&csid_hw->lock_rup);
 	csid_hw->rup_val_set |= csid_reg->rdi_reg[rdi_cfg->path]->rup_aup_mask;
 	/*rup enable */
 	cam_io_w_mb(csid_hw->rup_val_set,
 			soc_info->reg_map[0].mem_base +
 			csid_reg->cmn_reg->rup_aup_cmd_addr);
-	spin_unlock(&csid_hw->lock_state);
+	spin_unlock(&csid_hw->lock_rup);
 
 disable_csi2:
 	if (rc)
@@ -1908,6 +1908,7 @@ static irqreturn_t ais_ife_csid_irq(int irq_num, void *data)
 	struct timespec64 ts;
 	uint32_t rst_strobe_val = 0;
 	struct ais_csid_irq_event irq_event = {0};
+	uint32_t rup_mask = 0;
 
 	if (!data) {
 		CAM_ERR(CAM_ISP, "CSID: Invalid arguments");
@@ -2080,16 +2081,17 @@ handle_fatal_error:
 
 	/* rup aup irq */
 	spin_lock_irqsave(&csid_hw->lock_rup, flags);
-	if (csid_hw->rup_val_set) {
+	rup_mask = csid_hw->rup_val_set;
+	spin_unlock_irqrestore(&csid_hw->lock_rup, flags);
+	if (rup_mask) {
 		uint64_t timestamp;
 
 		timestamp = (uint64_t)((ts.tv_sec * 1000000000) + ts.tv_nsec);
 
 		ais_csid_dispatch_irq(csid_hw,
 			AIS_IFE_MSG_CSID_RUP_DONE,
-			irq_status, timestamp, csid_hw->rup_val_set);
+			irq_status, timestamp, rup_mask);
 	}
-	spin_unlock_irqrestore(&csid_hw->lock_rup, flags);
 
 	if (fatal_err_detected) {
 		uint64_t timestamp;
