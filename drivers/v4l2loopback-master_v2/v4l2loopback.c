@@ -3029,7 +3029,9 @@ static int v4l2_loopback_close(struct file *file)
 			if (opener->data) {
 				free_stream_data(opener->data);
 				opener->data = NULL;
-				opener->connected_opener->data = NULL;
+				if (opener->connected_opener) {
+					opener->connected_opener->data = NULL;
+				}
 			}
 			opener->connected_opener = NULL;
 		} else {
