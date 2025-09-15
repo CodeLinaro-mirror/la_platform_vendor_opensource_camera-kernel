@@ -546,6 +546,7 @@ static void ais_ife_csid_halt_csi2(
 {
 	const struct ais_ife_csid_reg_offset      *csid_reg;
 	struct cam_hw_soc_info                    *soc_info;
+	unsigned long flags;
 
 	csid_reg = csid_hw->csid_info->csid_reg;
 	soc_info = &csid_hw->hw_info->soc_info;
@@ -561,9 +562,9 @@ static void ais_ife_csid_halt_csi2(
 		csid_reg->csi2_reg->csid_csi2_rx_cfg1_addr);
 
 	/* reset rup */
-	spin_lock(&csid_hw->lock_rup);
+	spin_lock_irqsave(&csid_hw->lock_rup, flags);
 	csid_hw->rup_val_set = 0;
-	spin_unlock(&csid_hw->lock_rup);
+	spin_unlock_irqrestore(&csid_hw->lock_rup, flags);
 
 }
 
@@ -923,6 +924,7 @@ static int ais_ife_csid_disable_rdi_path(
 	const struct ais_ife_csid_reg_offset       *csid_reg;
 	struct cam_hw_soc_info                     *soc_info;
 	struct ais_ife_csid_path_cfg               *path_data;
+	unsigned long flags;
 
 	if (stop_args->path >= AIS_IFE_CSID_RDI_MAX) {
 		CAM_ERR(CAM_ISP, "RDI:%d path is not supported", stop_args->path);
@@ -974,9 +976,9 @@ static int ais_ife_csid_disable_rdi_path(
 	cam_io_w_mb(val, soc_info->reg_map[0].mem_base +
 		csid_reg->cmn_reg->csid_top_irq_mask_addr);
 
-	spin_lock(&csid_hw->lock_rup);
+	spin_lock_irqsave(&csid_hw->lock_rup, flags);
 	csid_hw->rup_val_set &= ~csid_reg->rdi_reg[id]->rup_aup_mask;
-	spin_unlock(&csid_hw->lock_rup);
+	spin_unlock_irqrestore(&csid_hw->lock_rup, flags);
 
 	path_data->state = AIS_ISP_RESOURCE_STATE_INIT_HW;
 
@@ -1266,13 +1268,13 @@ static int ais_ife_csid_reserve(void *hw_priv,
 	if (rc)
 		goto disable_csi2;
 
-	spin_lock(&csid_hw->lock_rup);
+	spin_lock_irqsave(&csid_hw->lock_rup, flags);
 	csid_hw->rup_val_set |= csid_reg->rdi_reg[rdi_cfg->path]->rup_aup_mask;
 	/*rup enable */
 	cam_io_w_mb(csid_hw->rup_val_set,
 			soc_info->reg_map[0].mem_base +
 			csid_reg->cmn_reg->rup_aup_cmd_addr);
-	spin_unlock(&csid_hw->lock_rup);
+	spin_unlock_irqrestore(&csid_hw->lock_rup, flags);
 
 disable_csi2:
 	if (rc)
