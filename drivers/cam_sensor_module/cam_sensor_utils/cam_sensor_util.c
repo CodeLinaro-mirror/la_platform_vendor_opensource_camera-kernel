@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/kernel.h>
 #include <clocksource/arm_arch_timer.h>
 #include "cam_common_util.h"
 #include "cam_sensor_util.h"
+#include "cam_packet_util.h"
 #include "cam_mem_mgr.h"
 #include "cam_res_mgr_api.h"
 #include "cam_mem_mgr_api.h"
@@ -627,6 +628,12 @@ int cam_sensor_i2c_command_parser(
 		 */
 		CAM_DBG(CAM_SENSOR_UTIL, "Total cmd Buf in Bytes: %d",
 			cmd_desc[i].length);
+
+		rc = cam_packet_util_validate_cmd_desc(&cmd_desc[i]);
+		if (rc) {
+			CAM_ERR(CAM_SENSOR_UTIL, "Invalid cmd[%d] buf, rc: %d", i, rc);
+			return rc;
+		}
 
 		if (!cmd_desc[i].length)
 			continue;
