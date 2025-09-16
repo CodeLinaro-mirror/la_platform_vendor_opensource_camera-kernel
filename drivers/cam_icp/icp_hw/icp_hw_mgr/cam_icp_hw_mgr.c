@@ -3696,8 +3696,11 @@ static void cam_icp_mgr_proc_suspend(struct cam_icp_hw_mgr *hw_mgr)
 {
 	struct cam_hw_intf *icp_dev_intf = hw_mgr->icp_dev_intf;
 
-	if (!icp_dev_intf)
+	if (!icp_dev_intf || !hw_mgr->icp_resumed) {
+		CAM_INFO(CAM_PERF, "icp_dev_intf is %pK or icp_resumed is %d",
+			icp_dev_intf, hw_mgr->icp_resumed);
 		return;
+	}
 
 	icp_dev_intf->hw_ops.process_cmd(icp_dev_intf->hw_priv,
 					CAM_ICP_CMD_POWER_COLLAPSE,
