@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -2719,6 +2719,13 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 				rc = 0;
 			}
 
+			rc = cam_csiphy_update_lane(csiphy_dev, offset, true);
+			if (rc) {
+				CAM_ERR(CAM_CSIPHY,
+					"Update enable lane failed, rc: %d", rc);
+				goto release_mutex;
+			}
+
 			if (csiphy_dev->csiphy_info[offset].csiphy_3phase) {
 				rc = cam_csiphy_cphy_data_rate_config(
 					csiphy_dev, offset);
@@ -2728,13 +2735,6 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 						rc);
 					goto release_mutex;
 				}
-			}
-
-			rc = cam_csiphy_update_lane(csiphy_dev, offset, true);
-			if (rc) {
-				CAM_ERR(CAM_CSIPHY,
-					"Update enable lane failed, rc: %d", rc);
-				goto release_mutex;
 			}
 
 			if (csiphy_dev->en_full_phy_reg_dump)
