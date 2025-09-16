@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/timer.h>
@@ -586,6 +586,7 @@ static int cam_lrme_hw_util_submit_req(struct cam_lrme_core *lrme_core,
 		cdm_cmd->userdata = NULL;
 		cdm_cmd->cookie = 0;
 		cdm_cmd->gen_irq_arb = false;
+		cdm_cmd->fast_complete = NULL;
 
 		for (i = 0; i <= frame_req->num_hw_update_entries; i++) {
 			cmd = (frame_req->hw_update_entries + i);
