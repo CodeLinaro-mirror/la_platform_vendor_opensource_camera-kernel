@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of_address.h>
@@ -568,7 +568,7 @@ static int __load_firmware(struct platform_device *pdev)
 	}
 
 	scnprintf(firmware_name, ARRAY_SIZE(firmware_name),
-		"%s.mdt", fw_name);
+		"%s.mbn", fw_name);
 
 	node = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);
 	if (!node) {
@@ -718,11 +718,12 @@ static int cam_lx7_core_control(
 
 	if (core_info->use_sec_pil) {
 		rc = qcom_scm_set_remote_state(state, CAM_FW_PAS_ID);
-		if (rc)
+		if (rc) {
 			CAM_ERR(CAM_ICP,
 				"remote state set to %s failed rc=%d",
 				state == TZ_STATE_RESUME ? "resume" : "suspend", rc);
-				__cam_lx7_core_reg_dump(lx7_info);
+			__cam_lx7_core_reg_dump(lx7_info);
+		}
 	} else {
 		if (state == TZ_STATE_RESUME) {
 			rc = __cam_lx7_power_resume(lx7_info);
