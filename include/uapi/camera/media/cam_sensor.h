@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __UAPI_CAM_SENSOR_H__
@@ -23,6 +23,7 @@
 
 #define CAM_SENSOR_GET_QUERY_CAP_V2
 #define CAM_SENSOR_TRIGGER_EVENT_V2
+#define CAM_SENSOR_RES_INFO_V2
 
 /* Sensor Driver cmd buffer meta type */
 #define CAM_SENSOR_PACKET_GENERIC_BLOB             1
@@ -1152,6 +1153,55 @@ struct cam_sensor_res_info {
 	__u16 params[4];
 } __attribute__((packed));
 
+
+/**
+ * struct cam_sensor_stream_data - Stream information for each stream
+ *
+ * @version  : Version of the structure
+ * @size     : Size of the structure
+ * @vc       : Virtual Channel
+ * @dt       : Data Type
+ * @type     : Stream Type
+ * @reserved : Reserved for future use
+ */
+struct cam_sensor_stream_data {
+	__u32 version;
+	__u32 size;
+	__u16 vc;
+	__u16 dt;
+	__u32 type;
+	__u64 reserved;
+} __attribute__((packed));
+
+/**
+ * struct cam_sensor_res_info_v2 - Contains sensor res info version 2
+ *
+ * vc/dt is the key property, it specifies the
+ * combinations of other properties enclosed in this
+ * structure. This version includes additional parameters
+ * for enhanced sensor configuration.
+ *
+ * @version            : Version to indicate the change
+ * @size               : Size of the structure (includes stream data)
+ * @num_streams        : Number of streams
+ * @frame_duration     : Frame duration
+ * @req_id             : Request Id
+ * @num_valid_params   : Number of valid params
+ * @valid_param_mask   : Valid param mask
+ * @stream_info_offset : Stream Info offset (points to stream data at end)
+ * @params             : params
+ */
+struct cam_sensor_res_info_v2 {
+	__u32 version;
+	__u32 total_size;
+	__u32 num_streams;
+	__u32 num_valid_params;
+	__u64 frame_duration;
+	__u64 req_id;
+	__u32 valid_param_mask;
+	__u32 stream_info_offset;
+	__u16 params[4];
+} __attribute__((packed));
 /**
  * struct cam_sensor_qtimer_info - Contains sensor qtimer info
  *
