@@ -703,6 +703,88 @@ int cam_res_mgr_gpio_set_value(unsigned int gpio, int value)
 }
 EXPORT_SYMBOL(cam_res_mgr_gpio_set_value);
 
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+bool cam_res_mgr_is_icc_clock(const char *clk_name)
+{
+	struct cam_res_mgr_dt *dt;
+	int count;
+
+	if (!cam_res || !clk_name)
+		return false;
+
+	dt = &cam_res->dt;
+
+	if (!dt->icc_clocks_en)
+		return false;
+
+	count = dt->num_icc_clocks;
+	while (count--) {
+		if (strcmp(clk_name, dt->icc_clocks[count]) == 0) {
+			CAM_DBG(CAM_RES, "The '%s' is ICC clock resource", clk_name);
+			return true;
+		}
+	}
+
+	return false;
+}
+EXPORT_SYMBOL(cam_res_mgr_is_icc_clock);
+
+static int cam_res_mgr_parse_dt_icc_clocks(struct device *dev)
+{
+	int rc = 0;
+	int count;
+	struct cam_res_mgr_dt *dt;
+
+	if (!cam_res)
+		return -EINVAL;
+
+	dt = &cam_res->dt;
+
+	dt->icc_clocks_en = of_property_read_bool(dev->of_node, "icc-clocks");
+	CAM_DBG(CAM_UTIL, "Clock handling via icc %s", dt->icc_clocks_en ? "enabled" : "disabled");
+
+	if (!dt->icc_clocks_en)
+		return 0;
+
+	if (!of_property_present(dev->of_node, "interconnects")) {
+		CAM_ERR(CAM_RES, "No interconnets present");
+		return -ENOENT;
+	}
+
+	if (!of_property_present(dev->of_node, "interconnect-names")) {
+		CAM_ERR(CAM_RES, "No interconnet-names present");
+		return -ENOENT;
+	}
+
+	dt->num_icc_clocks = of_property_count_strings(dev->of_node, "interconnect-names");
+	if (dt->num_icc_clocks < 0) {
+		CAM_ERR(CAM_RES, "Invalid interconnect entries");
+		return -ENOENT;
+	}
+
+	count = dt->num_icc_clocks;
+
+	dt->icc_clocks = devm_kcalloc(dev, count, sizeof(*dt->icc_clocks), GFP_KERNEL);
+	if (!dt->icc_clocks) {
+		CAM_ERR(CAM_RES, "Memory not available: %d", count * sizeof(*dt->icc_clocks));
+		return -ENOMEM;
+	}
+
+	while (count--) {
+		rc = of_property_read_string_index(dev->of_node,
+						   "interconnect-names", count,
+						   &dt->icc_clocks[count]);
+		if (rc)
+			return rc;
+
+	}
+
+	CAM_DBG(CAM_RES, "The count of ICC controlled clocks is: %d", dt->num_icc_clocks);
+
+	return 0;
+}
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
+
 static int cam_res_mgr_shared_pinctrl_init(
 	struct device *dev)
 {
@@ -886,6 +968,12 @@ static int cam_res_mgr_parse_dt(struct device *dev)
 			return rc;
 		}
 	}
+
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+	rc = cam_res_mgr_parse_dt_icc_clocks(dev);
+	if (rc < 0)
+		CAM_WARN(CAM_RES, "ICC clocks parsing failed: rc: %d", rc);
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 	return 0;
 }
