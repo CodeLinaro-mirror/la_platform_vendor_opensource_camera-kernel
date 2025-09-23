@@ -1546,6 +1546,12 @@ static int ais_vfe_handle_bus_wr_irq(struct cam_hw_info *vfe_hw,
 			core_info->vfe_idx, work_data->bus_wr_status[0]);
 		work_data->path = 0xF;
 		rc = ais_vfe_handle_error(core_info, work_data);
+		if (rc)
+			CAM_ERR(CAM_ISP, "ais vfe handle error failed rc=%d", rc);
+
+		rc = ais_vfe_bus_hw_deinit(core_info);
+		if (rc)
+			CAM_ERR(CAM_ISP, "vfe bus HW deinit Failed rc=%d", rc);
 	}
 
 	if (work_data->bus_wr_status[0] & 0x1) {
