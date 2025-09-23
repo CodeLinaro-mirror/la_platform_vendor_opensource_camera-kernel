@@ -132,4 +132,12 @@ int cam_res_mgr_util_get_idx_from_shared_pctrl_gpio(uint gpio);
  */
 int cam_res_mgr_util_shared_gpio_check_hold(uint gpio);
 
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+/**
+ * @brief : Check if clock is handled by icc fwk
+ * @return true if so, false all other cases
+ */
+bool cam_res_mgr_is_icc_clock(const char *clk_name);
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
+
 #endif /* __CAM_RES_MGR_API_H__ */
