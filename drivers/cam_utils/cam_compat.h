@@ -32,7 +32,6 @@
 
 #include <linux/msm_ion.h>
 #include <linux/ion.h>
-#include <linux/qcom_scm.h>
 
 #else
 
