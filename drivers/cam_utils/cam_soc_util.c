@@ -13,6 +13,7 @@
 #include "cam_debug_util.h"
 #include "cam_cx_ipeak.h"
 #include "cam_mem_mgr.h"
+#include "cam_compat.h"
 
 static char supported_clk_info[256];
 

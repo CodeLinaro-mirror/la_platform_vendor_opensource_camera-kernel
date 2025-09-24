@@ -7,6 +7,8 @@
 #include <linux/dma-mapping.h>
 #include <linux/of_address.h>
 #include <linux/slab.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 
 #include "cam_compat.h"
 #include "cam_debug_util.h"
