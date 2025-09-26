@@ -209,7 +209,6 @@ struct cam_hw_acquire_args {
 struct cam_hw_release_args {
 	void              *ctxt_to_hw_map;
 	bool               active_req;
-	bool               is_ext_isp;
 };
 
 /**

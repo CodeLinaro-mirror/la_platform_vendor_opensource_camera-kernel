@@ -16,7 +16,6 @@
 #endif // !CONFIG_SPECTRA_KT
 
 extern unsigned long long debug_mdl;
-extern unsigned long long sof_adjust_timeout;
 extern unsigned int debug_type;
 extern unsigned int debug_priority;
 extern unsigned int debug_drv;

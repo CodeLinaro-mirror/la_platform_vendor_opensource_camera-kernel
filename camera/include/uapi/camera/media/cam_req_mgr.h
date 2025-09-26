@@ -694,7 +694,6 @@ struct cam_mem_cpu_access_op {
 #define CAM_REQ_MGR_SOF_FREEZE                           BIT(17)
 #define CAM_REQ_MGR_SOF_FREEZE_ERROR_FATAL               BIT(18)
 #define CAM_REQ_MGR_ISP_FATAL_ERROR                      BIT(19)
-#define CAM_REQ_MGR_SOF_FREEZE_RECOVERY_DONE             BIT(20)
 
 /**
  * struct cam_req_mgr_error_msg
