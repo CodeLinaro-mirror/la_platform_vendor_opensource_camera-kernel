@@ -502,6 +502,7 @@ struct cam_isp_context {
 	bool                                  bubble_recover_dis;
 	bool                                  sfe_en;
 	bool                                  isp_external_recovery;
+	uint32_t                              sof_freeze_recovery_state;
 };
 
 /**

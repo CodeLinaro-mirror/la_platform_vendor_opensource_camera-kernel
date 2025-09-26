@@ -7598,6 +7598,32 @@ clear_param:
 	return rc;
 }
 
+int cam_ife_hw_mgr_inject_fatal_err(struct cam_ife_hw_mgr *hw_mgr)
+{
+	int rc = 0, i;
+
+	CAM_INFO(CAM_ISP, "TEST_LOG Injecting ERROR");
+
+	for (i = 0; i < CAM_IFE_CSID_HW_NUM_MAX; i++) {
+		if(hw_mgr->csid_devices[i] == NULL)
+		{
+			CAM_INFO(CAM_ISP, "csid_device[%d] NULL so skipping",i);
+			continue;
+		}
+		if (g_ife_hw_mgr.debug_cfg.set_fatal_error & (1 << i)) {
+			hw_mgr->irq_inject_param[0].hw_idx = hw_mgr->csid_devices[i]->hw_idx;
+			hw_mgr->irq_inject_param[0].reg_unit = CAM_ISP_CSID_RX_REG;
+			hw_mgr->irq_inject_param[0].hw_type = CAM_ISP_HW_TYPE_CSID;
+			hw_mgr->irq_inject_param[0].is_valid = true;
+			hw_mgr->irq_inject_param[0].irq_mask = BIT(17);
+
+			rc = cam_ife_hw_mgr_csid_irq_inject_or_dump_desc(
+				hw_mgr, &hw_mgr->irq_inject_param[0], false);
+		}
+	}
+	return rc;
+}
+
 static int cam_ife_hw_mgr_irq_injection(struct cam_ife_hw_mgr *hw_mgr,
 	uint64_t request_id)
 {
@@ -9144,6 +9170,10 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 	uint64_t                          ms, sec, min, hrs;
 	bool                              skip_deinit_hw = false;
 	bool                              per_port_feature_enable = false;
+	struct cam_isp_hw_mgr_res        *hw_mgr_res = NULL;
+	struct cam_isp_resource_node     *hw_res = NULL;
+	int hw_idx[CAM_ISP_HW_SPLIT_MAX] = {-1, -1};
+	bool is_ext_isp = false;
 
 	if (!hw_mgr_priv || !release_hw_args) {
 		CAM_ERR(CAM_ISP, "Invalid arguments");
@@ -9152,6 +9182,7 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 
 	hw_mgr_ctx = (struct cam_ife_hw_mgr_ctx *)release_args->ctxt_to_hw_map;
 	c_ctx = hw_mgr_ctx->concr_ctx;
+	is_ext_isp  = release_args->is_ext_isp;
 	if (!c_ctx || !c_ctx->flags.ctx_in_use) {
 		if (!hw_mgr_ctx->is_offline) {
 			CAM_ERR(CAM_ISP, "Invalid context is used");
@@ -9162,6 +9193,33 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 
 	CAM_DBG(CAM_ISP, "Enter...ctx id:%d",
 		c_ctx->ctx_index);
+
+	if (!list_empty(&c_ctx->res_list_ife_src)) {
+		hw_mgr_res = list_first_entry(&c_ctx->res_list_ife_src,
+			struct cam_isp_hw_mgr_res, list);
+
+		for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
+			hw_res = hw_mgr_res->hw_res[i];
+			if (hw_res && hw_res->hw_intf)
+			{
+				hw_idx[i] = hw_res->hw_intf->hw_idx;
+			}
+		}
+	}
+
+	CAM_INFO(CAM_ISP, "TEST_LOG is_ext_isp = %d, sof_freeze_camera_id = %d",
+			is_ext_isp, g_ife_hw_mgr.debug_cfg.sof_freeze_camera_id);
+	if (is_ext_isp) {
+		CAM_INFO(CAM_ISP, "TEST_LOG Clearing hw_id = %d",(1 << (hw_idx[CAM_ISP_HW_SPLIT_LEFT])));
+		if (g_ife_hw_mgr.debug_cfg.sof_freeze_camera_id & (1 << (hw_idx[CAM_ISP_HW_SPLIT_LEFT])))
+			g_ife_hw_mgr.debug_cfg.sof_freeze_camera_id &= ~(1 << (hw_idx[CAM_ISP_HW_SPLIT_LEFT]));
+	}
+
+	if (g_ife_hw_mgr.debug_cfg.set_fatal_error & (1 << (hw_idx[CAM_ISP_HW_SPLIT_LEFT])))
+	       g_ife_hw_mgr.debug_cfg.set_fatal_error &= ~(1 << (hw_idx[CAM_ISP_HW_SPLIT_LEFT]));
+
+	if (c_ctx->flags.per_port_en && g_ife_hw_mgr.skip_sof_freez_group_id)
+		g_ife_hw_mgr.skip_sof_freez_group_id = false;
 
 	if (c_ctx->flags.per_port_en && !c_ctx->flags.is_dual) {
 		for (i = 0; i < g_ife_sns_grp_cfg.num_grp_cfg; i++) {
@@ -9255,6 +9313,7 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 	kfree(c_ctx->sfe_bus_comp_grp);
 	c_ctx->vfe_bus_comp_grp = NULL;
 	c_ctx->sfe_bus_comp_grp = NULL;
+	c_ctx->flags.sof_freez_en = false;
 
 	memset(&c_ctx->flags, 0, sizeof(struct cam_ife_hw_mgr_ctx_flags));
 	atomic_set(&c_ctx->overflow_pending, 0);
@@ -16355,6 +16414,9 @@ static int cam_ife_hw_mgr_handle_csid_camif_epoch(
 		goto end;
 	}
 
+	CAM_INFO(CAM_ISP, "event_info->hw_idx= %d, sof_freeze_camera_id=%d",
+			 (1 << event_info->hw_idx), g_ife_hw_mgr.debug_cfg.sof_freeze_camera_id);
+
 	switch (event_info->res_id) {
 	case CAM_IFE_PIX_PATH_RES_IPP:
 	case CAM_IFE_PIX_PATH_RES_RDI_0:
@@ -16365,6 +16427,36 @@ static int cam_ife_hw_mgr_handle_csid_camif_epoch(
 	case CAM_IFE_PIX_PATH_RES_PPP:
 		if (atomic_read(&c_ctx->overflow_pending))
 			break;
+
+		if (g_ife_hw_mgr.debug_cfg.sof_freeze_camera_id & (1 << event_info->hw_idx)) {
+				CAM_INFO(CAM_ISP, "per_port_en=%d,skip_sof_freez_group_id=%d"
+						, g_ife_hw_mgr.skip_sof_freez_group_id);
+			if (c_ctx->flags.per_port_en &&
+				(g_ife_hw_mgr.debug_cfg.sof_freeze_camera_id & BIT(8))) {
+				if (!g_ife_hw_mgr.skip_sof_freez_group_id) {
+					g_ife_hw_mgr.skip_sof_freez_group_id = true;
+					c_ctx->flags.sof_freez_en = true;
+				}
+				if (c_ctx->flags.sof_freez_en) {
+					CAM_INFO(CAM_ISP,
+						"SKIP CSID[%u] per port CAMIF Epoch res: %d, ctx_idx: %u",
+						event_info->hw_idx, event_info->res_id, c_ctx->ctx_index);
+					rc = 0;
+					goto end;
+				}
+			} else {
+				CAM_INFO(CAM_ISP,
+					"SKIP CSID[%u] CAMIF Epoch res: %d, ctx_idx: %u",
+					event_info->hw_idx, event_info->res_id, c_ctx->ctx_index);
+				rc = 0;
+				goto end;
+			}
+
+		} else if (c_ctx->flags.sof_freez_en) {
+			g_ife_hw_mgr.skip_sof_freez_group_id = false;
+			c_ctx->flags.sof_freez_en = false;
+		}
+
 		epoch_done_event_data.frame_id_meta = event_info->reg_val;
 		ife_hw_irq_epoch_cb(ctx->cb_priv,
 			CAM_ISP_HW_EVENT_EPOCH, (void *)&epoch_done_event_data);
@@ -16379,6 +16471,15 @@ static int cam_ife_hw_mgr_handle_csid_camif_epoch(
 		break;
 	}
 end:
+		static int enable =1;
+		if (g_ife_hw_mgr.debug_cfg.set_fatal_error && enable)
+		{
+			cam_ife_hw_mgr_inject_fatal_err(&g_ife_hw_mgr);
+			enable =0;
+		} else {
+			enable = 1;
+			g_ife_hw_mgr.debug_cfg.set_fatal_error =0;
+		}
 	return rc;
 }
 
@@ -16691,15 +16792,45 @@ static int cam_ife_hw_mgr_handle_hw_epoch(
 	struct cam_ife_hw_concrete_ctx       *c_ctx = ctx->concr_ctx;
 	cam_hw_event_cb_func                  ife_hw_irq_epoch_cb;
 	struct cam_isp_hw_epoch_event_data    epoch_done_event_data;
+	int rc = 0;
 
 	ife_hw_irq_epoch_cb =
 		ctx->event_cb[CAM_ISP_HW_EVENT_EPOCH];
+
+	CAM_INFO(CAM_ISP, "event_info->hw_idx= %d, sof_freeze_camera_id=%d",
+			 (1 << event_info->hw_idx), g_ife_hw_mgr.debug_cfg.sof_freeze_camera_id);
 
 	switch (event_info->res_id) {
 	case CAM_ISP_HW_VFE_IN_CAMIF:
 		if (atomic_read(&c_ctx->overflow_pending))
 			break;
+		if ((!ife_hw_mgr_ctx->is_offline) &&
+			(g_ife_hw_mgr.debug_cfg.sof_freeze_camera_id & (1 << event_info->hw_idx))) {
+			if (c_ctx->flags.per_port_en &&
+				(g_ife_hw_mgr.debug_cfg.sof_freeze_camera_id & BIT(8))) {
+				if (!g_ife_hw_mgr.skip_sof_freez_group_id) {
+					g_ife_hw_mgr.skip_sof_freez_group_id = true;
+					c_ctx->flags.sof_freez_en = true;
+				}
+				if (c_ctx->flags.sof_freez_en) {
+					CAM_INFO(CAM_ISP,
+						"SKIP CSID[%u] perport CAMIF Epoch res: %d, ctx_idx: %u",
+						event_info->hw_idx, event_info->res_id, c_ctx->ctx_index);
+					rc = 0;
+					goto end;
+				}
+			} else {
+				CAM_INFO(CAM_ISP,
+					"SKIP CSID[%u] CAMIF Epoch res: %d, ctx_idx: %u",
+					event_info->hw_idx, event_info->res_id, c_ctx->ctx_index);
+				rc = 0;
+				goto end;
+			}
 
+		} else if ((!ife_hw_mgr_ctx->is_offline) && c_ctx->flags.sof_freez_en) {
+			g_ife_hw_mgr.skip_sof_freez_group_id = false;
+			c_ctx->flags.sof_freez_en = false;
+		}
 		epoch_done_event_data.frame_id_meta = event_info->reg_val;
 		ife_hw_irq_epoch_cb(ctx->cb_priv,
 			CAM_ISP_HW_EVENT_EPOCH, (void *)&epoch_done_event_data);
@@ -16724,8 +16855,17 @@ static int cam_ife_hw_mgr_handle_hw_epoch(
 
 	CAM_DBG(CAM_ISP, "Epoch for VFE:%d source %d ctx_idx: %u", event_info->hw_idx,
 		event_info->res_id, c_ctx->ctx_index);
-
-	return 0;
+end:
+		static int enable =1;
+		if (g_ife_hw_mgr.debug_cfg.set_fatal_error && enable)
+		{
+			cam_ife_hw_mgr_inject_fatal_err(&g_ife_hw_mgr);
+			enable =0;
+		} else {
+			enable = 1;
+			g_ife_hw_mgr.debug_cfg.set_fatal_error =0;
+		}
+	return rc;
 }
 
 static int cam_ife_hw_mgr_handle_hw_sof(
@@ -18232,6 +18372,10 @@ static int cam_ife_hw_mgr_debug_register(void)
 		g_ife_hw_mgr.debug_cfg.dentry, NULL, &cam_isp_irq_injection);
 	debugfs_create_bool("enable_cdm_cmd_check", 0644, g_ife_hw_mgr.debug_cfg.dentry,
 		&g_ife_hw_mgr.debug_cfg.enable_cdm_cmd_check);
+	debugfs_create_u32("sof_freeze_camera_id", 0644, g_ife_hw_mgr.debug_cfg.dentry,
+		&g_ife_hw_mgr.debug_cfg.sof_freeze_camera_id);
+	debugfs_create_u32("set_fatal_error", 0644, g_ife_hw_mgr.debug_cfg.dentry,
+		&g_ife_hw_mgr.debug_cfg.set_fatal_error);
 end:
 	g_ife_hw_mgr.debug_cfg.enable_csid_recovery = 1;
 	return rc;
