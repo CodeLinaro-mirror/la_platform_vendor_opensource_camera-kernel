@@ -15,8 +15,6 @@
 
 unsigned long long debug_mdl;
 module_param(debug_mdl, ullong, 0644);
-unsigned long long sof_adjust_timeout=50;
-module_param(sof_adjust_timeout, ullong, 0644);
 
 /* 0x0 - only logs, 0x1 - only trace, 0x2 - logs + trace */
 uint debug_type;

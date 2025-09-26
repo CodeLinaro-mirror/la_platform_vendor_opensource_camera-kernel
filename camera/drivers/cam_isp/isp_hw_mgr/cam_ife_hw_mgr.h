@@ -92,8 +92,6 @@ struct cam_ife_hw_mgr_debug {
 	bool           enable_presil_reg_dump;
 	bool           enable_cdm_cmd_check;
 	bool           disable_line_based_mode;
-	uint32_t       sof_freeze_camera_id;
-	uint32_t       set_fatal_error;
 };
 
 /**
@@ -233,7 +231,6 @@ struct cam_ife_hw_mgr_ctx_flags {
 	bool   sys_cache_usage[CAM_LLCC_MAX];
 	bool   rdi_pd_context;
 	bool   per_port_en;
-	bool   sof_freez_en;
 };
 
 /**
@@ -722,7 +719,6 @@ struct cam_ife_hw_mgr {
 	uint32_t                         min_clk_threshold;
 	uint32_t                         bytes_per_clk;
 	bool                             offline_reconfig;
-	bool                             skip_sof_freez_group_id;
 	bool                             offline_outport_sync;
 };
 

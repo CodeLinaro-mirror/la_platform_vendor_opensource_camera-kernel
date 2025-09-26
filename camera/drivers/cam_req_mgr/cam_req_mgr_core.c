@@ -1057,14 +1057,6 @@ static void __cam_req_mgr_validate_crm_wd_timer(
 	max_frame_timeout = (current_frame_timeout > next_frame_timeout) ?
 		current_frame_timeout : next_frame_timeout;
 
-	if(sof_adjust_timeout > 0)
-	{
-		max_frame_timeout = sof_adjust_timeout;
-		CAM_INFO(CAM_CRM,
-				"max_frame_timeout modified to %d ms",
-				max_frame_timeout);
-	}
-
 	spin_lock_bh(&link->link_state_spin_lock);
 	if (link->watchdog) {
 		if ((max_frame_timeout + CAM_REQ_MGR_WATCHDOG_TIMEOUT) >
@@ -2696,7 +2688,6 @@ static int __cam_req_mgr_process_sof_freeze(void *priv, void *data)
 	struct cam_req_mgr_core_session *session = NULL;
 	int rc = 0;
 	int64_t last_applied_req_id = -EINVAL;
-	CAM_INFO(CAM_CRM, "TEST_LOG Enter__cam_req_mgr_process_sof_freeze");
 
 	if (!data || !priv) {
 		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
@@ -2720,7 +2711,7 @@ static int __cam_req_mgr_process_sof_freeze(void *priv, void *data)
 	}
 
 	spin_lock_bh(&link->link_state_spin_lock);
-	if ((link->watchdog) && (link->watchdog->pause_timer) && !(link->watchdog->extend_timer.is_extended)) {
+	if ((link->watchdog) && (link->watchdog->pause_timer)) {
 		CAM_INFO(CAM_CRM,
 			"link:%x watchdog paused, maybe stream on/off is delayed",
 			link->link_hdl);
@@ -2736,21 +2727,17 @@ static int __cam_req_mgr_process_sof_freeze(void *priv, void *data)
 
 	if ((link->watchdog) && (link->watchdog->extend_timer.expiry > 0) &&
 		!(link->watchdog->extend_timer.is_extended)) {
-			link->watchdog->extend_timer.is_extended = true;
-			crm_timer_modify(link->watchdog, link->watchdog->extend_timer.expiry);
-			__cam_req_mgr_send_evt(0, CAM_REQ_MGR_LINK_EVT_SOF_FREEZE,
-					CRM_KMD_ERR_FATAL, link, 0);
-			CAM_INFO(CAM_CRM,"TEST_LOG First SOF Freeze Detected");
-			CAM_WARN(CAM_CRM,
-					"link:%x watchdog extended to %d ms, waiting for SOF",
-					link->link_hdl, link->watchdog->extend_timer.expiry);
-			rc = __cam_req_mgr_notify_v4l2_error_event(session, link,
+		link->watchdog->extend_timer.is_extended = true;
+		crm_timer_modify(link->watchdog, link->watchdog->extend_timer.expiry);
+		CAM_WARN(CAM_CRM,
+				"link:%x watchdog extended to %d ms, waiting for SOF",
+				link->link_hdl, link->watchdog->extend_timer.expiry);
+		rc = __cam_req_mgr_notify_v4l2_error_event(session, link,
 				CAM_REQ_MGR_ERROR_TYPE_SOF_FREEZE,
 				CAM_REQ_MGR_SOF_FREEZE);
 	} else {
 		if ((link->watchdog) && (link->watchdog->extend_timer.expiry > 0)) {
 			link->watchdog->extend_timer.is_extended = false;
-			CAM_INFO(CAM_CRM,"TEST_LOG SOFF_Recovery Failed...");
 			CAM_ERR(CAM_CRM,
 					"link:%x extended WDG expiry, SOF freeze ERR_FATAL,last_req_id:%d",
 					link->link_hdl, last_applied_req_id);
@@ -4391,8 +4378,6 @@ static int cam_req_mgr_cb_notify_trigger(
 	struct cam_req_mgr_state_monitor state;
 	struct cam_req_mgr_req_queue    *in_q = NULL;
 
-	struct cam_req_mgr_core_session *session = NULL;
-
 	if (!trigger_data) {
 		CAM_ERR(CAM_CRM, "trigger_data is NULL");
 		rc = -EINVAL;
@@ -4405,13 +4390,6 @@ static int cam_req_mgr_cb_notify_trigger(
 		rc = -EINVAL;
 		goto end;
 	}
-
-	session = (struct cam_req_mgr_core_session *)link->parent;
-	if (!session) {
-		CAM_WARN(CAM_CRM, "session ptr NULL %x", link->link_hdl);
-		return -EINVAL;
-	}
-
 
 	CAM_DBG(CAM_REQ, "link_hdl %x frame_id %lld, trigger %x\n",
 		trigger_data->link_hdl,
@@ -4461,21 +4439,8 @@ static int cam_req_mgr_cb_notify_trigger(
 		(trigger == CAM_TRIGGER_POINT_SOF))
 		link->watchdog->pause_timer = false;
 
-	if ((link->watchdog) && (link->watchdog->extend_timer.expiry > 0) &&
-		(link->watchdog->extend_timer.is_extended == TRUE)) {
+	if ((link->watchdog) && (link->watchdog->extend_timer.expiry > 0))
 		link->watchdog->extend_timer.is_extended = FALSE;
-		CAM_INFO(CAM_CRM,"TEST_LOG SOFF_Recovery Successfull...");
-		trigger_data->sof_recovery = 1;
-		rc = __cam_req_mgr_notify_v4l2_error_event(session, link,
-			CAM_REQ_MGR_ERROR_TYPE_SOF_FREEZE,
-			CAM_REQ_MGR_SOF_FREEZE_RECOVERY_DONE);
-		if (rc) {
-			CAM_ERR(CAM_CRM,
-					"Error notifying SOF freeze recovery for session %d link 0x%x rc %d",
-					session->session_hdl, link->link_hdl, rc);
-			goto end;
-		}
-	}
 
 	if (link->dual_trigger && link->wait_for_dual_trigger) {
 		if ((trigger_id >= 0) && (trigger_id <
@@ -5620,7 +5585,6 @@ int cam_req_mgr_link_control(struct cam_req_mgr_link_control *control)
 			break;
 		}
 
-
 		mutex_lock(&link->lock);
 		if (control->ops == CAM_REQ_MGR_LINK_ACTIVATE) {
 			spin_lock_bh(&link->link_state_spin_lock);
@@ -5646,15 +5610,15 @@ int cam_req_mgr_link_control(struct cam_req_mgr_link_control *control)
 			/*External timeout for SOF freeze handling */
 			link->watchdog->extend_timer.expiry = control->reserved;
 			if (link->watchdog->extend_timer.expiry > 0) {
-				link->watchdog->extend_timer.expiry = (9*link->watchdog->extend_timer.expiry)/10;
 				link->watchdog->extend_timer.is_extended = false;
 				__cam_req_mgr_send_evt(0, CAM_REQ_MGR_LINK_EVT_UPDATE_PROPERTIES,
 						CRM_KMD_ERR_MAX, link,
 						CAM_LINK_PROPERTY_SENSOR_EXTERNAL_RECOVERY);
-				CAM_INFO(CAM_CRM,
-					"TEST_LOG SOF Freeze extended expiry configured for link: 0x%x, extend_timeout: %d ms",
+				CAM_DBG(CAM_CRM,
+					"SOF Freeze extended expiry configured for link: 0x%x, extend_timeout: %d ms",
 					link->link_hdl,
 					link->watchdog->extend_timer.expiry);
+
 			}
 
 			if (link->dual_trigger)
@@ -5743,6 +5707,9 @@ int cam_req_mgr_link_properties(struct cam_req_mgr_link_properties *properties)
 	}
 
 	mutex_unlock(&link->lock);
+
+	CAM_DBG(CAM_CRM, "link 0x%x set properties successfully, properties mask:0x%x",
+		link->link_hdl, link->properties_mask);
 
 end:
 	mutex_unlock(&g_crm_core_dev->crm_lock);
