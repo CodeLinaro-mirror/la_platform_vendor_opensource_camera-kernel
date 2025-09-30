@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_VFE_TOP_VER3_H_
@@ -22,6 +23,16 @@
 #define CAM_SHIFT_TOP_CORE_CFG_STATS_HDR_BE       9
 #define CAM_SHIFT_TOP_CORE_CFG_STATS_HDR_BHIST    8
 #define CAM_SHIFT_TOP_CORE_CFG_INPUTMUX_PP        5
+
+struct cam_vfe_top_ver3_perf_count_reg_offset {
+	uint32_t perf_count_cfg;
+	uint32_t perf_count_cfg_mc;
+	uint32_t perf_pix_count;
+	uint32_t perf_line_count;
+	uint32_t perf_stall_count;
+	uint32_t perf_always_count;
+	uint32_t perf_count_status;
+};
 
 struct cam_vfe_top_ver3_reg_offset_common {
 	uint32_t hw_version;
@@ -63,6 +74,16 @@ struct cam_vfe_top_ver3_reg_offset_common {
 	uint32_t top_debug_11;
 	uint32_t top_debug_12;
 	uint32_t top_debug_13;
+	uint32_t stats_throttle_cfg_0;
+	uint32_t stats_throttle_cfg_1;
+	uint32_t top_reset_reg;
+	uint32_t num_perf_counters;
+	uint32_t num_top_debug_reg;
+	uint32_t *top_debug;
+	uint64_t top_hm_base;
+	uint64_t bus_wr_base;
+	struct cam_vfe_top_ver3_perf_count_reg_offset
+		perf_count_reg[CAM_VFE_PERF_CNT_MAX];
 };
 
 struct cam_vfe_camif_common_cfg {
@@ -87,6 +108,7 @@ struct cam_vfe_top_ver3_hw_info {
 		*rdi_hw_info[CAM_VFE_RDI_VER2_MAX];
 	struct cam_vfe_camif_lite_ver3_hw_info      lcr_hw_info;
 	struct cam_vfe_fe_ver1_hw_info              fe_hw_info;
+	uint64_t                                    top_hm_base;
 	uint32_t                                    num_mux;
 	uint32_t                                    num_path_port_map;
 	uint32_t mux_type[CAM_VFE_TOP_MUX_MAX];

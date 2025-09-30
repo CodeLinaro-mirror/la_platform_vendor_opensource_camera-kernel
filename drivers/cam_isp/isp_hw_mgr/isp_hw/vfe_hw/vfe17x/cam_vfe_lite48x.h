@@ -38,6 +38,13 @@ static struct cam_irq_controller_reg_info vfe48x_top_irq_reg_info = {
 	.clear_all_bitmask     = 0xFFFFFFFF,
 };
 
+static uint32_t vfe48x_top_debug_reg[] = {
+	0x0000005C,
+	0x00000068,
+	0x0000006C,
+	0x00000070,
+};
+
 static struct cam_vfe_top_ver3_reg_offset_common vfe48x_top_common_reg = {
 	.hw_version               = 0x00000000,
 	.titan_version            = 0x00000004,
@@ -51,10 +58,8 @@ static struct cam_vfe_top_ver3_reg_offset_common vfe48x_top_common_reg = {
 	.diag_sensor_status_0     = 0x00000054,
 	.bus_overflow_status      = 0x00001A68,
 	.top_debug_cfg            = 0x00000074,
-	.top_debug_0              = 0x0000005C,
-	.top_debug_1              = 0x00000068,
-	.top_debug_2              = 0x0000006C,
-	.top_debug_3              = 0x00000070,
+	.num_top_debug_reg        = ARRAY_SIZE(vfe48x_top_debug_reg),
+	.top_debug                = vfe48x_top_debug_reg,
 };
 
 static struct cam_vfe_camif_lite_ver3_reg vfe48x_camif_rdi[4] = {
@@ -69,7 +74,6 @@ static struct cam_vfe_camif_lite_ver3_reg vfe48x_camif_rdi[4] = {
 		.lite_debug_0               = 0x13F4,
 		.lite_test_bus_ctrl         = 0x13F8,
 		.camif_lite_spare           = 0x13FC,
-		.reg_update_cmd             = 0x0020,
 	},
 	{
 		.lite_hw_version            = 0x1400,
@@ -82,7 +86,6 @@ static struct cam_vfe_camif_lite_ver3_reg vfe48x_camif_rdi[4] = {
 		.lite_debug_0               = 0x15F4,
 		.lite_test_bus_ctrl         = 0x15F8,
 		.camif_lite_spare           = 0x15FC,
-		.reg_update_cmd             = 0x0020,
 	},
 	{
 		.lite_hw_version            = 0x1600,
@@ -95,7 +98,6 @@ static struct cam_vfe_camif_lite_ver3_reg vfe48x_camif_rdi[4] = {
 		.lite_debug_0               = 0x17F4,
 		.lite_test_bus_ctrl         = 0x17F8,
 		.camif_lite_spare           = 0x17FC,
-		.reg_update_cmd             = 0x0020,
 	},
 	{
 		.lite_hw_version            = 0x1800,
@@ -108,7 +110,6 @@ static struct cam_vfe_camif_lite_ver3_reg vfe48x_camif_rdi[4] = {
 		.lite_debug_0               = 0x19F4,
 		.lite_test_bus_ctrl         = 0x19F8,
 		.camif_lite_spare           = 0x19FC,
-		.reg_update_cmd             = 0x0020,
 	},
 };
 

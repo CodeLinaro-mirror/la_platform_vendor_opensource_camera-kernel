@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -337,9 +337,10 @@ int cam_vfe_top_ver3_init_hw(void *device_priv,
 {
 	struct cam_vfe_top_ver3_priv   *top_priv = device_priv;
 	struct cam_vfe_top_ver3_common_data common_data = top_priv->common_data;
+	uint64_t top_hm_base;
 
 	top_priv->top_common.applied_clk_rate = 0;
-
+	top_hm_base = top_priv->common_data.hw_info->top_hm_base;
 	/**
 	 * Auto clock gating is enabled by default, but no harm
 	 * in setting the value we expect.
@@ -347,20 +348,20 @@ int cam_vfe_top_ver3_init_hw(void *device_priv,
 	CAM_DBG(CAM_ISP, "Enabling clock gating at IFE top");
 
 	cam_soc_util_w_mb(top_priv->top_common.soc_info, VFE_CORE_BASE_IDX,
-		common_data.common_reg->core_cgc_ovd_0, 0x0);
+		top_hm_base + common_data.common_reg->core_cgc_ovd_0, 0x0);
 
 	cam_soc_util_w_mb(top_priv->top_common.soc_info, VFE_CORE_BASE_IDX,
-		common_data.common_reg->core_cgc_ovd_1, 0x0);
+		top_hm_base + common_data.common_reg->core_cgc_ovd_1, 0x0);
 
 	cam_soc_util_w_mb(top_priv->top_common.soc_info, VFE_CORE_BASE_IDX,
-		common_data.common_reg->ahb_cgc_ovd, 0x0);
+		top_hm_base + common_data.common_reg->ahb_cgc_ovd, 0x0);
 
 	cam_soc_util_w_mb(top_priv->top_common.soc_info, VFE_CORE_BASE_IDX,
-		common_data.common_reg->noc_cgc_ovd, 0x0);
+		top_hm_base + common_data.common_reg->noc_cgc_ovd, 0x0);
 
 	top_priv->top_common.hw_version =
 		cam_io_r_mb(top_priv->top_common.soc_info->reg_map[0].mem_base +
-		common_data.common_reg->hw_version);
+		top_hm_base + common_data.common_reg->hw_version);
 
 	return 0;
 }
@@ -374,6 +375,7 @@ int cam_vfe_top_ver3_reset(void *device_priv,
 	struct cam_vfe_top_ver3_reg_offset_common *reg_common = NULL;
 	uint32_t *reset_reg_args = reset_core_args;
 	uint32_t reset_reg_val;
+	uint64_t top_hm_base;
 
 	if (!top_priv || !reset_reg_args) {
 		CAM_ERR(CAM_ISP, "Invalid arguments");
@@ -382,12 +384,22 @@ int cam_vfe_top_ver3_reset(void *device_priv,
 
 	soc_info = top_priv->top_common.soc_info;
 	reg_common = top_priv->common_data.common_reg;
+	top_hm_base = top_priv->common_data.hw_info->top_hm_base;
 
 	soc_private = soc_info->soc_private;
 	if (!soc_private) {
 		CAM_ERR(CAM_ISP, "Invalid soc_private");
 		return -ENODEV;
 	}
+
+	/* Mask All the IRQs except RESET */
+	if (!soc_private->is_ife_lite)
+		reset_reg_val = 0x00000001;
+	else
+		reset_reg_val = 0x00020000;
+
+	cam_io_w_mb(reset_reg_val, CAM_SOC_GET_REG_MAP_START(soc_info, VFE_CORE_BASE_IDX) +
+		top_hm_base + reg_common->top_reset_reg);
 
 	switch (*reset_reg_args) {
 	case CAM_VFE_HW_RESET_HW_AND_REG:
@@ -406,20 +418,10 @@ int cam_vfe_top_ver3_reset(void *device_priv,
 
 	CAM_DBG(CAM_ISP, "reset reg value: 0x%x", reset_reg_val);
 
-	/* Mask All the IRQs except RESET */
-	if (!soc_private->is_ife_lite)
-		cam_io_w_mb(0x00000001,
-			CAM_SOC_GET_REG_MAP_START(soc_info, VFE_CORE_BASE_IDX)
-			+ 0x3C);
-	else
-		cam_io_w_mb(0x00020000,
-			CAM_SOC_GET_REG_MAP_START(soc_info, VFE_CORE_BASE_IDX)
-			+ 0x28);
-
 	/* Reset HW */
 	cam_io_w_mb(reset_reg_val,
 		CAM_SOC_GET_REG_MAP_START(soc_info, VFE_CORE_BASE_IDX) +
-		reg_common->global_reset_cmd);
+		top_hm_base + reg_common->global_reset_cmd);
 
 	CAM_DBG(CAM_ISP, "Reset HW exit");
 	return 0;
