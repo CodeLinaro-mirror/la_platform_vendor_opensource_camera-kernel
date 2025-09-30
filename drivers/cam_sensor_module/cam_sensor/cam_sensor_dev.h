@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SENSOR_DEV_H_
@@ -120,7 +120,6 @@ struct cam_sensor_dev_res_info {
  * @last_applied_done_timestamp : Last applied done timestamp value
  * @hw_no_ops                   : To determine whether HW operations need to be disabled
  * @read_buf_list               : Sensor register read cmd buffer handle list
- * @read_buf_lock               : Sensor register read cmd buffer mutex
  */
 struct cam_sensor_ctrl_t {
 	char                           device_name[CAM_CTX_DEV_NAME_MAX_LENGTH];
@@ -162,7 +161,6 @@ struct cam_sensor_ctrl_t {
 	int32_t                        req_table_wr_idx;
 	uint64_t                       req_table[MAX_PER_FRAME_ARRAY];
 	struct list_head               read_buf_list;
-	struct mutex                   read_buf_lock;
 };
 
 /**
