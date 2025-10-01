@@ -30,6 +30,10 @@
 #include "cam_compat.h"
 #include "camera_main.h"
 
+#if !defined(USE_DOWNSTREAM_DMA_BUFF)
+#include "cam_buf_mgr.h"
+#endif
+
 #define CAM_REQ_MGR_EVENT_MAX 30
 #define CAM_I3C_MASTER_COMPAT "qcom,geni-i3c"
 
@@ -1104,6 +1108,9 @@ static const struct component_master_ops cam_req_mgr_component_master_ops = {
 static void cam_req_mgr_remove(struct platform_device *pdev)
 {
 	component_master_del(&pdev->dev, &cam_req_mgr_component_master_ops);
+#if !defined(USE_DOWNSTREAM_DMA_BUFF)
+	cam_buf_mgr_exit(pdev);
+#endif
 }
 
 static int cam_req_mgr_probe(struct platform_device *pdev)
@@ -1138,6 +1145,15 @@ static int cam_req_mgr_probe(struct platform_device *pdev)
 			goto end;
 		}
 	}
+
+
+#if !defined(USE_DOWNSTREAM_DMA_BUFF)
+	rc = cam_buf_mgr_init(pdev);
+	if (rc) {
+		CAM_ERR(CAM_MEM, "Cannot initialize buffer manager, rc:%d", rc);
+		return rc;
+	}
+#endif
 
 	rc = camera_component_match_add_drivers(dev, &match_list);
 	if (rc) {

@@ -12,12 +12,16 @@
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
 #include <linux/of_address.h>
+#if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
 #include <linux/msm_dma_iommu_mapping.h>
+#endif
 #include <linux/workqueue.h>
 #include <linux/genalloc.h>
 #include <linux/debugfs.h>
 
+#if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
 #include <soc/qcom/secure_buffer.h>
+#endif
 
 #include <media/cam_req_mgr.h>
 
@@ -2728,6 +2732,11 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 		}
 		iommu_cb_set.cb_info[idx].shared_mapping_size += *len_ptr;
 	} else if (region_id == CAM_SMMU_REGION_IO) {
+#ifdef DMABUF_ALLOC_FIND_KERNEL_API
+		if (!dis_delayed_unmap)
+			attach->dma_map_attrs |= DMA_ATTR_DELAYED_UNMAP;
+#endif
+
 		table = dma_buf_map_attachment(attach, dma_dir);
 		if (IS_ERR_OR_NULL(table)) {
 			rc = PTR_ERR(table);
@@ -2746,9 +2755,15 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 		goto err_detach;
 	}
 
+#ifdef DMABUF_ALLOC_FIND_KERNEL_API
 	CAM_DBG(CAM_SMMU,
 		"iova=%pK, region_id=%d, paddr=0x%llx, len=%zu, dma_map_attrs=%d",
 		iova, region_id, *paddr_ptr, *len_ptr, attach->dma_map_attrs);
+#else
+	CAM_DBG(CAM_SMMU,
+		"iova=%pK, region_id=%d, paddr=0x%llx, len=%zu",
+		iova, region_id, *paddr_ptr, *len_ptr);
+#endif
 
 	if (iommu_cb_set.debug_cfg.map_profile_enable) {
 		CAM_GET_TIMESTAMP(ts2);
@@ -2920,10 +2935,16 @@ static int cam_smmu_unmap_buf_and_remove_from_list(
 	cam_smmu_update_monitor_array(&iommu_cb_set.cb_info[idx], false,
 		mapping_info);
 
+#ifdef DMABUF_ALLOC_FIND_KERNEL_API
 	CAM_DBG(CAM_SMMU,
 		"region_id=%d, paddr=0x%llx, len=%d, dma_map_attrs=%d",
 		mapping_info->region_id, mapping_info->paddr, mapping_info->len,
 		mapping_info->attach->dma_map_attrs);
+#else
+	CAM_DBG(CAM_SMMU,
+		"region_id=%d, paddr=0x%llx, len=%d",
+		mapping_info->region_id, mapping_info->paddr, mapping_info->len);
+#endif
 
 	if (iommu_cb_set.debug_cfg.map_profile_enable)
 		CAM_GET_TIMESTAMP(ts1);
@@ -2956,9 +2977,11 @@ static int cam_smmu_unmap_buf_and_remove_from_list(
 		iommu_cb_set.cb_info[idx].shared_mapping_size -=
 			mapping_info->len;
 	} else if (mapping_info->region_id == CAM_SMMU_REGION_IO) {
+#ifdef DMABUF_ALLOC_FIND_KERNEL_API
 		if (mapping_info->is_internal)
 			mapping_info->attach->dma_map_attrs |=
 				DMA_ATTR_SKIP_CPU_SYNC;
+#endif
 
 		dma_buf_unmap_attachment(mapping_info->attach,
 			mapping_info->table, mapping_info->dir);
@@ -3559,12 +3582,14 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 		goto err_out;
 	}
 
+#ifdef DMABUF_ALLOC_FIND_KERNEL_API
 	attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
 
 	if (IS_CSF25(iommu_cb_set.csf_version.arch_ver,
 		iommu_cb_set.csf_version.max_ver))
 		attach->dma_map_attrs =
 			cam_update_dma_map_attributes(attach->dma_map_attrs);
+#endif
 
 	table = dma_buf_map_attachment(attach, dma_dir);
 	if (IS_ERR_OR_NULL(table)) {
@@ -3709,8 +3734,10 @@ static int cam_smmu_secure_unmap_buf_and_remove_from_list(
 		return -EINVAL;
 	}
 
+#ifdef DMABUF_ALLOC_FIND_KERNEL_API
 	/* skip cache operations */
 	mapping_info->attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
+#endif
 
 	/* iommu buffer clean up */
 	dma_buf_unmap_attachment(mapping_info->attach,
