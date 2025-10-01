@@ -78,6 +78,7 @@ camera_$(CAMERA_ARCH)-y := \
 	common/cam_req_mgr_workq.o \
 	common/cam_soc_icc.o
 
+camera_$(CAMERA_ARCH)-$(CONFIG_ENABLE_US_API) += camera_kt/drivers/cam_req_mgr/cam_buf_mgr.o
 camera_$(CAMERA_ARCH)-$(CONFIG_QCOM_CX_IPEAK) += camera_kt/drivers/cam_utils/cam_cx_ipeak.o
 camera_$(CAMERA_ARCH)-$(CONFIG_QCOM_BUS_SCALING) += camera_kt/drivers/cam_utils/cam_soc_bus.o
 
