@@ -21,7 +21,9 @@
 #include "cam_smmu_api.h"
 #include "cam_soc_info.h"
 
+#if defined(USE_DOWNSTREAM_DMA_BUFF)
 #include <linux/qcom-dma-mapping.h>
+#endif
 #include <linux/i3c/master.h>
 
 #include <linux/interconnect.h>
