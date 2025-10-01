@@ -6,6 +6,7 @@ CONFIG_SPECTRA_ICP := y
 CONFIG_SPECTRA_JPEG := y
 CONFIG_SPECTRA_LRME := y
 CONFIG_SPECTRA_SENSOR := y
+CONFIG_ENABLE_US_API := y
 
 # Flags to pass into C preprocessor
 ccflags-y += -DCONFIG_SPECTRA_KT=1
