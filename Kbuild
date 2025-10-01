@@ -315,6 +315,7 @@ else
 	ccflags-y += -DCONFIG_CAM_PRESIL=1
 endif
 
+camera_$(CAMERA_ARCH)-$(CONFIG_ENABLE_US_API) += camera/drivers/cam_req_mgr/cam_buf_mgr.o
 camera_$(CAMERA_ARCH)-$(TARGET_SYNX_ENABLE) += camera/drivers/cam_sync/cam_sync_synx.o
 camera_$(CAMERA_ARCH)-$(CONFIG_QCOM_CX_IPEAK) += camera/drivers/cam_utils/cam_cx_ipeak.o
 camera_$(CAMERA_ARCH)-$(CONFIG_QCOM_BUS_SCALING) += camera/drivers/cam_utils/cam_soc_bus.o
