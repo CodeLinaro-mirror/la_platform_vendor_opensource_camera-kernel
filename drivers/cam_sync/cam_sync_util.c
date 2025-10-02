@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2018, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sync_util.h"
@@ -655,11 +655,9 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t idx,
 	return 0;
 }
 
-void cam_sync_util_cb_dispatch(struct work_struct *cb_dispatch_work)
+int cam_sync_util_cb_dispatch(void *priv, void *data)
 {
-	struct sync_callback_info *cb_info = container_of(cb_dispatch_work,
-		struct sync_callback_info,
-		cb_dispatch_work);
+	struct sync_callback_info *cb_info = (struct sync_callback_info *)priv;
 	sync_callback sync_data = cb_info->callback_func;
 	void *cb = cb_info->callback_func;
 
@@ -670,16 +668,20 @@ void cam_sync_util_cb_dispatch(struct work_struct *cb_dispatch_work)
 	sync_data(cb_info->sync_obj, cb_info->status, cb_info->cb_data);
 
 	CAM_MEM_FREE(cb_info);
+
+	return 0;
 }
 
 void cam_sync_util_dispatch_signaled_cb(int32_t sync_obj,
 	uint32_t status, uint32_t event_cause)
 {
+	int                         rc = 0;
 	struct sync_callback_info  *sync_cb;
 	struct sync_user_payload   *payload_info;
 	struct sync_callback_info  *temp_sync_cb;
 	struct sync_table_row      *signalable_row;
 	struct sync_user_payload   *temp_payload_info;
+	struct crm_workq_task      *task = NULL;
 
 	signalable_row = sync_dev->sync_table + sync_obj;
 	if (signalable_row->state == CAM_SYNC_STATE_INVALID) {
@@ -699,8 +701,22 @@ void cam_sync_util_dispatch_signaled_cb(int32_t sync_obj,
 			cam_generic_fence_update_monitor_array(sync_obj,
 				&sync_dev->table_lock, sync_dev->mon_data,
 				CAM_FENCE_OP_UNREGISTER_ON_SIGNAL);
-		queue_work(sync_dev->work_queue,
-			&sync_cb->cb_dispatch_work);
+		task = cam_req_mgr_workq_get_task(sync_dev->workq);
+		if (!task) {
+			CAM_ERR(CAM_SYNC,
+				"Failed to get workq task for sync object:%s[%d]",
+				signalable_row->name,
+				sync_obj);
+		} else {
+			task->process_cb = cam_sync_util_cb_dispatch;
+			rc = cam_req_mgr_workq_enqueue_task(
+				task, sync_cb, CRM_TASK_PRIORITY_0);
+			if (rc)
+				CAM_ERR(CAM_SYNC,
+					"Failed to enqueue task for sync object:%s[%d]",
+					signalable_row->name,
+					sync_cb->sync_obj);
+		}
 	}
 
 	/* Dispatch user payloads if any were registered earlier */
