@@ -1505,7 +1505,7 @@ static struct cam_ife_csid_ver2_common_reg_info
 	.decode_format_payload_only              = 0xF,
 	.timestamp_enabled_in_cfg0               = true,
 	.camif_irq_support                       = true,
-	.no_fault_stream_err_en                  = false,
+	.no_fault_stream_err_en                  = true,
 	/* Overflow recovery irq is selected as candidate bit for irq set on no-fault CSID HW */
 	.no_fault_irq_set_mask                   = 0x80000,
 	.capabilities                            = CAM_IFE_CSID_CAP_SPLIT_RUP_AUP |
