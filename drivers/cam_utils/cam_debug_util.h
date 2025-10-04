@@ -21,7 +21,7 @@ extern unsigned int debug_bypass_drivers;
 
 #define CAM_IS_NULL_TO_STR(ptr) ((ptr) ? "Non-NULL" : "NULL")
 
-#define CAM_LOG_BUF_LEN                  512
+#define CAM_LOG_BUF_LEN                  1024
 #define BYPASS_VALUE       0xDEADBEEF
 #define DEFAULT_CLK_VALUE  19200000
 

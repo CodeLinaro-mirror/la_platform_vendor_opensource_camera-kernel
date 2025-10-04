@@ -25,7 +25,7 @@
 #define CAM_VFE_MAX_UBWC_PORTS        12
 
 #define CAM_VFE_PERF_CNT_MAX          8
-#define CAM_VFE_LEN_LOG_BUF           256
+#define CAM_VFE_LEN_LOG_BUF           1024
 
 /* Common capabilities for VFE */
 #define CAM_VFE_COMMON_CAP_SKIP_CORE_CFG        BIT(0)
