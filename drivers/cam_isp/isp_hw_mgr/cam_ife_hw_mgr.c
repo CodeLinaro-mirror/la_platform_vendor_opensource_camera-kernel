@@ -2175,7 +2175,7 @@ static void cam_ife_hw_mgr_dump_acquire_resources(
 	list_for_each_entry_safe(hw_mgr_res, hw_mgr_res_temp,
 		&hwr_mgr_ctx->res_list_ife_csid, list) {
 		for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
-			if (!hw_mgr_res || !hw_mgr_res->hw_res[i])
+			if (!hw_mgr_res->hw_res[i])
 				continue;
 
 			hw_res = hw_mgr_res->hw_res[i];
@@ -17779,7 +17779,7 @@ static int cam_ife_hw_mgr_handle_sfe_hw_dump_info(
 	list_for_each_entry(hw_mgr_res,
 		&ife_hw_mgr_ctx->res_list_ife_in_rd, list) {
 		for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
-			if (!hw_mgr_res || !hw_mgr_res->hw_res[i])
+			if (!hw_mgr_res->hw_res[i])
 				continue;
 			rsrc_node = hw_mgr_res->hw_res[i];
 			if ((event_info->res_type == CAM_ISP_RESOURCE_SFE_RD) &&
