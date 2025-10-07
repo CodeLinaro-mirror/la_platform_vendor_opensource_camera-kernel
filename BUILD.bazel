@@ -175,4 +175,7 @@ config_setting(
     name = "canoe",
     flag_values = {":project_name": "canoe"},
 )
-
+config_setting(
+    name = "chora",
+    flag_values = {":project_name": "chora"},
+)
