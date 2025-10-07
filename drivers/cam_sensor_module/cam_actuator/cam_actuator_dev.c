@@ -222,6 +222,13 @@ static int cam_actuator_i2c_component_bind(struct device *dev,
 		goto unreg_subdev;
 	}
 
+	a_ctrl->i2c_data.per_frame_event_settings =
+		kzalloc(sizeof(struct cci_trigger_cam_setting_array) * MAX_PER_FRAME_ARRAY, GFP_KERNEL);
+	if (a_ctrl->i2c_data.per_frame_event_settings == NULL) {
+		rc = -ENOMEM;
+		goto unreg_subdev;
+	}
+
 	INIT_LIST_HEAD(&(a_ctrl->i2c_data.init_settings.list_head));
 
 	for (i = 0; i < MAX_PER_FRAME_ARRAY; i++)
@@ -238,6 +245,7 @@ static int cam_actuator_i2c_component_bind(struct device *dev,
 
 	a_ctrl->bridge_intf.no_crm_ops.handshake = cam_actuator_no_crm_handshake;
 	a_ctrl->bridge_intf.no_crm_ops.apply_req = cam_actuator_no_crm_apply_req;
+	a_ctrl->bridge_intf.no_crm_ops.notify_dev = cam_actuator_no_crm_notify_dev;
 	a_ctrl->bridge_intf.no_crm_ops.pause_cb  = NULL;
 	a_ctrl->bridge_intf.no_crm_ops.resume_cb = NULL;
 
@@ -289,6 +297,9 @@ static void cam_actuator_i2c_component_unbind(struct device *dev,
 	/*Free Allocated Mem */
 	kfree(a_ctrl->i2c_data.per_frame);
 	a_ctrl->i2c_data.per_frame = NULL;
+	kfree(a_ctrl->i2c_data.per_frame_event_settings);
+	a_ctrl->i2c_data.per_frame_event_settings = NULL;
+
 	a_ctrl->soc_info.soc_private = NULL;
 	v4l2_set_subdevdata(&a_ctrl->v4l2_dev_str.sd, NULL);
 	kfree(a_ctrl);
@@ -375,6 +386,13 @@ static int cam_actuator_platform_component_bind(struct device *dev,
 		goto free_soc;
 	}
 
+	a_ctrl->i2c_data.per_frame_event_settings =
+		kzalloc(sizeof(struct cci_trigger_cam_setting_array) * MAX_PER_FRAME_ARRAY, GFP_KERNEL);
+	if (a_ctrl->i2c_data.per_frame_event_settings == NULL) {
+		rc = -ENOMEM;
+		goto free_soc;
+	}
+
 	INIT_LIST_HEAD(&(a_ctrl->i2c_data.init_settings.list_head));
 
 	for (i = 0; i < MAX_PER_FRAME_ARRAY; i++)
@@ -407,6 +425,7 @@ static int cam_actuator_platform_component_bind(struct device *dev,
 
 	a_ctrl->bridge_intf.no_crm_ops.handshake = cam_actuator_no_crm_handshake;
 	a_ctrl->bridge_intf.no_crm_ops.apply_req = cam_actuator_no_crm_apply_req;
+	a_ctrl->bridge_intf.no_crm_ops.notify_dev = cam_actuator_no_crm_notify_dev;
 	a_ctrl->bridge_intf.no_crm_ops.pause_cb  = NULL;
 	a_ctrl->bridge_intf.no_crm_ops.resume_cb = NULL;
 
@@ -419,6 +438,7 @@ static int cam_actuator_platform_component_bind(struct device *dev,
 
 free_mem:
 	kfree(a_ctrl->i2c_data.per_frame);
+	kfree(a_ctrl->i2c_data.per_frame_event_settings);
 free_soc:
 	kfree(soc_private);
 free_cci_client:
@@ -457,6 +477,8 @@ static void cam_actuator_platform_component_unbind(struct device *dev,
 	a_ctrl->soc_info.soc_private = NULL;
 	kfree(a_ctrl->i2c_data.per_frame);
 	a_ctrl->i2c_data.per_frame = NULL;
+	kfree(a_ctrl->i2c_data.per_frame_event_settings);
+	a_ctrl->i2c_data.per_frame_event_settings = NULL;
 	v4l2_set_subdevdata(&a_ctrl->v4l2_dev_str.sd, NULL);
 	platform_set_drvdata(pdev, NULL);
 	devm_kfree(&pdev->dev, a_ctrl);

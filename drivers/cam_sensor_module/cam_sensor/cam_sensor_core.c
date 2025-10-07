@@ -136,6 +136,38 @@ static void cam_sensor_release_per_frame_resource(
 	}
 }
 
+static int32_t cam_sensor_notify_actuator_context_info(
+	struct cam_sensor_ctrl_t *s_ctrl,
+	struct cam_req_mgr_no_crm_get_csid_cid_info *cid_info)
+{
+	struct cam_req_mgr_no_crm_notify_device notify_dev = {0};
+	struct cam_actuator_trigger_data actuator_trigger_data = {0};
+	if (!s_ctrl->bridge_intf.enable_crm) {
+		int rc = 0;
+		notify_dev.link_hdl = s_ctrl->bridge_intf.link_hdl;
+		notify_dev.dev_hdl  = s_ctrl->bridge_intf.device_hdl;
+		notify_dev.command  = CAM_SUBDEV_MESSAGE_SET_TRIGGER_DATA;
+		notify_dev.data     = &actuator_trigger_data;
+		actuator_trigger_data.actuator_no = s_ctrl->sensordata->subdev_id[SUB_MODULE_ACTUATOR];
+		actuator_trigger_data.vc = cid_info->vc_dt_cid[0].vc;
+		actuator_trigger_data.dt = cid_info->vc_dt_cid[0].dt;
+		actuator_trigger_data.phy_no = s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY];
+		actuator_trigger_data.gpio_mask = s_ctrl->gpio_mask;
+		actuator_trigger_data.cid = cid_info->vc_dt_cid[0].cid;
+		actuator_trigger_data.csid = cid_info->csid_hw_no;
+		rc = s_ctrl->bridge_intf.crm_cb->no_crm_notify_dev(CAM_REQ_MGR_DEVICE_ACTUATOR, &notify_dev);
+		if (rc < 0) {
+			CAM_ERR(CAM_SENSOR, "SENSOR[%d] Unable to notify actuator", s_ctrl->soc_info.index);
+			return -EINVAL;
+		}
+		CAM_DBG(CAM_SENSOR, "actuator id %d", s_ctrl->sensordata->subdev_id[SUB_MODULE_ACTUATOR]);
+		return rc;
+	} else {
+		CAM_DBG(CAM_SENSOR, "crm is enable");
+		return -EINVAL;
+	}
+}
+
 static int32_t cam_sensor_get_cci_contextid (
 	struct cam_sensor_ctrl_t *s_ctrl)
 {
@@ -179,6 +211,7 @@ static int32_t cam_sensor_get_cci_contextid (
 		}
 		trigger_data.cid = cid_info.vc_dt_cid[0].cid;
 		trigger_data.csid = cid_info.csid_hw_no;
+		trigger_data.is_sensor_ctx = true;
 		if (s_ctrl->gpio_mask >= 0) {
 			trigger_data.gpio_mask = s_ctrl->gpio_mask;
 		} else {
@@ -192,6 +225,7 @@ static int32_t cam_sensor_get_cci_contextid (
 		}
 		s_ctrl->cci_contextId = trigger_data.context_id;
 		CAM_DBG(CAM_SENSOR, "idx:%d csid %d cid %d", trigger_data.context_id, trigger_data.csid, trigger_data.cid);
+		rc = cam_sensor_notify_actuator_context_info(s_ctrl, &cid_info);
 		return rc;
 	} else {
 		CAM_DBG(CAM_SENSOR, "crm is enable");
@@ -330,6 +364,14 @@ static int cam_sensor_handle_res_info(void *res_info_ptr,
 
 	s_ctrl->num_streams = num_streams;
 	s_ctrl->frame_duration = frame_duration;
+
+	if (s_ctrl->is_trigger_mode && s_ctrl->cci_contextId == CONTEXT_ID_MAX) {
+		rc = cam_sensor_get_cci_contextid(s_ctrl);
+		if (rc < 0) {
+			CAM_ERR(CAM_SENSOR, "Invalid context id");
+			return rc;
+		}
+	}
 
 	return rc;
 }
@@ -1042,14 +1084,6 @@ static int32_t cam_sensor_cmd_buffer(struct cam_sensor_ctrl_t *s_ctrl,
 	offset = (uint32_t *)&csl_packet->payload;
 	offset += csl_packet->cmd_buf_offset / 4;
 	cmd_desc = (struct cam_cmd_buf_desc *)(offset);
-
-	if (s_ctrl->cci_contextId == CONTEXT_ID_MAX) {
-		rc = cam_sensor_get_cci_contextid(s_ctrl);
-		if (rc < 0) {
-			CAM_ERR(CAM_SENSOR, "Invalid context id");
-			return rc;
-		}
-	}
 
 	CAM_DBG(CAM_SENSOR, "num of cmd buffer %d", csl_packet->num_cmd_buf);
 	for (i = 0; i < csl_packet->num_cmd_buf; i++) {
@@ -2055,7 +2089,8 @@ void cam_sensor_shutdown(struct cam_sensor_ctrl_t *s_ctrl)
 	if (s_ctrl->io_master_info.master_type == CCI_MASTER) {
 		if(s_ctrl->is_trigger_mode) {
 			if (s_ctrl->cci_contextId < CONTEXT_ID_MAX) {
-				rc = camera_io_contextid_release(&(s_ctrl->io_master_info), s_ctrl->cci_contextId);
+				rc = camera_io_contextid_release(&(s_ctrl->io_master_info),
+						s_ctrl->cci_contextId, TRUE);
 				if (rc < 0) {
 					CAM_ERR(CAM_SENSOR, "Shutdown[%d] contextid release failed",
 						s_ctrl->soc_info.index);
@@ -2530,7 +2565,8 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 
 		if (s_ctrl->is_trigger_mode) {
 			if (s_ctrl->cci_contextId < CONTEXT_ID_MAX) {
-				rc = camera_io_contextid_release(&(s_ctrl->io_master_info), s_ctrl->cci_contextId);
+				rc = camera_io_contextid_release(&(s_ctrl->io_master_info),
+						s_ctrl->cci_contextId, TRUE);
 				if (rc < 0) {
 					CAM_ERR(CAM_SENSOR, "Slot[%d] contextid release failed",
 						s_ctrl->soc_info.index);

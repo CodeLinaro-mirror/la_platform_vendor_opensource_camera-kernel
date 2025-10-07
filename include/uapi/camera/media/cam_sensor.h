@@ -76,6 +76,9 @@
 /* Sensor EOF Frame Event */
 #define CAM_SENSOR_EOF_FRAME_EVENT                 1
 
+/* Sensor Frame Line Event */
+#define CAM_SENSOR_FRAME_LINE_EVENT                2
+
 /* Sensor Max Event */
 #define CAMERA_SENSOR_EVENT_MAX                    5
 
@@ -90,6 +93,11 @@
 /* CSIPHY CDR tolerance operations */
 #define CAM_CSIPHY_CDR_ADD_TOLERANCE               1
 #define CAM_CSIPHY_CDR_SUB_TOLERANCE               2
+
+/* Actuator Event Controlled Blob Type */
+#define CAM_ACTUATOR_GENERIC_BLOB_FRAME_EVENT_INFO 0
+#define CAM_ACTUATOR_GENERIC_BLOB_EVENT_INFO       1
+#define CAM_ACTUATOR_GENERIC_BLOB_EVENT_CMD_INFO   2
 
 enum camera_sensor_cmd_type {
 	CAMERA_SENSOR_CMD_TYPE_INVALID,
@@ -1125,6 +1133,27 @@ struct cam_flash_query_cap_info {
 	__u32    max_duration_flash[CAM_FLASH_MAX_LED_TRIGGERS];
 	__u32    max_current_torch[CAM_FLASH_MAX_LED_TRIGGERS];
 } __attribute__ ((packed));
+
+/**
+ * struct cam_actuator_event_control_info - Contains actuator event control info
+ *
+ * enable_event_Controlled and event_name is the key property, it specifies the
+ * combinations of other properties enclosed in this
+ * structure.
+ *
+ * @version                 : version of cmd buffer
+ * @enable_event_controlled : enable event Controlled actuator
+ * @event_name              : event name
+ * @value                   : value
+ * @reserved                : reserved
+ */
+struct cam_actuator_event_control_info {
+	__s32 version;
+	__s32 enable_event_controlled;
+	__s32 event_name;
+	__s32 value;
+	__s64 reserved;
+} __attribute__((packed));
 
 /**
  * struct cam_cmd_sensor_res_info - Contains sensor res info
