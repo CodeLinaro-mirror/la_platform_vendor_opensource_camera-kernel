@@ -610,13 +610,14 @@ static void cam_res_mgr_gpio_free(struct device *dev, uint gpio)
 	if (gpio_found && cam_res
 		&& cam_res->shared_gpio_enabled) {
 		struct cam_dev_res *dev_res = NULL;
-
-		list_for_each_entry(dev_res,
-			&gpio_res->dev_list, list) {
-			if (dev_res->dev == dev) {
-				list_del_init(&dev_res->list);
-				CAM_MEM_FREE(dev_res);
-				break;
+		if (!list_empty(&gpio_res->dev_list)) {
+			list_for_each_entry(dev_res,
+				&gpio_res->dev_list, list) {
+				if (dev_res->dev == dev) {
+					list_del_init(&dev_res->list);
+					CAM_MEM_FREE(dev_res);
+					break;
+				}
 			}
 		}
 	}
