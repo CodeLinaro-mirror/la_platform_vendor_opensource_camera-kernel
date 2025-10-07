@@ -5018,7 +5018,7 @@ static int cam_vfe_bus_ver3_set_rd_ctxt_sel(
 		return 0;
 	}
 
-	reg_addr = common_reg->rd_ctxt_sel;
+	reg_addr = bus_priv->common_data.bus_wr_base + common_reg->rd_ctxt_sel;
 	reg_val = (rd_ctxt << common_reg->mc_read_sel_shift);
 
 	CAM_DBG(CAM_ISP,
@@ -5046,7 +5046,7 @@ static void cam_vfe_bus_ver3_get_rd_ctxt_sel(
 		return;
 	}
 
-	reg_addr = common_reg->rd_ctxt_sel;
+	reg_addr = bus_priv->common_data.bus_wr_base + common_reg->rd_ctxt_sel;
 	reg_val = cam_io_r_mb(bus_priv->common_data.mem_base + reg_addr);
 	*rd_ctxt = reg_val >> common_reg->mc_read_sel_shift;
 
