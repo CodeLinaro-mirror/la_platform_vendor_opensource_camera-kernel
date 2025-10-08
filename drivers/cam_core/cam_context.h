@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_CONTEXT_H_
@@ -385,7 +386,7 @@ int cam_context_dump_pf_info(struct cam_context *ctx,
  *
  */
 int cam_context_handle_message(struct cam_context *ctx,
-	uint32_t msg_type, uint32_t *data);
+	uint32_t msg_type, void *data);
 
 /**
  * cam_context_handle_acquire_dev()

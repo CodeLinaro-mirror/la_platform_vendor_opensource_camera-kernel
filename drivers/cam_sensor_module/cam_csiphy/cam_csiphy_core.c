@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -1471,7 +1471,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 				if(clk_rate > 0) {
 					cam_subdev_notify_message(CAM_TFE_DEVICE_TYPE,
 						CAM_SUBDEV_MESSAGE_CLOCK_UPDATE,
-						clk_rate);
+						(void *)&clk_rate);
 				}
 			}
 

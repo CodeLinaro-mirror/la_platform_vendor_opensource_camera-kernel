@@ -28,3 +28,12 @@ config SPECTRA_SENSOR
 	  sensor module files will be included to enable the driver.
 	  eeprom, flash, csiphy all other module will be included
 	  to make the sensor functional.
+
+config SPECTRA_SECURE_CAMERA_25
+	bool "enable secure camera 2.5"
+	help
+		This config enables 2.5 secure camera
+		feature that allows the usage of non contiguous
+		buffers for the secure camera images by
+		lending the buffers to a trusted virtual machine.
+

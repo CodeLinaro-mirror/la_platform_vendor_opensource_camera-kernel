@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_MEM_MGR_H_
@@ -91,6 +91,12 @@ struct cam_mem_buf_queue {
  * @alloc_profile_enable: Whether to enable alloc profiling
  * @dbg_buf_idx: debug buffer index to get usecases info
  * @force_cache_allocs: Force all internal buffer allocations with cache
+ * @csf_version: Camera security framework version
+ * @system_heap: Handle to system heap
+ * @system_uncached_heap: Handle to system uncached heap
+ * @camera_heap: Handle to camera heap
+ * @camera_uncached_heap: Handle to camera uncached heap
+ * @secure_display_heap: Handle to secure display heap
  */
 struct cam_mem_table {
 	struct mutex m_lock;
@@ -101,6 +107,7 @@ struct cam_mem_table {
 	bool alloc_profile_enable;
 	size_t dbg_buf_idx;
 	bool force_cache_allocs;
+	struct cam_csf_version csf_version;
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
 	struct dma_heap *system_heap;
 	struct dma_heap *system_uncached_heap;
