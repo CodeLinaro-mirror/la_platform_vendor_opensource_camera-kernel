@@ -3625,6 +3625,7 @@ hw_dump:
 	if (dump_only_event_record)
 		goto end;
 
+	spin_unlock_bh(&ctx->lock);
 	rc = __cam_isp_ctx_dump_req_info(ctx, req, cpu_addr,
 		buf_len, &dump_info->offset);
 	if (rc) {
@@ -3632,7 +3633,6 @@ hw_dump:
 			req->request_id);
 		goto end;
 	}
-	spin_unlock_bh(&ctx->lock);
 
 	if (ctx->hw_mgr_intf->hw_dump) {
 		dump_args.offset = dump_info->offset;
