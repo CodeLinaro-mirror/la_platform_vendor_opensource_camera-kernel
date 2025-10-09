@@ -38,6 +38,11 @@ config SPECTRA_SENSOR
 	  eeprom, flash, csiphy all other module will be included
 	  to make the sensor functional.
 
+config SPECTRA_SECURE
+	bool "enable secure camera"
+	help
+	  This will enable changes to support secure camera.
+
 config SPECTRA_USE_CLK_CRM_API
 	bool "enable camera cesta clk feature"
 	help

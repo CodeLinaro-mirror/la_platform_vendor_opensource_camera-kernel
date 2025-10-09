@@ -22,7 +22,9 @@ project_configs = select({
     ":sun": dependency_config + [
        "CONFIG_SPECTRA_SECURE_DYN_PORT_CFG=y",
     ],
-    ":lahaina": [],
+    ":lahaina": [
+       "CONFIG_SPECTRA_SECURE=y",
+    ],
     ":canoe": [],
 })
 
