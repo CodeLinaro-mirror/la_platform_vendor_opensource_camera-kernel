@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -1155,11 +1155,11 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 	struct cam_cmd_power *pwr_cmd =
 		kzalloc(cmd_buf_len, GFP_KERNEL);
 	if (!pwr_cmd) {
-        CAM_DBG(CAM_SENSOR, "pwr_cmd memory allocation failed!");
+		CAM_DBG(CAM_SENSOR, "pwr_cmd memory allocation failed!");
 		return -ENOMEM;
 	}
 	memcpy(pwr_cmd, cmd_buf, cmd_buf_len);
-        ptr = pwr_cmd;
+	ptr = pwr_cmd;
 	cmm_hdr = (struct common_header *)pwr_cmd;
 
 	if (!pwr_cmd || !cmd_length || cmd_buf_len < (size_t)cmd_length ||
@@ -1170,7 +1170,7 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 		goto free_power_command;
 	}
 
-        memcpy(pwr_cmd, cmd_buf, sizeof(struct cam_cmd_power));
+	memcpy(pwr_cmd, cmd_buf, sizeof(struct cam_cmd_power));
 
 	power_info->power_setting_size = 0;
 	power_info->power_setting =
