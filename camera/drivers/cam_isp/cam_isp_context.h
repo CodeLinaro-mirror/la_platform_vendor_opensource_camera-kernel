@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_ISP_CONTEXT_H_
@@ -125,6 +125,17 @@ enum cam_isp_state_change_trigger {
 	CAM_ISP_STATE_CHANGE_TRIGGER_FRAME_DROP,
 	CAM_ISP_STATE_CHANGE_TRIGGER_CDM_DONE,
 	CAM_ISP_STATE_CHANGE_TRIGGER_MAX
+};
+
+/**
+ * enum cam_isp_ctx_flush_event - Different types of Flush event for affected ctx
+ * in case of group stream configurations
+ *
+ */
+enum cam_isp_ctx_flush_event {
+	CAM_ISP_CTX_FLUSH_AFFECTED_CTX_REQ_LIST,
+	CAM_ISP_CTX_FLUSH_AFFECTED_CTX_SET_FLUSH_IN_PROGRESS,
+	CAM_ISP_CTX_FLUSH_EVENT_MAX
 };
 
 #define CAM_ISP_CTX_DISABLE_RECOVERY_AEB           BIT(0)
@@ -417,7 +428,9 @@ struct cam_isp_fcg_prediction_tracker {
  * @is_shdr:                   true, if usecase is sdhr
  * @is_shdr_master:            Flag to indicate master context in shdr usecase
  * @last_num_exp:              Last num of exposure
- *
+ * @flush_in_progress          indicates whether flush is in progress
+ * @bubble_recover_dis:        Bubble recovery disabled
+ * @sfe_en:                    Indicates if SFE is being used
  */
 struct cam_isp_context {
 	struct cam_context              *base;
@@ -483,6 +496,10 @@ struct cam_isp_context {
 	bool                                  is_tfe_shdr;
 	bool                                  is_shdr_master;
 	uint32_t                              last_num_exp;
+	atomic_t                              flush_in_progress;
+	struct mutex                          isp_mutex;
+	bool                                  bubble_recover_dis;
+	bool                                  sfe_en;
 };
 
 /**

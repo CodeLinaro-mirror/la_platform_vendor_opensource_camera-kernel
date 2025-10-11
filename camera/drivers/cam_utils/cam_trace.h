@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #if !defined(_CAM_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
@@ -329,6 +329,7 @@ TRACE_EVENT(cam_delay_detect,
 	),
 	TP_fast_assign(
 		__cam_assign_str(entity);
+		__cam_assign_str(text);
 		__entry->req_id      = req_id;
 		__entry->ctx_id      = ctx_id;
 		__entry->link_hdl    = link_hdl;

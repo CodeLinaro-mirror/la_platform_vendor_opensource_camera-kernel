@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -371,7 +371,7 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 		}
 
 		io_cfg = (struct cam_buf_io_cfg *) ((uint8_t *)
-			&csl_packet->payload +
+			&csl_packet->payload_flex +
 			csl_packet->io_configs_offset);
 
 		if (io_cfg == NULL) {
@@ -471,7 +471,7 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 		goto end;
 	}
 
-	offset = (uint32_t *)&csl_packet->payload;
+	offset = (uint32_t *)&csl_packet->payload_flex;
 	offset += csl_packet->cmd_buf_offset / 4;
 	cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 	cmd_buf_type = cmd_desc->meta_data;
@@ -715,6 +715,24 @@ static int32_t cam_sensor_i2c_modes_util(
 		rc = cam_sensor_i2c_read_data(
 			&s_ctrl->i2c_data.read_settings,
 			&s_ctrl->io_master_info);
+	} else if (i2c_list->op_code == CAM_SENSOR_I2C_READ_APPEND_WRITE) {
+		CAM_DBG(CAM_SENSOR, "Captured READ_APPEND_WRITE OPCODE");
+		rc = camera_io_dev_read_append_write(io_master_info,
+			&(i2c_list->i2c_settings));
+		if (rc < 0) {
+			CAM_ERR(CAM_SENSOR,
+				"i2c Read_append_write settings Failed: %d", rc);
+			return rc;
+		}
+	} else if ((i2c_list->op_code == CAM_SENSOR_I2C_SEQUENTIAL_XFER_LOCK) ||
+			(i2c_list->op_code == CAM_SENSOR_I2C_SEQUENTIAL_XFER_UNLOCK)) {
+		rc = camera_io_dev_sequential_xfer(io_master_info,
+			&(i2c_list->seq_xfer));
+		if (rc < 0) {
+			CAM_ERR(CAM_SENSOR,
+				"i2c Sequential Xfer settings Failed: %d", rc);
+			return rc;
+		}
 	}
 
 	return rc;
@@ -908,7 +926,7 @@ int32_t cam_handle_mem_ptr(uint64_t handle, uint32_t cmd,
 	}
 
 	cmd_desc = (struct cam_cmd_buf_desc *)
-		((uint32_t *)&pkt->payload + pkt->cmd_buf_offset/4);
+		((uint32_t *)&pkt->payload_flex + pkt->cmd_buf_offset/4);
 	if (cmd_desc == NULL) {
 		CAM_ERR(CAM_SENSOR, "command descriptor pos is invalid");
 		rc = -EINVAL;
@@ -1128,7 +1146,7 @@ end:
 int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 	void *arg)
 {
-	int rc = 0, pkt_opcode = 0;
+	int rc = 0, rc1 = 0, pkt_opcode = 0;
 	struct cam_control *cmd = (struct cam_control *)arg;
 	struct cam_sensor_power_ctrl_t *power_info = NULL;
 	struct timespec64 ts;
@@ -1213,15 +1231,14 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		if (s_ctrl->i2c_data.reg_bank_unlock_settings.is_settings_valid) {
 			rc = cam_sensor_apply_settings(s_ctrl, 0,
 				CAM_SENSOR_PACKET_OPCODE_SENSOR_REG_BANK_UNLOCK);
-			if (rc < 0) {
+			rc1 = delete_request(&(s_ctrl->i2c_data.reg_bank_unlock_settings));
+			if (rc < 0 || rc1 < 0) {
+				if (rc1 < 0) {
+					rc = rc1;
+					CAM_ERR(CAM_SENSOR,
+						"failed while deleting REG_bank unlock settings");
+				}
 				CAM_ERR(CAM_SENSOR, "REG_bank unlock failed");
-				cam_sensor_power_down(s_ctrl);
-				goto free_power_settings;
-			}
-			rc = delete_request(&(s_ctrl->i2c_data.reg_bank_unlock_settings));
-			if (rc < 0) {
-				CAM_ERR(CAM_SENSOR,
-					"failed while deleting REG_bank unlock settings");
 				cam_sensor_power_down(s_ctrl);
 				goto free_power_settings;
 			}
@@ -1243,15 +1260,14 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		if (s_ctrl->i2c_data.reg_bank_lock_settings.is_settings_valid) {
 			rc = cam_sensor_apply_settings(s_ctrl, 0,
 				CAM_SENSOR_PACKET_OPCODE_SENSOR_REG_BANK_LOCK);
-			if (rc < 0) {
+			rc1 = delete_request(&(s_ctrl->i2c_data.reg_bank_lock_settings));
+			if (rc < 0 || rc1 < 0) {
+				if (rc1 < 0) {
+					rc = rc1;
+					CAM_ERR(CAM_SENSOR,
+						"failed while deleting REG_bank lock settings");
+				}
 				CAM_ERR(CAM_SENSOR, "REG_bank lock failed");
-				cam_sensor_power_down(s_ctrl);
-				goto free_power_settings;
-			}
-			rc = delete_request(&(s_ctrl->i2c_data.reg_bank_lock_settings));
-			if (rc < 0) {
-				CAM_ERR(CAM_SENSOR,
-					"failed while deleting REG_bank lock settings");
 				cam_sensor_power_down(s_ctrl);
 				goto free_power_settings;
 			}
@@ -1516,7 +1532,6 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		}
 		if (s_ctrl->i2c_data.init_settings.is_settings_valid &&
 			(s_ctrl->i2c_data.init_settings.request_id == 0)) {
-
 			pkt_opcode =
 				CAM_SENSOR_PACKET_OPCODE_SENSOR_INITIAL_CONFIG;
 			rc = cam_sensor_apply_settings(s_ctrl, 0,

@@ -262,6 +262,13 @@ enum cam_isp_hw_cmd_type {
 	CAM_ISP_HW_CMD_BUFFER_ALIGNMENT_UPDATE,
 	CAM_ISP_HW_CMD_GET_CLK_THRESHOLDS,
 	CAM_ISP_HW_CMD_WM_UPDATE,
+	CAM_ISP_HW_CMD_UPDATE_CSID_RES_DATA,
+	CAM_ISP_HW_CMD_UPDATE_VFE_SRC_RES_DATA,
+	CAM_ISP_HW_CMD_UPDATE_VFE_OUT_RES_DATA,
+	CAM_ISP_HW_CMD_UPDATE_CSID_RES_IRQ_MASK,
+	CAM_ISP_HW_CMD_UPDATE_VFE_SRC_RES_IRQ_MASK,
+	CAM_ISP_HW_CMD_UPDATE_VFE_OUT_RES_IRQ_MASK,
+	CAM_ISP_HW_CMD_GET_NUM_OUT_RES,
 	CAM_ISP_HW_CMD_MAX,
 };
 
@@ -293,6 +300,9 @@ enum cam_isp_hw_cmd_type {
  * @res_name:                     Name of resource
  * @is_rdi_primary_res:           Indicates whether RDI is primiary resource or not.
  *                                Based on this, We need to enable interrupts on RDI path only.
+ * @is_per_port_start:            Indicates start_hw is called on real streamon call or
+ *                                on per port streamon call
+ * @is_per_port_acquire:          Indicates if resource is yet to be really acquired
  */
 struct cam_isp_resource_node {
 	enum cam_isp_resource_type     res_type;
@@ -317,6 +327,8 @@ struct cam_isp_resource_node {
 	CAM_IRQ_HANDLER_BOTTOM_HALF    bottom_half_handler;
 	uint8_t                        res_name[CAM_ISP_RES_NAME_LEN];
 	bool                           is_rdi_primary_res;
+	bool                           is_per_port_start;
+	bool                           is_per_port_acquire;
 };
 
 /*

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -296,7 +296,6 @@ handle_mismatch:
 	mutex_unlock(&tbl.bufq[idx].q_lock);
 	return rc;
 }
-EXPORT_SYMBOL(cam_mem_get_io_buf);
 
 int cam_mem_get_cpu_buf(int32_t buf_handle, uintptr_t *vaddr_ptr, size_t *len)
 {
@@ -349,7 +348,6 @@ end:
 	mutex_unlock(&tbl.bufq[idx].q_lock);
 	return 0;
 }
-EXPORT_SYMBOL(cam_mem_get_cpu_buf);
 
 int cam_mem_mgr_cache_ops(struct cam_mem_cache_ops_cmd *cmd)
 {
@@ -434,7 +432,6 @@ end:
 	mutex_unlock(&tbl.bufq[idx].q_lock);
 	return rc;
 }
-EXPORT_SYMBOL(cam_mem_mgr_cache_ops);
 
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
 #define CAM_MAX_VMIDS 4
@@ -1267,7 +1264,6 @@ static int cam_mem_mgr_cleanup_table(void)
 			cam_mem_mgr_unmap_active_buf(i);
 		}
 
-		mutex_lock(&tbl.bufq[i].q_lock);
 		if (tbl.bufq[i].dma_buf) {
 			dma_buf_put(tbl.bufq[i].dma_buf);
 			tbl.bufq[i].dma_buf = NULL;
@@ -1463,7 +1459,6 @@ void cam_mem_put_cpu_buf(int32_t buf_handle)
 end:
 	mutex_unlock(&tbl.bufq[idx].q_lock);
 }
-EXPORT_SYMBOL(cam_mem_put_cpu_buf);
 
 
 int cam_mem_mgr_release(struct cam_mem_mgr_release_cmd *cmd)
@@ -1656,7 +1651,6 @@ map_fail:
 ion_fail:
 	return rc;
 }
-EXPORT_SYMBOL(cam_mem_mgr_request_mem);
 
 int cam_mem_mgr_release_mem(struct cam_mem_mgr_memory_desc *inp)
 {
@@ -1709,7 +1703,6 @@ end:
 	mutex_unlock(&tbl.bufq[idx].q_lock);
 	return rc;
 }
-EXPORT_SYMBOL(cam_mem_mgr_release_mem);
 
 int cam_mem_mgr_reserve_memory_region(struct cam_mem_mgr_request_desc *inp,
 	enum cam_smmu_region_id region,
@@ -1809,7 +1802,6 @@ smmu_fail:
 ion_fail:
 	return rc;
 }
-EXPORT_SYMBOL(cam_mem_mgr_reserve_memory_region);
 
 int cam_mem_mgr_free_memory_region(struct cam_mem_mgr_memory_desc *inp)
 {
@@ -1893,4 +1885,3 @@ end:
 	mutex_unlock(&tbl.bufq[idx].q_lock);
 	return rc;
 }
-EXPORT_SYMBOL(cam_mem_mgr_free_memory_region);

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_DEFS_H__
@@ -32,6 +32,8 @@
 #define CAM_QUERY_CAP_V3                    (CAM_COMMON_OPCODE_BASE_v2 + 0x4)
 #define CAM_SYNX_TEST_TRIGGER               (CAM_COMMON_OPCODE_BASE_v2 + 0x5)
 #define CAM_CUSTOM_DEV_CONFIG               (CAM_COMMON_OPCODE_BASE_v2 + 0x6)
+#define CAM_UPDATE_SENSOR_STREAM_CONFIG     (CAM_COMMON_OPCODE_BASE_v2 + 0x7)
+
 
 #define CAM_EXT_OPCODE_BASE                     0x200
 #define CAM_CONFIG_DEV_EXTERNAL                 (CAM_EXT_OPCODE_BASE + 0x1)
@@ -527,7 +529,10 @@ struct cam_packet {
 	__u32                        num_patches;
 	__u32                        kmd_cmd_buf_index;
 	__u32                        kmd_cmd_buf_offset;
-	__u64                        payload[1];
+	union {
+		__u64                    payload[1];
+		__DECLARE_FLEX_ARRAY(__u64, payload_flex);
+	};
 
 };
 
@@ -755,8 +760,15 @@ struct cam_flush_dev_cmd {
 struct cam_ubwc_config {
 	__u32   api_version;
 	__u32   num_ports;
-	struct cam_ubwc_plane_cfg_v1
-		   ubwc_plane_cfg[1][CAM_PACKET_MAX_PLANES - 1];
+	union {
+		struct cam_ubwc_plane_cfg_v1
+			ubwc_plane_cfg[1][CAM_PACKET_MAX_PLANES - 1];
+		struct {
+			struct { } __empty_ubwc_plane_cfg_array_flex;
+			struct cam_ubwc_plane_cfg_v1
+				ubwc_plane_cfg_array_flex[][CAM_PACKET_MAX_PLANES - 1];
+		};
+	};
 };
 
 /**
@@ -773,8 +785,15 @@ struct cam_ubwc_config {
 struct cam_ubwc_config_v2 {
 	__u32   api_version;
 	__u32   num_ports;
-	struct cam_ubwc_plane_cfg_v2
-	   ubwc_plane_cfg[1][CAM_PACKET_MAX_PLANES - 1];
+	union {
+		struct cam_ubwc_plane_cfg_v2
+			ubwc_plane_cfg[1][CAM_PACKET_MAX_PLANES - 1];
+		struct {
+			struct { } __empty_ubwc_plane_cfg_array_flex;
+			struct cam_ubwc_plane_cfg_v2
+				ubwc_plane_cfg_array_flex[][CAM_PACKET_MAX_PLANES - 1];
+		};
+	};
 };
 
 /**
@@ -805,7 +824,10 @@ struct cam_cmd_mem_region_info {
 struct cam_cmd_mem_regions {
 	__u32 version;
 	__u32 num_regions;
-	struct cam_cmd_mem_region_info map_info_array[1];
+	union {
+		struct cam_cmd_mem_region_info map_info_array[1];
+		__DECLARE_FLEX_ARRAY(struct cam_cmd_mem_region_info, map_info_array_flex);
+	};
 };
 
 /**
@@ -878,7 +900,10 @@ struct cam_reg_read_info {
 struct cam_reg_dump_out_buffer {
 	__u64   req_id;
 	__u32   bytes_written;
-	__u32   dump_data[1];
+	union {
+		__u32   dump_data[1];
+		__DECLARE_FLEX_ARRAY(__u32, dump_data_flex);
+	};
 };
 
 /**
@@ -896,7 +921,10 @@ struct cam_reg_dump_desc {
 	__u32                    dump_buffer_offset;
 	__u32                    dump_buffer_size;
 	__u32                    num_read_range;
-	struct cam_reg_read_info read_range[1];
+	union {
+		struct cam_reg_read_info read_range[1];
+		__DECLARE_FLEX_ARRAY(struct cam_reg_read_info, read_range_flex);
+	};
 };
 
 /**
@@ -908,7 +936,10 @@ struct cam_reg_dump_desc {
  */
 struct cam_reg_dump_input_info {
 	__u32                   num_dump_sets;
-	__u32                   dump_set_offsets[1];
+	union {
+		__u32                   dump_set_offsets[1];
+		__DECLARE_FLEX_ARRAY(__u32, dump_set_offsets_flex);
+	};
 };
 
 /**
@@ -1001,5 +1032,21 @@ struct cam_synx_test_params {
 		struct cam_synx_core_control core_ctrl;
 	} u;
 } __attribute__((__packed__));
+
+/**
+ * struct cam_update_sensor_stream_cfg_cmd -
+ *        Information of group stream sensor configurations
+ *
+ * @size:               Handle size
+ * @handle_type:        User pointer or shared memory handle
+ * @cfg_handle:         Sensor specific configurations payload
+ * @reserved:           reserved field for alignment
+ */
+ struct cam_update_sensor_stream_cfg_cmd {
+	__u32        size;
+	__u32        handle_type;
+	__u64        cfg_handle;
+	__u64        reserved;
+};
 
 #endif /* __UAPI_CAM_DEFS_H__ */

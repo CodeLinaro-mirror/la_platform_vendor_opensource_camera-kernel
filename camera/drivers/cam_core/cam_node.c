@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/debugfs.h>
@@ -66,6 +66,28 @@ void cam_node_put_ctxt_to_free_list(struct kref *ref)
 	mutex_lock(&node->list_mutex);
 	list_add_tail(&ctx->list, &node->free_ctx_list);
 	mutex_unlock(&node->list_mutex);
+}
+
+static int __cam_node_handle_update_sensor_stream_cap(
+	struct cam_node *node,
+	struct cam_update_sensor_stream_cfg_cmd *update_sensor_stream)
+{
+	int rc = 0;
+
+	if (!update_sensor_stream || !node) {
+		CAM_ERR(CAM_CORE, "Invalid params");
+		return -EINVAL;
+	}
+
+	if (node->hw_mgr_intf.hw_update_sensor_grp_stream_cfg) {
+		rc = node->hw_mgr_intf.hw_update_sensor_grp_stream_cfg(
+			node->hw_mgr_intf.hw_mgr_priv, update_sensor_stream);
+	}
+
+	if (rc)
+		CAM_ERR(CAM_ISP, "update_sensor_static data failed: %d", rc);
+
+	return rc;
 }
 
 static int __cam_node_handle_query_cap(uint32_t version,
@@ -855,6 +877,7 @@ int cam_node_handle_ioctl(struct cam_node *node, struct cam_control *cmd)
 	}
 	case CAM_ACQUIRE_HW: {
 		uint32_t api_version;
+		uint32_t struct_version;
 		void *acquire_ptr = NULL;
 		size_t acquire_size;
 
@@ -889,6 +912,16 @@ int cam_node_handle_ioctl(struct cam_node *node, struct cam_control *cmd)
 		}
 
 		if (api_version == 1) {
+			struct_version =
+				((struct cam_acquire_hw_cmd_v1 *)acquire_ptr)->struct_version;
+			if (struct_version != api_version) {
+				CAM_ERR(CAM_CORE,
+					"Unmatched struct api version %u and struct version %u",
+					api_version, struct_version);
+				rc = -EINVAL;
+				goto acquire_kfree;
+			}
+
 			rc = __cam_node_handle_acquire_hw_v1(node, acquire_ptr);
 			if (rc) {
 				CAM_ERR(CAM_CORE,
@@ -896,6 +929,16 @@ int cam_node_handle_ioctl(struct cam_node *node, struct cam_control *cmd)
 				goto acquire_kfree;
 			}
 		} else if (api_version == 2) {
+			struct_version =
+				((struct cam_acquire_hw_cmd_v2 *)acquire_ptr)->struct_version;
+			if (struct_version != api_version) {
+				CAM_ERR(CAM_CORE,
+					"Unmatched struct api version %u and struct version %u",
+					api_version, struct_version);
+				rc = -EINVAL;
+				goto acquire_kfree;
+			}
+
 			rc = __cam_node_handle_acquire_hw_v2(node, acquire_ptr);
 			if (rc) {
 				CAM_ERR(CAM_CORE,
@@ -1029,6 +1072,11 @@ release_kfree:
 	case CAM_DUMP_REQ: {
 		struct cam_dump_req_cmd dump;
 
+		if (!cam_debugfs_available())
+		{
+			CAM_DBG(CAM_CORE, "Dump request disabled");
+			return 0;
+		}
 		if (copy_from_user(&dump, u64_to_user_ptr(cmd->handle),
 			sizeof(dump))) {
 			rc = -EFAULT;
@@ -1063,6 +1111,21 @@ release_kfree:
 		if (rc)
 			CAM_ERR(CAM_CORE, "Synx test on %s failed(rc = %d)",
 			    node->name, rc);
+		break;
+	}
+	case CAM_UPDATE_SENSOR_STREAM_CONFIG: {
+		struct cam_update_sensor_stream_cfg_cmd update_sensor_stream;
+
+		if (copy_from_user(&update_sensor_stream, u64_to_user_ptr(cmd->handle),
+			sizeof(update_sensor_stream)))
+			rc = -EFAULT;
+		else {
+			rc = __cam_node_handle_update_sensor_stream_cap(node,
+				&update_sensor_stream);
+			if (rc)
+				CAM_ERR(CAM_CORE,
+					"update sensor stream config failed(rc = %d)", rc);
+		}
 		break;
 	}
 	default:

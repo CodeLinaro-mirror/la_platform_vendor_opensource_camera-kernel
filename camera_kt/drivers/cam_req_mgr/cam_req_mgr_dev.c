@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -184,7 +184,17 @@ static int cam_req_mgr_close(struct file *filep)
 	struct v4l2_subdev *sd;
 	struct cam_subdev *csd;
 	struct v4l2_fh *vfh = filep->private_data;
-	struct v4l2_subdev_fh *subdev_fh = to_v4l2_subdev_fh(vfh);
+	struct v4l2_subdev_fh *subdev_fh = NULL;
+
+	if (!vfh) {
+		CAM_ERR(CAM_CRM, "filep->private_data (vfh) is NULL!");
+		return -EINVAL;
+	}
+	subdev_fh = to_v4l2_subdev_fh(vfh);
+	if (!subdev_fh) {
+		CAM_ERR(CAM_CRM, "Failed to convert vfh to subdev_fh!");
+		return -EINVAL;
+	}
 
 	CAM_WARN(CAM_CRM,
 		"release invoked associated userspace process has died, open_cnt: %d",
@@ -195,6 +205,7 @@ static int cam_req_mgr_close(struct file *filep)
 	mutex_lock(&g_dev.cam_lock);
 
 	if (g_dev.open_cnt <= 0) {
+		CAM_WARN(CAM_CRM, "open_cnt <= 0 in close!");
 		mutex_unlock(&g_dev.cam_lock);
 		cam_req_mgr_rwsem_write_op(CAM_SUBDEV_UNLOCK);
 		return -EINVAL;
@@ -204,7 +215,13 @@ static int cam_req_mgr_close(struct file *filep)
 	g_dev.shutdown_state = true;
 
 	list_for_each_entry(csd, &cam_req_mgr_ordered_sd_list, list) {
+		if (!csd)
+			continue;
+
 		sd = &csd->sd;
+		if (!sd)
+			continue;
+
 		if (!(sd->flags & V4L2_SUBDEV_FL_HAS_DEVNODE))
 			continue;
 		if (sd->internal_ops) {
@@ -633,6 +650,11 @@ static long cam_private_ioctl(struct file *file, void *fh,
 	case CAM_REQ_MGR_REQUEST_DUMP: {
 		struct cam_dump_req_cmd cmd;
 
+		if (!cam_debugfs_available()) {
+			CAM_DBG(CAM_CORE, "Dump request disabled");
+			return 0;
+		}
+
 		if (k_ioctl->size != sizeof(cmd))
 			return -EINVAL;
 
@@ -732,7 +754,6 @@ int cam_req_mgr_notify_message(struct cam_req_mgr_message *msg,
 
 	return 0;
 }
-EXPORT_SYMBOL(cam_req_mgr_notify_message);
 
 static void cam_video_device_cleanup(void)
 {
@@ -757,7 +778,6 @@ void cam_subdev_notify_message(u32 subdev_type,
 		}
 	}
 }
-EXPORT_SYMBOL(cam_subdev_notify_message);
 
 bool cam_req_mgr_is_open(void)
 {
@@ -769,13 +789,11 @@ bool cam_req_mgr_is_open(void)
 
 	return crm_status;
 }
-EXPORT_SYMBOL(cam_req_mgr_is_open);
 
 bool cam_req_mgr_is_shutdown(void)
 {
 	return g_dev.shutdown_state;
 }
-EXPORT_SYMBOL(cam_req_mgr_is_shutdown);
 
 int cam_register_subdev(struct cam_subdev *csd)
 {
@@ -798,13 +816,14 @@ int cam_register_subdev(struct cam_subdev *csd)
 	v4l2_subdev_init(sd, csd->ops);
 	sd->internal_ops = csd->internal_ops;
 	csd_name_len = strlen(csd->name);
-	if (csd_name_len < CAM_SUBDEV_NAME_SIZE) {
-		snprintf(sd->name, CAM_SUBDEV_NAME_SIZE, "%s", csd->name);
+	if (csd_name_len < sizeof(sd->name)) {
+		snprintf(sd->name, sizeof(sd->name), "%s", csd->name);
 	} else {
 		CAM_ERR(CAM_CRM, "Subdevice Name %s to big %d <= %d",
-			csd->name, CAM_SUBDEV_NAME_SIZE,
+			csd->name, sizeof(sd->name),
 			csd_name_len);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto invalid_val_fail;
 	}
 
 	v4l2_set_subdevdata(sd, csd->token);
@@ -839,10 +858,10 @@ int cam_register_subdev(struct cam_subdev *csd)
 	g_dev.count++;
 
 reg_fail:
+invalid_val_fail:
 	mutex_unlock(&g_dev.dev_lock);
 	return rc;
 }
-EXPORT_SYMBOL(cam_register_subdev);
 
 int cam_unregister_subdev(struct cam_subdev *csd)
 {
@@ -858,7 +877,6 @@ int cam_unregister_subdev(struct cam_subdev *csd)
 
 	return 0;
 }
-EXPORT_SYMBOL(cam_unregister_subdev);
 
 static int cam_req_mgr_component_master_bind(struct device *dev)
 {
@@ -868,14 +886,6 @@ static int cam_req_mgr_component_master_bind(struct device *dev)
 	rc = cam_v4l2_device_setup(dev);
 	if (rc)
 		return rc;
-
-	rc = cam_media_device_setup(dev);
-	if (rc)
-		goto media_setup_fail;
-
-	rc = cam_video_device_setup();
-	if (rc)
-		goto video_setup_fail;
 
 	g_dev.open_cnt = 0;
 	g_dev.shutdown_state = false;
@@ -896,6 +906,15 @@ static int cam_req_mgr_component_master_bind(struct device *dev)
 	}
 
 	g_dev.state = true;
+
+	rc = cam_media_device_setup(dev);
+	if (rc)
+		goto media_setup_fail;
+
+	rc = cam_video_device_setup();
+	if (rc)
+		goto video_setup_fail;
+
 	INIT_LIST_HEAD(&cam_req_mgr_ordered_sd_list);
 
 	if (g_cam_req_mgr_timer_cachep == NULL) {
@@ -930,17 +949,17 @@ static int cam_req_mgr_component_master_bind(struct device *dev)
 sysfs_fail:
 	sysfs_remove_file(&dev->kobj, &camera_debug_sysfs_attr.attr);
 req_mgr_device_deinit:
-	cam_req_mgr_core_device_deinit();
-req_mgr_core_fail:
-	cam_req_mgr_util_deinit();
-req_mgr_util_fail:
-	mutex_destroy(&g_dev.dev_lock);
-	mutex_destroy(&g_dev.cam_lock);
 	cam_video_device_cleanup();
 video_setup_fail:
 	cam_media_device_cleanup();
 media_setup_fail:
+	cam_req_mgr_core_device_deinit();
+req_mgr_core_fail:
+	cam_req_mgr_util_deinit();
+req_mgr_util_fail:
 	cam_v4l2_device_cleanup();
+	mutex_destroy(&g_dev.dev_lock);
+	mutex_destroy(&g_dev.cam_lock);
 	g_dev.state = false;
 	return rc;
 }
@@ -1020,7 +1039,6 @@ int cam_req_mgr_init(void)
 {
 	return platform_driver_register(&cam_req_mgr_driver);
 }
-EXPORT_SYMBOL(cam_req_mgr_init);
 
 void cam_req_mgr_exit(void)
 {

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_SENSOR_H__
@@ -60,6 +60,10 @@ enum camera_sensor_cmd_type {
 	CAMERA_SENSOR_CMD_TYPE_RD_DATA,
 	CAMERA_SENSOR_FLASH_CMD_TYPE_INIT_FIRE,
 	CAMERA_SENSOR_OIS_CMD_TYPE_FW_INFO,
+	CAMERA_SENSOR_CMD_TYPE_RES_INFO,
+	CAMERA_SENSOR_CMD_TYPE_I2C_RD_APPEND_WR,
+	CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_LOCK,
+	CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_UNLOCK,
 	CAMERA_SENSOR_CMD_TYPE_MAX,
 };
 
@@ -93,6 +97,9 @@ enum camera_sensor_i2c_op_code {
 	CAMERA_SENSOR_I2C_OP_CONT_WR_SEQN_VERF,
 	CAMERA_SENSOR_I2C_OP_RNDM_RD,
 	CAMERA_SENSOR_I2C_OP_CONT_RD,
+	CAMERA_SENSOR_I2C_OP_RD_APPEND_WR,
+	CAMERA_SENSOR_I2C_OP_SEQUENTIAL_XFER_LOCK,
+	CAMERA_SENSOR_I2C_OP_SEQUENTIAL_XFER_UNLOCK,
 	CAMERA_SENSOR_I2C_OP_MAX,
 };
 
@@ -574,7 +581,10 @@ struct cam_cmd_power {
 	__u8                        reserved;
 	__u8                        cmd_type;
 	__u16                       more_reserved;
-	struct cam_power_settings   power_settings[1];
+	union {
+		struct cam_power_settings   power_settings[1];
+		__DECLARE_FLEX_ARRAY(struct cam_power_settings, power_settings_flex);
+	};
 } __attribute__((packed));
 
 /**
@@ -600,11 +610,13 @@ struct i2c_rdwr_header {
  *
  * @ reg_addr        :   Register address
  * @ reg_data        :   Register data
+ * @ mask            :   mask value
  *
  */
 struct i2c_random_wr_payload {
 	__u32     reg_addr;
 	__u32     reg_data;
+	__u32     mask;
 } __attribute__((packed));
 
 /**
@@ -614,7 +626,10 @@ struct i2c_random_wr_payload {
  */
 struct cam_cmd_i2c_random_wr {
 	struct i2c_rdwr_header       header;
-	struct i2c_random_wr_payload random_wr_payload[1];
+	union {
+		struct i2c_random_wr_payload random_wr_payload[1];
+		__DECLARE_FLEX_ARRAY(struct i2c_random_wr_payload, random_wr_payload_flex);
+	};
 } __attribute__((packed));
 
 /**
@@ -636,7 +651,10 @@ struct cam_cmd_read {
 struct cam_cmd_i2c_continuous_wr {
 	struct i2c_rdwr_header header;
 	__u32                  reg_addr;
-	struct cam_cmd_read    data_read[1];
+	union {
+		struct cam_cmd_read    data_read[1];
+		__DECLARE_FLEX_ARRAY(struct cam_cmd_read, data_read_flex);
+	};
 } __attribute__((packed));
 
 /**
@@ -646,7 +664,10 @@ struct cam_cmd_i2c_continuous_wr {
  */
 struct cam_cmd_i2c_random_rd {
 	struct i2c_rdwr_header header;
-	struct cam_cmd_read    data_read[1];
+	union {
+		struct cam_cmd_read    data_read[1];
+		__DECLARE_FLEX_ARRAY(struct cam_cmd_read, data_read_flex);
+	};
 } __attribute__((packed));
 
 /**
@@ -658,6 +679,23 @@ struct cam_cmd_i2c_random_rd {
 struct cam_cmd_i2c_continuous_rd {
 	struct i2c_rdwr_header header;
 	__u32                  reg_addr;
+} __attribute__((packed));
+
+/**
+ * struct cam_cmd_i2c_continuous_rd - I2C continuous continuous read command
+ * @ header          :   header of READ/WRITE I2C command
+ * @ reserved        :
+ * @ op_code         :   Opcode
+ * @ cmd_type        :   Explains type of command
+ * @ lock            :   lock or unlock
+ *
+ */
+struct cam_cmd_i2c_sequential_xfer {
+	struct i2c_rdwr_header header;
+	__u16    reserved;
+	__u8     op_code;
+	__u8     cmd_type;
+	__u32    lock;
 } __attribute__((packed));
 
 /**
