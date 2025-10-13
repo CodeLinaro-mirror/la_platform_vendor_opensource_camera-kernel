@@ -9,6 +9,10 @@
 #include <linux/slab.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+#include <linux/interconnect.h>
+#include "cam_res_mgr_api.h"
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 #include "cam_soc_util.h"
 #include "cam_debug_util.h"
 #include "cam_cx_ipeak.h"
@@ -873,6 +877,9 @@ static int cam_soc_util_set_clk_rate(struct cam_hw_soc_info *soc_info,
 	int rc = 0;
 	long clk_rate_round = -1;
 	bool set_rate = false;
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+	struct icc_path *icc_path;
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 	if (!clk || !clk_name) {
 		CAM_ERR(CAM_UTIL, "Invalid input clk %pK clk_name %pK",
@@ -903,6 +910,26 @@ static int cam_soc_util_set_clk_rate(struct cam_hw_soc_info *soc_info,
 		}
 		set_rate = true;
 	}
+
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+	if (cam_res_mgr_is_icc_clock(clk_name)) {
+		CAM_DBG(CAM_UTIL, "Avoid set rate of mutual clock: %s", clk_name);
+
+		icc_path = cam_res_mgr_clk_get_path(clk_name);
+		if (!icc_path) {
+			CAM_ERR(CAM_UTIL, "Failed getting icc path for clock: %s\n", clk_name);
+			return -EINVAL;
+		}
+
+		rc = cam_res_mgr_icc_set_bw(icc_path, clk_rate_round, clk_rate_round);
+		if (rc) {
+			CAM_ERR(CAM_UTIL, "icc set_bw failed on %s", clk_name);
+			return rc;
+		}
+
+		goto clk_handled;
+	}
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 	if (set_rate) {
 		if (shared_clk) {
@@ -951,6 +978,10 @@ static int cam_soc_util_set_clk_rate(struct cam_hw_soc_info *soc_info,
 			}
 		}
 	}
+
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+clk_handled:
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 	if (applied_clk_rate)
 		*applied_clk_rate = clk_rate_round;
@@ -1207,6 +1238,9 @@ int cam_soc_util_clk_enable(struct cam_hw_soc_info *soc_info,
 	uint32_t shared_clk_mask;
 	uint32_t clk_id;
 	bool is_src_clk = false;
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+	struct icc_path *icc_path;
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 	if (!soc_info || (clk_idx < 0) || (apply_level >= CAM_MAX_VOTE)) {
 		CAM_ERR(CAM_UTIL, "Invalid param %d %d", clk_idx, apply_level);
@@ -1237,11 +1271,31 @@ int cam_soc_util_clk_enable(struct cam_hw_soc_info *soc_info,
 	if (rc)
 		return rc;
 
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+	if (cam_res_mgr_is_icc_clock(clk_name) && (clk_rate >= 0)) {
+		icc_path = cam_res_mgr_clk_get_path(clk_name);
+		if (!icc_path) {
+			CAM_ERR(CAM_UTIL, "Failed getting icc path for clock: %s\n", clk_name);
+			return -EINVAL;
+		}
+
+		rc = cam_res_mgr_icc_set_bw(icc_path, clk_rate, clk_rate);
+		if (rc)
+			CAM_ERR(CAM_UTIL, "icc set_bw failed on %s", clk_name);
+
+		goto clk_handled;
+	}
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
+
 	rc = clk_prepare_enable(clk);
 	if (rc) {
 		CAM_ERR(CAM_UTIL, "enable failed for %s: rc(%d)", clk_name, rc);
 		return rc;
 	}
+
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+clk_handled:
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 	return rc;
 }
@@ -1254,6 +1308,9 @@ int cam_soc_util_clk_disable(struct cam_hw_soc_info *soc_info,
 	const char *clk_name;
 	uint32_t shared_clk_mask;
 	uint32_t clk_id;
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+	struct icc_path *icc_path;
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 	if (!soc_info || (clk_idx < 0)) {
 		CAM_ERR(CAM_UTIL, "Invalid param %d", clk_idx);
@@ -1272,6 +1329,23 @@ int cam_soc_util_clk_disable(struct cam_hw_soc_info *soc_info,
 		clk_id = soc_info->clk_id[clk_idx];
 	}
 
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+	if (cam_res_mgr_is_icc_clock(clk_name)) {
+		icc_path = cam_res_mgr_clk_get_path(clk_name);
+		if (!icc_path) {
+			CAM_ERR(CAM_UTIL, "Failed getting icc path for clock: %s\n", clk_name);
+			return -EINVAL;
+		}
+
+		if (cam_res_mgr_icc_set_bw(icc_path, 0, 0)) {
+			CAM_ERR(CAM_UTIL, "icc set_bw failed on %s", clk_name);
+			return -EINVAL;
+		}
+
+		goto clk_handled;
+	}
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
+
 	CAM_DBG(CAM_UTIL, "disable %s", clk_name);
 	clk_disable_unprepare(clk);
 
@@ -1289,6 +1363,10 @@ int cam_soc_util_clk_disable(struct cam_hw_soc_info *soc_info,
 			soc_info->is_nrt_dev,
 			0, 0, 1);
 	}
+
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+clk_handled:
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 	return 0;
 }
