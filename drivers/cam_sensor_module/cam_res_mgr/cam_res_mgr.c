@@ -704,6 +704,20 @@ int cam_res_mgr_gpio_set_value(unsigned int gpio, int value)
 EXPORT_SYMBOL(cam_res_mgr_gpio_set_value);
 
 #ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+int cam_res_mgr_icc_set_bw(struct icc_path *path, s32 avg, s32 peak)
+{
+	if (avg < 0)
+		avg = 0;
+
+	if (peak < 0)
+		peak = 0;
+
+	CAM_DBG(CAM_RES, "set avg: %d, peak: %d", avg, peak);
+
+	return icc_set_bw(path, avg, peak);
+}
+EXPORT_SYMBOL(cam_res_mgr_icc_set_bw);
+
 bool cam_res_mgr_is_icc_clock(const char *clk_name)
 {
 	struct cam_res_mgr_dt *dt;

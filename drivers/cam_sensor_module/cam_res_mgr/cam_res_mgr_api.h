@@ -144,6 +144,13 @@ bool cam_res_mgr_is_icc_clock(const char *clk_name);
  * @return struct icc_path* or NULL otherwise
  */
 struct icc_path *cam_res_mgr_clk_get_path(const char *clk_name);
+
+/**
+ * @brief : single call where interconnect clock rates
+ *	could be handled before being passed to icc.
+ * @return 0 on success, error code otherwise
+ */
+int cam_res_mgr_icc_set_bw(struct icc_path *path, s32 avg, s32 peak);
 #endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 #endif /* __CAM_RES_MGR_API_H__ */
