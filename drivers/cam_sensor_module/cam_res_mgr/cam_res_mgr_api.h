@@ -138,6 +138,12 @@ int cam_res_mgr_util_shared_gpio_check_hold(uint gpio);
  * @return true if so, false all other cases
  */
 bool cam_res_mgr_is_icc_clock(const char *clk_name);
+
+/**
+ * @brief : convert clock to icc path
+ * @return struct icc_path* or NULL otherwise
+ */
+struct icc_path *cam_res_mgr_clk_get_path(const char *clk_name);
 #endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 #endif /* __CAM_RES_MGR_API_H__ */
