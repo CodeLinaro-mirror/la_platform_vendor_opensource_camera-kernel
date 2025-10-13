@@ -816,6 +816,32 @@ static int cam_res_mgr_alloc_icc_clocks(struct device *dev)
 
 	return 0;
 }
+
+struct icc_path *cam_res_mgr_clk_get_path(const char *clk_name)
+{
+	struct cam_res_mgr_dt *dt;
+	int cnt;
+
+	if (!cam_res) {
+		CAM_INFO(CAM_RES, "Camera res-mgr is not yet active");
+		return NULL;
+	}
+
+	if (!clk_name) {
+		CAM_ERR(CAM_RES, "No clock name provided");
+		return NULL;
+	}
+
+	dt = &cam_res->dt;
+	cnt = dt->num_icc_clocks;
+
+	while (cnt--)
+		if (!strcmp(clk_name, dt->icc_clocks[cnt]))
+			return dt->iccpath[cnt];
+
+	return NULL;
+}
+EXPORT_SYMBOL(cam_res_mgr_clk_get_path);
 #endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 static int cam_res_mgr_shared_pinctrl_init(
