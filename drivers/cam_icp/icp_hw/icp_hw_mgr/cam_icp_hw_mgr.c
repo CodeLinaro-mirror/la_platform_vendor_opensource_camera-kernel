@@ -1234,7 +1234,7 @@ static bool cam_icp_update_clk_free(struct cam_icp_hw_mgr *hw_mgr,
 		over_clocked) {
 		rc = cam_icp_update_clk_overclk_free(hw_mgr, ctx_data,
 			hw_mgr_clk_info, clk_info, base_clk);
-	} else if (hw_mgr_clk_info->curr_clk > hw_mgr_clk_info->base_clk) {
+	} else if (hw_mgr_clk_info->curr_clk >= hw_mgr_clk_info->base_clk) {
 		hw_mgr_clk_info->over_clked = 0;
 		rc = false;
 	}  else if (hw_mgr_clk_info->curr_clk < hw_mgr_clk_info->base_clk) {
