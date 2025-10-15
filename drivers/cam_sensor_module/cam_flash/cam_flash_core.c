@@ -1289,6 +1289,7 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 	struct cam_req_mgr_add_request add_req = {0};
 	struct cam_flash_init *cam_flash_info = NULL;
 	struct cam_flash_set_rer *flash_rer_info = NULL;
+	struct cam_flash_set_rer *flash_rer_info_u = NULL;
 	struct cam_flash_set_on_off *flash_operation_info = NULL;
 	struct cam_flash_set_on_off *flash_operation_info_u = NULL;
 	struct cam_flash_query_curr *flash_query_info = NULL;
@@ -1722,18 +1723,44 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 				rc = -EINVAL;
 				goto rel_cmd_buf;
 			}
-			flash_rer_info = (struct cam_flash_set_rer *)cmd_buf;
-			if (!flash_rer_info) {
+			flash_rer_info_u = (struct cam_flash_set_rer *)cmd_buf;
+			if (!flash_rer_info_u) {
 				CAM_ERR(CAM_FLASH,
 					"flash_rer_info Null");
 				rc = -EINVAL;
 				goto rel_cmd_buf;
 			}
+
+			count = flash_rer_info_u->count;
+			rc = cam_common_mem_kdup((void**)&flash_rer_info,
+				flash_rer_info_u,
+				sizeof(struct cam_flash_set_rer));
+
+			if(rc) {
+				CAM_ERR(CAM_FLASH, "Alloc and copy flash operation info failed");
+				break;
+			}
+
+			if (!flash_rer_info) {
+				CAM_ERR(CAM_FLASH, "Memory allocation for flash_rer_info failed");
+				rc = -ENOMEM;
+				break;
+			}
+
+			if (count != flash_rer_info->count) {
+				CAM_ERR(CAM_FLASH, "Count changed: userspace: %d, kernel: %d",
+					count, flash_rer_info->count);
+				rc = -EINVAL;
+				cam_common_mem_free(flash_rer_info);
+				break;
+			}
+
 			if (flash_rer_info->count >
 				CAM_FLASH_MAX_LED_TRIGGERS) {
 				CAM_ERR(CAM_FLASH, "led count out of limit");
 				rc = -EINVAL;
-				goto rel_cmd_buf;
+				cam_common_mem_free(flash_rer_info);
+				break;
 			}
 
 			fctrl->nrt_info.cmn_attr.cmd_type =
@@ -1756,7 +1783,8 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 			if (rc)
 				CAM_ERR(CAM_FLASH, "apply_setting failed: %d",
 					rc);
-			goto rel_cmd_buf;
+			cam_common_mem_free(flash_rer_info);
+			break;
 		}
 		default:
 			CAM_ERR(CAM_FLASH, "Wrong cmd_type : %d",
