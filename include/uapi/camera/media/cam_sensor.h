@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __UAPI_CAM_SENSOR_H__
@@ -401,7 +401,7 @@ struct cam_sensor_res_info {
 	char  caps[64];
 	__u32 num_valid_params;
 	__u32 valid_param_mask;
-	__u16 params[3];
+	__u16 params[5];
 } __attribute__((packed));
 
 /**
@@ -820,7 +820,7 @@ struct cam_csiphy_aux_settings_params {
 	__u64 data_rate_aux_mask;
 	__u32 num_valid_params;
 	__u32 valid_param_mask;
-	__u32 params[2];
+	__u32 params[3];
 };
 
 /**
@@ -1297,10 +1297,11 @@ struct cam_flash_set_on_off {
  *
  */
 struct cam_flash_query_curr {
-	__u16    reserved;
+	__u32    reserved;
 	__u8     opcode;
 	__u8     cmd_type;
 	__u32    query_current_ma;
+	__u16    reserved1;
 } __attribute__ ((packed));
 
 /**
