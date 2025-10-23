@@ -3793,8 +3793,8 @@ static int cam_req_mgr_no_crm_trigger_cb(int trigger_point,
 			continue;
 		}
 
-		CAM_DBG(CAM_CRM, "%d apply \"%s\" for req %lld", i, dev->dev_info.name,
-				apply_info->anchor_req_id);
+		CAM_DBG(CAM_CRM, "%d apply \"%s\" for req %lld setting id: %u", i, dev->dev_info.name,
+				apply_info->anchor_req_id, apply_info->setting_id);
 		apply_info->dev_hdl = dev->dev_hdl;
 		rc = dev->no_crm_ops->apply_req(apply_info);
 		if (rc) {
@@ -4431,6 +4431,7 @@ int cam_req_mgr_get_setting_id(int link_hdl)
 				&link->new_setting_period_packet,
 				sizeof(struct setting_pattern_period));
 			link->curr_seting_idx = 0;
+			link->is_new_setting_available = false;
 		}
 	}
 	link->curr_setting = link->setting_period_packet.pattern[link->curr_seting_idx];
