@@ -3576,8 +3576,7 @@ static int __cam_isp_ctx_dump_in_top_state(
 			goto hw_dump;
 		}
 	}
-	spin_unlock_bh(&ctx->lock);
-	return rc;
+	goto end;
 hw_dump:
 	if (buf_len <= dump_info->offset) {
 		spin_unlock_bh(&ctx->lock);
@@ -4778,6 +4777,7 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 	struct cam_hw_cmd_args           hw_cmd_args;
 	struct cam_isp_hw_cmd_args       isp_hw_cmd_args;
 	uint32_t                         packet_opcode = 0;
+	struct cam_kmd_buf_info *kmd_buff = NULL;
 
 	CAM_DBG(CAM_ISP, "get free request object......");
 
@@ -4969,9 +4969,11 @@ put_ref:
 			CAM_ERR(CAM_CTXT, "Failed to put ref of fence %d",
 				req_isp->fence_map_out[i].sync_id);
 	}
+	kmd_buff = &(req_isp->hw_update_data.kmd_cmd_buff_info);
+	cam_mem_put_kref(kmd_buff->handle);
 free_req:
 	spin_lock_bh(&ctx->lock);
-	__cam_isp_ctx_move_req_to_free_list(ctx, req);
+	list_add_tail(&req->list, &ctx->free_req_list);
 	spin_unlock_bh(&ctx->lock);
 
 	cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
