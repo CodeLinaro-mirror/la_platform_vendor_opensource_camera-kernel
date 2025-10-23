@@ -4134,6 +4134,13 @@ int cam_req_mgr_batch_request_v2(struct cam_batch_config_dev_cmd *cmd)
 			return -EINVAL;
 		}
 		for (j = 0; j < link->num_devs; j++) {
+			if (!link->l_dev[j].no_crm_ops) {
+				CAM_DBG(CAM_ISP,
+					"noCRM ops not applicable for dev_hdl 0x%x %s",
+					link->l_dev[j].dev_hdl,
+					link->l_dev[j].dev_info.name);
+				continue;
+			}
 			if (link->l_dev[j].no_crm_ops->retrieve_v2) {
 				link->l_dev[j].no_crm_ops->retrieve_v2(
 					link->l_dev[j].dev_hdl, ul_packet);
@@ -4313,6 +4320,13 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd)
 			return -EINVAL;
 		}
 		for (j = 0; j < link->num_devs; j++) {
+			if (!link->l_dev[j].no_crm_ops) {
+				CAM_DBG(CAM_ISP,
+					"noCRM ops not applicable for dev_hdl 0x%x %s",
+					link->l_dev[j].dev_hdl,
+					link->l_dev[j].dev_info.name);
+				continue;
+			}
 			if (link->l_dev[j].no_crm_ops->retrieve) {
 				link->l_dev[j].no_crm_ops->retrieve(
 					link->l_dev[j].dev_hdl, ul_packet);
