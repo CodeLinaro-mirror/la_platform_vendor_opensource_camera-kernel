@@ -638,12 +638,13 @@ int cam_actuator_driver_init(void)
 	if (rc)
 		goto i3c_register_err;
 
+#ifdef CONFIG_I3C
 	rc = i3c_driver_register_with_owner(&cam_actuator_i3c_driver, THIS_MODULE);
 	if (rc) {
 		CAM_ERR(CAM_ACTUATOR, "i3c_driver registration failed, rc: %d", rc);
 		goto i3c_register_err;
 	}
-
+#endif
 	return 0;
 
 i3c_register_err:
@@ -666,8 +667,9 @@ void cam_actuator_driver_exit(void)
 		CAM_DBG(CAM_ACTUATOR, "Couldnt Find the i3c-id-table dev node");
 		return;
 	}
-
+#ifdef CONFIG_I3C
 	i3c_driver_unregister(&cam_actuator_i3c_driver);
+#endif
 }
 
 MODULE_DESCRIPTION("cam_actuator_driver");

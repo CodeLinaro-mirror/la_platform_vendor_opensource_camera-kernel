@@ -801,12 +801,13 @@ int cam_eeprom_driver_init(void)
 	if (rc)
 		goto i3c_register_err;
 
+#ifdef CONFIG_I3C
 	rc = i3c_driver_register_with_owner(&cam_eeprom_i3c_driver, THIS_MODULE);
 	if (rc) {
 		CAM_ERR(CAM_EEPROM, "i3c_driver registration failed, rc: %d", rc);
 		goto i3c_register_err;
 	}
-
+#endif
 	return 0;
 i3c_register_err:
 	i2c_del_driver(&cam_sensor_i2c_driver);
@@ -832,7 +833,9 @@ void cam_eeprom_driver_exit(void)
 		return;
 	}
 
+#ifdef CONFIG_I3C
 	i3c_driver_unregister(&cam_eeprom_i3c_driver);
+#endif
 }
 
 MODULE_DESCRIPTION("CAM EEPROM driver");

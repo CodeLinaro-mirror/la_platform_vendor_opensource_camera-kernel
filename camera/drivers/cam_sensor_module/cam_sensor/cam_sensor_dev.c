@@ -690,12 +690,13 @@ int cam_sensor_driver_init(void)
 	if (rc)
 		goto i3c_register_err;
 
+#ifdef CONFIG_I3C
 	rc = i3c_driver_register_with_owner(&cam_sensor_i3c_driver, THIS_MODULE);
 	if (rc) {
 		CAM_ERR(CAM_SENSOR, "i3c_driver registration failed, rc: %d", rc);
 		goto i3c_register_err;
 	}
-
+#endif
 	cam_sensor_module_debug_register();
 
 	return 0;
@@ -721,8 +722,9 @@ void cam_sensor_driver_exit(void)
 		return;
 	}
 
+#ifdef CONFIG_I3C
 	i3c_driver_unregister(&cam_sensor_i3c_driver);
-
+#endif
 	cam_sensor_module_debug_deregister();
 }
 
