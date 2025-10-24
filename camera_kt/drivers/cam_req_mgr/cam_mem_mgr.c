@@ -20,6 +20,11 @@
 #include "cam_debug_util.h"
 #include "cam_trace.h"
 #include "cam_common_util.h"
+#if !defined(USE_DOWNSTREAM_DMA_BUFF)
+#include <linux/iosys-map.h>
+#include <asm/cacheflush.h>
+#include "cam_buf_mgr.h"
+#endif
 
 static struct cam_mem_table tbl;
 static atomic_t cam_mem_mgr_state = ATOMIC_INIT(CAM_MEM_MGR_UNINITIALIZED);
@@ -450,7 +455,7 @@ static int cam_mem_mgr_get_dma_heaps(void)
 	tbl.camera_heap = NULL;
 	tbl.camera_uncached_heap = NULL;
 	tbl.secure_display_heap = NULL;
-
+#ifdef DMABUF_ALLOC_FIND_KERNEL_API
 	tbl.system_heap = dma_heap_find("system");
 	if (IS_ERR_OR_NULL(tbl.system_heap)) {
 		rc = PTR_ERR(tbl.system_heap);
@@ -508,11 +513,16 @@ static int cam_mem_mgr_get_dma_heaps(void)
 		tbl.system_heap, tbl.system_uncached_heap,
 		tbl.camera_heap, tbl.camera_uncached_heap,
 		tbl.secure_display_heap);
+#else
+	CAM_INFO(CAM_MEM, "QC DMA heaps kernel API is not available");
+#endif
 
 	return 0;
+#ifdef DMABUF_ALLOC_FIND_KERNEL_API
 put_heaps:
 	cam_mem_mgr_put_dma_heaps();
 	return rc;
+#endif
 }
 
 static int cam_mem_util_get_dma_buf(size_t len,
@@ -540,6 +550,7 @@ static int cam_mem_util_get_dma_buf(size_t len,
 	if (tbl.alloc_profile_enable)
 		CAM_GET_TIMESTAMP(ts1);
 
+#ifdef DMABUF_ALLOC_FIND_KERNEL_API
 	if ((cam_flags & CAM_MEM_FLAG_CACHE) ||
 		(tbl.force_cache_allocs &&
 		(!(cam_flags & CAM_MEM_FLAG_PROTECTED_MODE)))) {
@@ -615,6 +626,16 @@ static int cam_mem_util_get_dma_buf(size_t len,
 			return rc;
 		}
 	}
+#else
+	CAM_DBG(CAM_MEM, "Using cmm_alloc_buffer for allocation, len=%zu, flags=0x%x", len, cam_flags);
+	*buf = cmm_alloc_buffer(len, cam_flags);
+	if (IS_ERR_OR_NULL(*buf)) {
+		rc = PTR_ERR(*buf);
+		CAM_ERR(CAM_MEM, "Failed in cmm_alloc_buffer, len=%zu, flags=0x%x, rc=%d", len, cam_flags, rc);
+		*buf = NULL;
+		return rc;
+	}
+#endif
 #ifdef CONFIG_SPECTRA_SECURE
 	if (cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) {
 		if (num_vmids >= CAM_MAX_VMIDS) {
@@ -713,7 +734,7 @@ static int cam_mem_util_buffer_alloc(struct cam_mem_mgr_alloc_cmd_v2 *cmd,
 	struct dma_buf **dmabuf,
 	int *fd)
 {
-	int rc;
+	int rc = 0;
 	struct dma_buf *temp_dmabuf = NULL;
 
 	rc = cam_mem_util_get_dma_buf(cmd->len,
@@ -1293,9 +1314,81 @@ static int cam_mem_mgr_cleanup_table(void)
 	return 0;
 }
 
+static void cam_mem_util_unmap_dummy(struct kref *kref)
+{
+	CAM_DBG(CAM_MEM, "Cam mem util unmap dummy");
+}
+
+#if !defined(USE_DOWNSTREAM_DMA_BUFF)
+static int __cam_mem_mgr_release(struct cam_mem_mgr_release_cmd *cmd)
+{
+	int idx;
+	int rc = 0;
+
+	lockdep_assert_held(&tbl.m_lock);
+
+	if (!cmd) {
+		CAM_ERR(CAM_MEM, "Invalid argument");
+		return -EINVAL;
+	}
+
+	idx = CAM_MEM_MGR_GET_HDL_IDX(cmd->buf_handle);
+	if (idx >= CAM_MEM_BUFQ_MAX || idx <= 0) {
+		CAM_ERR(CAM_MEM, "Incorrect index %d extracted from mem handle",
+			idx);
+		return -EINVAL;
+	}
+
+	if (!tbl.bufq[idx].active) {
+		CAM_ERR(CAM_MEM, "Released buffer state should be active");
+		return -EINVAL;
+	}
+
+	if (tbl.bufq[idx].buf_handle != cmd->buf_handle) {
+		CAM_ERR(CAM_MEM,
+			"Released buf handle %d not matching within table %d, idx=%d",
+			cmd->buf_handle, tbl.bufq[idx].buf_handle, idx);
+		return -EINVAL;
+	}
+
+	CAM_DBG(CAM_MEM, "Releasing hdl = %x, idx = %d", cmd->buf_handle, idx);
+	if (kref_put(&tbl.bufq[idx].krefcount, cam_mem_util_unmap_dummy)) {
+		CAM_DBG(CAM_MEM,
+			"Called unmap from here, buf_handle: %u, idx: %d",
+			cmd->buf_handle, idx);
+	} else
+		rc = -EINVAL;
+
+	return rc;
+}
+
+static void cam_mem_mgr_close(void)
+{
+	struct cam_mem_mgr_release_cmd cmd;
+	int i = 1;
+
+	for_each_set_bit_from(i, tbl.bitmap, tbl.bits) {
+		mutex_lock(&tbl.m_lock);
+		if (tbl.bufq[i].active) {
+			CAM_DBG(CAM_MEM, "Active buffer idx=%d", i);
+			cmd.buf_handle = tbl.bufq[i].buf_handle;
+			mutex_lock(&tbl.bufq[i].q_lock);
+			__cam_mem_mgr_release(&cmd);
+			mutex_unlock(&tbl.bufq[i].q_lock);
+			mutex_unlock(&tbl.m_lock);
+		} else {
+			mutex_unlock(&tbl.m_lock);
+		}
+	}
+}
+#endif
+
 void cam_mem_mgr_deinit(void)
 {
 	atomic_set(&cam_mem_mgr_state, CAM_MEM_MGR_UNINITIALIZED);
+#if !defined(USE_DOWNSTREAM_DMA_BUFF)
+	cam_mem_mgr_close();
+#endif
 	cam_mem_mgr_cleanup_table();
 	debugfs_remove_recursive(tbl.dentry);
 	mutex_lock(&tbl.m_lock);
@@ -1305,11 +1398,6 @@ void cam_mem_mgr_deinit(void)
 	tbl.dbg_buf_idx = -1;
 	mutex_unlock(&tbl.m_lock);
 	mutex_destroy(&tbl.m_lock);
-}
-
-static void cam_mem_util_unmap_dummy(struct kref *kref)
-{
-	CAM_DBG(CAM_MEM, "Cam mem util unmap dummy");
 }
 
 static void cam_mem_util_unmap(int32_t idx)
