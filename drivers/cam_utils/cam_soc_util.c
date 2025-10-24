@@ -2747,45 +2747,59 @@ int cam_soc_util_request_platform_resource(
 			goto put_clk;
 		}
 
-		/* Create a wrapper entry if this is a shared clock */
-		if (CAM_IS_BIT_SET(soc_info->shared_clk_mask, i)) {
-			uint32_t min_level = soc_info->lowest_clk_level;
 
-			CAM_DBG(CAM_UTIL,
-				"Dev %s, clk %s, id %d register wrapper entry for shared clk",
-				soc_info->dev_name, soc_info->clk_name[i],
-				soc_info->clk_id[i]);
-
-			rc = cam_soc_util_clk_wrapper_register_entry(
-				soc_info->clk_id[i], soc_info->clk[i],
-				(i == soc_info->src_clk_idx) ? true : false,
-				soc_info, soc_info->clk_rate[min_level][i],
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+		/* IFE Lite resources are shared by different camera services. In this case
+		   camsx clock provider is in use. No source clocks can be accessed directly and
+		   mmrm cannot be used. */
+		if (!strcmp(soc_info->clk_name[i], "ife_lite_csid_clk") ||
+		    !strcmp(soc_info->clk_name[i], "ife_lite_clk")) {
+			CAM_DBG(CAM_UTIL, "IFE Lite shared resource! %s",
 				soc_info->clk_name[i]);
-			if (rc) {
-				CAM_ERR(CAM_UTIL,
-					"Failed in registering shared clk Dev %s id %d",
-					soc_info->dev_name,
+		} else {
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
+			/* Create a wrapper entry if this is a shared clock */
+			if (CAM_IS_BIT_SET(soc_info->shared_clk_mask, i)) {
+				uint32_t min_level = soc_info->lowest_clk_level;
+
+				CAM_DBG(CAM_UTIL,
+					"Dev %s, clk %s, id %d register wrapper entry for shared clk",
+					soc_info->dev_name, soc_info->clk_name[i],
 					soc_info->clk_id[i]);
-				clk_put(soc_info->clk[i]);
-				soc_info->clk[i] = NULL;
-				goto put_clk;
+
+				rc = cam_soc_util_clk_wrapper_register_entry(
+					soc_info->clk_id[i], soc_info->clk[i],
+					(i == soc_info->src_clk_idx) ? true : false,
+					soc_info, soc_info->clk_rate[min_level][i],
+					soc_info->clk_name[i]);
+				if (rc) {
+					CAM_ERR(CAM_UTIL,
+						"Failed in registering shared clk Dev %s id %d",
+						soc_info->dev_name,
+						soc_info->clk_id[i]);
+					clk_put(soc_info->clk[i]);
+					soc_info->clk[i] = NULL;
+					goto put_clk;
+				}
+			} else if (i == soc_info->src_clk_idx) {
+				rc = cam_soc_util_register_mmrm_client(
+					soc_info->clk_id[i], soc_info->clk[i],
+					soc_info->is_nrt_dev,
+					soc_info, soc_info->clk_name[i],
+					&soc_info->mmrm_handle);
+				if (rc) {
+					CAM_ERR(CAM_UTIL,
+						"Failed in register mmrm client Dev %s clk id %d",
+						soc_info->dev_name,
+						soc_info->clk_id[i]);
+					clk_put(soc_info->clk[i]);
+					soc_info->clk[i] = NULL;
+					goto put_clk;
+				}
 			}
-		} else if (i == soc_info->src_clk_idx) {
-			rc = cam_soc_util_register_mmrm_client(
-				soc_info->clk_id[i], soc_info->clk[i],
-				soc_info->is_nrt_dev,
-				soc_info, soc_info->clk_name[i],
-				&soc_info->mmrm_handle);
-			if (rc) {
-				CAM_ERR(CAM_UTIL,
-					"Failed in register mmrm client Dev %s clk id %d",
-					soc_info->dev_name,
-					soc_info->clk_id[i]);
-				clk_put(soc_info->clk[i]);
-				soc_info->clk[i] = NULL;
-				goto put_clk;
-			}
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
 		}
+#endif /*CONFIG_INTERCONNECT_QCOM_CAMSX */
 	}
 
 	rc = cam_soc_util_request_pinctrl(soc_info);
