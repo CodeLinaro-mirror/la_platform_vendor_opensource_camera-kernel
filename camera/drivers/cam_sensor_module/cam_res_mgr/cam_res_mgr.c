@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/init.h>
@@ -541,7 +542,7 @@ end:
 }
 
 bool cam_res_mgr_util_check_if_gpio_is_shared(
-	struct gpio *gpio_tbl, uint8_t size)
+	cam_gpio *gpio_tbl, uint8_t size)
 {
 	int i = 0;
 	bool found = false;
@@ -643,7 +644,7 @@ static void cam_res_mgr_gpio_free(struct device *dev, uint gpio)
 }
 
 void cam_res_mgr_gpio_free_arry(struct device *dev,
-		const struct gpio *array, size_t num)
+		const cam_gpio *array, size_t num)
 {
 	while (num--)
 		cam_res_mgr_gpio_free(dev, (array[num]).gpio);

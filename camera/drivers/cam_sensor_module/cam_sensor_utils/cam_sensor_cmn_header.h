@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SENSOR_CMN_HEADER_
@@ -15,6 +16,8 @@
 #include <linux/timer.h>
 #include <linux/delay.h>
 #include <linux/list.h>
+
+#include "cam_soc_util.h"
 
 #include <dt-bindings/camera/msm-camera.h>
 #include <media/cam_sensor.h>
@@ -373,9 +376,9 @@ enum msm_camera_vreg_name_t {
 struct msm_camera_gpio_conf {
 	void *cam_gpiomux_conf_tbl;
 	uint8_t cam_gpiomux_conf_tbl_size;
-	struct gpio *cam_gpio_common_tbl;
+	cam_gpio *cam_gpio_common_tbl;
 	uint8_t cam_gpio_common_tbl_size;
-	struct gpio *cam_gpio_req_tbl;
+	cam_gpio *cam_gpio_req_tbl;
 	uint8_t cam_gpio_req_tbl_size;
 	uint32_t gpio_no_mux;
 	uint32_t *camera_off_table;

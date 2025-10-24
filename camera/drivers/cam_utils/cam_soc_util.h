@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SOC_UTIL_H_
@@ -23,6 +24,17 @@
 #include "cam_io_util.h"
 #include "cam_debug_util.h"
 #include <media/cam_defs.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+#include <linux/gpio.h>
+typedef struct gpio cam_gpio;
+#else
+typedef struct {
+	int 		gpio;
+	long		flags;
+	const char	*label;
+} cam_gpio;
+#endif
 
 #if IS_REACHABLE(CONFIG_MSM_MMRM)
 #include <linux/soc/qcom/msm_mmrm.h>
@@ -169,9 +181,9 @@ struct cam_soc_pinctrl_info {
  * @cam_gpio_req_tbl_size:      It is size of requested gpios
  **/
 struct cam_soc_gpio_data {
-	struct gpio *cam_gpio_common_tbl;
+	cam_gpio *cam_gpio_common_tbl;
 	uint8_t cam_gpio_common_tbl_size;
-	struct gpio *cam_gpio_req_tbl;
+	cam_gpio *cam_gpio_req_tbl;
 	uint8_t cam_gpio_req_tbl_size;
 };
 
