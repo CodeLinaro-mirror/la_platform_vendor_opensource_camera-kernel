@@ -507,6 +507,7 @@ struct cam_isp_context_prev_req_info {
  * @skip_addr_check:           Skip last consumed addr check incase of frame drop
  * @fast_crop_en:              Fast crop enable flag
  * @dual_trigger:              Indicates if its dual trigger scenario
+ * @error_recovery_en:         Error recovery enable flag
  */
 struct cam_isp_context {
 	struct cam_context              *base;
@@ -605,6 +606,7 @@ struct cam_isp_context {
 	bool                                    skip_addr_check;
 	bool                                    fast_crop_en;
 	bool                                    dual_trigger;
+	bool                                    error_recovery_en;
 };
 
 /**
