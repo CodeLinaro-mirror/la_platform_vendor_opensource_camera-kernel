@@ -12,14 +12,14 @@
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
 #include <linux/of_address.h>
-#if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
+#if IS_REACHABLE(CONFIG_DMABUF_HEAP)
 #include <linux/msm_dma_iommu_mapping.h>
 #endif
 #include <linux/workqueue.h>
 #include <linux/genalloc.h>
 #include <linux/debugfs.h>
 
-#if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
+#if IS_REACHABLE(CONFIG_DMABUF_HEAP)
 #include <soc/qcom/secure_buffer.h>
 #endif
 
