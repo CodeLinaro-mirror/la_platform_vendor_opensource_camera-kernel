@@ -65,6 +65,20 @@ struct cam_fw_alloc_info {
 	uint64_t       fw_hdl;
 };
 
+/**
+ * cam_timer_delete_sync_compat()
+ * @brief : Compatibility helper to delete a timer synchronously.
+ * @timer : Pointer to the timer_list structure to be deleted.
+ */
+static inline void cam_timer_delete_sync_compat(struct timer_list *timer)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+    timer_delete_sync(timer);
+#else
+    del_timer_sync(timer);
+#endif
+}
+
 int cam_reserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length);
 void cam_unreserve_icp_fw(struct cam_fw_alloc_info *icp_fw, size_t fw_length);
 int camera_component_match_add_drivers(struct device *master_dev,

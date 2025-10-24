@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_req_mgr_timer.h"
 #include "cam_debug_util.h"
 #include "cam_common_util.h"
+#include "cam_compat.h"
 
 extern struct kmem_cache *g_cam_req_mgr_timer_cachep;
 
@@ -80,11 +81,12 @@ int crm_timer_init(struct cam_req_mgr_timer **timer,
 end:
 	return ret;
 }
+
 void crm_timer_exit(struct cam_req_mgr_timer **crm_timer)
 {
 	CAM_DBG(CAM_CRM, "destroy timer %pK @ %pK", *crm_timer, crm_timer);
 	if (*crm_timer) {
-		del_timer_sync(&(*crm_timer)->sys_timer);
+		cam_timer_delete_sync_compat(&(*crm_timer)->sys_timer);
 		if (g_cam_req_mgr_timer_cachep)
 			kmem_cache_free(g_cam_req_mgr_timer_cachep, *crm_timer);
 		*crm_timer = NULL;
