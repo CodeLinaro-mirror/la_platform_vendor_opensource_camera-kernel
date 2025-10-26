@@ -1585,7 +1585,7 @@ int cam_hw_cdm_alloc_genirq_mem(void *hw_priv)
 	cdm_core = (struct cam_cdm *)cdm_hw->core_info;
 	genirq_alloc_cmd.align = 0;
 	genirq_alloc_cmd.smmu_hdl = cdm_core->iommu_hdl.non_secure;
-	genirq_alloc_cmd.flags = CAM_MEM_FLAG_HW_READ_WRITE;
+	genirq_alloc_cmd.flags = CAM_MEM_FLAG_CACHE | CAM_MEM_FLAG_HW_READ_WRITE;
 	for (i = 0; i < cdm_core->offsets->reg_data->num_bl_fifo; i++) {
 		if (!cdm_core->bl_fifo[i].bl_depth)
 			continue;
