@@ -96,4 +96,6 @@ inline struct icc_path *cam_icc_get_path(struct device *dev,
 	const int src_id, const int dst_id, const char *path_name, bool use_path_name);
 #endif
 
+int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info);
+
 #endif /* _CAM_COMPAT_H_ */

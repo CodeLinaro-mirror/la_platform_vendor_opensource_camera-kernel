@@ -367,6 +367,19 @@ size_t cam_iommu_map_sg(struct iommu_domain *domain,
 			prot, GFP_ATOMIC);
 	return size;
 }
+
+int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
+{
+	int rc = 0;
+
+	soc_info->irq_num = platform_get_irq(soc_info->pdev, 0);
+	if (soc_info->irq_num < 0) {
+		rc = soc_info->irq_num;
+		return rc;
+	}
+
+	return rc;
+}
 #else
 size_t cam_iommu_map_sg(struct iommu_domain *domain,
 	dma_addr_t iova_start, struct scatterlist *sgl,
@@ -378,6 +391,24 @@ size_t cam_iommu_map_sg(struct iommu_domain *domain,
 			sgl, orig_nents,
 			prot);
 	return size;
+}
+
+int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
+{
+	int rc = 0;
+
+	soc_info->irq_line =
+		platform_get_resource_byname(soc_info->pdev,
+		IORESOURCE_IRQ, soc_info->irq_name);
+	if (!soc_info->irq_line) {
+        soc_info->irq_num = -1;
+        CAM_ERR(CAM_UTIL, "Failed to get IRQ resource");
+		rc = -ENODEV;
+		return rc;
+	}
+	soc_info->irq_num = soc_info->irq_line->start;
+
+	return rc;
 }
 #endif
 
