@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_cci_dev.h"
@@ -313,16 +314,16 @@ static void cam_cci_init_clk_params(struct cci_device *cci_dev)
 
 		if (count == I2C_STANDARD_MODE)
 			src_node = of_find_node_by_name(of_node,
-				"qcom,i2c_standard_mode");
+				"qcom,i2c-standard-mode");
 		else if (count == I2C_FAST_MODE)
 			src_node = of_find_node_by_name(of_node,
-				"qcom,i2c_fast_mode");
+				"qcom,i2c-fast-mode");
 		else if (count == I2C_FAST_PLUS_MODE)
 			src_node = of_find_node_by_name(of_node,
-				"qcom,i2c_fast_plus_mode");
+				"qcom,i2c-fast-plus-mode");
 		else
 			src_node = of_find_node_by_name(of_node,
-				"qcom,i2c_custom_mode");
+				"qcom,i2c-custom-mode");
 
 		rc = of_property_read_u32(src_node, "hw-thigh", &val);
 		CAM_DBG(CAM_CCI, "hw-thigh %d, rc %d", val, rc);
