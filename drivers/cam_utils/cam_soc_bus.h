@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SOC_BUS_H_
@@ -63,7 +64,7 @@ int cam_soc_bus_client_update_bw(void *client, uint64_t ab,
 
 int cam_soc_bus_client_register(struct platform_device *pdev,
 	struct device_node *dev_node, void **client,
-	struct cam_soc_bus_client_common_data *common_data);
+	struct cam_soc_bus_client_common_data *common_data, bool use_path_name);
 
 void cam_soc_bus_client_unregister(void **client);
 
@@ -82,7 +83,7 @@ static inline int cam_soc_bus_client_update_bw(void *client,
 
 static inline int cam_soc_bus_client_register(
 	struct platform_device *pdev, struct device_node *dev_node,
-	void **client, struct cam_soc_bus_client_common_data *common_data)
+	void **client, struct cam_soc_bus_client_common_data *common_data, bool use_path_name)
 {
 	return 0;
 }
