@@ -9253,7 +9253,7 @@ static int cam_icp_vm_rcv_msg(void *hw_mgr_priv, void *msg, uint32_t size)
 	int rc = 0;
 
 	if (!hw_mgr) {
-		CAM_ERR(CAM_ICP, "%s invalid hw_mgr_priv",  hw_mgr->hw_mgr_name);
+		CAM_ERR(CAM_ICP, "invalid hw_mgr_priv");
 		return -EINVAL;
 	}
 
