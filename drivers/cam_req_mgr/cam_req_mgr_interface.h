@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_REQ_MGR_INTERFACE_H
@@ -255,15 +255,17 @@ enum cam_req_mgr_link_evt_type {
 
 /**
  * enum cam_req_mgr_msg_type
- * @CAM_REQ_MGR_MSG_SENSOR_FRAME_INFO  : sensor frame info message type
- * @CAM_REQ_MGR_MSG_UPDATE_DEVICE_INFO : Update device specific info
- * @CAM_REQ_MGR_MSG_MAX                : invalid msg type
- * @CAM_REQ_MGR_MSG_CHECK_FOR_RESUME   : Check for synced resume post flush
+ * @CAM_REQ_MGR_MSG_SENSOR_FRAME_INFO         : sensor frame info message type
+ * @CAM_REQ_MGR_MSG_UPDATE_DEVICE_INFO        : Update device specific info
+ * @CAM_REQ_MGR_MSG_CHECK_FOR_RESUME          : Check for synced resume post flush
+ * @CAM_REQ_MGR_MSG_CHECK_DYN_EOF_UNDER_RESUME: Check to register EOF during resume
+ * @CAM_REQ_MGR_MSG_MAX                       : invalid msg type
  */
 enum cam_req_mgr_msg_type {
 	CAM_REQ_MGR_MSG_SENSOR_FRAME_INFO,
 	CAM_REQ_MGR_MSG_UPDATE_DEVICE_INFO,
 	CAM_REQ_MGR_MSG_NOTIFY_FOR_SYNCED_RESUME,
+	CAM_REQ_MGR_MSG_CHECK_DYN_EOF_UNDER_RESUME,
 	CAM_REQ_MGR_MSG_MAX,
 };
 
@@ -380,6 +382,8 @@ struct cam_req_mgr_sensor_frame_info {
  * @frame_info       : Frame info structure includes frame duration and
  *                   : vertical blanking
  * @ife_hw_name      : Update acquired IFE/SFE name
+ * @pending_eof_event: Indicate whether there's any pending EOF triggered event at CRM. This works
+ *                     as output, which is updated at CRM and retrieved by clients
  */
 struct cam_req_mgr_notify_msg {
 	int32_t  link_hdl;
@@ -389,6 +393,7 @@ struct cam_req_mgr_notify_msg {
 	union {
 		struct cam_req_mgr_sensor_frame_info frame_info;
 		char ife_hw_name[30];
+		bool pending_eof_event;
 	} u;
 };
 

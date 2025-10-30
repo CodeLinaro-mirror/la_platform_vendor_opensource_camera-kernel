@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef _CAM_REQ_MGR_CORE_H_
 #define _CAM_REQ_MGR_CORE_H_
@@ -502,6 +502,7 @@ struct cam_req_mgr_connected_device {
  * @resume_sync_curr_mask       : Current device mask of devices notifying they are ready for resume
  * @last_applied_done_timestamp : Last applied done timestamp value
  * @exp_time_for_resume         : Exposure time in ms, to be used for WD timer post resume
+ * @is_standby                  : Indicate flush is happening and standby is enabled
  */
 struct cam_req_mgr_core_link {
 	int32_t                              link_hdl;
@@ -550,6 +551,7 @@ struct cam_req_mgr_core_link {
 	uint32_t                             resume_sync_curr_mask;
 	uint64_t                             last_applied_done_timestamp;
 	uint32_t                             exp_time_for_resume;
+	bool                                 is_standby;
 };
 
 /**
