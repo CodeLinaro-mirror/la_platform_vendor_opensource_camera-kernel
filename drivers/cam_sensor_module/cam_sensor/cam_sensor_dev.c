@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sensor_dev.h"
@@ -155,13 +155,18 @@ static int cam_sensor_init_subdev_params(struct cam_sensor_ctrl_t *s_ctrl)
 	return rc;
 }
 
-static int32_t cam_sensor_driver_i2c_probe(struct i2c_client *client,
-	const struct i2c_device_id *id)
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+static int cam_sensor_driver_i2c_probe(struct i2c_client *client)
 {
-	int32_t rc = 0;
+	int rc = 0;
 	int i = 0;
 	struct cam_sensor_ctrl_t *s_ctrl = NULL;
 	struct cam_hw_soc_info   *soc_info = NULL;
+
+	if (client == NULL) {
+		CAM_ERR(CAM_SENSOR, "Invalid Args client: %pK", client);
+		return -EINVAL;
+	}
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		CAM_ERR(CAM_SENSOR,
@@ -246,6 +251,105 @@ free_s_ctrl:
 	kfree(s_ctrl);
 	return rc;
 }
+#else
+static int32_t cam_sensor_driver_i2c_probe(struct i2c_client *client,
+	const struct i2c_device_id *id)
+{
+	int32_t rc = 0;
+	int i = 0;
+	struct cam_sensor_ctrl_t *s_ctrl = NULL;
+	struct cam_hw_soc_info   *soc_info = NULL;
+
+	if (client == NULL || id == NULL) {
+		CAM_ERR(CAM_SENSOR, "Invalid Args client: %pK id: %pK",
+			client, id);
+		return -EINVAL;
+	}
+
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+		CAM_ERR(CAM_SENSOR,
+			"%s :i2c_check_functionality failed", client->name);
+		return -EFAULT;
+	}
+
+	/* Create sensor control structure */
+	s_ctrl = kzalloc(sizeof(*s_ctrl), GFP_KERNEL);
+	if (!s_ctrl)
+		return -ENOMEM;
+
+	i2c_set_clientdata(client, s_ctrl);
+
+	s_ctrl->io_master_info.client = client;
+	soc_info = &s_ctrl->soc_info;
+	soc_info->dev = &client->dev;
+	soc_info->dev_name = client->name;
+
+	/* Initialize sensor device type */
+	s_ctrl->of_node = client->dev.of_node;
+	s_ctrl->io_master_info.master_type = I2C_MASTER;
+	s_ctrl->is_probe_succeed = 0;
+	s_ctrl->last_flush_req = 0;
+
+	rc = cam_sensor_parse_dt(s_ctrl);
+	if (rc < 0) {
+		CAM_ERR(CAM_SENSOR, "cam_sensor_parse_dt rc %d", rc);
+		goto free_s_ctrl;
+	}
+
+	rc = cam_sensor_init_subdev_params(s_ctrl);
+	if (rc)
+		goto free_s_ctrl;
+
+	s_ctrl->i2c_data.per_frame =
+		kzalloc(sizeof(struct i2c_settings_array) *
+		MAX_PER_FRAME_ARRAY, GFP_KERNEL);
+	if (s_ctrl->i2c_data.per_frame == NULL) {
+		rc = -ENOMEM;
+		goto unreg_subdev;
+	}
+
+	s_ctrl->i2c_data.frame_skip =
+		kzalloc(sizeof(struct i2c_settings_array) *
+		MAX_PER_FRAME_ARRAY, GFP_KERNEL);
+	if (s_ctrl->i2c_data.frame_skip == NULL) {
+		rc = -ENOMEM;
+		goto free_perframe;
+	}
+
+	INIT_LIST_HEAD(&(s_ctrl->i2c_data.init_settings.list_head));
+	INIT_LIST_HEAD(&(s_ctrl->i2c_data.config_settings.list_head));
+	INIT_LIST_HEAD(&(s_ctrl->i2c_data.streamon_settings.list_head));
+	INIT_LIST_HEAD(&(s_ctrl->i2c_data.streamoff_settings.list_head));
+	INIT_LIST_HEAD(&(s_ctrl->i2c_data.reg_bank_unlock_settings.list_head));
+	INIT_LIST_HEAD(&(s_ctrl->i2c_data.reg_bank_lock_settings.list_head));
+	INIT_LIST_HEAD(&(s_ctrl->i2c_data.read_settings.list_head));
+
+	for (i = 0; i < MAX_PER_FRAME_ARRAY; i++) {
+		INIT_LIST_HEAD(&(s_ctrl->i2c_data.per_frame[i].list_head));
+		INIT_LIST_HEAD(&(s_ctrl->i2c_data.frame_skip[i].list_head));
+	}
+
+	s_ctrl->bridge_intf.device_hdl = -1;
+	s_ctrl->bridge_intf.link_hdl = -1;
+	s_ctrl->bridge_intf.ops.get_dev_info = cam_sensor_publish_dev_info;
+	s_ctrl->bridge_intf.ops.link_setup = cam_sensor_establish_link;
+	s_ctrl->bridge_intf.ops.apply_req = cam_sensor_apply_request;
+	s_ctrl->bridge_intf.ops.notify_frame_skip =
+		cam_sensor_notify_frame_skip;
+	s_ctrl->bridge_intf.ops.flush_req = cam_sensor_flush_request;
+
+	s_ctrl->sensordata->power_info.dev = soc_info->dev;
+
+	return rc;
+free_perframe:
+	kfree(s_ctrl->i2c_data.per_frame);
+unreg_subdev:
+	cam_unregister_subdev(&(s_ctrl->v4l2_dev_str));
+free_s_ctrl:
+	kfree(s_ctrl);
+	return rc;
+}
+#endif
 
 static int cam_sensor_component_bind(struct device *dev,
 	struct device *master_dev, void *data)
@@ -378,10 +482,17 @@ const static struct component_ops cam_sensor_component_ops = {
 	.unbind = cam_sensor_component_unbind,
 };
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_sensor_platform_remove(struct platform_device *pdev)
+#else
+static void cam_sensor_platform_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_sensor_component_ops);
+
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 int cam_sensor_driver_i2c_remove_common(struct i2c_client *client)
