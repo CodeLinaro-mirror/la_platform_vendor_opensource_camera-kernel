@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_ois_dev.h"
@@ -174,7 +174,68 @@ static int cam_ois_init_subdev_param(struct cam_ois_ctrl_t *o_ctrl)
 
 	return rc;
 }
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+static int cam_ois_i2c_driver_probe(struct i2c_client *client)
+{
+	int                          rc = 0;
+	struct cam_ois_ctrl_t       *o_ctrl = NULL;
+	struct cam_ois_soc_private  *soc_private = NULL;
 
+	if (client == NULL) {
+		CAM_ERR(CAM_OIS, "Invalid Args client: %pK", client);
+		return -EINVAL;
+	}
+
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+		CAM_ERR(CAM_OIS, "i2c_check_functionality failed");
+		goto probe_failure;
+	}
+
+	o_ctrl = kzalloc(sizeof(*o_ctrl), GFP_KERNEL);
+	if (!o_ctrl) {
+		CAM_ERR(CAM_OIS, "kzalloc failed");
+		rc = -ENOMEM;
+		goto probe_failure;
+	}
+
+	i2c_set_clientdata(client, o_ctrl);
+
+	o_ctrl->soc_info.dev = &client->dev;
+	o_ctrl->soc_info.dev_name = client->name;
+	o_ctrl->ois_device_type = MSM_CAMERA_I2C_DEVICE;
+	o_ctrl->io_master_info.master_type = I2C_MASTER;
+	o_ctrl->io_master_info.client = client;
+
+	soc_private = kzalloc(sizeof(struct cam_ois_soc_private),
+		GFP_KERNEL);
+	if (!soc_private) {
+		rc = -ENOMEM;
+		goto octrl_free;
+	}
+
+	o_ctrl->soc_info.soc_private = soc_private;
+	rc = cam_ois_driver_soc_init(o_ctrl);
+	if (rc) {
+		CAM_ERR(CAM_OIS, "failed: cam_sensor_parse_dt rc %d", rc);
+		goto soc_free;
+	}
+
+	rc = cam_ois_init_subdev_param(o_ctrl);
+	if (rc)
+		goto soc_free;
+
+	o_ctrl->cam_ois_state = CAM_OIS_INIT;
+
+	return rc;
+
+soc_free:
+	kfree(soc_private);
+octrl_free:
+	kfree(o_ctrl);
+probe_failure:
+	return rc;
+}
+#else
 static int cam_ois_i2c_driver_probe(struct i2c_client *client,
 	 const struct i2c_device_id *id)
 {
@@ -237,6 +298,7 @@ octrl_free:
 probe_failure:
 	return rc;
 }
+#endif
 
 int cam_ois_i2c_driver_remove_common(struct i2c_client *client)
 {
@@ -402,10 +464,17 @@ static int32_t cam_ois_platform_driver_probe(
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_ois_platform_driver_remove(struct platform_device *pdev)
+#else
+static void cam_ois_platform_driver_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_ois_component_ops);
+
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_ois_dt_match[] = {
