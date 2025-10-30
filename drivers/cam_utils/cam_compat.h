@@ -27,7 +27,11 @@
 
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)
+#include <linux/firmware/qcom/qcom_scm.h>
+
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 
 #include <linux/msm_ion.h>
 #include <linux/iommu.h>
@@ -126,4 +130,16 @@ static int32_t cam_eeprom_spi_driver_remove(struct spi_device *sdev);
 
 int cam_get_subpart_info(uint32_t *part_info, uint32_t max_num_cam);
 
+int cam_iommu_map(struct iommu_domain *domain,
+	size_t firmware_start, phys_addr_t fw_hdl, size_t firmware_len,
+	int prot);
+
+size_t cam_iommu_map_sg(struct iommu_domain *domain,
+	dma_addr_t iova_start, struct scatterlist *sgl, uint64_t orig_nents,
+	int prot);
+
+int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info);
+
+uint16_t cam_get_named_gpio(struct cam_hw_soc_info *soc_info,
+	int index);
 #endif /* _CAM_COMPAT_H_ */
