@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -15,6 +15,8 @@
 #include "cam_icp_hw_intf.h"
 #include "cam_icp_v2_core.h"
 #include "cam_icp_soc_common.h"
+#include "cam_icp_v2_dev.h"
+#include "cam_icp_proc.h"
 
 static int max_icp_v2_hw_idx = -1;
 

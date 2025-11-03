@@ -366,7 +366,7 @@ static void cam_tpg_component_unbind(struct device *dev,
 	cam_unregister_subdev(&(tpg_dev->tpg_subdev));
 }
 
-const static struct component_ops cam_tpg_component_ops = {
+static const struct component_ops cam_tpg_component_ops = {
 	.bind = cam_tpg_component_bind,
 	.unbind = cam_tpg_component_unbind,
 };

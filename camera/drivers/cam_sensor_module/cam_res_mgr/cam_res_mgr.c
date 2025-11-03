@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
@@ -937,7 +936,7 @@ static void cam_res_mgr_component_unbind(struct device *dev,
 	CAM_DBG(CAM_RES, "Component unbound successfully");
 }
 
-const static struct component_ops cam_res_mgr_component_ops = {
+static const struct component_ops cam_res_mgr_component_ops = {
 	.bind = cam_res_mgr_component_bind,
 	.unbind = cam_res_mgr_component_unbind,
 };

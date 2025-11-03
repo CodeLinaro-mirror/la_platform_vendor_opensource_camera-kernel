@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -881,7 +881,7 @@ static void cam_ir_led_component_unbind(struct device *dev,
 	kfree(ictrl);
 }
 
-const static struct component_ops cam_ir_led_component_ops = {
+static const struct component_ops cam_ir_led_component_ops = {
 	.bind = cam_ir_led_component_bind,
 	.unbind = cam_ir_led_component_unbind,
 };

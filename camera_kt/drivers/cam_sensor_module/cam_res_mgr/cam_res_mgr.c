@@ -938,7 +938,7 @@ static void cam_res_mgr_component_unbind(struct device *dev,
 	CAM_DBG(CAM_RES, "Component unbound successfully");
 }
 
-const static struct component_ops cam_res_mgr_component_ops = {
+static const struct component_ops cam_res_mgr_component_ops = {
 	.bind = cam_res_mgr_component_bind,
 	.unbind = cam_res_mgr_component_unbind,
 };

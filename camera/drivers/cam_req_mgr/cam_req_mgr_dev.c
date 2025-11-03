@@ -869,7 +869,7 @@ int cam_req_mgr_notify_message(struct cam_req_mgr_message *msg,
 	return 0;
 }
 
-void cam_video_device_cleanup(void)
+static void cam_video_device_cleanup(void)
 {
 	media_entity_cleanup(&g_dev.video->entity);
 	video_unregister_device(g_dev.video);

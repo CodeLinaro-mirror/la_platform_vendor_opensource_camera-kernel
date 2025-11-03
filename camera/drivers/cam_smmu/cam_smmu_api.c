@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -1114,7 +1114,7 @@ static enum dma_data_direction cam_smmu_translate_dir(
 	return DMA_NONE;
 }
 
-void cam_smmu_reset_iommu_table(enum cam_smmu_init_dir ops)
+static void cam_smmu_reset_iommu_table(enum cam_smmu_init_dir ops)
 {
 	unsigned int i;
 	int j = 0;
@@ -5591,7 +5591,7 @@ static void cam_smmu_fw_dev_component_unbind(struct device *dev,
 	CAM_DBG(CAM_SMMU, "Unbinding component: %s", pdev->name);
 }
 
-const static struct component_ops cam_smmu_fw_dev_component_ops = {
+static const struct component_ops cam_smmu_fw_dev_component_ops = {
 	.bind = cam_smmu_fw_dev_component_bind,
 	.unbind = cam_smmu_fw_dev_component_unbind,
 };
@@ -5621,7 +5621,7 @@ static void cam_smmu_cb_component_unbind(struct device *dev,
 	CAM_DBG(CAM_SMMU, "Unbinding component: %s", pdev->name);
 }
 
-const static struct component_ops cam_smmu_cb_component_ops = {
+static const struct component_ops cam_smmu_cb_component_ops = {
 	.bind = cam_smmu_cb_component_bind,
 	.unbind = cam_smmu_cb_component_unbind,
 };
@@ -5649,7 +5649,7 @@ static void cam_smmu_cb_qsmmu_component_unbind(struct device *dev,
 	CAM_DBG(CAM_SMMU, "Unbinding component: %s", pdev->name);
 }
 
-const static struct component_ops cam_smmu_cb_qsmmu_component_ops = {
+static const struct component_ops cam_smmu_cb_qsmmu_component_ops = {
 	.bind = cam_smmu_cb_qsmmu_component_bind,
 	.unbind = cam_smmu_cb_qsmmu_component_unbind,
 };
@@ -5701,7 +5701,7 @@ static void cam_smmu_component_unbind(struct device *dev,
 	iommu_cb_set.debug_cfg.dentry = NULL;
 }
 
-const static struct component_ops cam_smmu_component_ops = {
+static const struct component_ops cam_smmu_component_ops = {
 	.bind = cam_smmu_component_bind,
 	.unbind = cam_smmu_component_unbind,
 };

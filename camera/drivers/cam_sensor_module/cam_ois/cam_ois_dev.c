@@ -12,6 +12,10 @@
 #include "camera_main.h"
 #include "cam_compat.h"
 
+#ifndef CONFIG_I3C
+static struct i3c_driver cam_ois_i3c_driver __attribute__((unused));
+#endif
+
 static struct cam_i3c_ois_data {
 	struct cam_ois_ctrl_t                       *o_ctrl;
 	struct completion                            probe_complete;
@@ -291,7 +295,7 @@ static void cam_ois_i2c_component_unbind(struct device *dev,
 	kfree(o_ctrl);
 }
 
-const static struct component_ops cam_ois_i2c_component_ops = {
+static const struct component_ops cam_ois_i2c_component_ops = {
 	.bind = cam_ois_i2c_component_bind,
 	.unbind = cam_ois_i2c_component_unbind,
 };
@@ -452,7 +456,7 @@ static void cam_ois_component_unbind(struct device *dev,
 	kfree(o_ctrl);
 }
 
-const static struct component_ops cam_ois_component_ops = {
+static const struct component_ops cam_ois_component_ops = {
 	.bind = cam_ois_component_bind,
 	.unbind = cam_ois_component_unbind,
 };

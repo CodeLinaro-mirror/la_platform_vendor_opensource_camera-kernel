@@ -12,6 +12,10 @@
 #include "camera_main.h"
 #include "cam_compat.h"
 
+#ifndef CONFIG_I3C
+static struct i3c_driver cam_eeprom_i3c_driver __attribute__((unused));
+#endif
+
 static struct cam_i3c_eeprom_data {
 	struct cam_eeprom_ctrl_t                  *e_ctrl;
 	struct completion                          probe_complete;
@@ -329,7 +333,7 @@ static void cam_eeprom_i2c_component_unbind(struct device *dev,
 	kfree(e_ctrl);
 }
 
-const static struct component_ops cam_eeprom_i2c_component_ops = {
+static const struct component_ops cam_eeprom_i2c_component_ops = {
 	.bind = cam_eeprom_i2c_component_bind,
 	.unbind = cam_eeprom_i2c_component_unbind,
 };
@@ -626,7 +630,7 @@ static void cam_eeprom_component_unbind(struct device *dev,
 	kfree(e_ctrl);
 }
 
-const static struct component_ops cam_eeprom_component_ops = {
+static const struct component_ops cam_eeprom_component_ops = {
 	.bind = cam_eeprom_component_bind,
 	.unbind = cam_eeprom_component_unbind,
 };

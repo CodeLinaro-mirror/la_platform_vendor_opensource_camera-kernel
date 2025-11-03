@@ -582,7 +582,7 @@ static void cam_flash_component_unbind(struct device *dev,
 	CAM_INFO(CAM_FLASH, "Flash Sensor component unbind");
 }
 
-const static struct component_ops cam_flash_component_ops = {
+static const struct component_ops cam_flash_component_ops = {
 	.bind = cam_flash_component_bind,
 	.unbind = cam_flash_component_unbind,
 };

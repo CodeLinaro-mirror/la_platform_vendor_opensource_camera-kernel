@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -142,7 +142,7 @@ int cam_csid_ppi_hw_init(struct cam_hw_intf **csid_ppi_hw,
 	return rc;
 }
 
-const static struct component_ops cam_ppi_component_ops = {
+static const struct component_ops cam_ppi_component_ops = {
 	.bind = cam_ppi_component_bind,
 	.unbind = cam_ppi_component_unbind,
 };

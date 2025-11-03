@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "tpg_hw_v_1_0.h"
+
+static int tpg_hw_v_1_0_process_cmd(
+	struct tpg_hw *hw,
+	uint32_t       cmd,
+	void          *arg) __attribute__((unused));
 
 enum tpg_hw_encode_format_t {
 	RAW_8_BIT = 1,
@@ -211,7 +216,7 @@ static int tpg_hw_v_1_0_reset(struct tpg_hw *hw, void *data)
 	return 0;
 }
 
-int tpg_hw_v_1_0_process_cmd(
+static int tpg_hw_v_1_0_process_cmd(
 	struct tpg_hw *hw,
 	uint32_t       cmd,
 	void          *arg)

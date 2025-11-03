@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -321,7 +321,7 @@ static void cam_isp_dev_component_unbind(struct device *dev,
 	memset(&g_isp_dev, 0, sizeof(g_isp_dev));
 }
 
-const static struct component_ops cam_isp_dev_component_ops = {
+static const struct component_ops cam_isp_dev_component_ops = {
 	.bind = cam_isp_dev_component_bind,
 	.unbind = cam_isp_dev_component_unbind,
 };

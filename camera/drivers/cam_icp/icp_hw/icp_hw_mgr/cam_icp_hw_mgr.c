@@ -3196,10 +3196,11 @@ static void cam_icp_free_hfi_mem(struct cam_icp_hw_mgr *hw_mgr)
 	if (hw_mgr->hfi_mem.fw_uncached_region) {
 		rc = cam_mem_mgr_free_memory_region(
 			&hw_mgr->hfi_mem.fw_uncached_generic);
-		if (rc)
+		if (rc) {
 			CAM_ERR(CAM_ICP,
 				"[%s] failed to unreserve fwuncached region", hw_mgr->hw_mgr_name);
-			hw_mgr->hfi_mem.fw_uncached_region = false;
+		}
+		hw_mgr->hfi_mem.fw_uncached_region = false;
 	} else {
 		rc = cam_mem_mgr_free_memory_region(
 			&hw_mgr->hfi_mem.sec_heap);
@@ -8011,7 +8012,7 @@ cmd_work_failed:
 	return rc;
 }
 
-void cam_icp_mgr_destroy_wq(struct cam_icp_hw_mgr *hw_mgr)
+static void cam_icp_mgr_destroy_wq(struct cam_icp_hw_mgr *hw_mgr)
 {
 	cam_req_mgr_workq_destroy(&hw_mgr->timer_work);
 	cam_req_mgr_workq_destroy(&hw_mgr->msg_work);

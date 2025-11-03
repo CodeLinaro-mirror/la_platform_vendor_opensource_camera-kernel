@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -50,7 +50,7 @@ static void __cam_req_mgr_reset_state_monitor_array(
 	}
 }
 
-void cam_req_mgr_core_link_reset(struct cam_req_mgr_core_link *link)
+static void cam_req_mgr_core_link_reset(struct cam_req_mgr_core_link *link)
 {
 	int i = 0;
 
@@ -3119,7 +3119,7 @@ static int __cam_req_mgr_try_cancel_req(struct cam_req_mgr_core_link *link,
  *
  * @return: 0 on success.
  */
-int cam_req_mgr_process_flush_req(void *priv, void *data)
+static int cam_req_mgr_process_flush_req(void *priv, void *data)
 {
 	int                                  rc = 0;
 	struct cam_req_mgr_flush_info       *flush_info = NULL;
@@ -3183,7 +3183,7 @@ int cam_req_mgr_process_flush_req(void *priv, void *data)
  *
  * @return: 0 on success.
  */
-int cam_req_mgr_process_sched_req(void *priv, void *data)
+static int cam_req_mgr_process_sched_req(void *priv, void *data)
 {
 	int                                  rc = 0, i, sync_idx = 0;
 	struct cam_req_mgr_sched_request_v2 *sched_req = NULL;
@@ -3283,7 +3283,7 @@ end:
  * @type     : sync type
  * @return   : 0 for success, negative for failure.
  */
-int cam_req_mgr_sync_info_for_sync_mode(
+static int cam_req_mgr_sync_info_for_sync_mode(
 	struct cam_req_mgr_core_link   *link,
 	struct cam_req_mgr_add_request *add_req,
 	struct cam_req_mgr_tbl_slot    *slot,
@@ -3374,7 +3374,7 @@ end:
  *
  * @return: 0 on success.
  */
-int cam_req_mgr_process_add_req(void *priv, void *data)
+static int cam_req_mgr_process_add_req(void *priv, void *data)
 {
 	int                                  rc = 0, i = 0;
 	int                                  idx;
@@ -3607,7 +3607,7 @@ end:
  * @err_info : contains information about frame_id, trigger etc.
  *
  */
-void __cam_req_mgr_apply_on_bubble(
+static void __cam_req_mgr_apply_on_bubble(
 	struct cam_req_mgr_core_link    *link,
 	struct cam_req_mgr_error_notify *err_info)
 {
@@ -3636,7 +3636,7 @@ void __cam_req_mgr_apply_on_bubble(
  *
  * @return: 0 on success.
  */
-int cam_req_mgr_process_error(void *priv, void *data)
+static int cam_req_mgr_process_error(void *priv, void *data)
 {
 	int                                  rc = 0, idx = -1;
 	int                                  i, slot_diff;
@@ -3808,7 +3808,7 @@ end:
  *
  * @return: 0 on success.
  */
-int cam_req_mgr_process_stop(void *priv, void *data)
+static int cam_req_mgr_process_stop(void *priv, void *data)
 {
 	int                                  rc = 0;
 	struct cam_req_mgr_core_link        *link = NULL;
@@ -5327,7 +5327,7 @@ int cam_req_mgr_sync_config(
 		link[i] = cam_get_link_priv(sync_info->link_hdls[i]);
 		if (!link[i] || (link[i]->link_hdl != sync_info->link_hdls[i])) {
 			CAM_ERR(CAM_CRM, "link: %s, sync_info->link_hdl:%x, link->link_hdl:%x",
-				CAM_IS_NULL_TO_STR(link), sync_info->link_hdls[i],
+				CAM_IS_NULL_TO_STR(link[i]), sync_info->link_hdls[i],
 				(!link[i]) ? CAM_REQ_MGR_DEFAULT_HDL_VAL : link[i]->link_hdl);
 			rc = -EINVAL;
 			goto done;
@@ -5459,7 +5459,7 @@ end:
 	return rc;
 }
 
-int cam_req_mgr_rearrange_devs(
+static int cam_req_mgr_rearrange_devs(
 	struct cam_req_mgr_core_link       *link)
 {
 	int i, rc = 0;

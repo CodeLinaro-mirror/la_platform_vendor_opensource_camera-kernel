@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -805,7 +805,7 @@ static int cam_vfe_camif_ver3_sof_irq_debug(
 	return 0;
 }
 
-int cam_vfe_camif_ver3_dump_timestamps(
+static int cam_vfe_camif_ver3_dump_timestamps(
 	struct cam_isp_resource_node *rsrc_node, void *cmd_args)
 {
 	struct cam_vfe_mux_camif_ver3_data *camif_priv =

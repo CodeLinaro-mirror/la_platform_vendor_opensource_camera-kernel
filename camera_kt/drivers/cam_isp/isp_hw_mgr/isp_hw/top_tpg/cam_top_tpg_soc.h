@@ -1,12 +1,14 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_TOP_TPG_SOC_H_
 #define _CAM_TOP_TPG_SOC_H_
 
 #include "cam_isp_hw.h"
+#include "cam_soc_util.h"
 
 /*
  * struct cam_top_tpg_soc_private:
@@ -64,7 +66,7 @@ int cam_top_tpg_deinit_soc_resources(struct cam_hw_soc_info *soc_info);
  *
  */
 int cam_top_tpg_enable_soc_resources(struct cam_hw_soc_info  *soc_info,
-	uint32_t clk_lvl);
+	enum cam_vote_level clk_lvl);
 
 /**
  * cam_top_tpg_disable_soc_resources()

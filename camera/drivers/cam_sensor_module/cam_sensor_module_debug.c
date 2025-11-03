@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/debugfs.h>
@@ -42,7 +42,7 @@ static struct dentry *debugfs_root;
 static char in_buffer[RW_BUFFER_SIZE], out_buffer[RW_BUFFER_SIZE];
 static struct cam_sensor_i2c_devices devices = {0};
 
-struct camera_io_master *cam_sensor_module_get_io_master(
+static struct camera_io_master *cam_sensor_module_get_io_master(
 	int device_type, int instance_number, bool *is_on)
 {
 	struct camera_io_master *io_master = NULL;
@@ -109,8 +109,11 @@ static int cam_sensor_module_parse_line(const char *p_line,
 		*is_read = true;
 
 		rc = sscanf(p_line+2, "%x,%d,%d,%d,%d",
-			&reg_array->reg_addr, &reg_list->addr_type, &reg_list->data_type,
-			&device_type, &instance_number);
+			&reg_array->reg_addr,
+			(int *)&reg_list->addr_type,
+			(int *)&reg_list->data_type,
+			&device_type,
+			&instance_number);
 		if (rc == NUM_OF_READ_PARAMS) {
 			*io_master = cam_sensor_module_get_io_master(
 				device_type, instance_number, power_state);
@@ -120,9 +123,13 @@ static int cam_sensor_module_parse_line(const char *p_line,
 		*is_read = false;
 
 		rc = sscanf(p_line+2, "%x,%x,%u,%d,%d,%d,%d",
-			&reg_array->reg_addr,  &reg_array->reg_data, &reg_array->delay,
-			&reg_list->addr_type, &reg_list->data_type,
-			&device_type, &instance_number);
+			&reg_array->reg_addr,
+			&reg_array->reg_data,
+			&reg_array->delay,
+			(int *)&reg_list->addr_type,
+			(int *)&reg_list->data_type,
+			&device_type,
+			&instance_number);
 		if (rc == NUM_OF_WRITE_PARAMS) {
 			*io_master = cam_sensor_module_get_io_master(
 				device_type, instance_number, power_state);
@@ -225,7 +232,7 @@ static ssize_t i2c_write(struct file *t_file, const char __user *t_char,
 			rc = camera_io_dev_write(io_master, &read_write);
 			if (rc) {
 				snprintf(line_buffer, LINE_BUFFER_SIZE,
-					"Error: 0x%X, 0x%X, rc: %d\n",
+					"Error: 0x%X, 0x%X, rc: %ld\n",
 					read_write.reg_setting->reg_addr,
 					read_write.reg_setting->reg_data, rc);
 				strlcat(out_buffer, line_buffer, RW_BUFFER_SIZE);
@@ -239,7 +246,7 @@ static ssize_t i2c_write(struct file *t_file, const char __user *t_char,
 				snprintf(line_buffer, LINE_BUFFER_SIZE, "Read data: 0x%X\n",
 					read_write.reg_setting->reg_data);
 			else
-				snprintf(line_buffer, LINE_BUFFER_SIZE, "Error, rc: %d\n", rc);
+				snprintf(line_buffer, LINE_BUFFER_SIZE, "Error, rc: %ld\n", rc);
 			strlcat(out_buffer, line_buffer, RW_BUFFER_SIZE);
 		}
 	} else {

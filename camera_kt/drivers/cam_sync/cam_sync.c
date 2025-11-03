@@ -1228,8 +1228,10 @@ static int cam_sync_component_bind(struct device *dev,
 	CAM_DBG(CAM_SYNC, "Component bound successfully");
 	return rc;
 
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX)
 video_unregister:
 	video_unregister_device(sync_dev->vdev);
+#endif
 v4l2_fail:
 	v4l2_device_unregister(sync_dev->vdev->v4l2_dev);
 register_fail:
@@ -1267,7 +1269,7 @@ static void cam_sync_component_unbind(struct device *dev,
 	sync_dev = NULL;
 }
 
-const static struct component_ops cam_sync_component_ops = {
+static const struct component_ops cam_sync_component_ops = {
 	.bind = cam_sync_component_bind,
 	.unbind = cam_sync_component_unbind,
 };

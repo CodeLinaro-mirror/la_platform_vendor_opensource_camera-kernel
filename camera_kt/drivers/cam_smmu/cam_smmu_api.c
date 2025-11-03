@@ -4084,8 +4084,7 @@ static void cam_smmu_fw_dev_component_unbind(struct device *dev,
 
 	CAM_DBG(CAM_SMMU, "Unbinding component: %s", pdev->name);
 }
-
-const static struct component_ops cam_smmu_fw_dev_component_ops = {
+static const struct component_ops cam_smmu_fw_dev_component_ops = {
 	.bind = cam_smmu_fw_dev_component_bind,
 	.unbind = cam_smmu_fw_dev_component_unbind,
 };
@@ -4115,7 +4114,7 @@ static void cam_smmu_cb_component_unbind(struct device *dev,
 	CAM_DBG(CAM_SMMU, "Unbinding component: %s", pdev->name);
 }
 
-const static struct component_ops cam_smmu_cb_component_ops = {
+static const struct component_ops cam_smmu_cb_component_ops = {
 	.bind = cam_smmu_cb_component_bind,
 	.unbind = cam_smmu_cb_component_unbind,
 };
@@ -4143,7 +4142,7 @@ static void cam_smmu_cb_qsmmu_component_unbind(struct device *dev,
 	CAM_DBG(CAM_SMMU, "Unbinding component: %s", pdev->name);
 }
 
-const static struct component_ops cam_smmu_cb_qsmmu_component_ops = {
+static const struct component_ops cam_smmu_cb_qsmmu_component_ops = {
 	.bind = cam_smmu_cb_qsmmu_component_bind,
 	.unbind = cam_smmu_cb_qsmmu_component_unbind,
 };
@@ -4180,7 +4179,7 @@ static void cam_smmu_component_unbind(struct device *dev,
 	iommu_cb_set.dentry = NULL;
 }
 
-const static struct component_ops cam_smmu_component_ops = {
+static const struct component_ops cam_smmu_component_ops = {
 	.bind = cam_smmu_component_bind,
 	.unbind = cam_smmu_component_unbind,
 };

@@ -448,14 +448,13 @@ static void cam_mem_mgr_put_dma_heaps(void)
 
 static int cam_mem_mgr_get_dma_heaps(void)
 {
-	int rc = 0;
-
 	tbl.system_heap = NULL;
 	tbl.system_uncached_heap = NULL;
 	tbl.camera_heap = NULL;
 	tbl.camera_uncached_heap = NULL;
 	tbl.secure_display_heap = NULL;
 #ifdef DMABUF_ALLOC_FIND_KERNEL_API
+	int rc = 0;
 	tbl.system_heap = dma_heap_find("system");
 	if (IS_ERR_OR_NULL(tbl.system_heap)) {
 		rc = PTR_ERR(tbl.system_heap);
@@ -530,11 +529,13 @@ static int cam_mem_util_get_dma_buf(size_t len,
 	struct dma_buf **buf)
 {
 	int rc = 0;
-	struct dma_heap *heap;
-	struct dma_heap *try_heap = NULL;
 	struct timespec64 ts1, ts2;
 	long microsec = 0;
+#ifdef DMABUF_ALLOC_FIND_KERNEL_API
+	struct dma_heap *heap;
+	struct dma_heap *try_heap = NULL;
 	bool use_cached_heap = false;
+#endif
 #ifdef CONFIG_SPECTRA_SECURE
 	struct mem_buf_lend_kernel_arg arg;
 	int vmids[CAM_MAX_VMIDS];

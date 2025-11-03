@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sensor_io.h"
@@ -176,6 +176,7 @@ int32_t camera_io_dev_read_append_write(
 	case SPI_MASTER:
 	case I3C_MASTER:
 		CAM_ERR(CAM_SENSOR, "Read append write only supported in CCI Master");
+		return -EINVAL;
 	default:
 		CAM_ERR(CAM_SENSOR, "Invalid Master Type:%d", io_master_info->master_type);
 	}
@@ -200,6 +201,7 @@ int32_t camera_io_dev_sequential_xfer(struct camera_io_master *io_master_info,
 	case SPI_MASTER:
 	case I3C_MASTER:
 		CAM_ERR(CAM_SENSOR, "Sequential Lock/Unlock only supported in CCI Master");
+		return -EINVAL;
 	default:
 		CAM_ERR(CAM_SENSOR, "Invalid Master Type:%d", io_master_info->master_type);
 	}

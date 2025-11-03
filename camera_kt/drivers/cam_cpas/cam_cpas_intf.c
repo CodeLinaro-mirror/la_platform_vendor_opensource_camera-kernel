@@ -919,7 +919,7 @@ static void cam_cpas_dev_component_unbind(struct device *dev,
 	g_cpas_intf = NULL;
 }
 
-const static struct component_ops cam_cpas_dev_component_ops = {
+static const struct component_ops cam_cpas_dev_component_ops = {
 	.bind = cam_cpas_dev_component_bind,
 	.unbind = cam_cpas_dev_component_unbind,
 };

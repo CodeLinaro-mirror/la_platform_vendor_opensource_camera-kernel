@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #include <linux/module.h>
 #include <linux/of_device.h>
@@ -276,7 +276,7 @@ int cam_cre_hw_init(struct cam_cre_hw_intf_data **cre_hw_intf_data,
 	return rc;
 }
 
-const static struct component_ops cam_cre_component_ops = {
+static const struct component_ops cam_cre_component_ops = {
 	.bind = cam_cre_component_bind,
 	.unbind = cam_cre_component_unbind,
 };

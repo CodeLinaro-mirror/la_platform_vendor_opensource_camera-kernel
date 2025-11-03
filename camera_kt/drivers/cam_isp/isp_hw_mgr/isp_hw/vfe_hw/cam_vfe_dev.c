@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 
@@ -194,7 +194,7 @@ free_vfe_hw_intf:
 	kfree(vfe_hw_intf);
 }
 
-const static struct component_ops cam_vfe_component_ops = {
+static const struct component_ops cam_vfe_component_ops = {
 	.bind = cam_vfe_component_bind,
 	.unbind = cam_vfe_component_unbind,
 };

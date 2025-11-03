@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022,2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -33,7 +33,7 @@
 #include "camera_main.h"
 #include "cam_common_util.h"
 #include "cam_context_utils.h"
-
+#include "cam_icp_subdev.h"
 
 #define CAM_ICP_IS_DEV_IDX_INVALID(dev_idx)                   \
 ({                                                            \
@@ -428,7 +428,7 @@ static void cam_icp_component_unbind(struct device *dev,
 	CAM_DBG(CAM_ICP, "device[%s] component unbinded successfully", pdev->name);
 }
 
-const static struct component_ops cam_icp_component_ops = {
+static const struct component_ops cam_icp_component_ops = {
 	.bind = cam_icp_component_bind,
 	.unbind = cam_icp_component_unbind,
 };

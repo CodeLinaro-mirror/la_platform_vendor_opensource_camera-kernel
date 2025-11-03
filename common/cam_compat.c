@@ -409,7 +409,7 @@ void cam_check_iommu_faults(struct iommu_domain *domain,
 	pf_info->mid = fault_ids.mid;
 }
 
-static int inline cam_subdev_list_cmp(struct cam_subdev *entry_1, struct cam_subdev *entry_2)
+static inline int cam_subdev_list_cmp(struct cam_subdev *entry_1, struct cam_subdev *entry_2)
 {
 	if (entry_1->close_seq_prior > entry_2->close_seq_prior)
 		return 1;
@@ -476,7 +476,7 @@ int cam_get_ddr_info(struct ddrinfo *ddr)
 	struct ddrinfo *ddr_data;
 	size_t ddr_item_sz;
 	int i;
-	char dbg_buf[2048];
+	static char dbg_buf[2048];
 	int offset = 0;
 
 	ddr_data = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_DDR_BUILD_ID, &ddr_item_sz);

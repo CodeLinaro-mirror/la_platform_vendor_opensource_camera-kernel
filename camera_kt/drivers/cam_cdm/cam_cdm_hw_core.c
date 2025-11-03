@@ -2491,7 +2491,7 @@ static void cam_hw_cdm_component_unbind(struct device *dev,
 	cdm_hw = NULL;
 }
 
-const static struct component_ops cam_hw_cdm_component_ops = {
+static const struct component_ops cam_hw_cdm_component_ops = {
 	.bind = cam_hw_cdm_component_bind,
 	.unbind = cam_hw_cdm_component_unbind,
 };

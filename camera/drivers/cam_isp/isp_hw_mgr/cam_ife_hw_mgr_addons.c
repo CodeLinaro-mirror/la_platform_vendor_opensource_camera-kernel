@@ -314,7 +314,7 @@ static uint32_t cam_ife_mgr_calc_bw(struct cam_ife_mgr_bw_data *bw_data)
 	return bw;
 }
 
-int cam_ife_validate_config(
+static int cam_ife_validate_config(
 	struct cam_isp_in_port_generic_info   *curr_in_port,
 	struct cam_isp_in_port_generic_info   *prev_in_port)
 {
@@ -439,7 +439,7 @@ int cam_ife_mgr_required_hw(void *hw_mgr_priv, bool stop)
 	return req_hw;
 }
 
-int cam_ife_mgr_get_rdi_stream_cfg_cnt(
+static int cam_ife_mgr_get_rdi_stream_cfg_cnt(
 	struct cam_isp_sensor_group_config   *sensor_grp_config,
 	int                                   index)
 {
@@ -466,7 +466,7 @@ int cam_ife_mgr_get_rdi_stream_cfg_cnt(
 	return cnt;
 }
 
-int cam_ife_mgr_update_vc_dt_sensor_stream_cfg(
+static int cam_ife_mgr_update_vc_dt_sensor_stream_cfg(
 	uint32_t                 path_id,
 	uint32_t                 vc,
 	uint32_t                 dt,
@@ -564,7 +564,7 @@ int cam_ife_mgr_update_vc_dt_sensor_stream_cfg(
 	return rc;
 }
 
-int cam_ife_mgr_check_for_previous_sensor_cfg(
+static int cam_ife_mgr_check_for_previous_sensor_cfg(
 	struct cam_isp_sensor_group_config   *sensor_grp_config,
 	int                                   grp_idx,
 	int                                   sensor_grp_stream_idx,
@@ -596,7 +596,7 @@ int cam_ife_mgr_check_for_previous_sensor_cfg(
 	return rc;
 }
 
-int cam_ife_mgr_dump_sensor_grp_stream_cfg(void)
+static int cam_ife_mgr_dump_sensor_grp_stream_cfg(void)
 {
 	int i, j, k;
 	struct cam_ife_hw_mgr_stream_grp_config  *grp_cfg;
@@ -661,7 +661,7 @@ int cam_ife_mgr_clear_sensor_stream_cfg_grp(uint32_t grp_cfg_idx)
 	return 0;
 }
 
-struct cam_ife_hw_mgr_stream_grp_config *cam_ife_mgr_get_free_grp_cfg(uint32_t *grp_idx)
+static struct cam_ife_hw_mgr_stream_grp_config *cam_ife_mgr_get_free_grp_cfg(uint32_t *grp_idx)
 {
 	int i;
 
@@ -2104,7 +2104,6 @@ static int cam_ife_hw_mgr_acquire_ife_src_stream_grp(
 	int                                  index)
 {
 	int rc = -EINVAL;
-	struct cam_ife_hw_concrete_ctx           *c_ctx = ife_ctx->concr_ctx;
 
 	if (cam_ife_mgr_check_res_path_enabled(CAM_ISP_PXL_PATH, index)) {
 		rc = cam_ife_hw_mgr_acquire_res_ife_src(ife_ctx,

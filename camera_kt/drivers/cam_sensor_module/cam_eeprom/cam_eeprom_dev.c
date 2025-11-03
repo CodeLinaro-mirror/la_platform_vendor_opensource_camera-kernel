@@ -558,7 +558,7 @@ static void cam_eeprom_component_unbind(struct device *dev,
 	kfree(e_ctrl);
 }
 
-const static struct component_ops cam_eeprom_component_ops = {
+static const struct component_ops cam_eeprom_component_ops = {
 	.bind = cam_eeprom_component_bind,
 	.unbind = cam_eeprom_component_unbind,
 };

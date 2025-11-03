@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -196,7 +196,7 @@ static void cam_jpeg_dev_component_unbind(struct device *dev,
 		CAM_ERR(CAM_JPEG, "Subdev remove failed %d", rc);
 }
 
-const static struct component_ops cam_jpeg_dev_component_ops = {
+static const struct component_ops cam_jpeg_dev_component_ops = {
 	.bind = cam_jpeg_dev_component_bind,
 	.unbind = cam_jpeg_dev_component_unbind,
 };

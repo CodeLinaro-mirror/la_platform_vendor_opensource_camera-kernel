@@ -217,7 +217,7 @@ static void cam_a5_component_unbind(struct device *dev,
 	kfree(a5_dev_intf);
 }
 
-const static struct component_ops cam_a5_component_ops = {
+static const struct component_ops cam_a5_component_ops = {
 	.bind = cam_a5_component_bind,
 	.unbind = cam_a5_component_unbind,
 };

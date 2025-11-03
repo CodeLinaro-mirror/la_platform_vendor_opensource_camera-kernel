@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
@@ -594,7 +593,7 @@ static int cam_sensor_handle_slave_info(
 static int cam_sensor_handle_sequential_xfer(
 	uint32_t *cmd_buf,
 	struct i2c_settings_array *i2c_reg_settings,
-	enum cam_sensor_i2c_cmd_type opcode,
+	enum camera_sensor_cmd_type opcode,
 	struct list_head **list_ptr)
 {
 	int rc = 0;
@@ -2212,7 +2211,7 @@ int cam_sensor_bob_pwm_mode_switch(struct cam_hw_soc_info *soc_info,
 	return rc;
 }
 
-int msm_cam_sensor_handle_reg_gpio(int seq_type,
+static int msm_cam_sensor_handle_reg_gpio(int seq_type,
 	struct msm_camera_gpio_num_info *gpio_num_info, int val)
 {
 	int gpio_offset = -1;
@@ -2287,7 +2286,7 @@ static int cam_config_mclk_reg(struct cam_sensor_power_ctrl_t *ctrl,
 
 int cam_sensor_util_request_power_domain(struct cam_hw_soc_info *soc_info)
 {
-	int i, rc = 0;
+	int rc = 0;
 
 	rc = cam_soc_util_configure_pd(soc_info);
 	if (rc) {

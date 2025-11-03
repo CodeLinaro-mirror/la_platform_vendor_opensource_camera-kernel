@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -228,7 +228,7 @@ static int cam_vfe_top_ver4_pdaf_lcr_config(struct cam_vfe_top_ver4_priv *top_pr
 }
 
 
-int cam_vfe_top_acquire_resource_update_res(
+static int cam_vfe_top_acquire_resource_update_res(
 	struct cam_isp_resource_node  *vfe_full_res,
 	void                          *acquire_param)
 {
@@ -711,7 +711,7 @@ static void cam_vfe_top_ver4_print_debug_reg_status(
 	cam_vfe_top_dump_perf_counters("ERROR", "", top_priv);
 }
 
-int cam_vfe_top_ver4_dump_timestamps(
+static int cam_vfe_top_ver4_dump_timestamps(
 	struct cam_vfe_top_ver4_priv *top_priv,
 	int  res_id)
 {
@@ -932,7 +932,7 @@ static int cam_vfe_top_ver4_get_data(
 	return -EINVAL;
 }
 
-int cam_vfe_top_ver4_get_hw_caps(void *device_priv, void *args, uint32_t arg_size)
+static int cam_vfe_top_ver4_get_hw_caps(void *device_priv, void *args, uint32_t arg_size)
 {
 	struct cam_vfe_hw_get_hw_cap *vfe_cap_info = NULL;
 	struct cam_vfe_top_ver4_priv *vfe_top_prv = NULL;
@@ -961,7 +961,7 @@ int cam_vfe_top_ver4_get_hw_caps(void *device_priv, void *args, uint32_t arg_siz
 	return 0;
 }
 
-int cam_vfe_top_ver4_init_hw(void *device_priv,
+static int cam_vfe_top_ver4_init_hw(void *device_priv,
 	void *init_hw_args, uint32_t arg_size)
 {
 	struct cam_vfe_top_ver4_priv   *top_priv = device_priv;
@@ -979,14 +979,14 @@ int cam_vfe_top_ver4_init_hw(void *device_priv,
 	return 0;
 }
 
-int cam_vfe_top_ver4_reset(void *device_priv,
+static int cam_vfe_top_ver4_reset(void *device_priv,
 	void *reset_core_args, uint32_t arg_size)
 {
 	CAM_DBG(CAM_ISP, "Reset not supported");
 	return 0;
 }
 
-int cam_vfe_top_acquire_resource(
+static int cam_vfe_top_acquire_resource(
 	struct cam_isp_resource_node  *vfe_full_res,
 	void                          *acquire_param)
 {
@@ -1038,7 +1038,7 @@ config_done:
 	return rc;
 }
 
-int cam_vfe_top_ver4_reserve(void *device_priv,
+static int cam_vfe_top_ver4_reserve(void *device_priv,
 	void *reserve_args, uint32_t arg_size)
 {
 	struct cam_vfe_top_ver4_priv            *top_priv;
@@ -1131,7 +1131,7 @@ end:
 
 }
 
-int cam_vfe_top_ver4_release(void *device_priv,
+static int cam_vfe_top_ver4_release(void *device_priv,
 	void *release_args, uint32_t arg_size)
 {
 	struct cam_isp_resource_node            *mux_res;
@@ -1170,7 +1170,7 @@ int cam_vfe_top_ver4_release(void *device_priv,
 	return 0;
 }
 
-int cam_vfe_top_ver4_start(void *device_priv,
+static int cam_vfe_top_ver4_start(void *device_priv,
 	void *start_args, uint32_t arg_size)
 {
 	struct cam_vfe_top_ver4_priv     *top_priv;
@@ -1245,7 +1245,7 @@ int cam_vfe_top_ver4_start(void *device_priv,
 	return rc;
 }
 
-int cam_vfe_top_ver4_stop(void *device_priv,
+static int cam_vfe_top_ver4_stop(void *device_priv,
 	void *stop_args, uint32_t arg_size)
 {
 	struct cam_vfe_top_ver4_priv            *top_priv;
@@ -1302,13 +1302,13 @@ int cam_vfe_top_ver4_stop(void *device_priv,
 	return rc;
 }
 
-int cam_vfe_top_ver4_read(void *device_priv,
+static int cam_vfe_top_ver4_read(void *device_priv,
 	void *read_args, uint32_t arg_size)
 {
 	return -EPERM;
 }
 
-int cam_vfe_top_ver4_write(void *device_priv,
+static int cam_vfe_top_ver4_write(void *device_priv,
 	void *write_args, uint32_t arg_size)
 {
 	return -EPERM;
@@ -1572,7 +1572,7 @@ static int cam_vfe_top_fcg_config(
 	return rc;
 }
 
-int cam_vfe_top_ver4_process_cmd(void *device_priv, uint32_t cmd_type,
+static int cam_vfe_top_ver4_process_cmd(void *device_priv, uint32_t cmd_type,
 	void *cmd_args, uint32_t arg_size)
 {
 	int rc = 0;
@@ -2461,7 +2461,7 @@ static int cam_vfe_resource_deinit(
 	return rc;
 }
 
-int cam_vfe_res_mux_init(
+static int cam_vfe_res_mux_init(
 	struct cam_vfe_top_ver4_priv  *top_priv,
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
@@ -2507,7 +2507,7 @@ int cam_vfe_res_mux_init(
 	return 0;
 }
 
-int cam_vfe_res_mux_deinit(
+static int cam_vfe_res_mux_deinit(
 	struct cam_isp_resource_node  *vfe_res)
 {
 	struct cam_vfe_mux_ver4_data *vfe_priv;

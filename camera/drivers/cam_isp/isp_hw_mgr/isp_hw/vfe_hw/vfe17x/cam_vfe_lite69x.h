@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_VFE_LITE69X_H_
@@ -264,7 +264,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe690x_bus_hw_info = {
 		.test_bus_ctrl                    = 0x0000157C,
 		.irq_reg_info = {
 			.num_registers            = 1,
-			.irq_reg_set              = vfe680x_bus_irq_reg,
+			.irq_reg_set              = vfe690x_bus_irq_reg,
 			.global_irq_cmd_offset    = 0x000014B0,
 			.global_clear_bitmask     = 0x00000001,
 		},

@@ -422,7 +422,7 @@ static void cam_actuator_component_unbind(struct device *dev,
 	CAM_INFO(CAM_ACTUATOR, "Actuator component unbinded");
 }
 
-const static struct component_ops cam_actuator_component_ops = {
+static const struct component_ops cam_actuator_component_ops = {
 	.bind = cam_actuator_component_bind,
 	.unbind = cam_actuator_component_unbind,
 };

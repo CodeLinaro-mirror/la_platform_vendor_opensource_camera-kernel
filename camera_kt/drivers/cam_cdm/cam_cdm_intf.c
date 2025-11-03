@@ -691,7 +691,7 @@ end:
 	mutex_unlock(&cam_cdm_mgr_lock);
 }
 
-const static struct component_ops cam_cdm_intf_component_ops = {
+static const struct component_ops cam_cdm_intf_component_ops = {
 	.bind = cam_cdm_intf_component_bind,
 	.unbind = cam_cdm_intf_component_unbind,
 };

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/debugfs.h>
@@ -1602,10 +1602,11 @@ static int cam_context_user_dump(struct cam_context *ctx,
 				local_len = dump_args->offset +
 					sizeof(struct cam_context_dump_header);
 				scnprintf(hdr->tag, CAM_CTXT_DUMP_TAG_MAX_LEN,
-					"%s_OUT_FENCE_REQUEST_APPLIED.%d.%d.%d:",
+					"%s_OUT_FENCE_REQUEST_APPLIED.%d.%llu.%llu.%d:",
 					ctx->dev_name,
 					req->out_map_entries[i].resource_handle,
-					&(req->out_map_entries[i].image_buf_addr),
+					req->out_map_entries[i].image_buf_addr[0],
+					req->out_map_entries[i].image_buf_addr[1],
 					req->out_map_entries[i].sync_id);
 				hdr->word_size = sizeof(uint64_t);
 				addr = (uint64_t *)(dst + sizeof(struct cam_context_dump_header));
@@ -1643,10 +1644,11 @@ static int cam_context_user_dump(struct cam_context *ctx,
 				local_len = dump_args->offset +
 					sizeof(struct cam_context_dump_header);
 				scnprintf(hdr->tag, CAM_CTXT_DUMP_TAG_MAX_LEN,
-					"%s_OUT_FENCE_REQUEST_PENDING.%d.%d.%d:",
+					"%s_OUT_FENCE_REQUEST_PENDING.%d.%llu.%llu.%d:",
 					ctx->dev_name,
 					req->out_map_entries[i].resource_handle,
-					&(req->out_map_entries[i].image_buf_addr),
+					req->out_map_entries[i].image_buf_addr[0],
+					req->out_map_entries[i].image_buf_addr[1],
 					req->out_map_entries[i].sync_id);
 				hdr->word_size = sizeof(uint64_t);
 				addr = (uint64_t *)(dst + sizeof(struct cam_context_dump_header));
@@ -1684,10 +1686,11 @@ static int cam_context_user_dump(struct cam_context *ctx,
 				local_len = dump_args->offset +
 					sizeof(struct cam_context_dump_header);
 				scnprintf(hdr->tag, CAM_CTXT_DUMP_TAG_MAX_LEN,
-					"%s_OUT_FENCE_REQUEST_ACTIVE.%d.%d.%d:",
+					"%s_OUT_FENCE_REQUEST_ACTIVE.%d.%llu.%llu.%d:",
 					ctx->dev_name,
 					req->out_map_entries[i].resource_handle,
-					&(req->out_map_entries[i].image_buf_addr),
+					req->out_map_entries[i].image_buf_addr[0],
+					req->out_map_entries[i].image_buf_addr[1],
 					req->out_map_entries[i].sync_id);
 				hdr->word_size = sizeof(uint64_t);
 				addr = (uint64_t *)(dst + sizeof(struct cam_context_dump_header));

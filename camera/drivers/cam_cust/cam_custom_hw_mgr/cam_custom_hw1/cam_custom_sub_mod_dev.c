@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -130,7 +130,7 @@ static void cam_custom_hw_sub_mod_component_unbind(
 	CAM_DBG(CAM_CUSTOM, "Unbinding component: %s", pdev->name);
 }
 
-const static struct component_ops cam_custom_hw_sub_mod_component_ops = {
+static const struct component_ops cam_custom_hw_sub_mod_component_ops = {
 	.bind = cam_custom_hw_sub_mod_component_bind,
 	.unbind = cam_custom_hw_sub_mod_component_unbind,
 };

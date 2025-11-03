@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 
@@ -10,6 +10,7 @@
 #include <linux/of_device.h>
 #include <linux/component.h>
 
+#include "cam_vfe_dev.h"
 #include "cam_vfe_core.h"
 #include "cam_vfe_soc.h"
 #include "cam_debug_util.h"
@@ -198,7 +199,7 @@ free_vfe_hw_intf:
 	kfree(vfe_hw_intf);
 }
 
-const static struct component_ops cam_vfe_component_ops = {
+static const struct component_ops cam_vfe_component_ops = {
 	.bind = cam_vfe_component_bind,
 	.unbind = cam_vfe_component_unbind,
 };

@@ -2552,7 +2552,7 @@ static struct v4l2_subscribed_event_ops cam_sync_v4l2_ops = {
 	.merge = cam_sync_event_queue_notify_error,
 };
 
-int cam_sync_subscribe_event(struct v4l2_fh *fh,
+static int cam_sync_subscribe_event(struct v4l2_fh *fh,
 	const struct v4l2_event_subscription *sub)
 {
 	if (!((sub->type == CAM_SYNC_V4L_EVENT) ||
@@ -2567,7 +2567,7 @@ int cam_sync_subscribe_event(struct v4l2_fh *fh,
 		&cam_sync_v4l2_ops);
 }
 
-int cam_sync_unsubscribe_event(struct v4l2_fh *fh,
+static int cam_sync_unsubscribe_event(struct v4l2_fh *fh,
 	const struct v4l2_event_subscription *sub)
 {
 	if (!((sub->type == CAM_SYNC_V4L_EVENT) ||
@@ -2918,7 +2918,7 @@ static void cam_sync_component_unbind(struct device *dev,
 	sync_dev = NULL;
 }
 
-const static struct component_ops cam_sync_component_ops = {
+static const struct component_ops cam_sync_component_ops = {
 	.bind = cam_sync_component_bind,
 	.unbind = cam_sync_component_unbind,
 };

@@ -277,7 +277,7 @@ deinit_platform_res:
 	kfree(lrme_hw);
 }
 
-const static struct component_ops cam_lrme_hw_dev_component_ops = {
+static const struct component_ops cam_lrme_hw_dev_component_ops = {
 	.bind = cam_lrme_hw_dev_component_bind,
 	.unbind = cam_lrme_hw_dev_component_unbind,
 };

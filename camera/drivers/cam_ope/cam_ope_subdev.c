@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -284,7 +284,7 @@ static void cam_ope_subdev_component_unbind(struct device *dev,
 	mutex_destroy(&g_ope_dev.ope_lock);
 }
 
-const static struct component_ops cam_ope_subdev_component_ops = {
+static const struct component_ops cam_ope_subdev_component_ops = {
 	.bind = cam_ope_subdev_component_bind,
 	.unbind = cam_ope_subdev_component_unbind,
 };

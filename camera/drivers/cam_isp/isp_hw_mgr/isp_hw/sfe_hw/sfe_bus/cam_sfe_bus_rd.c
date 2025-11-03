@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/ratelimit.h>
@@ -1491,14 +1491,16 @@ static int cam_sfe_bus_rd_config_rm(void *priv, void *cmd_args,
 		CAM_DBG(CAM_SFE, "SFE:%d RM:%d image_address:0x%x offset: 0x%x",
 			rm_data->common_data->core_index, rm_data->index,
 			img_addr, rm_data->offset);
-		if (cam_smmu_is_expanded_memory())
+		if (cam_smmu_is_expanded_memory()) {
 			CAM_DBG(CAM_SFE, "SFE:%d RM:%d image address offset: 0x%x",
 				rm_data->common_data->core_index,
 				rm_data->index,
 				img_offset);
+
 			cam_io_w_mb(img_offset,
 				rm_data->common_data->mem_base +
 				rm_data->hw_regs->addr_cfg);
+		}
 	}
 
 	return 0;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -1259,7 +1259,7 @@ static int32_t cam_cci_data_queue_burst(struct cci_device *cci_dev,
 	/* Retry count is not supported in BURST MODE */
 	c_ctrl->cci_info->retries = 0;
 
-	/* 
+	/*
 	 * 1. Configure Slave ID through SET_PARAM_CMD
 	 *    For Burst Mode retries are not supported.
 	 *    Record the number of words written to QUEUE
@@ -1275,7 +1275,7 @@ static int32_t cam_cci_data_queue_burst(struct cci_device *cci_dev,
 		reg_offset);
 	index++;
 
-	/* 
+	/*
 	 * 2. Initialize the variables used for synchronizing between
 	 *    process context and CCI IRQ Context
 	 */
@@ -2784,7 +2784,6 @@ static int cam_cci_read_append_write(struct v4l2_subdev *sd,
 	enum camera_sensor_i2c_type data_type;
 	struct cam_cci_ctrl rd_ctrl;
 	struct cam_cci_master_info *cci_master_info;
-	uint32_t i;
 	unsigned char buf[CAMERA_SENSOR_I2C_TYPE_DWORD];
 	uint32_t rd_data;
 

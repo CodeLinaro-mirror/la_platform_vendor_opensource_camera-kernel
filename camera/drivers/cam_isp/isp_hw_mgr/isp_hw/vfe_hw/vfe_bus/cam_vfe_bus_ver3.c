@@ -3815,7 +3815,7 @@ static int cam_vfe_bus_ver3_update_wm(void *priv, void *cmd_args,
 			wm_data->hw_regs->frame_incr, frame_inc);
 		CAM_DBG(CAM_ISP, "VFE:%u WM:%d frame_inc: %d expanded_mem: %s",
 			bus_priv->common_data.core_index, wm_data->index, reg_val_pair[j-1],
-			CAM_BOOL_TO_YESNO(cam_smmu_is_expanded_memory));
+			CAM_BOOL_TO_YESNO(cam_smmu_is_expanded_memory()));
 
 		/* enable the WM */
 		CAM_VFE_ADD_REG_VAL_PAIR(reg_val_pair, j,

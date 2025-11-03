@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -19,6 +19,7 @@
 #include "camera_main.h"
 #include "cam_icp_soc_common.h"
 #include "cam_icp_v1_dev.h"
+#include "cam_icp_proc.h"
 
 static int max_icp_v1_hw_idx = -1;
 
@@ -61,7 +62,7 @@ static bool cam_icp_v1_cpas_cb(uint32_t client_handle, void *userdata,
 	return error_handled;
 }
 
-int cam_icp_v1_register_cpas(struct cam_hw_soc_info *soc_info,
+static int cam_icp_v1_register_cpas(struct cam_hw_soc_info *soc_info,
 	struct cam_icp_v1_device_core_info *core_info, uint32_t hw_idx)
 {
 	struct cam_cpas_register_params cpas_register_params;
@@ -237,7 +238,7 @@ static const struct component_ops cam_icp_v1_component_ops = {
 	.unbind = cam_icp_v1_component_unbind,
 };
 
-int cam_icp_v1_probe(struct platform_device *pdev)
+static int cam_icp_v1_probe(struct platform_device *pdev)
 {
 	int rc = 0;
 

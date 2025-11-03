@@ -817,7 +817,7 @@ static void cam_cci_component_unbind(struct device *dev,
 	devm_kfree(&pdev->dev, cci_dev);
 }
 
-const static struct component_ops cam_cci_component_ops = {
+static const struct component_ops cam_cci_component_ops = {
 	.bind = cam_cci_component_bind,
 	.unbind = cam_cci_component_unbind,
 };

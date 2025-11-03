@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -207,7 +207,7 @@ free_sfe_hw_intf:
 	kfree(sfe_hw_intf);
 }
 
-const static struct component_ops cam_sfe_component_ops = {
+static const struct component_ops cam_sfe_component_ops = {
 	.bind = cam_sfe_component_bind,
 	.unbind = cam_sfe_component_unbind,
 };
@@ -220,7 +220,7 @@ void cam_sfe_get_num_hws(uint32_t *sfe_num)
 		CAM_ERR(CAM_SFE, "Invalid argument, g_num_sfe_hws: %u", g_num_sfe_hws);
 }
 
-int cam_sfe_probe(struct platform_device *pdev)
+static int cam_sfe_probe(struct platform_device *pdev)
 {
 	int rc = 0;
 

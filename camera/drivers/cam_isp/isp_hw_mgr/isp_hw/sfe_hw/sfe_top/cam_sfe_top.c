@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -408,7 +408,7 @@ static struct cam_axi_vote *cam_sfe_top_delay_bw_reduction(
 	return &top_priv->last_bw_vote[vote_idx];
 }
 
-int cam_sfe_top_calc_axi_bw_vote(struct cam_sfe_top_priv *top_priv,
+static int cam_sfe_top_calc_axi_bw_vote(struct cam_sfe_top_priv *top_priv,
 	bool start_stop, struct cam_axi_vote **to_be_applied_axi_vote,
 	uint64_t *total_bw_new_vote, uint64_t request_id)
 {
@@ -554,7 +554,7 @@ end:
 	return rc;
 }
 
-int cam_sfe_top_bw_update(struct cam_sfe_soc_private *soc_private,
+static int cam_sfe_top_bw_update(struct cam_sfe_soc_private *soc_private,
 	struct cam_sfe_top_priv *top_priv, void *cmd_args,
 	uint32_t arg_size)
 {
@@ -598,7 +598,7 @@ int cam_sfe_top_bw_update(struct cam_sfe_soc_private *soc_private,
 	return rc;
 }
 
-int cam_sfe_top_bw_control(struct cam_sfe_soc_private *soc_private,
+static int cam_sfe_top_bw_control(struct cam_sfe_soc_private *soc_private,
 	struct cam_sfe_top_priv *top_priv, void *cmd_args,
 	uint32_t arg_size)
 {
@@ -684,7 +684,7 @@ static inline void cam_sfe_top_delay_clk_reduction(
 	}
 }
 
-int cam_sfe_top_calc_hw_clk_rate(
+static int cam_sfe_top_calc_hw_clk_rate(
 	struct cam_sfe_top_priv *top_priv, bool start_stop,
 	unsigned long *final_clk_rate, uint64_t request_id)
 {
@@ -1408,7 +1408,7 @@ static int cam_sfe_top_fcg_config(
 	return rc;
 }
 
-int cam_sfe_top_process_cmd(void *priv, uint32_t cmd_type,
+static int cam_sfe_top_process_cmd(void *priv, uint32_t cmd_type,
 	void *cmd_args, uint32_t arg_size)
 {
 	int rc = 0;
@@ -1480,7 +1480,7 @@ int cam_sfe_top_process_cmd(void *priv, uint32_t cmd_type,
 	return rc;
 }
 
-int cam_sfe_top_reserve(void *device_priv,
+static int cam_sfe_top_reserve(void *device_priv,
 	void *reserve_args, uint32_t arg_size)
 {
 	struct cam_sfe_top_priv                 *top_priv;
@@ -1540,7 +1540,7 @@ int cam_sfe_top_reserve(void *device_priv,
 	return rc;
 }
 
-int cam_sfe_top_release(void *device_priv,
+static int cam_sfe_top_release(void *device_priv,
 	void *release_args, uint32_t arg_size)
 {
 	struct cam_sfe_top_priv            *top_priv;
@@ -1696,7 +1696,7 @@ static int cam_sfe_top_handle_irq_top_half(uint32_t evt_id,
 	return rc;
 }
 
-void cam_sfe_top_sel_frame_counter(
+static void cam_sfe_top_sel_frame_counter(
 	uint32_t res_id, uint32_t *val,
 	bool read_counter,
 	struct cam_sfe_path_data *path_data)
@@ -1899,7 +1899,7 @@ static int cam_sfe_top_handle_irq_bottom_half(
 	return ret;
 }
 
-int cam_sfe_top_start(
+static int cam_sfe_top_start(
 	void *priv, void *start_args, uint32_t arg_size)
 {
 	int                                   rc = -EINVAL;
@@ -2089,7 +2089,7 @@ int cam_sfe_top_start(
 	return 0;
 }
 
-int cam_sfe_top_stop(
+static int cam_sfe_top_stop(
 	void *priv, void *stop_args, uint32_t arg_size)
 {
 	int i;
@@ -2187,7 +2187,7 @@ int cam_sfe_top_stop(
 	return 0;
 }
 
-int cam_sfe_top_init_hw(void *priv, void *init_hw_args, uint32_t arg_size)
+static int cam_sfe_top_init_hw(void *priv, void *init_hw_args, uint32_t arg_size)
 {
 	struct cam_sfe_top_priv *top_priv = priv;
 	void __iomem *mem_base;

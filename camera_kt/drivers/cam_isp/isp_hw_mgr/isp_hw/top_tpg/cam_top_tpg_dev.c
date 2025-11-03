@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -125,7 +125,7 @@ static void cam_top_tpg_component_unbind(struct device *dev,
 	kfree(tpg_hw_intf);
 }
 
-const static struct component_ops cam_top_tpg_component_ops = {
+static const struct component_ops cam_top_tpg_component_ops = {
 	.bind = cam_top_tpg_component_bind,
 	.unbind = cam_top_tpg_component_unbind,
 };

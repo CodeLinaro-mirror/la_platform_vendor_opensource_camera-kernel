@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -217,7 +217,7 @@ free_jpeg_hw_intf:
 	kfree(jpeg_dma_dev_intf);
 }
 
-const static struct component_ops cam_jpeg_dma_component_ops = {
+static const struct component_ops cam_jpeg_dma_component_ops = {
 	.bind = cam_jpeg_dma_component_bind,
 	.unbind = cam_jpeg_dma_component_unbind,
 };

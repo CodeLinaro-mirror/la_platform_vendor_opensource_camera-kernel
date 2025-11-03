@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sensor_i3c.h"
@@ -16,7 +16,8 @@ MODULE_PARM_DESC(i3c_lookahead_en,
 static int cam_qup_i3c_rxdata(struct i3c_device *dev_client, unsigned char *rxdata,
 	enum camera_sensor_i2c_type addr_type, int data_length)
 {
-	int rc;
+	int rc = 0;
+#ifdef CONFIG_I3C
 	uint32_t us = 0;
 	struct i3c_priv_xfer read_buf[2] = {
 		{
@@ -30,7 +31,6 @@ static int cam_qup_i3c_rxdata(struct i3c_device *dev_client, unsigned char *rxda
 			.data.in = rxdata,
 		},
 	};
-#ifdef CONFIG_I3C
 	rc = i3c_device_do_priv_xfers(dev_client, read_buf, ARRAY_SIZE(read_buf));
 	if (rc == -ENOTCONN) {
 		while (us < CAM_I3C_DEV_PROBE_TIMEOUT_US) {
@@ -61,7 +61,8 @@ static inline void cam_qup_i3c_txdata_fill(struct camera_io_master *dev_client,
 static int cam_qup_i3c_txdata(struct camera_io_master *dev_client, unsigned char *txdata,
 	uint16_t length)
 {
-	int rc;
+	int rc = 0;
+#ifdef CONFIG_I3C
 	uint32_t us = 0;
 	struct i3c_priv_xfer write_buf = {
 		.rnw = 0,
@@ -69,7 +70,6 @@ static int cam_qup_i3c_txdata(struct camera_io_master *dev_client, unsigned char
 		.data.out = txdata,
 	};
 
-#ifdef CONFIG_I3C
 	rc = i3c_device_do_priv_xfers(dev_client->i3c_client, &write_buf, 1);
 	if (rc == -ENOTCONN) {
 		while (us < CAM_I3C_DEV_PROBE_TIMEOUT_US) {
@@ -389,11 +389,12 @@ int cam_qup_i3c_write_table(struct camera_io_master *client,
 	struct cam_sensor_i2c_reg_setting *write_setting)
 {
 	int rc = -EINVAL;
-	uint32_t us = 0;
 	struct i3c_priv_xfer *msgs = NULL;
 	unsigned char *buf = NULL;
 	int i3c_msg_size = 0;
-
+#ifdef CONFIG_I3C
+	uint32_t us = 0;
+#endif
 	if (!client || !write_setting)
 		return -EINVAL;
 

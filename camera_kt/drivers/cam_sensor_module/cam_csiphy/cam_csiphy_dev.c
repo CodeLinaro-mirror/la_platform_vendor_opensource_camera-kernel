@@ -343,7 +343,7 @@ static void cam_csiphy_component_unbind(struct device *dev,
 	devm_kfree(&pdev->dev, csiphy_dev);
 }
 
-const static struct component_ops cam_csiphy_component_ops = {
+static const struct component_ops cam_csiphy_component_ops = {
 	.bind = cam_csiphy_component_bind,
 	.unbind = cam_csiphy_component_unbind,
 };

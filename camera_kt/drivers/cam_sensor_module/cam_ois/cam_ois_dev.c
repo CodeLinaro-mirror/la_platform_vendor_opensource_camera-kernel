@@ -383,7 +383,7 @@ static void cam_ois_component_unbind(struct device *dev,
 	kfree(o_ctrl);
 }
 
-const static struct component_ops cam_ois_component_ops = {
+static const  struct component_ops cam_ois_component_ops = {
 	.bind = cam_ois_component_bind,
 	.unbind = cam_ois_component_unbind,
 };

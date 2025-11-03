@@ -42,6 +42,8 @@ LINUXINCLUDE +=                                                  \
 
 # After creating lists, add content of 'ccflags-m' variable to 'ccflags-y' one.
 ccflags-y += ${ccflags-m}
+ccflags-y += -Wmissing-prototypes
+ccflags-y += -Werror
 
 camera_$(CAMERA_ARCH)-y := \
 	camera_kt/drivers/cam_req_mgr/cam_req_mgr_core.o \
@@ -245,8 +247,6 @@ camera_$(CAMERA_ARCH)-$(CONFIG_SPECTRA_SFE) += \
 
 camera_$(CAMERA_ARCH)-y += camera_kt/drivers/camera_main.o
 
-ccflags-y += -Wmissing-prototypes
-
 obj-m += camera_$(CAMERA_ARCH).o
 BOARD_VENDOR_KERNEL_MODULES += $(KERNEL_MODULES_OUT)/camera_$(CAMERA_ARCH).ko
 else
@@ -274,6 +274,9 @@ LINUXINCLUDE +=                                                       \
 
 # After creating lists, add content of 'ccflags-m' variable to 'ccflags-y' one.
 ccflags-y += ${ccflags-m}
+ccflags-y += -Wmissing-prototypes
+ccflags-y += -Werror
+
 camera_$(CAMERA_ARCH)-y := \
 	camera/drivers/cam_req_mgr/cam_req_mgr_core.o \
 	camera/drivers/cam_req_mgr/cam_req_mgr_dev.o \

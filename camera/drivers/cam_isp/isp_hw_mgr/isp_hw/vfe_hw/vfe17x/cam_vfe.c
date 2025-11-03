@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -32,6 +32,7 @@
 #include "cam_vfe_core.h"
 #include "cam_vfe_dev.h"
 #include "camera_main.h"
+#include "cam_vfe.h"
 
 static const struct of_device_id cam_vfe_dt_match[] = {
 	{

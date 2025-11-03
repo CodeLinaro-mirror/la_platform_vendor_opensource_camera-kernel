@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "tpg_hw_v_1_4.h"
@@ -908,24 +908,24 @@ static int tpg_1_4_set_shdr_line_offset1(void *data, u64 val)
 DEFINE_SIMPLE_ATTRIBUTE(tpg_1_4_xcfa_test,
 		&tpg_1_4_get_xcfa_test,
 		&tpg_1_4_set_xcfa_test,
-		"%16d");
+		"%16lld");
 
 DEFINE_SIMPLE_ATTRIBUTE(tpg_1_4_shdr_overlap_test,
 		&tpg_1_4_get_shdr_overlap_test,
 		&tpg_1_4_set_shdr_overlap_test,
-		"%16d");
+		"%16lld");
 DEFINE_SIMPLE_ATTRIBUTE(tpg_1_4_shdr_offset_num_batch,
 		&tpg_1_4_get_shdr_offset_num_batch,
 		&tpg_1_4_set_shdr_offset_num_batch,
-		"%16d");
+		"%16lld");
 DEFINE_SIMPLE_ATTRIBUTE(tpg_1_4_shdr_line_offset0,
 		&tpg_1_4_get_shdr_line_offset0,
 		&tpg_1_4_set_shdr_line_offset0,
-		"%16d");
+		"%16lld");
 DEFINE_SIMPLE_ATTRIBUTE(tpg_1_4_shdr_line_offset1,
 		&tpg_1_4_get_shdr_line_offset1,
 		&tpg_1_4_set_shdr_line_offset1,
-		"%16d");
+		"%16lld");
 
 
 int tpg_1_4_layer_init(struct tpg_hw *hw)

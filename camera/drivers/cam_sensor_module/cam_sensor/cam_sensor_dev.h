@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SENSOR_DEV_H_
@@ -157,7 +157,6 @@ struct cam_sensor_ctrl_t {
 	bool                           hw_no_ops;
 };
 
-
 /**
  * @brief : API to remove SENSOR i2c Hw from driver framework.
  * @return : return 0 on success.
@@ -174,5 +173,11 @@ int cam_sensor_driver_init(void);
  * @brief : API to remove SENSOR Hw from platform framework.
  */
 void cam_sensor_driver_exit(void);
+
+/**
+ * @brief : API to get I3C probe completion status.
+ * @return : return completion status.
+ */
+struct completion *cam_sensor_get_i3c_completion(uint32_t index);
 
 #endif /* _CAM_SENSOR_DEV_H_ */

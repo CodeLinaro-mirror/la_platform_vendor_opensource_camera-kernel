@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -182,7 +182,7 @@ int cam_cdm_get_caps(void *hw_priv,
 	return -EINVAL;
 }
 
-int cam_cdm_find_free_client_slot(struct cam_cdm *hw)
+static int cam_cdm_find_free_client_slot(struct cam_cdm *hw)
 {
 	int i;
 

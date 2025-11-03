@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sensor_dev.h"
@@ -10,6 +10,11 @@
 #include "cam_sensor_core.h"
 #include "camera_main.h"
 #include "cam_compat.h"
+#include "cam_sensor_dev.h"
+
+#ifndef CONFIG_I3C
+static struct i3c_driver cam_sensor_i3c_driver __attribute__((unused));
+#endif
 
 static struct cam_sensor_i3c_sensor_data {
 	struct cam_sensor_ctrl_t                  *s_ctrl;
@@ -349,7 +354,7 @@ static void cam_sensor_i2c_component_unbind(struct device *dev,
 	kfree(s_ctrl);
 }
 
-const static struct component_ops cam_sensor_i2c_component_ops = {
+static const struct component_ops cam_sensor_i2c_component_ops = {
 	.bind = cam_sensor_i2c_component_bind,
 	.unbind = cam_sensor_i2c_component_unbind,
 };
@@ -576,7 +581,7 @@ static void cam_sensor_component_unbind(struct device *dev,
 	devm_kfree(&pdev->dev, s_ctrl);
 }
 
-const static struct component_ops cam_sensor_component_ops = {
+static const struct component_ops cam_sensor_component_ops = {
 	.bind = cam_sensor_component_bind,
 	.unbind = cam_sensor_component_unbind,
 };

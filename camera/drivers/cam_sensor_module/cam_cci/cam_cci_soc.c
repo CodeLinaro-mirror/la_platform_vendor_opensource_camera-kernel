@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
@@ -411,8 +410,6 @@ int cam_cci_parse_dt_info(struct platform_device *pdev,
 		&new_cci_dev->soc_info;
 	void *irq_data[CAM_SOC_MAX_IRQ_LINES_PER_DEV] = {0};
 	int32_t  num_irq = 0;
-	struct task_struct  *task = NULL;
-	struct irq_desc     *desc = NULL;
 
 	rc = cam_soc_util_get_dt_properties(soc_info);
 	if (rc < 0) {

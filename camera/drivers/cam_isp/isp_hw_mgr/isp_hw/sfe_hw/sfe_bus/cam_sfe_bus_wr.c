@@ -288,7 +288,7 @@ static enum cam_sfe_bus_sfe_out_type
 	}
 }
 
-bool cam_sfe_is_mipi_pcking_needed(
+static bool cam_sfe_is_mipi_pcking_needed(
 	struct cam_sfe_bus_wr_priv *bus_priv,
 	int wm_index)
 {
@@ -2567,7 +2567,7 @@ skip_cache_cfg:
 			wm_data->hw_regs->frame_incr, frame_inc);
 		CAM_DBG(CAM_SFE, "WM:%d frame_inc %d expanded mem: %s",
 			wm_data->index, reg_val_pair[j-1],
-			CAM_BOOL_TO_YESNO(cam_smmu_is_expanded_memory));
+			CAM_BOOL_TO_YESNO(cam_smmu_is_expanded_memory()));
 
 		/* enable the WM */
 		CAM_SFE_ADD_REG_VAL_PAIR(reg_val_pair, j,
@@ -2716,7 +2716,7 @@ static int cam_sfe_bus_wr_config_wm(void *priv, void *cmd_args,
 
 		CAM_DBG(CAM_SFE, "WM:%d frame_inc: %d expanded_mem: %s",
 			wm_data->index, frame_inc,
-			CAM_BOOL_TO_YESNO(cam_smmu_is_expanded_memory));
+			CAM_BOOL_TO_YESNO(cam_smmu_is_expanded_memory()));
 
 		curr_cache_cfg = wm_data->cache_cfg;
 		wm_data->cache_cfg = bus_priv->common_data.sys_cache_default_cfg;

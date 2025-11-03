@@ -236,7 +236,7 @@ static int __cam_isp_ctx_print_event_record(struct cam_isp_context *ctx_isp)
 			}
 			if (record->event_type != CAM_ISP_CTX_EVENT_SHUTTER)
 				len += scnprintf(buf + len, CAM_ISP_CONTEXT_DBG_BUF_LEN - len,
-					"%llu[%lld:%06lld] ", record->req_id, ts.tv_sec,
+					"%llu[%lld:%06ld] ", record->req_id, ts.tv_sec,
 					ts.tv_nsec / NSEC_PER_USEC);
 			else
 				/*
@@ -244,7 +244,7 @@ static int __cam_isp_ctx_print_event_record(struct cam_isp_context *ctx_isp)
 				 * req Id[timestamp] status frmId softs bootts
 				 */
 				len += scnprintf(buf + len, (CAM_ISP_CONTEXT_DBG_BUF_LEN) - len,
-					"%llu[%lld:%06lld] [%d %lld %llu %llu] | ",
+					"%llu[%lld:%06ld] [%d %lld %llu %llu] | ",
 					record->req_id, ts.tv_sec,
 					ts.tv_nsec / NSEC_PER_USEC,
 					record->event.shutter_event.status,
@@ -7201,11 +7201,6 @@ static void cam_isp_ctx_sync_callback(int32_t sync_obj, int status, void *data)
 	struct cam_context *ctx = NULL;
 	struct cam_isp_context *ctx_isp = NULL;
 	struct cam_req_mgr_flush_request  flush_req;
-	struct cam_ctx_request *req_f;
-	struct cam_ctx_request *req_temp;
-	struct cam_isp_ctx_req *req_isp;
-	int i;
-	int rc;
 
 	if (!req) {
 		CAM_ERR(CAM_CTXT, "Invalid input param");
@@ -9243,7 +9238,7 @@ static int __cam_isp_ctx_apply_default_settings(
 	return rc;
 }
 
-void __cam_isp_ctx_notify_cpas(struct cam_context *ctx, uint32_t evt_id)
+static void __cam_isp_ctx_notify_cpas(struct cam_context *ctx, uint32_t evt_id)
 {
 	uint64_t request_id = 0;
 	struct cam_isp_context *ctx_isp =

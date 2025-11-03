@@ -1411,7 +1411,7 @@ static int cam_ife_csid_ver2_rx_err_bottom_half(
 		for (i = 0; i < 4; i++) {
 			/* NOTE: Hardware specific bits */
 			if (irq_status & (IFE_CSID_VER2_RX_LANE0_FIFO_OVERFLOW << i)) {
-				tmp_len += scnprintf(tmp_buf + tmp_len, 10 - tmp_len, " %d", i);
+				tmp_len += scnprintf(tmp_buf + tmp_len, 10 - tmp_len, " %ld", i);
 				lane_overflow = true;
 			}
 		}
@@ -2447,7 +2447,7 @@ end:
 	return rc;
 }
 
-int cam_ife_csid_ver2_get_hw_caps(void *hw_priv,
+static int cam_ife_csid_ver2_get_hw_caps(void *hw_priv,
 	void *get_hw_cap_args, uint32_t arg_size)
 {
 	int rc = 0;
@@ -2676,7 +2676,7 @@ wait_only:
 	return rc;
 }
 
-int cam_ife_csid_ver2_reset(void *hw_priv,
+static int cam_ife_csid_ver2_reset(void *hw_priv,
 	void *reset_args, uint32_t arg_size)
 {
 	struct cam_hw_info *hw_info;
@@ -3266,7 +3266,7 @@ static int cam_ife_csid_ver_config_camif(
 	return 0;
 }
 
-int cam_ife_csid_hw_ver2_hw_cfg(
+static int cam_ife_csid_hw_ver2_hw_cfg(
 	struct cam_ife_csid_ver2_hw *csid_hw,
 	struct cam_ife_csid_ver2_path_cfg *path_cfg,
 	struct cam_csid_hw_reserve_resource_args  *reserve,
@@ -3343,7 +3343,7 @@ static bool cam_ife_csid_ver2_is_width_valid_by_fuse(
 	return true;
 }
 
-bool cam_ife_csid_ver2_is_width_valid(
+static bool cam_ife_csid_ver2_is_width_valid(
 	struct cam_csid_hw_reserve_resource_args  *reserve,
 	struct cam_ife_csid_ver2_hw *csid_hw)
 {
@@ -3457,7 +3457,7 @@ err:
 	return rc;
 }
 
-int cam_ife_csid_ver2_reserve(void *hw_priv,
+static int cam_ife_csid_ver2_reserve(void *hw_priv,
 	void *reserve_args, uint32_t arg_size)
 {
 
@@ -3588,7 +3588,7 @@ release:
 	return rc;
 }
 
-int cam_ife_csid_ver2_release(void *hw_priv,
+static int cam_ife_csid_ver2_release(void *hw_priv,
 	void *release_args, uint32_t arg_size)
 {
 	struct cam_ife_csid_ver2_hw     *csid_hw;
@@ -5416,7 +5416,7 @@ free_buf_done_mask:
 	return rc;
 }
 
-int cam_ife_csid_ver2_init_hw(void *hw_priv,
+static int cam_ife_csid_ver2_init_hw(void *hw_priv,
 	void *init_args, uint32_t arg_size)
 {
 	struct cam_ife_csid_ver2_hw *csid_hw  = NULL;
@@ -5529,7 +5529,7 @@ static int cam_ife_csid_ver2_disable_core(
 	return rc;
 }
 
-int cam_ife_csid_ver2_deinit_hw(void *hw_priv,
+static int cam_ife_csid_ver2_deinit_hw(void *hw_priv,
 	void *deinit_args, uint32_t arg_size)
 {
 	struct cam_ife_csid_ver2_hw *csid_hw  = NULL;
@@ -5646,7 +5646,7 @@ static void cam_ife_csid_ver2_send_secure_info(
 
 }
 
-int cam_ife_csid_ver2_start(void *hw_priv, void *args,
+static int cam_ife_csid_ver2_start(void *hw_priv, void *args,
 			uint32_t arg_size)
 {
 	struct cam_ife_csid_ver2_hw                 *csid_hw  = NULL;
@@ -5943,7 +5943,7 @@ static void cam_ife_csid_ver2_maskout_all_irqs(
 		mem_base + csid_reg->cmn_reg->top_irq_mask_addr[CAM_IFE_CSID_TOP_IRQ_STATUS_REG0]);
 }
 
-int cam_ife_csid_ver2_stop(void *hw_priv,
+static int cam_ife_csid_ver2_stop(void *hw_priv,
 	void *stop_args, uint32_t arg_size)
 {
 	struct cam_ife_csid_ver2_hw *csid_hw  = NULL;
@@ -6058,7 +6058,7 @@ int cam_ife_csid_ver2_stop(void *hw_priv,
 	return rc;
 }
 
-int cam_ife_csid_ver2_read(void *hw_priv,
+static int cam_ife_csid_ver2_read(void *hw_priv,
 	void *read_args, uint32_t arg_size)
 {
 	CAM_ERR(CAM_ISP, "CSID: un supported");
@@ -6066,7 +6066,7 @@ int cam_ife_csid_ver2_read(void *hw_priv,
 	return -EINVAL;
 }
 
-int cam_ife_csid_ver2_write(void *hw_priv,
+static int cam_ife_csid_ver2_write(void *hw_priv,
 	void *write_args, uint32_t arg_size)
 {
 	CAM_ERR(CAM_ISP, "CSID: un supported");
@@ -7102,11 +7102,10 @@ static int cam_ife_csid_ver2_update_path_irq(
 	struct cam_isp_resource_node    *res,
 	bool                             enable)
 {
-	int i, rc = 0;
+	int rc = 0;
 	struct cam_ife_csid_ver2_path_cfg *path_cfg;
 	const struct cam_ife_csid_ver2_path_reg_info *path_reg;
 	struct cam_ife_csid_ver2_reg_info *csid_reg = csid_hw->core_info->csid_reg;
-	int top_index = -1;
 	uint32_t val = 0;
 
 	path_cfg = (struct cam_ife_csid_ver2_path_cfg *)res->res_priv;
@@ -8050,7 +8049,7 @@ deinit_controller:
 	return rc;
 }
 
-int cam_ife_csid_ver2_irq_line_test(void *hw_priv)
+static int cam_ife_csid_ver2_irq_line_test(void *hw_priv)
 {
 	struct cam_ife_csid_ver2_hw *csid_hw;
 	struct cam_hw_soc_info *soc_info;

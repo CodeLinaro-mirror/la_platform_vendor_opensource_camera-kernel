@@ -13,11 +13,10 @@
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
 #include "cam_req_mgr_dev.h"
+#include "cam_sensor_dev.h"
 
 #define CAM_SENSOR_PIPELINE_DELAY_MASK        0xFF
 #define CAM_SENSOR_MODESWITCH_DELAY_SHIFT     8
-
-extern struct completion *cam_sensor_get_i3c_completion(uint32_t index);
 
 static int cam_sensor_notify_v4l2_error_event(
 	struct cam_sensor_ctrl_t *s_ctrl,
@@ -738,7 +737,7 @@ static int32_t cam_sensor_i2c_modes_util(
 	return rc;
 }
 
-int32_t cam_sensor_update_slave_info(void *probe_info,
+static int32_t cam_sensor_update_slave_info(void *probe_info,
 	uint32_t cmd, struct cam_sensor_ctrl_t *s_ctrl, uint8_t probe_ver)
 {
 	int32_t rc = 0;
@@ -793,7 +792,7 @@ int32_t cam_sensor_update_slave_info(void *probe_info,
 	return rc;
 }
 
-int32_t cam_handle_cmd_buffers_for_probe(void *cmd_buf,
+static int32_t cam_handle_cmd_buffers_for_probe(void *cmd_buf,
 	struct cam_sensor_ctrl_t *s_ctrl,
 	int32_t cmd_buf_num, uint32_t cmd,
 	uint32_t cmd_buf_length, size_t remain_len,
@@ -890,7 +889,7 @@ int32_t cam_handle_cmd_buffers_for_probe(void *cmd_buf,
 	return rc;
 }
 
-int32_t cam_handle_mem_ptr(uint64_t handle, uint32_t cmd,
+static int32_t cam_handle_mem_ptr(uint64_t handle, uint32_t cmd,
 	struct cam_sensor_ctrl_t *s_ctrl)
 {
 	int rc = 0, i;
@@ -986,7 +985,7 @@ end:
 	return rc;
 }
 
-void cam_sensor_query_cap(struct cam_sensor_ctrl_t *s_ctrl,
+static void cam_sensor_query_cap(struct cam_sensor_ctrl_t *s_ctrl,
 	struct  cam_sensor_query_cap *query_cap)
 {
 	query_cap->pos_roll = s_ctrl->sensordata->pos_roll;
@@ -1065,7 +1064,7 @@ void cam_sensor_shutdown(struct cam_sensor_ctrl_t *s_ctrl)
 	s_ctrl->sensor_state = CAM_SENSOR_INIT;
 }
 
-int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
+static int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
 {
 	int rc = 0;
 	uint32_t chipid = 0;
@@ -1100,7 +1099,7 @@ int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
 	return rc;
 }
 
-int cam_sensor_stream_off(struct cam_sensor_ctrl_t *s_ctrl)
+static int cam_sensor_stream_off(struct cam_sensor_ctrl_t *s_ctrl)
 {
 	int               rc = 0;
 	struct timespec64 ts;

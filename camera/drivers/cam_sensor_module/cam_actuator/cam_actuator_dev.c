@@ -12,6 +12,10 @@
 #include "camera_main.h"
 #include "cam_compat.h"
 
+#ifndef CONFIG_I3C
+static struct i3c_driver cam_actuator_i3c_driver __attribute__((unused));
+#endif
+
 static struct cam_i3c_actuator_data {
 	struct cam_actuator_ctrl_t                  *a_ctrl;
 	struct completion                            probe_complete;
@@ -303,7 +307,7 @@ static void cam_actuator_i2c_component_unbind(struct device *dev,
 	kfree(a_ctrl);
 }
 
-const static struct component_ops cam_actuator_i2c_component_ops = {
+static const struct component_ops cam_actuator_i2c_component_ops = {
 	.bind = cam_actuator_i2c_component_bind,
 	.unbind = cam_actuator_i2c_component_unbind,
 };
@@ -472,7 +476,7 @@ static void cam_actuator_platform_component_unbind(struct device *dev,
 	CAM_INFO(CAM_ACTUATOR, "Actuator component unbinded");
 }
 
-const static struct component_ops cam_actuator_platform_component_ops = {
+static const struct component_ops cam_actuator_platform_component_ops = {
 	.bind = cam_actuator_platform_component_bind,
 	.unbind = cam_actuator_platform_component_unbind,
 };

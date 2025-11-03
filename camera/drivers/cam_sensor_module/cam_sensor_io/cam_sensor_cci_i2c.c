@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2018, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sensor_cmn_header.h"
@@ -301,7 +301,6 @@ int32_t cam_cci_i2c_sequential_xfer(
 	struct cam_cmd_i2c_sequential_xfer *seq_xfer)
 {
 	int32_t rc = 0;
-	uint32_t reg_data = 0;
 	struct cam_cci_ctrl cci_ctrl;
 
 	if (seq_xfer->cmd_type != CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_LOCK
