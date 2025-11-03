@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -321,7 +321,7 @@ int cam_mem_get_cpu_buf(int32_t buf_handle, uintptr_t *vaddr_ptr, size_t *len)
 		*len = tbl.bufq[idx].len;
 	} else {
 		CAM_ERR(CAM_MEM, "No KMD access requested, kmdvddr= %p, idx= %d, buf_handle= %d",
-			tbl.bufq[idx].kmdvaddr, idx, buf_handle);
+			(void *)tbl.bufq[idx].kmdvaddr, idx, buf_handle);
 		rc = -EINVAL;
 	}
 	_SPIN_UNLOCK_PROCESS_TO_BH(&tbl.bufq[idx].idx_lock);
@@ -558,8 +558,8 @@ static int cam_mem_util_get_dma_buf(size_t len,
 		*buf = dma_heap_buffer_alloc(try_heap, len, O_RDWR, 0);
 		if (IS_ERR_OR_NULL(*buf)) {
 			CAM_WARN(CAM_MEM,
-				"Failed in allocating from try heap, heap=%pK, len=%zu, err=%d",
-				try_heap, len, PTR_ERR(*buf));
+				"Failed in allocating from try heap, heap=%pK, len=%zu, err=%ld",
+				(void *)try_heap, len, PTR_ERR(*buf));
 			*buf = NULL;
 		}
 	}
@@ -903,7 +903,7 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd *cmd)
 
 		if (rc) {
 			CAM_ERR(CAM_MEM,
-				"Failed in map_hw_va, len=%llu, flags=0x%x, fd=%d, region=%d, num_hdl=%d, rc=%d",
+				"Failed in map_hw_va, len=%zu, flags=0x%x, fd=%d, region=%d, num_hdl=%d, rc=%d",
 				len, cmd->flags, fd, region,
 				cmd->num_hdl, rc);
 			goto map_hw_fail;
@@ -1392,7 +1392,7 @@ void cam_mem_put_cpu_buf(int32_t buf_handle)
 			buf_handle, idx);
 	} else if (tbl.bufq[idx].release_deferred) {
 		CAM_ERR(CAM_MEM,
-			"idx %d fd %d size %llu active %d buf_handle %d krefCount %d urefCount %d",
+			"idx %d fd %d size %zu active %d buf_handle %d krefCount %d urefCount %d",
 			idx, tbl.bufq[idx].fd, tbl.bufq[idx].len,
 			tbl.bufq[idx].active, tbl.bufq[idx].buf_handle, krefcount, urefcount);
 	} else if (krefcount == 0) {
@@ -1437,7 +1437,7 @@ void cam_mem_put_kref(int32_t buf_handle)
 	return;
 warn:
 	CAM_ERR(CAM_MEM,
-		"idx %d fd %d size %llu active %d buf_handle %d krefCount %d urefCount %d",
+		"idx %d fd %d size %zu active %d buf_handle %d krefCount %d urefCount %d",
 		idx, tbl.bufq[idx].fd,
 		tbl.bufq[idx].len, tbl.bufq[idx].active, tbl.bufq[idx].buf_handle,
 		krefcount, urefcount);
@@ -1506,7 +1506,7 @@ int cam_mem_mgr_release(struct cam_mem_mgr_release_cmd *cmd)
 	} else if (tbl.bufq[idx].flags & CAM_MEM_FLAG_KMD_ACCESS) {
 		rc = -EINVAL;
 		CAM_ERR(CAM_MEM,
-			"idx %d fd %d size %llu active %d buf_handle %d krefCount %d urefCount %d",
+			"idx %d fd %d size %zu active %d buf_handle %d krefCount %d urefCount %d",
 			idx, tbl.bufq[idx].fd, tbl.bufq[idx].len,
 			tbl.bufq[idx].active, tbl.bufq[idx].buf_handle, krefcount, urefcount);
 		if (tbl.bufq[idx].release_deferred)

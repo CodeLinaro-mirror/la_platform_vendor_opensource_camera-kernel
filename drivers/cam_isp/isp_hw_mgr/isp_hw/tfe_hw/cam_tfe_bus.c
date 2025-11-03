@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/ratelimit.h>
@@ -1643,7 +1644,7 @@ static int cam_tfe_bus_rup_bottom_half(
 				evt_payload->bus_irq_val[0] &= ~BIT(i);
 			} else
 				CAM_ERR(CAM_ISP,
-					"TFE:%d No event cb id:%lld evt id:%d",
+					"TFE:%d No event cb id:%x evt id:%d",
 					bus_priv->common_data.core_index,
 					out_rsrc_data->out_id, evt_info.res_id);
 		}
