@@ -2753,7 +2753,8 @@ int cam_soc_util_request_platform_resource(
 		   camsx clock provider is in use. No source clocks can be accessed directly and
 		   mmrm cannot be used. */
 		if (!strcmp(soc_info->clk_name[i], "ife_lite_csid_clk") ||
-		    !strcmp(soc_info->clk_name[i], "ife_lite_clk")) {
+			!strcmp(soc_info->clk_name[i], "ife_lite_clk") ||
+			!strcmp(soc_info->clk_name[i], "camnoc_axi_clk")) {
 			CAM_DBG(CAM_UTIL, "IFE Lite shared resource! %s",
 				soc_info->clk_name[i]);
 		} else {
