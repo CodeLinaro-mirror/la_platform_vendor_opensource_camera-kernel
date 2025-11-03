@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/device.h>
@@ -464,7 +465,7 @@ static int cam_cpas_util_translate_client_paths(
 			*path_data_type %= CAM_CPAS_MAX_GRAN_PATHS_PER_CLIENT;
 
 		if (*path_data_type >= CAM_CPAS_PATH_DATA_MAX) {
-			CAM_ERR(CAM_CPAS, "index Invalid: %d", path_data_type);
+			CAM_ERR(CAM_CPAS, "index Invalid: %lu", (unsigned long)path_data_type);
 			return -EINVAL;
 		}
 	}

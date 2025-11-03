@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -137,7 +138,6 @@ int cam_tfe_remove(struct platform_device *pdev)
 	tfe_hw_intf = platform_get_drvdata(pdev);
 	if (!tfe_hw_intf) {
 		CAM_ERR(CAM_ISP, "Error! No data in pdev");
-		return -EINVAL;
 	}
 
 	CAM_DBG(CAM_ISP, "type %d index %d",
@@ -149,14 +149,12 @@ int cam_tfe_remove(struct platform_device *pdev)
 	tfe_hw = tfe_hw_intf->hw_priv;
 	if (!tfe_hw) {
 		CAM_ERR(CAM_ISP, "Error! HW data is NULL");
-		rc = -ENODEV;
 		goto free_tfe_hw_intf;
 	}
 
 	core_info = (struct cam_tfe_hw_core_info *)tfe_hw->core_info;
 	if (!core_info) {
 		CAM_ERR(CAM_ISP, "Error! core data NULL");
-		rc = -EINVAL;
 		goto deinit_soc;
 	}
 

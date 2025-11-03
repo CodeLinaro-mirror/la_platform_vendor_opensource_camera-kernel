@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of.h>
@@ -66,7 +66,7 @@ int cam_ope_get_hw_caps(void *hw_priv, void *get_hw_cap_args,
 	core_info = (struct cam_ope_device_core_info *)ope_dev->core_info;
 
 	if ((!soc_info) || (!core_info)) {
-		CAM_ERR(CAM_OPE, "soc_info = %x core_info = %x",
+		CAM_ERR(CAM_OPE, "soc_info = %p core_info = %p",
 			soc_info, core_info);
 		return -EINVAL;
 	}
@@ -501,7 +501,7 @@ int ope_validate_buff_offset(size_t buf_len,
 	if ((buf_len <= cmd_buf->offset) ||
 		(cmd_buf->size < cmd_buf->length) ||
 		((buf_len - cmd_buf->offset) < cmd_buf->length)) {
-		CAM_ERR(CAM_OPE, "invalid offset:0x%x, mem_hdl:0x%x buf_len:%llu",
+		CAM_ERR(CAM_OPE, "invalid offset:0x%x, mem_hdl:0x%x buf_len:%x",
 					cmd_buf->offset,
 					cmd_buf->mem_handle,
 					cmd_buf->length);
@@ -1686,7 +1686,7 @@ int cam_ope_process_cmd(void *device_priv, uint32_t cmd_type,
 	unsigned long flags;
 
 	if (!device_priv) {
-		CAM_ERR(CAM_OPE, "Invalid args %x for cmd %u",
+		CAM_ERR(CAM_OPE, "Invalid args %p for cmd %u",
 			device_priv, cmd_type);
 		return -EINVAL;
 	}
@@ -1694,7 +1694,7 @@ int cam_ope_process_cmd(void *device_priv, uint32_t cmd_type,
 	soc_info = &ope_dev->soc_info;
 	core_info = (struct cam_ope_device_core_info *)ope_dev->core_info;
 	if ((!soc_info) || (!core_info)) {
-		CAM_ERR(CAM_OPE, "soc_info = %x core_info = %x",
+		CAM_ERR(CAM_OPE, "soc_info = %p core_info = %p",
 			soc_info, core_info);
 		return -EINVAL;
 	}
