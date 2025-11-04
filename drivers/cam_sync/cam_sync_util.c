@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2018, 2020-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sync_util.h"
 #include "cam_req_mgr_workq.h"
 #include "cam_common_util.h"
+#include "cam_mem_mgr_api.h"
 
 int cam_sync_util_find_and_set_empty_row(struct sync_device *sync_dev,
 	long *idx)
@@ -104,7 +106,7 @@ int cam_sync_init_group_object(struct sync_table_row *table,
 		row->remaining++;
 
 		/* Add child info */
-		child_info = kzalloc(sizeof(*child_info), GFP_ATOMIC);
+		child_info = CAM_MEM_ZALLOC(sizeof(*child_info), GFP_ATOMIC);
 		if (!child_info) {
 			spin_unlock_bh(&sync_dev->row_spinlocks[sync_objs[i]]);
 			rc = -ENOMEM;
@@ -114,7 +116,7 @@ int cam_sync_init_group_object(struct sync_table_row *table,
 		list_add_tail(&child_info->list, &row->children_list);
 
 		/* Add parent info */
-		parent_info = kzalloc(sizeof(*parent_info), GFP_ATOMIC);
+		parent_info = CAM_MEM_ZALLOC(sizeof(*parent_info), GFP_ATOMIC);
 		if (!parent_info) {
 			spin_unlock_bh(&sync_dev->row_spinlocks[sync_objs[i]]);
 			rc = -ENOMEM;
@@ -217,7 +219,8 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t idx)
 			list_del_init(&child_info->list);
 			spin_unlock_bh(&sync_dev->row_spinlocks[
 				child_info->sync_id]);
-			kfree(child_info);
+			CAM_MEM_FREE(child_info);
+			child_info = NULL;
 			continue;
 		}
 
@@ -231,7 +234,8 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t idx)
 
 		list_del_init(&child_info->list);
 		spin_unlock_bh(&sync_dev->row_spinlocks[child_info->sync_id]);
-		kfree(child_info);
+		CAM_MEM_FREE(child_info);
+		child_info = NULL;
 	}
 
 	/* Cleanup the parent to child link */
@@ -246,7 +250,8 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t idx)
 			list_del_init(&parent_info->list);
 			spin_unlock_bh(&sync_dev->row_spinlocks[
 				parent_info->sync_id]);
-			kfree(parent_info);
+			CAM_MEM_FREE(parent_info);
+			parent_info = NULL;
 			continue;
 		}
 
@@ -260,20 +265,23 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t idx)
 
 		list_del_init(&parent_info->list);
 		spin_unlock_bh(&sync_dev->row_spinlocks[parent_info->sync_id]);
-		kfree(parent_info);
+		CAM_MEM_FREE(parent_info);
+		parent_info = NULL;
 	}
 
 	spin_lock_bh(&sync_dev->row_spinlocks[idx]);
 	list_for_each_entry_safe(upayload_info, temp_upayload,
 			&row->user_payload_list, list) {
 		list_del_init(&upayload_info->list);
-		kfree(upayload_info);
+		CAM_MEM_FREE(upayload_info);
+		upayload_info = NULL;
 	}
 
 	list_for_each_entry_safe(sync_cb, temp_cb,
 			&row->callback_list, list) {
 		list_del_init(&sync_cb->list);
-		kfree(sync_cb);
+		CAM_MEM_FREE(sync_cb);
+		sync_cb = NULL;
 	}
 
 	memset(row, 0, sizeof(*row));
@@ -301,7 +309,8 @@ void cam_sync_util_cb_dispatch(struct work_struct *cb_dispatch_work)
 		CAM_WORKQ_SCHEDULE_TIME_THRESHOLD);
 	sync_data(cb_info->sync_obj, cb_info->status, cb_info->cb_data);
 
-	kfree(cb_info);
+	CAM_MEM_FREE(cb_info);
+	cb_info = NULL;
 }
 
 void cam_sync_util_dispatch_signaled_cb(int32_t sync_obj,
@@ -353,7 +362,8 @@ void cam_sync_util_dispatch_signaled_cb(int32_t sync_obj,
 		 * sending V4L event will make a deep copy
 		 * anyway
 		 */
-		 kfree(payload_info);
+		CAM_MEM_FREE(payload_info);
+		payload_info = NULL;
 	}
 
 	/*
@@ -443,7 +453,8 @@ void cam_sync_util_cleanup_children_list(struct sync_table_row *row,
 
 		curr_sync_obj = child_info->sync_id;
 		list_del_init(&child_info->list);
-		kfree(child_info);
+		CAM_MEM_FREE(child_info);
+		child_info = NULL;
 
 		if ((list_clean_type == SYNC_LIST_CLEAN_ONE) &&
 			(curr_sync_obj == sync_obj))
@@ -466,7 +477,8 @@ void cam_sync_util_cleanup_parents_list(struct sync_table_row *row,
 
 		curr_sync_obj = parent_info->sync_id;
 		list_del_init(&parent_info->list);
-		kfree(parent_info);
+		CAM_MEM_FREE(parent_info);
+		parent_info = NULL;
 
 		if ((list_clean_type == SYNC_LIST_CLEAN_ONE) &&
 			(curr_sync_obj == sync_obj))

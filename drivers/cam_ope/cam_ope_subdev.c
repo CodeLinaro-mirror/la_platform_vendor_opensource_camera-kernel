@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -30,6 +31,7 @@
 #include "cam_debug_util.h"
 #include "cam_smmu_api.h"
 #include "camera_main.h"
+#include "cam_mem_mgr_api.h"
 
 #define OPE_DEV_NAME        "cam-ope"
 
@@ -182,7 +184,7 @@ static int cam_ope_subdev_component_bind(struct device *dev,
 
 	node = (struct cam_node *) g_ope_dev.sd.token;
 
-	hw_mgr_intf = kzalloc(sizeof(*hw_mgr_intf), GFP_KERNEL);
+	hw_mgr_intf = CAM_MEM_ZALLOC(sizeof(*hw_mgr_intf), GFP_KERNEL);
 	if (!hw_mgr_intf) {
 		rc = -EINVAL;
 		goto hw_alloc_fail;
@@ -226,7 +228,8 @@ ctx_fail:
 	for (--i; i >= 0; i--)
 		cam_ope_context_deinit(&g_ope_dev.ctx_ope[i]);
 hw_init_fail:
-	kfree(hw_mgr_intf);
+	CAM_MEM_FREE(hw_mgr_intf);
+	hw_mgr_intf = NULL;
 hw_alloc_fail:
 	cam_subdev_remove(&g_ope_dev.sd);
 	return rc;

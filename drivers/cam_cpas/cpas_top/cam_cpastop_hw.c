@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -37,6 +37,7 @@
 #include "cpastop_v165_100.h"
 #include "cam_req_mgr_workq.h"
 #include "cam_common_util.h"
+#include "cam_mem_mgr_api.h"
 
 struct cam_camnoc_info *camnoc_info;
 struct cam_cpas_camnoc_qchannel *qchannel_info;
@@ -684,7 +685,8 @@ static void cam_cpastop_work(struct work_struct *work)
 		CAM_ERR(CAM_CPAS, "IRQ not handled irq_status=0x%x",
 			payload->irq_status);
 
-	kfree(payload);
+	CAM_MEM_FREE(payload);
+	payload = NULL;
 }
 
 static irqreturn_t cam_cpastop_handle_irq(int irq_num, void *data)
@@ -700,7 +702,7 @@ static irqreturn_t cam_cpastop_handle_irq(int irq_num, void *data)
 		return IRQ_HANDLED;
 	}
 
-	payload = kzalloc(sizeof(struct cam_cpas_work_payload), GFP_ATOMIC);
+	payload = CAM_MEM_ZALLOC(sizeof(struct cam_cpas_work_payload), GFP_ATOMIC);
 	if (!payload)
 		goto done;
 

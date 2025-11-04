@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -779,8 +779,8 @@ void cam_sensor_shutdown(struct cam_sensor_ctrl_t *s_ctrl)
 	s_ctrl->bridge_intf.device_hdl = -1;
 	s_ctrl->bridge_intf.link_hdl = -1;
 	s_ctrl->bridge_intf.session_hdl = -1;
-	kfree(power_info->power_setting);
-	kfree(power_info->power_down_setting);
+	CAM_MEM_FREE(power_info->power_setting);
+	CAM_MEM_FREE(power_info->power_down_setting);
 	power_info->power_setting = NULL;
 	power_info->power_down_setting = NULL;
 	power_info->power_setting_size = 0;
@@ -1273,8 +1273,8 @@ release_mutex:
 	return rc;
 
 free_power_settings:
-	kfree(power_info->power_setting);
-	kfree(power_info->power_down_setting);
+	CAM_MEM_FREE(power_info->power_setting);
+	CAM_MEM_FREE(power_info->power_down_setting);
 	power_info->power_setting = NULL;
 	power_info->power_down_setting = NULL;
 	power_info->power_down_setting_size = 0;

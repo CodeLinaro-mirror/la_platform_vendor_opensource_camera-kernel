@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_subdev.h"
 #include "cam_node.h"
 #include "cam_debug_util.h"
+#include "cam_mem_mgr_api.h"
 
 /**
  * cam_subdev_subscribe_event()
@@ -130,7 +132,8 @@ int cam_subdev_remove(struct cam_subdev *sd)
 
 	cam_unregister_subdev(sd);
 	cam_node_deinit((struct cam_node *)sd->token);
-	kfree(sd->token);
+	CAM_MEM_FREE(sd->token);
+	sd->token = NULL;
 
 	return 0;
 }
@@ -144,7 +147,7 @@ int cam_subdev_probe(struct cam_subdev *sd, struct platform_device *pdev,
 	if (!sd || !pdev || !name)
 		return -EINVAL;
 
-	node = kzalloc(sizeof(*node), GFP_KERNEL);
+	node = CAM_MEM_ZALLOC(sizeof(*node), GFP_KERNEL);
 	if (!node)
 		return -ENOMEM;
 
@@ -166,6 +169,7 @@ int cam_subdev_probe(struct cam_subdev *sd, struct platform_device *pdev,
 	platform_set_drvdata(sd->pdev, sd);
 	return rc;
 err:
-	kfree(node);
+	CAM_MEM_FREE(node);
+	node = NULL;
 	return rc;
 }

@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/interconnect.h>
 #include "cam_soc_bus.h"
 #include <linux/math64.h>
+#include "cam_mem_mgr_api.h"
+
 /**
  * struct cam_soc_bus_client_data : Bus client data
  *
@@ -80,7 +83,7 @@ int cam_soc_bus_client_register(struct platform_device *pdev,
 	struct cam_soc_bus_client_data *bus_client_data = NULL;
 	int rc = 0;
 
-	bus_client = kzalloc(sizeof(struct cam_soc_bus_client), GFP_KERNEL);
+	bus_client = CAM_MEM_ZALLOC(sizeof(struct cam_soc_bus_client), GFP_KERNEL);
 	if (!bus_client) {
 		CAM_ERR(CAM_UTIL, "soc bus client is NULL");
 		rc = -ENOMEM;
@@ -89,10 +92,10 @@ int cam_soc_bus_client_register(struct platform_device *pdev,
 
 	*client = bus_client;
 
-	bus_client_data = kzalloc(sizeof(struct cam_soc_bus_client_data),
+	bus_client_data = CAM_MEM_ZALLOC(sizeof(struct cam_soc_bus_client_data),
 		GFP_KERNEL);
 	if (!bus_client_data) {
-		kfree(bus_client);
+		CAM_MEM_FREE(bus_client);
 		*client = NULL;
 		rc = -ENOMEM;
 		goto end;
@@ -125,9 +128,9 @@ int cam_soc_bus_client_register(struct platform_device *pdev,
 fail_unregister_client:
 	icc_put(bus_client_data->icc_data);
 error:
-	kfree(bus_client_data);
+	CAM_MEM_FREE(bus_client_data);
 	bus_client->client_data = NULL;
-	kfree(bus_client);
+	CAM_MEM_FREE(bus_client);
 	*client = NULL;
 end:
 	return rc;
@@ -142,9 +145,9 @@ void cam_soc_bus_client_unregister(void **client)
 		(struct cam_soc_bus_client_data *) bus_client->client_data;
 
 	icc_put(bus_client_data->icc_data);
-	kfree(bus_client_data);
+	CAM_MEM_FREE(bus_client_data);
 	bus_client->client_data = NULL;
-	kfree(bus_client);
+	CAM_MEM_FREE(bus_client);
 	*client = NULL;
 
 }

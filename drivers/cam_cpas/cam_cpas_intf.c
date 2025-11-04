@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of.h>
@@ -21,6 +21,7 @@
 #include "cam_cpastop_hw.h"
 #include "camera_main.h"
 #include "cam_cpas_api.h"
+#include "cam_mem_mgr_api.h"
 
 #define CAM_CPAS_DEV_NAME    "cam-cpas"
 #define CAM_CPAS_INTF_INITIALIZED() (g_cpas_intf && g_cpas_intf->probe_done)
@@ -977,7 +978,7 @@ static int cam_cpas_dev_component_bind(struct device *dev,
 		return -EALREADY;
 	}
 
-	g_cpas_intf = kzalloc(sizeof(*g_cpas_intf), GFP_KERNEL);
+	g_cpas_intf = CAM_MEM_ZALLOC(sizeof(*g_cpas_intf), GFP_KERNEL);
 	if (!g_cpas_intf)
 		return -ENOMEM;
 
@@ -1023,7 +1024,7 @@ error_hw_remove:
 	cam_cpas_hw_remove(g_cpas_intf->hw_intf);
 error_destroy_mem:
 	mutex_destroy(&g_cpas_intf->intf_lock);
-	kfree(g_cpas_intf);
+	CAM_MEM_FREE(g_cpas_intf);
 	g_cpas_intf = NULL;
 	CAM_ERR(CAM_CPAS, "CPAS component bind failed");
 	return rc;
@@ -1043,7 +1044,7 @@ static void cam_cpas_dev_component_unbind(struct device *dev,
 	cam_cpas_hw_remove(g_cpas_intf->hw_intf);
 	mutex_unlock(&g_cpas_intf->intf_lock);
 	mutex_destroy(&g_cpas_intf->intf_lock);
-	kfree(g_cpas_intf);
+	CAM_MEM_FREE(g_cpas_intf);
 	g_cpas_intf = NULL;
 }
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/platform_device.h>
@@ -30,19 +31,20 @@ static int cam_lrme_hw_dev_util_cdm_acquire(struct cam_lrme_core *lrme_core,
 	struct cam_cdm_acquire_data cdm_acquire;
 	struct cam_lrme_cdm_info *hw_cdm_info;
 
-	hw_cdm_info = kzalloc(sizeof(struct cam_lrme_cdm_info),
+	hw_cdm_info = CAM_MEM_ZALLOC(sizeof(struct cam_lrme_cdm_info),
 		GFP_KERNEL);
 	if (!hw_cdm_info) {
 		CAM_ERR(CAM_LRME, "No memory for hw_cdm_info");
 		return -ENOMEM;
 	}
 
-	cdm_cmd = kzalloc((sizeof(struct cam_cdm_bl_request) +
+	cdm_cmd = CAM_MEM_ZALLOC((sizeof(struct cam_cdm_bl_request) +
 		((CAM_LRME_MAX_HW_ENTRIES - 1) *
 		sizeof(struct cam_cdm_bl_cmd))), GFP_KERNEL);
 	if (!cdm_cmd) {
 		CAM_ERR(CAM_LRME, "No memory for cdm_cmd");
-		kfree(hw_cdm_info);
+		CAM_MEM_FREE(hw_cdm_info);
+		hw_cdm_info = NULL;
 		return -ENOMEM;
 	}
 
@@ -73,8 +75,10 @@ static int cam_lrme_hw_dev_util_cdm_acquire(struct cam_lrme_core *lrme_core,
 
 	return 0;
 error:
-	kfree(cdm_cmd);
-	kfree(hw_cdm_info);
+	CAM_MEM_FREE(cdm_cmd);
+	cdm_cmd = NULL;
+	CAM_MEM_FREE(hw_cdm_info);
+	hw_cdm_info = NULL;
 	return rc;
 }
 
@@ -94,16 +98,17 @@ static int cam_lrme_hw_dev_component_bind(struct device *dev,
 	int rc, i;
 	struct platform_device *pdev = to_platform_device(dev);
 
-	lrme_hw = kzalloc(sizeof(struct cam_hw_info), GFP_KERNEL);
+	lrme_hw = CAM_MEM_ZALLOC(sizeof(struct cam_hw_info), GFP_KERNEL);
 	if (!lrme_hw) {
 		CAM_ERR(CAM_LRME, "No memory to create lrme_hw");
 		return -ENOMEM;
 	}
 
-	lrme_core = kzalloc(sizeof(struct cam_lrme_core), GFP_KERNEL);
+	lrme_core = CAM_MEM_ZALLOC(sizeof(struct cam_lrme_core), GFP_KERNEL);
 	if (!lrme_core) {
 		CAM_ERR(CAM_LRME, "No memory to create lrme_core");
-		kfree(lrme_hw);
+		CAM_MEM_FREE(lrme_hw);
+		lrme_hw = NULL;
 		return -ENOMEM;
 	}
 
@@ -223,8 +228,10 @@ detach_smmu:
 	cam_smmu_destroy_handle(lrme_core->device_iommu.non_secure);
 release_cdm:
 	cam_cdm_release(lrme_core->hw_cdm_info->cdm_handle);
-	kfree(lrme_core->hw_cdm_info->cdm_cmd);
-	kfree(lrme_core->hw_cdm_info);
+	CAM_MEM_FREE(lrme_core->hw_cdm_info->cdm_cmd);
+	lrme_core->hw_cdm_info->cdm_cmd = NULL;
+	CAM_MEM_FREE(lrme_core->hw_cdm_info);
+	lrme_core->hw_cdm_info = NULL;
 deinit_platform_res:
 	if (cam_lrme_soc_deinit_resources(&lrme_hw->soc_info))
 		CAM_ERR(CAM_LRME, "Failed in soc deinit");
@@ -233,8 +240,10 @@ destroy_workqueue:
 	cam_req_mgr_workq_destroy(&lrme_core->work);
 free_memory:
 	mutex_destroy(&lrme_hw->hw_mutex);
-	kfree(lrme_hw);
-	kfree(lrme_core);
+	CAM_MEM_FREE(lrme_hw);
+	lrme_hw = NULL;
+	CAM_MEM_FREE(lrme_core);
+	lrme_core = NULL;
 
 	return rc;
 }
@@ -263,9 +272,12 @@ static void cam_lrme_hw_dev_component_unbind(struct device *dev,
 	cam_cdm_release(lrme_core->hw_cdm_info->cdm_handle);
 	cam_lrme_mgr_deregister_device(lrme_core->hw_idx);
 
-	kfree(lrme_core->hw_cdm_info->cdm_cmd);
-	kfree(lrme_core->hw_cdm_info);
-	kfree(lrme_core);
+	CAM_MEM_FREE(lrme_core->hw_cdm_info->cdm_cmd);
+	lrme_core->hw_cdm_info->cdm_cmd = NULL;
+	CAM_MEM_FREE(lrme_core->hw_cdm_info);
+	lrme_core->hw_cdm_info = NULL;
+	CAM_MEM_FREE(lrme_core);
+	lrme_core = NULL;
 
 deinit_platform_res:
 	rc = cam_lrme_soc_deinit_resources(&lrme_hw->soc_info);
@@ -273,7 +285,8 @@ deinit_platform_res:
 		CAM_ERR(CAM_LRME, "Error in LRME soc deinit, rc=%d", rc);
 
 	mutex_destroy(&lrme_hw->hw_mutex);
-	kfree(lrme_hw);
+	CAM_MEM_FREE(lrme_hw);
+	lrme_hw = NULL;
 }
 
 const static struct component_ops cam_lrme_hw_dev_component_ops = {

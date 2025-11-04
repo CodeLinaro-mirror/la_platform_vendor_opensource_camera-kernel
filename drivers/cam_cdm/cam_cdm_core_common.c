@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -17,6 +18,7 @@
 #include "cam_cdm.h"
 #include "cam_cdm_soc.h"
 #include "cam_cdm_core_common.h"
+#include "cam_mem_mgr_api.h"
 
 static void cam_cdm_get_client_refcount(struct cam_cdm_client *client)
 {
@@ -569,7 +571,7 @@ int cam_cdm_process_cmd(void *hw_priv,
 			data->identifier, core->index);
 			break;
 		}
-		core->clients[idx] = kzalloc(sizeof(struct cam_cdm_client),
+		core->clients[idx] = CAM_MEM_ZALLOC(sizeof(struct cam_cdm_client),
 			GFP_KERNEL);
 		if (!core->clients[idx]) {
 			mutex_unlock(&cdm_hw->hw_mutex);
@@ -591,7 +593,7 @@ int cam_cdm_process_cmd(void *hw_priv,
 			if (!data->ops) {
 				mutex_destroy(&client->lock);
 				mutex_lock(&cdm_hw->hw_mutex);
-				kfree(core->clients[idx]);
+				CAM_MEM_FREE(core->clients[idx]);
 				core->clients[idx] = NULL;
 				mutex_unlock(
 					&cdm_hw->hw_mutex);
@@ -652,7 +654,7 @@ int cam_cdm_process_cmd(void *hw_priv,
 		core->clients[idx] = NULL;
 		mutex_unlock(&client->lock);
 		mutex_destroy(&client->lock);
-		kfree(client);
+		CAM_MEM_FREE(client);
 		mutex_unlock(&cdm_hw->hw_mutex);
 		rc = 0;
 		break;

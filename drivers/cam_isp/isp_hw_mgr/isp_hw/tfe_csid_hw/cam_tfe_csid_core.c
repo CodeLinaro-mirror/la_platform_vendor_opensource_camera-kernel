@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/iopoll.h>
@@ -19,6 +20,7 @@
 #include "cam_isp_hw_mgr_intf.h"
 #include "cam_subdev.h"
 #include "cam_tasklet_util.h"
+#include "cam_mem_mgr_api.h"
 
 /* Timeout value in msec */
 #define TFE_CSID_TIMEOUT                               1000
@@ -3677,7 +3679,7 @@ int cam_tfe_csid_hw_probe_init(struct cam_hw_intf  *csid_hw_intf,
 		tfe_csid_hw->ipp_res.res_state =
 			CAM_ISP_RESOURCE_STATE_AVAILABLE;
 		tfe_csid_hw->ipp_res.hw_intf = tfe_csid_hw->hw_intf;
-		path_data = kzalloc(sizeof(*path_data),
+		path_data = CAM_MEM_ZALLOC(sizeof(*path_data),
 					GFP_KERNEL);
 		if (!path_data) {
 			rc = -ENOMEM;
@@ -3698,7 +3700,7 @@ int cam_tfe_csid_hw_probe_init(struct cam_hw_intf  *csid_hw_intf,
 			CAM_ISP_RESOURCE_STATE_AVAILABLE;
 		tfe_csid_hw->rdi_res[i].hw_intf = tfe_csid_hw->hw_intf;
 
-		path_data = kzalloc(sizeof(*path_data),
+		path_data = CAM_MEM_ZALLOC(sizeof(*path_data),
 			GFP_KERNEL);
 		if (!path_data) {
 			rc = -ENOMEM;
@@ -3753,11 +3755,14 @@ int cam_tfe_csid_hw_probe_init(struct cam_hw_intf  *csid_hw_intf,
 	return 0;
 err:
 	if (rc) {
-		kfree(tfe_csid_hw->ipp_res.res_priv);
+		CAM_MEM_FREE(tfe_csid_hw->ipp_res.res_priv);
+		tfe_csid_hw->ipp_res.res_priv = NULL;
 		for (i = 0; i <
 			tfe_csid_hw->csid_info->csid_reg->cmn_reg->num_rdis;
-			i++)
-			kfree(tfe_csid_hw->rdi_res[i].res_priv);
+			i++) {
+			CAM_MEM_FREE(tfe_csid_hw->rdi_res[i].res_priv);
+			tfe_csid_hw->rdi_res[i].res_priv = NULL;
+		}
 	}
 
 	return rc;
@@ -3775,12 +3780,14 @@ int cam_tfe_csid_hw_deinit(struct cam_tfe_csid_hw *tfe_csid_hw)
 	}
 
 	/* release the privdate data memory from resources */
-	kfree(tfe_csid_hw->ipp_res.res_priv);
+	CAM_MEM_FREE(tfe_csid_hw->ipp_res.res_priv);
+	tfe_csid_hw->ipp_res.res_priv = NULL;
 
 	for (i = 0; i <
 		tfe_csid_hw->csid_info->csid_reg->cmn_reg->num_rdis;
 		i++) {
-		kfree(tfe_csid_hw->rdi_res[i].res_priv);
+		CAM_MEM_FREE(tfe_csid_hw->rdi_res[i].res_priv);
+		tfe_csid_hw->rdi_res[i].res_priv = NULL;
 	}
 
 	cam_tfe_csid_deinit_soc_resources(&tfe_csid_hw->hw_info->soc_info);

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/debugfs.h>
@@ -10,6 +11,7 @@
 #include "cam_node.h"
 #include "cam_trace.h"
 #include "cam_debug_util.h"
+#include "cam_mem_mgr_api.h"
 
 static void cam_node_print_ctx_state(
 	struct cam_node *node)
@@ -833,7 +835,7 @@ int cam_node_handle_ioctl(struct cam_node *node, struct cam_control *cmd)
 			break;
 		}
 
-		acquire_ptr = kzalloc(acquire_size, GFP_KERNEL);
+		acquire_ptr = CAM_MEM_ZALLOC(acquire_size, GFP_KERNEL);
 		if (!acquire_ptr) {
 			CAM_ERR(CAM_CORE, "No memory for acquire HW");
 			rc = -ENOMEM;
@@ -843,7 +845,7 @@ int cam_node_handle_ioctl(struct cam_node *node, struct cam_control *cmd)
 		if (copy_from_user(acquire_ptr, (void __user *)cmd->handle,
 			acquire_size)) {
 			rc = -EFAULT;
-			goto acquire_kfree;
+			goto acquire_free;
 		}
 
 		if (api_version == 1) {
@@ -854,14 +856,14 @@ int cam_node_handle_ioctl(struct cam_node *node, struct cam_control *cmd)
 					"Unmatched struct api version %u and struct version %u",
 					api_version, struct_version);
 				rc = -EINVAL;
-				goto acquire_kfree;
+				goto acquire_free;
 			}
 
 			rc = __cam_node_handle_acquire_hw_v1(node, acquire_ptr);
 			if (rc) {
 				CAM_ERR(CAM_CORE,
 					"acquire hw failed(rc = %d)", rc);
-				goto acquire_kfree;
+				goto acquire_free;
 			}
 		} else if (api_version == 2) {
 			struct_version =
@@ -871,14 +873,14 @@ int cam_node_handle_ioctl(struct cam_node *node, struct cam_control *cmd)
 					"Unmatched struct api version %u and struct version %u",
 					api_version, struct_version);
 				rc = -EINVAL;
-				goto acquire_kfree;
+				goto acquire_free;
 			}
 
 			rc = __cam_node_handle_acquire_hw_v2(node, acquire_ptr);
 			if (rc) {
 				CAM_ERR(CAM_CORE,
 					"acquire hw failed(rc = %d)", rc);
-				goto acquire_kfree;
+				goto acquire_free;
 			}
 		}
 
@@ -886,8 +888,9 @@ int cam_node_handle_ioctl(struct cam_node *node, struct cam_control *cmd)
 			acquire_size))
 			rc = -EFAULT;
 
-acquire_kfree:
-		kfree(acquire_ptr);
+acquire_free:
+		CAM_MEM_FREE(acquire_ptr);
+		acquire_ptr = NULL;
 		break;
 	}
 	case CAM_START_DEV: {
@@ -966,7 +969,7 @@ acquire_kfree:
 			break;
 		}
 
-		release_ptr = kzalloc(release_size, GFP_KERNEL);
+		release_ptr = CAM_MEM_ZALLOC(release_size, GFP_KERNEL);
 		if (!release_ptr) {
 			CAM_ERR(CAM_CORE, "No memory for release HW");
 			rc = -ENOMEM;
@@ -976,7 +979,7 @@ acquire_kfree:
 		if (copy_from_user(release_ptr, (void __user *)cmd->handle,
 			release_size)) {
 			rc = -EFAULT;
-			goto release_kfree;
+			goto release_free;
 		}
 
 		if (api_version == 1) {
@@ -986,8 +989,9 @@ acquire_kfree:
 					"release device failed(rc = %d)", rc);
 		}
 
-release_kfree:
-		kfree(release_ptr);
+release_free:
+		CAM_MEM_FREE(release_ptr);
+		release_ptr = NULL;
 		break;
 	}
 	case CAM_FLUSH_REQ: {

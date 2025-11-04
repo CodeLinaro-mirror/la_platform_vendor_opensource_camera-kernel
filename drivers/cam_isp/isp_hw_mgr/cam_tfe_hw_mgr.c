@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -2408,7 +2408,8 @@ static int cam_tfe_mgr_acquire_dev(void *hw_mgr_priv, void *acquire_hw_args)
 				CAM_ERR(CAM_ISP, "too many output res %d",
 					in_port->num_out_res);
 				rc = -EINVAL;
-				kfree(in_port);
+				CAM_MEM_FREE(in_port);
+				in_port = NULL;
 				goto free_res;
 			}
 
@@ -2419,7 +2420,8 @@ static int cam_tfe_mgr_acquire_dev(void *hw_mgr_priv, void *acquire_hw_args)
 			if (in_port_length > isp_resource[i].length) {
 				CAM_ERR(CAM_ISP, "buffer size is not enough");
 				rc = -EINVAL;
-				kfree(in_port);
+				CAM_MEM_FREE(in_port);
+				in_port = NULL;
 				goto free_res;
 			}
 
@@ -2429,7 +2431,8 @@ static int cam_tfe_mgr_acquire_dev(void *hw_mgr_priv, void *acquire_hw_args)
 			total_pix_port += num_pix_port_per_in;
 			total_rdi_port += num_rdi_port_per_in;
 
-			kfree(in_port);
+			CAM_MEM_FREE(in_port);
+			in_port = NULL;
 			if (rc) {
 				CAM_ERR(CAM_ISP, "can not acquire resource");
 				goto free_res;
@@ -2631,7 +2634,7 @@ static int cam_isp_tfe_blob_bw_update(
 			bw_config->axi_path[i].mnoc_ib_bw);
 	}
 
-	bw_upd_args = kzalloc(sizeof(struct cam_tfe_bw_update_args),
+	bw_upd_args = CAM_MEM_ZALLOC(sizeof(struct cam_tfe_bw_update_args),
 		GFP_KERNEL);
 	if (!bw_upd_args) {
 		CAM_ERR(CAM_ISP, "Out of memory");
@@ -2675,7 +2678,7 @@ static int cam_isp_tfe_blob_bw_update(
 	}
 
 end:
-	cam_free_clear((void *)bw_upd_args);
+	CAM_MEM_ZFREE((void *)bw_upd_args, sizeof(struct cam_tfe_bw_update_args));
 	bw_upd_args = NULL;
 	return rc;
 }
@@ -6176,7 +6179,7 @@ int cam_tfe_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 		}
 
 		g_tfe_hw_mgr.ctx_pool[i].cdm_cmd =
-			kzalloc(((sizeof(struct cam_cdm_bl_request)) +
+			CAM_MEM_ZALLOC(((sizeof(struct cam_cdm_bl_request)) +
 				((CAM_ISP_CTX_CFG_MAX - 1) *
 				 sizeof(struct cam_cdm_bl_cmd))), GFP_KERNEL);
 		if (!g_tfe_hw_mgr.ctx_pool[i].cdm_cmd) {
@@ -6243,7 +6246,7 @@ end:
 		for (i = 0; i < CAM_TFE_CTX_MAX; i++) {
 			cam_tasklet_deinit(
 				&g_tfe_hw_mgr.mgr_common.tasklet_pool[i]);
-			kfree(g_tfe_hw_mgr.ctx_pool[i].cdm_cmd);
+			CAM_MEM_FREE(g_tfe_hw_mgr.ctx_pool[i].cdm_cmd);
 			g_tfe_hw_mgr.ctx_pool[i].cdm_cmd = NULL;
 			g_tfe_hw_mgr.ctx_pool[i].common.tasklet_info = NULL;
 		}
@@ -6268,7 +6271,7 @@ void cam_tfe_hw_mgr_deinit(void)
 	for (i = 0; i < CAM_TFE_CTX_MAX; i++) {
 		cam_tasklet_deinit(
 			&g_tfe_hw_mgr.mgr_common.tasklet_pool[i]);
-		kfree(g_tfe_hw_mgr.ctx_pool[i].cdm_cmd);
+		CAM_MEM_FREE(g_tfe_hw_mgr.ctx_pool[i].cdm_cmd);
 		g_tfe_hw_mgr.ctx_pool[i].cdm_cmd = NULL;
 		g_tfe_hw_mgr.ctx_pool[i].common.tasklet_info = NULL;
 	}

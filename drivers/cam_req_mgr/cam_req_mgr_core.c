@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -17,6 +17,7 @@
 #include "cam_debug_util.h"
 #include "cam_req_mgr_dev.h"
 #include "cam_req_mgr_debug.h"
+#include "cam_mem_mgr_api.h"
 
 static struct cam_req_mgr_core_device *g_crm_core_dev;
 static struct cam_req_mgr_core_link g_links[MAXIMUM_LINKS_PER_SESSION];
@@ -90,7 +91,7 @@ static int __cam_req_mgr_setup_payload(struct cam_req_mgr_core_workq *workq)
 	int                      rc = 0;
 	struct crm_task_payload *task_data = NULL;
 
-	task_data = kcalloc(
+	task_data = CAM_MEM_ZALLOC_ARRAY(
 		workq->task.num_task, sizeof(*task_data),
 		GFP_KERNEL);
 	if (!task_data) {
@@ -2039,7 +2040,7 @@ static struct cam_req_mgr_req_tbl *__cam_req_mgr_create_pd_tbl(int32_t delay)
 	int i = 0;
 
 	struct cam_req_mgr_req_tbl *tbl =
-		kzalloc(sizeof(struct cam_req_mgr_req_tbl), GFP_KERNEL);
+		CAM_MEM_ZALLOC(sizeof(struct cam_req_mgr_req_tbl), GFP_KERNEL);
 	if (tbl != NULL) {
 		tbl->num_slots = MAX_REQ_SLOTS;
 		CAM_DBG(CAM_CRM, "pd= %d slots= %d", delay, tbl->num_slots);
@@ -2067,7 +2068,8 @@ static void __cam_req_mgr_destroy_all_tbl(struct cam_req_mgr_req_tbl **l_tbl)
 	CAM_DBG(CAM_CRM, "*l_tbl %pK", tbl);
 	while (tbl != NULL) {
 		temp = tbl->next;
-		kfree(tbl);
+		CAM_MEM_FREE(tbl);
+		tbl = NULL;
 		tbl = temp;
 	}
 	*l_tbl = NULL;
@@ -2284,7 +2286,7 @@ static int __cam_req_mgr_create_subdevs(
 	struct cam_req_mgr_connected_device **l_dev, int32_t num_dev)
 {
 	int rc = 0;
-	*l_dev = kzalloc(sizeof(struct cam_req_mgr_connected_device) *
+	*l_dev = CAM_MEM_ZALLOC(sizeof(struct cam_req_mgr_connected_device) *
 		num_dev, GFP_KERNEL);
 	if (!*l_dev)
 		rc = -ENOMEM;
@@ -2304,7 +2306,7 @@ static void __cam_req_mgr_destroy_subdev(
 {
 	CAM_DBG(CAM_CRM, "*l_device %pK", *l_device);
 	if (*(l_device) != NULL) {
-		kfree(*(l_device));
+		CAM_MEM_FREE(*(l_device));
 		*l_device = NULL;
 	}
 }
@@ -2406,7 +2408,7 @@ static struct cam_req_mgr_core_link *__cam_req_mgr_reserve_link(
 	if (i == MAXIMUM_LINKS_PER_SESSION)
 		return NULL;
 
-	in_q = kzalloc(sizeof(struct cam_req_mgr_req_queue),
+	in_q = CAM_MEM_ZALLOC(sizeof(struct cam_req_mgr_req_queue),
 		GFP_KERNEL);
 	if (!in_q) {
 		CAM_ERR(CAM_CRM, "failed to create input queue, no mem");
@@ -2453,7 +2455,8 @@ static struct cam_req_mgr_core_link *__cam_req_mgr_reserve_link(
 	return link;
 error:
 	mutex_unlock(&session->lock);
-	kfree(in_q);
+	CAM_MEM_FREE(in_q);
+	in_q = NULL;
 	return NULL;
 }
 
@@ -2468,7 +2471,7 @@ error:
 static void __cam_req_mgr_free_link(struct cam_req_mgr_core_link *link)
 {
 	ptrdiff_t i;
-	kfree(link->req.in_q);
+	CAM_MEM_FREE(link->req.in_q);
 	link->req.in_q = NULL;
 	link->parent = NULL;
 	i = link - g_links;
@@ -3786,7 +3789,7 @@ int cam_req_mgr_create_session(
 		return -EINVAL;
 	}
 	mutex_lock(&g_crm_core_dev->crm_lock);
-	cam_session = kzalloc(sizeof(*cam_session),
+	cam_session = CAM_MEM_ZALLOC(sizeof(*cam_session),
 		GFP_KERNEL);
 	if (!cam_session) {
 		rc = -ENOMEM;
@@ -3798,7 +3801,8 @@ int cam_req_mgr_create_session(
 		CAM_ERR(CAM_CRM, "unable to create session_hdl = %x",
 			session_hdl);
 		rc = session_hdl;
-		kfree(cam_session);
+		CAM_MEM_FREE(cam_session);
+		cam_session = NULL;
 		goto end;
 	}
 	ses_info->session_hdl = session_hdl;
@@ -3923,7 +3927,8 @@ int cam_req_mgr_destroy_session(
 	mutex_unlock(&cam_session->lock);
 	mutex_destroy(&cam_session->lock);
 
-	kfree(cam_session);
+	CAM_MEM_FREE(cam_session);
+	cam_session = NULL;
 
 	rc = cam_destroy_session_hdl(ses_info->session_hdl);
 	if (rc < 0)
@@ -4629,7 +4634,7 @@ int cam_req_mgr_core_device_init(void)
 		CAM_WARN(CAM_CRM, "core device is already initialized");
 		return 0;
 	}
-	g_crm_core_dev = kzalloc(sizeof(*g_crm_core_dev),
+	g_crm_core_dev = CAM_MEM_ZALLOC(sizeof(*g_crm_core_dev),
 		GFP_KERNEL);
 	if (!g_crm_core_dev)
 		return -ENOMEM;
@@ -4658,7 +4663,7 @@ int cam_req_mgr_core_device_deinit(void)
 	CAM_DBG(CAM_CRM, "g_crm_core_dev %pK", g_crm_core_dev);
 	cam_req_mgr_debug_unregister();
 	mutex_destroy(&g_crm_core_dev->crm_lock);
-	kfree(g_crm_core_dev);
+	CAM_MEM_FREE(g_crm_core_dev);
 	g_crm_core_dev = NULL;
 
 	return 0;
