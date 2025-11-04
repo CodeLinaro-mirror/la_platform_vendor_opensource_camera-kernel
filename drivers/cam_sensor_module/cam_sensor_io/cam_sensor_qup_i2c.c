@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sensor_cmn_header.h"
 #include "cam_sensor_i2c.h"
 #include "cam_sensor_io.h"
+#include "cam_mem_mgr_api.h"
 
 #define I2C_REG_MAX_BUF_SIZE   8
 
@@ -83,7 +85,7 @@ int32_t cam_qup_i2c_read(struct i2c_client *client,
 		return rc;
 	}
 
-	buf = kzalloc(addr_type + data_type, GFP_KERNEL);
+	buf = CAM_MEM_ZALLOC(addr_type + data_type, GFP_KERNEL);
 
 	if (!buf)
 		return -ENOMEM;
@@ -122,7 +124,7 @@ int32_t cam_qup_i2c_read(struct i2c_client *client,
 
 	CAM_DBG(CAM_SENSOR, "addr = 0x%x data: 0x%x", addr, *data);
 read_fail:
-	kfree(buf);
+	CAM_MEM_FREE(buf);
 	buf = NULL;
 	return rc;
 }
@@ -148,7 +150,7 @@ int32_t cam_qup_i2c_read_seq(struct i2c_client *client,
 		return rc;
 	}
 
-	buf = kzalloc(addr_type + num_byte, GFP_KERNEL);
+	buf = CAM_MEM_ZALLOC(addr_type + num_byte, GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
 
@@ -178,7 +180,7 @@ int32_t cam_qup_i2c_read_seq(struct i2c_client *client,
 		data[i] = buf[i];
 
 read_seq_fail:
-	kfree(buf);
+	CAM_MEM_FREE(buf);
 	buf = NULL;
 	return rc;
 }
@@ -250,7 +252,7 @@ static int32_t cam_qup_i2c_write(struct camera_io_master *client,
 	unsigned char *buf = NULL;
 	uint8_t len = 0;
 
-	buf = kzalloc(I2C_REG_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
+	buf = CAM_MEM_ZALLOC(I2C_REG_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
 	if (!buf) {
 		CAM_ERR(CAM_SENSOR, "Buffer memory allocation failed");
 		return -ENOMEM;
@@ -325,7 +327,7 @@ static int32_t cam_qup_i2c_write(struct camera_io_master *client,
 		CAM_ERR(CAM_SENSOR, "failed rc: %d", rc);
 
 deallocate_buffer:
-	kfree(buf);
+	CAM_MEM_FREE(buf);
 	return rc;
 }
 
@@ -408,7 +410,7 @@ static int32_t cam_qup_i2c_write_burst(struct camera_io_master *client,
 	enum camera_sensor_i2c_type addr_type;
 	enum camera_sensor_i2c_type data_type;
 
-	buf = kzalloc((write_setting->addr_type +
+	buf = CAM_MEM_ZALLOC((write_setting->addr_type +
 			(write_setting->size * write_setting->data_type)),
 			GFP_KERNEL);
 
@@ -511,7 +513,7 @@ static int32_t cam_qup_i2c_write_burst(struct camera_io_master *client,
 		CAM_ERR(CAM_SENSOR, "failed rc: %d", rc);
 
 free_res:
-	kfree(buf);
+	CAM_MEM_FREE(buf);
 	return rc;
 }
 

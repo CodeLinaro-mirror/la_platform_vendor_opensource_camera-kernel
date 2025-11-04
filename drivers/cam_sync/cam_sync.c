@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/init.h>
@@ -20,6 +20,7 @@
 #include "cam_compat.h"
 #include "camera_main.h"
 #include "cam_req_mgr_workq.h"
+#include "cam_mem_mgr_api.h"
 
 struct sync_device *sync_dev;
 
@@ -106,7 +107,7 @@ int cam_sync_register_callback(sync_callback cb_func,
 		return -EINVAL;
 	}
 
-	sync_cb = kzalloc(sizeof(*sync_cb), GFP_ATOMIC);
+	sync_cb = CAM_MEM_ZALLOC(sizeof(*sync_cb), GFP_ATOMIC);
 	if (!sync_cb) {
 		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 		return -ENOMEM;
@@ -121,7 +122,8 @@ int cam_sync_register_callback(sync_callback cb_func,
 			CAM_DBG(CAM_SYNC, "Invoke callback for sync object:%d",
 				sync_obj);
 			status = row->state;
-			kfree(sync_cb);
+			CAM_MEM_FREE(sync_cb);
+			sync_cb = NULL;
 			spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
 			cb_func(sync_obj, status, userdata);
 		} else {
@@ -179,7 +181,8 @@ int cam_sync_deregister_callback(sync_callback cb_func,
 		if (sync_cb->callback_func == cb_func &&
 			sync_cb->cb_data == userdata) {
 			list_del_init(&sync_cb->list);
-			kfree(sync_cb);
+			CAM_MEM_FREE(sync_cb);
+			sync_cb = NULL;
 			found = true;
 		}
 	}
@@ -547,7 +550,7 @@ static int cam_sync_handle_merge(struct cam_private_ioctl_arg *k_ioctl)
 		return -EINVAL;
 
 	size = sizeof(uint32_t) * sync_merge.num_objs;
-	sync_objs = kzalloc(size, GFP_ATOMIC);
+	sync_objs = CAM_MEM_ZALLOC(size, GFP_ATOMIC);
 
 	if (!sync_objs)
 		return -ENOMEM;
@@ -555,7 +558,8 @@ static int cam_sync_handle_merge(struct cam_private_ioctl_arg *k_ioctl)
 	if (copy_from_user(sync_objs,
 		u64_to_user_ptr(sync_merge.sync_objs),
 		sizeof(uint32_t) * sync_merge.num_objs)) {
-		kfree(sync_objs);
+		CAM_MEM_FREE(sync_objs);
+		sync_objs = NULL;
 		return -EFAULT;
 	}
 
@@ -570,11 +574,13 @@ static int cam_sync_handle_merge(struct cam_private_ioctl_arg *k_ioctl)
 			u64_to_user_ptr(k_ioctl->ioctl_ptr),
 			&sync_merge,
 			k_ioctl->size)) {
-			kfree(sync_objs);
+			CAM_MEM_FREE(sync_objs);
+			sync_objs = NULL;
 			return -EFAULT;
 	}
 
-	kfree(sync_objs);
+	CAM_MEM_FREE(sync_objs);
+	sync_objs = NULL;
 
 	return result;
 }
@@ -643,7 +649,7 @@ static int cam_sync_handle_register_user_payload(
 	if (sync_obj >= CAM_SYNC_MAX_OBJS || sync_obj <= 0)
 		return -EINVAL;
 
-	user_payload_kernel = kzalloc(sizeof(*user_payload_kernel), GFP_KERNEL);
+	user_payload_kernel = CAM_MEM_ZALLOC(sizeof(*user_payload_kernel), GFP_KERNEL);
 	if (!user_payload_kernel)
 		return -ENOMEM;
 
@@ -659,7 +665,8 @@ static int cam_sync_handle_register_user_payload(
 			"Error: accessing an uninitialized sync obj = %d",
 			sync_obj);
 		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
-		kfree(user_payload_kernel);
+		CAM_MEM_FREE(user_payload_kernel);
+		user_payload_kernel = NULL;
 		return -EINVAL;
 	}
 
@@ -675,7 +682,8 @@ static int cam_sync_handle_register_user_payload(
 			CAM_SYNC_COMMON_REG_PAYLOAD_EVENT);
 
 		spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
-		kfree(user_payload_kernel);
+		CAM_MEM_FREE(user_payload_kernel);
+		user_payload_kernel = NULL;
 		return 0;
 	}
 
@@ -689,7 +697,8 @@ static int cam_sync_handle_register_user_payload(
 				user_payload_kernel->payload_data[1]) {
 
 			spin_unlock_bh(&sync_dev->row_spinlocks[sync_obj]);
-			kfree(user_payload_kernel);
+			CAM_MEM_FREE(user_payload_kernel);
+			user_payload_kernel = NULL;
 			return -EALREADY;
 		}
 	}
@@ -744,7 +753,8 @@ static int cam_sync_handle_deregister_user_payload(
 				user_payload_kernel->payload_data[1] ==
 				userpayload_info.payload[1]) {
 			list_del_init(&user_payload_kernel->list);
-			kfree(user_payload_kernel);
+			CAM_MEM_FREE(user_payload_kernel);
+			user_payload_kernel = NULL;
 		}
 	}
 
@@ -995,7 +1005,7 @@ static int cam_sync_media_controller_init(struct sync_device *sync_dev,
 {
 	int rc;
 
-	sync_dev->v4l2_dev.mdev = kzalloc(sizeof(struct media_device),
+	sync_dev->v4l2_dev.mdev = CAM_MEM_ZALLOC(sizeof(struct media_device),
 		GFP_KERNEL);
 	if (!sync_dev->v4l2_dev.mdev)
 		return -ENOMEM;
@@ -1027,7 +1037,8 @@ static void cam_sync_media_controller_cleanup(struct sync_device *sync_dev)
 	media_entity_cleanup(&sync_dev->vdev->entity);
 	media_device_unregister(sync_dev->v4l2_dev.mdev);
 	media_device_cleanup(sync_dev->v4l2_dev.mdev);
-	kfree(sync_dev->v4l2_dev.mdev);
+	CAM_MEM_FREE(sync_dev->v4l2_dev.mdev);
+	sync_dev->v4l2_dev.mdev = NULL;
 }
 
 static void cam_sync_init_entity(struct sync_device *sync_dev)
@@ -1151,7 +1162,7 @@ static int cam_sync_component_bind(struct device *dev,
 	int idx;
 	struct platform_device *pdev = to_platform_device(dev);
 
-	sync_dev = kzalloc(sizeof(*sync_dev), GFP_KERNEL);
+	sync_dev = CAM_MEM_ZALLOC(sizeof(*sync_dev), GFP_KERNEL);
 	if (!sync_dev)
 		return -ENOMEM;
 
@@ -1237,7 +1248,8 @@ mcinit_fail:
 	video_device_release(sync_dev->vdev);
 vdev_fail:
 	mutex_destroy(&sync_dev->table_lock);
-	kfree(sync_dev);
+	CAM_MEM_FREE(sync_dev);
+	sync_dev = NULL;
 	return rc;
 }
 
@@ -1259,7 +1271,7 @@ static void cam_sync_component_unbind(struct device *dev,
 	for (i = 0; i < CAM_SYNC_MAX_OBJS; i++)
 		spin_lock_init(&sync_dev->row_spinlocks[i]);
 
-	kfree(sync_dev);
+	CAM_MEM_FREE(sync_dev);
 	sync_dev = NULL;
 }
 

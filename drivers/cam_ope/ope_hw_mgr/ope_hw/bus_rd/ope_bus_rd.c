@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of.h>
@@ -26,6 +27,7 @@
 #include "ope_hw.h"
 #include "ope_dev_intf.h"
 #include "ope_bus_rd.h"
+#include "cam_mem_mgr_api.h"
 
 static struct ope_bus_rd *bus_rd;
 
@@ -723,7 +725,7 @@ static int cam_ope_bus_rd_probe(struct ope_hw *ope_hw_info,
 		CAM_ERR(CAM_OPE, "Invalid ope_hw_info");
 		return -EINVAL;
 	}
-	bus_rd = kzalloc(sizeof(struct ope_bus_rd), GFP_KERNEL);
+	bus_rd = CAM_MEM_ZALLOC(sizeof(struct ope_bus_rd), GFP_KERNEL);
 	if (!bus_rd) {
 		CAM_ERR(CAM_OPE, "Out of memory");
 		return -ENOMEM;

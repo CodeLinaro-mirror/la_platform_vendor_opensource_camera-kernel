@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/device.h>
@@ -15,6 +15,7 @@
 #include "cam_cpas_hw_intf.h"
 #include "cam_cpas_hw.h"
 #include "cam_cpas_soc.h"
+#include "cam_mem_mgr_api.h"
 
 static uint cpas_dump;
 module_param(cpas_dump, uint, 0644);
@@ -96,7 +97,7 @@ int cam_cpas_node_tree_cleanup(struct cam_cpas *cpas_core,
 	for (i = 0; i < CAM_CPAS_MAX_TREE_NODES; i++) {
 		if (soc_private->tree_node[i]) {
 			of_node_put(soc_private->tree_node[i]->tree_dev_node);
-			kfree(soc_private->tree_node[i]);
+			CAM_MEM_FREE(soc_private->tree_node[i]);
 			soc_private->tree_node[i] = NULL;
 		}
 	}
@@ -217,9 +218,8 @@ static int cam_cpas_parse_node_tree(struct cam_cpas *cpas_core,
 			"camnoc-max-needed");
 
 		for_each_available_child_of_node(level_node, curr_node) {
-			curr_node_ptr =
-				kzalloc(sizeof(struct cam_cpas_tree_node),
-				GFP_KERNEL);
+			curr_node_ptr = CAM_MEM_ZALLOC(sizeof(struct cam_cpas_tree_node),
+					GFP_KERNEL);
 			if (!curr_node_ptr)
 				return -ENOMEM;
 
@@ -810,7 +810,7 @@ int cam_cpas_get_custom_dt_info(struct cam_hw_info *cpas_hw,
 		}
 
 		cpas_core->cpas_client[i] =
-			kzalloc(sizeof(struct cam_cpas_client), GFP_KERNEL);
+			CAM_MEM_ZALLOC(sizeof(struct cam_cpas_client), GFP_KERNEL);
 		if (!cpas_core->cpas_client[i]) {
 			rc = -ENOMEM;
 			goto cleanup_clients;
@@ -964,7 +964,7 @@ int cam_cpas_soc_init_resources(struct cam_hw_soc_info *soc_info,
 		return rc;
 	}
 
-	soc_info->soc_private = kzalloc(sizeof(struct cam_cpas_private_soc),
+	soc_info->soc_private = CAM_MEM_ZALLOC(sizeof(struct cam_cpas_private_soc),
 		GFP_KERNEL);
 	if (!soc_info->soc_private) {
 		rc = -ENOMEM;
@@ -981,7 +981,8 @@ int cam_cpas_soc_init_resources(struct cam_hw_soc_info *soc_info,
 	return rc;
 
 free_soc_private:
-	kfree(soc_info->soc_private);
+	CAM_MEM_FREE(soc_info->soc_private);
+	soc_info->soc_private = NULL;
 release_res:
 	cam_soc_util_release_platform_resource(soc_info);
 	return rc;
@@ -995,7 +996,7 @@ int cam_cpas_soc_deinit_resources(struct cam_hw_soc_info *soc_info)
 	if (rc)
 		CAM_ERR(CAM_CPAS, "release platform failed, rc=%d", rc);
 
-	kfree(soc_info->soc_private);
+	CAM_MEM_FREE(soc_info->soc_private);
 	soc_info->soc_private = NULL;
 
 	return rc;

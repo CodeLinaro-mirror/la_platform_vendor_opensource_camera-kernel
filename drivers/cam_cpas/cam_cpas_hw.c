@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/device.h>
@@ -18,6 +18,7 @@
 #include "cam_smmu_api.h"
 #include "cam_compat.h"
 #include "cam_cpastop_hw.h"
+#include "cam_mem_mgr_api.h"
 
 #define CAM_CPAS_LOG_BUF_LEN      512
 
@@ -2450,7 +2451,7 @@ int cam_cpas_util_client_cleanup(struct cam_hw_info *cpas_hw)
 			cpas_core->cpas_client[i]->registered) {
 			cam_cpas_hw_unregister_client(cpas_hw, i);
 		}
-		kfree(cpas_core->cpas_client[i]);
+		CAM_MEM_FREE(cpas_core->cpas_client[i]);
 		cpas_core->cpas_client[i] = NULL;
 		mutex_destroy(&cpas_core->client_mutex[i]);
 	}
@@ -2561,7 +2562,7 @@ static struct kobj_attribute cam_subparts_info_attribute = __ATTR(subparts_info,
 static void cam_cpas_hw_kobj_release(struct kobject *kobj)
 {
 	CAM_DBG(CAM_CPAS, "Release kobj");
-	kfree(container_of(kobj, struct cam_cpas_kobj_map, base_kobj));
+	CAM_MEM_FREE(container_of(kobj, struct cam_cpas_kobj_map, base_kobj));
 }
 
 static struct kobj_type kobj_cam_cpas_hw_type = {
@@ -2590,7 +2591,7 @@ static int cam_cpas_create_sysfs(struct cam_hw_info *cpas_hw)
 	mutex_lock(&cpas_hw->hw_mutex);
 	soc_private = (struct cam_cpas_private_soc *) cpas_hw->soc_info.soc_private;
 
-	kobj_camera = kzalloc(sizeof(*kobj_camera), GFP_KERNEL);
+	kobj_camera = CAM_MEM_ZALLOC(sizeof(*kobj_camera), GFP_KERNEL);
 	if (!kobj_camera) {
 		CAM_ERR(CAM_CPAS, "failed to allocate memory for kobj_camera");
 		mutex_unlock(&cpas_hw->hw_mutex);
@@ -2633,20 +2634,23 @@ int cam_cpas_hw_probe(struct platform_device *pdev,
 	struct cam_cpas_private_soc *soc_private;
 	struct cam_cpas_internal_ops *internal_ops;
 
-	cpas_hw_intf = kzalloc(sizeof(struct cam_hw_intf), GFP_KERNEL);
+	cpas_hw_intf = CAM_MEM_ZALLOC(sizeof(struct cam_hw_intf), GFP_KERNEL);
 	if (!cpas_hw_intf)
 		return -ENOMEM;
 
-	cpas_hw = kzalloc(sizeof(struct cam_hw_info), GFP_KERNEL);
+	cpas_hw = CAM_MEM_ZALLOC(sizeof(struct cam_hw_info), GFP_KERNEL);
 	if (!cpas_hw) {
-		kfree(cpas_hw_intf);
+		CAM_MEM_FREE(cpas_hw_intf);
+		cpas_hw_intf = NULL;
 		return -ENOMEM;
 	}
 
-	cpas_core = kzalloc(sizeof(struct cam_cpas), GFP_KERNEL);
+	cpas_core = CAM_MEM_ZALLOC(sizeof(struct cam_cpas), GFP_KERNEL);
 	if (!cpas_core) {
-		kfree(cpas_hw);
-		kfree(cpas_hw_intf);
+		CAM_MEM_FREE(cpas_hw);
+		cpas_hw = NULL;
+		CAM_MEM_FREE(cpas_hw_intf);
+		cpas_hw_intf = NULL;
 		return -ENOMEM;
 	}
 
@@ -2809,9 +2813,12 @@ release_workq:
 	destroy_workqueue(cpas_core->work_queue);
 release_mem:
 	mutex_destroy(&cpas_hw->hw_mutex);
-	kfree(cpas_core);
-	kfree(cpas_hw);
-	kfree(cpas_hw_intf);
+	CAM_MEM_FREE(cpas_core);
+	cpas_core = NULL;
+	CAM_MEM_FREE(cpas_hw);
+	cpas_hw = NULL;
+	CAM_MEM_FREE(cpas_hw_intf);
+	cpas_hw_intf = NULL;
 	CAM_ERR(CAM_CPAS, "failed in hw probe");
 	return rc;
 }
@@ -2845,9 +2852,12 @@ int cam_cpas_hw_remove(struct cam_hw_intf *cpas_hw_intf)
 	flush_workqueue(cpas_core->work_queue);
 	destroy_workqueue(cpas_core->work_queue);
 	mutex_destroy(&cpas_hw->hw_mutex);
-	kfree(cpas_core);
-	kfree(cpas_hw);
-	kfree(cpas_hw_intf);
+	CAM_MEM_FREE(cpas_core);
+	cpas_core = NULL;
+	CAM_MEM_FREE(cpas_hw);
+	cpas_hw = NULL;
+	CAM_MEM_FREE(cpas_hw_intf);
+	cpas_hw_intf = NULL;
 
 	return 0;
 }

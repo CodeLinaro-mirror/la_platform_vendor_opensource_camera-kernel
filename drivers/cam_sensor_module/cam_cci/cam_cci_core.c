@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -9,6 +9,7 @@
 #include "cam_cci_dev.h"
 #include "cam_req_mgr_workq.h"
 #include "cam_common_util.h"
+#include "cam_mem_mgr_api.h"
 
 static int32_t cam_cci_convert_type_to_num_bytes(
 	enum camera_sensor_i2c_type type)
@@ -1506,8 +1507,10 @@ static void cam_cci_write_async_helper(struct work_struct *work)
 	if (rc < 0)
 		CAM_ERR(CAM_CCI, "Failed rc: %d", rc);
 
-	kfree(write_async->c_ctrl.cfg.cci_i2c_write_cfg.reg_setting);
-	kfree(write_async);
+	CAM_MEM_FREE(write_async->c_ctrl.cfg.cci_i2c_write_cfg.reg_setting);
+	write_async->c_ctrl.cfg.cci_i2c_write_cfg.reg_setting = NULL;
+	CAM_MEM_FREE(write_async);
+	write_async = NULL;
 }
 
 static int32_t cam_cci_i2c_write_async(struct v4l2_subdev *sd,
@@ -1522,7 +1525,7 @@ static int32_t cam_cci_i2c_write_async(struct v4l2_subdev *sd,
 
 	cci_dev = v4l2_get_subdevdata(sd);
 
-	write_async = kzalloc(sizeof(*write_async), GFP_KERNEL);
+	write_async = CAM_MEM_ZALLOC(sizeof(*write_async), GFP_KERNEL);
 	if (!write_async) {
 		CAM_ERR(CAM_CCI, "Memory allocation failed for write_async");
 		return -ENOMEM;
@@ -1539,16 +1542,18 @@ static int32_t cam_cci_i2c_write_async(struct v4l2_subdev *sd,
 	cci_i2c_write_cfg_w = &write_async->c_ctrl.cfg.cci_i2c_write_cfg;
 
 	if (cci_i2c_write_cfg->size == 0) {
-		kfree(write_async);
+		CAM_MEM_FREE(write_async);
+		write_async = NULL;
 		return -EINVAL;
 	}
 
 	cci_i2c_write_cfg_w->reg_setting =
-		kzalloc(sizeof(struct cam_sensor_i2c_reg_array)*
+		CAM_MEM_ZALLOC(sizeof(struct cam_sensor_i2c_reg_array)*
 		cci_i2c_write_cfg->size, GFP_KERNEL);
 	if (!cci_i2c_write_cfg_w->reg_setting) {
 		CAM_ERR(CAM_CCI, "Couldn't allocate memory for reg_setting");
-		kfree(write_async);
+		CAM_MEM_FREE(write_async);
+		write_async = NULL;
 		return -ENOMEM;
 	}
 	memcpy(cci_i2c_write_cfg_w->reg_setting,

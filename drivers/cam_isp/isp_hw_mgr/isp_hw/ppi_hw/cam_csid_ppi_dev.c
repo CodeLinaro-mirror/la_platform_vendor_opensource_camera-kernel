@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -13,6 +14,7 @@
 #include "cam_csid_ppi_core.h"
 #include "cam_csid_ppi_dev.h"
 #include "cam_debug_util.h"
+#include "cam_mem_mgr_api.h"
 
 static struct cam_hw_intf *cam_csid_ppi_hw_list[CAM_CSID_PPI_HW_MAX] = {
 	NULL, NULL, NULL, NULL};
@@ -32,19 +34,19 @@ static int cam_ppi_component_bind(struct device *dev,
 
 	CAM_DBG(CAM_ISP, "PPI probe called");
 
-	ppi_hw_intf = kzalloc(sizeof(struct cam_hw_intf), GFP_KERNEL);
+	ppi_hw_intf = CAM_MEM_ZALLOC(sizeof(struct cam_hw_intf), GFP_KERNEL);
 	if (!ppi_hw_intf) {
 		rc = -ENOMEM;
 		goto err;
 	}
 
-	ppi_hw_info = kzalloc(sizeof(struct cam_hw_info), GFP_KERNEL);
+	ppi_hw_info = CAM_MEM_ZALLOC(sizeof(struct cam_hw_info), GFP_KERNEL);
 	if (!ppi_hw_info) {
 		rc = -ENOMEM;
 		goto free_hw_intf;
 	}
 
-	ppi_dev = kzalloc(sizeof(struct cam_csid_ppi_hw), GFP_KERNEL);
+	ppi_dev = CAM_MEM_ZALLOC(sizeof(struct cam_csid_ppi_hw), GFP_KERNEL);
 	if (!ppi_dev) {
 		rc = -ENOMEM;
 		goto free_hw_info;
@@ -94,11 +96,14 @@ static int cam_ppi_component_bind(struct device *dev,
 
 	return 0;
 free_dev:
-	kfree(ppi_dev);
+	CAM_MEM_FREE(ppi_dev);
+	ppi_dev = NULL;
 free_hw_info:
-	kfree(ppi_hw_info);
+	CAM_MEM_FREE(ppi_hw_info);
+	ppi_hw_info = NULL;
 free_hw_intf:
-	kfree(ppi_hw_intf);
+	CAM_MEM_FREE(ppi_hw_intf);
+	ppi_hw_intf = NULL;
 err:
 	return rc;
 }
@@ -119,9 +124,12 @@ static void cam_ppi_component_unbind(struct device *dev,
 
 	cam_csid_ppi_hw_deinit(ppi_dev);
 
-	kfree(ppi_dev);
-	kfree(ppi_hw_info);
-	kfree(ppi_hw_intf);
+	CAM_MEM_FREE(ppi_dev);
+	ppi_dev = NULL;
+	CAM_MEM_FREE(ppi_hw_info);
+	ppi_hw_info = NULL;
+	CAM_MEM_FREE(ppi_hw_intf);
+	ppi_hw_intf = NULL;
 }
 
 int cam_csid_ppi_hw_init(struct cam_hw_intf **csid_ppi_hw,

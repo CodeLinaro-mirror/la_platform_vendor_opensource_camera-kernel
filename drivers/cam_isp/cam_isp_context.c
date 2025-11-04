@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/debugfs.h>
@@ -23,6 +23,7 @@
 #include "cam_req_mgr_debug.h"
 #include "cam_cpas_api.h"
 #include "cam_subdev.h"
+#include "cam_mem_mgr_api.h"
 
 static const char isp_dev_name[] = "cam-isp";
 
@@ -5021,7 +5022,7 @@ static int __cam_isp_ctx_acquire_dev_in_available(struct cam_context *ctx,
 		goto end;
 	}
 
-	isp_res = kzalloc(
+	isp_res = CAM_MEM_ZALLOC(
 		sizeof(*isp_res)*cmd->num_resources, GFP_KERNEL);
 	if (!isp_res) {
 		rc = -ENOMEM;
@@ -5101,7 +5102,7 @@ static int __cam_isp_ctx_acquire_dev_in_available(struct cam_context *ctx,
 	for (i = 0; i < CAM_ISP_CTX_EVENT_MAX; i++)
 		atomic64_set(&ctx_isp->event_record_head[i], -1);
 
-	kfree(isp_res);
+	CAM_MEM_FREE(isp_res);
 	isp_res = NULL;
 
 get_dev_handle:
@@ -5141,7 +5142,8 @@ free_hw:
 	ctx_isp->hw_ctx = NULL;
 	ctx_isp->hw_acquired = false;
 free_res:
-	kfree(isp_res);
+	CAM_MEM_FREE(isp_res);
+	isp_res = NULL;
 end:
 	return rc;
 }
@@ -5183,7 +5185,7 @@ static int __cam_isp_ctx_acquire_hw_v1(struct cam_context *ctx,
 		goto end;
 	}
 
-	acquire_hw_info = kzalloc(cmd->data_size, GFP_KERNEL);
+	acquire_hw_info = CAM_MEM_ZALLOC(cmd->data_size, GFP_KERNEL);
 	if (!acquire_hw_info) {
 		rc = -ENOMEM;
 		goto end;
@@ -5271,7 +5273,8 @@ static int __cam_isp_ctx_acquire_hw_v1(struct cam_context *ctx,
 	CAM_DBG(CAM_ISP,
 		"Acquire success on session_hdl 0x%xs ctx_type %d ctx_id %u",
 		ctx->session_hdl, isp_hw_cmd_args.u.ctx_type, ctx->ctx_id);
-	kfree(acquire_hw_info);
+	CAM_MEM_FREE(acquire_hw_info);
+	acquire_hw_info = NULL;
 	return rc;
 
 free_hw:
@@ -5280,7 +5283,8 @@ free_hw:
 	ctx_isp->hw_ctx = NULL;
 	ctx_isp->hw_acquired = false;
 free_res:
-	kfree(acquire_hw_info);
+	CAM_MEM_FREE(acquire_hw_info);
+	acquire_hw_info = NULL;
 end:
 	return rc;
 }
@@ -5326,7 +5330,7 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 		goto end;
 	}
 
-	acquire_hw_info = kzalloc(cmd->data_size, GFP_KERNEL);
+	acquire_hw_info = CAM_MEM_ZALLOC(cmd->data_size, GFP_KERNEL);
 	if (!acquire_hw_info) {
 		rc = -ENOMEM;
 		goto end;
@@ -5438,7 +5442,8 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 	CAM_DBG(CAM_ISP,
 		"Acquire success on session_hdl 0x%xs ctx_type %d ctx_id %u",
 		ctx->session_hdl, isp_hw_cmd_args.u.ctx_type, ctx->ctx_id);
-	kfree(acquire_hw_info);
+	CAM_MEM_FREE(acquire_hw_info);
+	acquire_hw_info = NULL;
 	return rc;
 
 free_hw:
@@ -5447,7 +5452,8 @@ free_hw:
 	ctx_isp->hw_ctx = NULL;
 	ctx_isp->hw_acquired = false;
 free_res:
-	kfree(acquire_hw_info);
+	CAM_MEM_FREE(acquire_hw_info);
+	acquire_hw_info = NULL;
 end:
 	return rc;
 }

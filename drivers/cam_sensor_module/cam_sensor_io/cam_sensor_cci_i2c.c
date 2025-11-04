@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sensor_cmn_header.h"
@@ -69,7 +70,7 @@ int32_t cam_camera_cci_i2c_read_seq(struct cam_sensor_cci_client *cci_client,
 		return rc;
 	}
 
-	buf = kzalloc(num_byte, GFP_KERNEL);
+	buf = CAM_MEM_ZALLOC(num_byte, GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
 
@@ -89,7 +90,8 @@ int32_t cam_camera_cci_i2c_read_seq(struct cam_sensor_cci_client *cci_client,
 		data[i] = buf[i];
 		CAM_DBG(CAM_SENSOR, "Byte %d: Data: 0x%x\n", i, data[i]);
 	}
-	kfree(buf);
+	CAM_MEM_FREE(buf);
+	buf = NULL;
 	return rc;
 }
 

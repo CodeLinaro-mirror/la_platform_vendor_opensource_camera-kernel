@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_req_mgr_workq.h"
 #include "cam_debug_util.h"
 #include "cam_common_util.h"
+#include "cam_mem_mgr_api.h"
 
 #define WORKQ_ACQUIRE_LOCK(workq, flags) {\
 	if ((workq)->in_irq) \
@@ -192,7 +194,7 @@ int cam_req_mgr_workq_create(char *name, int32_t num_tasks,
 	char buf[128] = "crm_workq-";
 
 	if (!*workq) {
-		crm_workq = kzalloc(sizeof(struct cam_req_mgr_core_workq),
+		crm_workq = CAM_MEM_ZALLOC(sizeof(struct cam_req_mgr_core_workq),
 			GFP_KERNEL);
 		if (crm_workq == NULL)
 			return -ENOMEM;
@@ -209,7 +211,8 @@ int cam_req_mgr_workq_create(char *name, int32_t num_tasks,
 		crm_workq->job = alloc_workqueue(buf,
 			wq_flags, max_active_tasks, NULL);
 		if (!crm_workq->job) {
-			kfree(crm_workq);
+			CAM_MEM_FREE(crm_workq);
+			crm_workq = NULL;
 			return -ENOMEM;
 		}
 
@@ -227,13 +230,14 @@ int cam_req_mgr_workq_create(char *name, int32_t num_tasks,
 		INIT_LIST_HEAD(&crm_workq->task.empty_head);
 		crm_workq->in_irq = in_irq;
 		crm_workq->task.num_task = num_tasks;
-		crm_workq->task.pool = kcalloc(crm_workq->task.num_task,
+		crm_workq->task.pool = CAM_MEM_ZALLOC_ARRAY(crm_workq->task.num_task,
 				sizeof(struct crm_workq_task), GFP_KERNEL);
 		if (!crm_workq->task.pool) {
 			CAM_WARN(CAM_CRM, "Insufficient memory %zu",
 				sizeof(struct crm_workq_task) *
 				crm_workq->task.num_task);
-			kfree(crm_workq);
+			CAM_MEM_FREE(crm_workq);
+			crm_workq = NULL;
 			return -ENOMEM;
 		}
 

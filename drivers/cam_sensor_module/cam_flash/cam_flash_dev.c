@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -11,6 +11,7 @@
 #include "cam_common_util.h"
 #include "camera_main.h"
 #include "cam_compat.h"
+#include "cam_mem_mgr_api.h"
 
 static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 		void *arg, struct cam_flash_private_soc *soc_private)
@@ -226,7 +227,7 @@ static int32_t cam_flash_init_default_params(struct cam_flash_ctrl *fctrl)
 		"master_type: %d", fctrl->io_master_info.master_type);
 	/* Initialize cci_client */
 	if (fctrl->io_master_info.master_type == CCI_MASTER) {
-		fctrl->io_master_info.cci_client = kzalloc(sizeof(
+		fctrl->io_master_info.cci_client = CAM_MEM_ZALLOC(sizeof(
 			struct cam_sensor_cci_client), GFP_KERNEL);
 		if (!(fctrl->io_master_info.cci_client))
 			return -ENOMEM;
@@ -433,7 +434,7 @@ static int cam_flash_component_bind(struct device *dev,
 		return -EINVAL;
 	}
 
-	fctrl = kzalloc(sizeof(struct cam_flash_ctrl), GFP_KERNEL);
+	fctrl = CAM_MEM_ZALLOC(sizeof(struct cam_flash_ctrl), GFP_KERNEL);
 	if (!fctrl)
 		return -ENOMEM;
 
@@ -448,7 +449,8 @@ static int cam_flash_component_bind(struct device *dev,
 	rc = cam_flash_get_dt_data(fctrl, &fctrl->soc_info);
 	if (rc) {
 		CAM_ERR(CAM_FLASH, "cam_flash_get_dt_data failed with %d", rc);
-		kfree(fctrl);
+		CAM_MEM_FREE(fctrl);
+		fctrl = NULL;
 		return -EINVAL;
 	}
 
@@ -497,7 +499,7 @@ static int cam_flash_component_bind(struct device *dev,
 		}
 
 		fctrl->i2c_data.per_frame =
-			kzalloc(sizeof(struct i2c_settings_array) *
+			CAM_MEM_ZALLOC(sizeof(struct i2c_settings_array) *
 			MAX_PER_FRAME_ARRAY, GFP_KERNEL);
 		if (fctrl->i2c_data.per_frame == NULL) {
 			CAM_ERR(CAM_FLASH, "No Memory");
@@ -547,15 +549,15 @@ static int cam_flash_component_bind(struct device *dev,
 	return rc;
 
 free_cci_resource:
-	kfree(fctrl->io_master_info.cci_client);
+	CAM_MEM_FREE(fctrl->io_master_info.cci_client);
 	fctrl->io_master_info.cci_client = NULL;
 free_resource:
-	kfree(fctrl->i2c_data.per_frame);
-	kfree(fctrl->soc_info.soc_private);
+	CAM_MEM_FREE(fctrl->i2c_data.per_frame);
+	CAM_MEM_FREE(fctrl->soc_info.soc_private);
 	cam_soc_util_release_platform_resource(&fctrl->soc_info);
 	fctrl->i2c_data.per_frame = NULL;
 	fctrl->soc_info.soc_private = NULL;
-	kfree(fctrl);
+	CAM_MEM_FREE(fctrl);
 	fctrl = NULL;
 	return rc;
 }
@@ -579,7 +581,8 @@ static void cam_flash_component_unbind(struct device *dev,
 	cam_flash_put_source_node_data(fctrl);
 	platform_set_drvdata(pdev, NULL);
 	v4l2_set_subdevdata(&fctrl->v4l2_dev_str.sd, NULL);
-	kfree(fctrl);
+	CAM_MEM_FREE(fctrl);
+	fctrl = NULL;
 	CAM_INFO(CAM_FLASH, "Flash Sensor component unbind");
 }
 
@@ -630,7 +633,7 @@ static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
 	}
 
 	/* Create sensor control structure */
-	fctrl = kzalloc(sizeof(*fctrl), GFP_KERNEL);
+	fctrl = CAM_MEM_ZALLOC(sizeof(*fctrl), GFP_KERNEL);
 	if (!fctrl)
 		return -ENOMEM;
 
@@ -686,7 +689,7 @@ static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
 		goto free_ctrl;
 
 	fctrl->i2c_data.per_frame =
-		kzalloc(sizeof(struct i2c_settings_array) *
+		CAM_MEM_ZALLOC(sizeof(struct i2c_settings_array) *
 		MAX_PER_FRAME_ARRAY, GFP_KERNEL);
 	if (fctrl->i2c_data.per_frame == NULL) {
 		rc = -ENOMEM;
@@ -720,7 +723,7 @@ static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
 unreg_subdev:
 	cam_unregister_subdev(&(fctrl->v4l2_dev_str));
 free_ctrl:
-	kfree(fctrl);
+	CAM_MEM_FREE(fctrl);
 	fctrl = NULL;
 	return rc;
 }

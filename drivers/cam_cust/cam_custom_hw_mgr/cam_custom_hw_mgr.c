@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -955,7 +955,7 @@ static int cam_custom_hw_mgr_acquire_get_unified_dev_str(
 		return rc;
 	}
 
-	port_info = kzalloc(
+	port_info = CAM_MEM_ZALLOC(
 		sizeof(struct cam_isp_in_port_generic_info), GFP_KERNEL);
 
 	if (!port_info)
@@ -986,7 +986,7 @@ static int cam_custom_hw_mgr_acquire_get_unified_dev_str(
 	port_info->num_out_res     =  in->num_out_res;
 	port_info->num_bytes_out   =  in->num_bytes_out;
 
-	port_info->data = kcalloc(in->num_out_res,
+	port_info->data = CAM_MEM_ZALLOC_ARRAY(in->num_out_res,
 		sizeof(struct cam_isp_out_port_generic_info),
 		GFP_KERNEL);
 	if (port_info->data == NULL) {
@@ -1003,7 +1003,8 @@ static int cam_custom_hw_mgr_acquire_get_unified_dev_str(
 	return 0;
 
 release_port_mem:
-	kfree(port_info);
+	CAM_MEM_FREE(port_info);
+	port_info = NULL;
 	return rc;
 }
 
@@ -1107,8 +1108,9 @@ static int cam_custom_mgr_acquire_hw(
 			goto free_mem;
 		}
 
-		kfree(gen_port_info->data);
-		kfree(gen_port_info);
+		CAM_MEM_FREE(gen_port_info->data);
+		gen_port_info->data = NULL;
+		CAM_MEM_FREE(gen_port_info);
 		gen_port_info = NULL;
 	}
 
@@ -1120,8 +1122,10 @@ static int cam_custom_mgr_acquire_hw(
 	return 0;
 
 free_mem:
-	kfree(gen_port_info->data);
-	kfree(gen_port_info);
+	CAM_MEM_FREE(gen_port_info->data);
+	gen_port_info->data = NULL;
+	CAM_MEM_FREE(gen_port_info);
+	gen_port_info = NULL;
 free_res:
 	cam_custom_hw_mgr_release_hw_for_ctx(custom_ctx);
 	cam_custom_hw_mgr_put_ctx(&custom_hw_mgr->free_ctx_list, &custom_ctx);

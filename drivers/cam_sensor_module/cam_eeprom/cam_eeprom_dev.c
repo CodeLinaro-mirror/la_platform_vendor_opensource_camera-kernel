@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_eeprom_dev.h"
@@ -11,6 +11,7 @@
 #include "cam_debug_util.h"
 #include "camera_main.h"
 #include "cam_compat.h"
+#include "cam_mem_mgr_api.h"
 
 static int cam_eeprom_subdev_close_internal(struct v4l2_subdev *sd,
 	struct v4l2_subdev_fh *fh)
@@ -192,14 +193,14 @@ static int cam_eeprom_i2c_driver_probe(struct i2c_client *client,
 		goto probe_failure;
 	}
 
-	e_ctrl = kzalloc(sizeof(*e_ctrl), GFP_KERNEL);
+	e_ctrl = CAM_MEM_ZALLOC(sizeof(*e_ctrl), GFP_KERNEL);
 	if (!e_ctrl) {
-		CAM_ERR(CAM_EEPROM, "kzalloc failed");
+		CAM_ERR(CAM_EEPROM, "CAM_MEM_ZALLOC failed");
 		rc = -ENOMEM;
 		goto probe_failure;
 	}
 
-	soc_private = kzalloc(sizeof(*soc_private), GFP_KERNEL);
+	soc_private = CAM_MEM_ZALLOC(sizeof(*soc_private), GFP_KERNEL);
 	if (!soc_private)
 		goto ectrl_free;
 
@@ -248,9 +249,11 @@ static int cam_eeprom_i2c_driver_probe(struct i2c_client *client,
 
 	return rc;
 free_soc:
-	kfree(soc_private);
+	CAM_MEM_FREE(soc_private);
+	soc_private = NULL;
 ectrl_free:
-	kfree(e_ctrl);
+	CAM_MEM_FREE(e_ctrl);
+	e_ctrl = NULL;
 probe_failure:
 	return rc;
 }
@@ -295,13 +298,14 @@ int cam_eeprom_i2c_driver_remove_common(struct i2c_client *client)
 	mutex_unlock(&(e_ctrl->eeprom_mutex));
 	mutex_destroy(&(e_ctrl->eeprom_mutex));
 	rc = cam_unregister_subdev(&(e_ctrl->v4l2_dev_str));
-
 	if (rc)
 		CAM_ERR(CAM_EEPROM, "unregistering eeprom subdev is not sucessful");
 
-	kfree(soc_private);
+	CAM_MEM_FREE(soc_private);
+	soc_private = NULL;
 	v4l2_set_subdevdata(&e_ctrl->v4l2_dev_str.sd, NULL);
-	kfree(e_ctrl);
+	CAM_MEM_FREE(e_ctrl);
+	e_ctrl = NULL;
 
 	return rc;
 }
@@ -315,7 +319,7 @@ static int cam_eeprom_spi_setup(struct spi_device *spi)
 	struct cam_sensor_power_ctrl_t *power_info = NULL;
 	int                             rc = 0;
 
-	e_ctrl = kzalloc(sizeof(*e_ctrl), GFP_KERNEL);
+	e_ctrl = CAM_MEM_ZALLOC(sizeof(*e_ctrl), GFP_KERNEL);
 	if (!e_ctrl)
 		return -ENOMEM;
 
@@ -328,13 +332,14 @@ static int cam_eeprom_spi_setup(struct spi_device *spi)
 	e_ctrl->cal_data.mapdata = NULL;
 	e_ctrl->cal_data.map = NULL;
 
-	spi_client = kzalloc(sizeof(*spi_client), GFP_KERNEL);
+	spi_client = CAM_MEM_ZALLOC(sizeof(*spi_client), GFP_KERNEL);
 	if (!spi_client) {
-		kfree(e_ctrl);
+		CAM_MEM_FREE(e_ctrl);
+		e_ctrl = NULL;
 		return -ENOMEM;
 	}
 
-	eb_info = kzalloc(sizeof(*eb_info), GFP_KERNEL);
+	eb_info = CAM_MEM_ZALLOC(sizeof(*eb_info), GFP_KERNEL);
 	if (!eb_info)
 		goto spi_free;
 	e_ctrl->soc_info.soc_private = eb_info;
@@ -379,10 +384,13 @@ static int cam_eeprom_spi_setup(struct spi_device *spi)
 	return rc;
 
 board_free:
-	kfree(e_ctrl->soc_info.soc_private);
+	CAM_MEM_FREE(e_ctrl->soc_info.soc_private);
+	e_ctrl->soc_info.soc_private = NULL;
 spi_free:
-	kfree(spi_client);
-	kfree(e_ctrl);
+	CAM_MEM_FREE(spi_client);
+	spi_client = NULL;
+	CAM_MEM_FREE(e_ctrl);
+	e_ctrl = NULL;
 	return rc;
 }
 
@@ -459,7 +467,7 @@ static int cam_eeprom_component_bind(struct device *dev,
 	struct cam_eeprom_soc_private  *soc_private = NULL;
 	struct platform_device *pdev = to_platform_device(dev);
 
-	e_ctrl = kzalloc(sizeof(struct cam_eeprom_ctrl_t), GFP_KERNEL);
+	e_ctrl = CAM_MEM_ZALLOC(sizeof(struct cam_eeprom_ctrl_t), GFP_KERNEL);
 	if (!e_ctrl)
 		return -ENOMEM;
 
@@ -472,14 +480,14 @@ static int cam_eeprom_component_bind(struct device *dev,
 	e_ctrl->userspace_probe = false;
 
 	e_ctrl->io_master_info.master_type = CCI_MASTER;
-	e_ctrl->io_master_info.cci_client = kzalloc(
+	e_ctrl->io_master_info.cci_client = CAM_MEM_ZALLOC(
 		sizeof(struct cam_sensor_cci_client), GFP_KERNEL);
 	if (!e_ctrl->io_master_info.cci_client) {
 		rc = -ENOMEM;
 		goto free_e_ctrl;
 	}
 
-	soc_private = kzalloc(sizeof(struct cam_eeprom_soc_private),
+	soc_private = CAM_MEM_ZALLOC(sizeof(struct cam_eeprom_soc_private),
 		GFP_KERNEL);
 	if (!soc_private) {
 		rc = -ENOMEM;
@@ -516,11 +524,14 @@ static int cam_eeprom_component_bind(struct device *dev,
 
 	return rc;
 free_soc:
-	kfree(soc_private);
+	CAM_MEM_FREE(soc_private);
+	soc_private = NULL;
 free_cci_client:
-	kfree(e_ctrl->io_master_info.cci_client);
+	CAM_MEM_FREE(e_ctrl->io_master_info.cci_client);
+	e_ctrl->io_master_info.cci_client = NULL;
 free_e_ctrl:
-	kfree(e_ctrl);
+	CAM_MEM_FREE(e_ctrl);
+	e_ctrl = NULL;
 
 	return rc;
 }
@@ -550,11 +561,14 @@ static void cam_eeprom_component_unbind(struct device *dev,
 	mutex_unlock(&(e_ctrl->eeprom_mutex));
 	mutex_destroy(&(e_ctrl->eeprom_mutex));
 	cam_unregister_subdev(&(e_ctrl->v4l2_dev_str));
-	kfree(soc_info->soc_private);
-	kfree(e_ctrl->io_master_info.cci_client);
+	CAM_MEM_FREE(soc_info->soc_private);
+	soc_info->soc_private = NULL;
+	CAM_MEM_FREE(e_ctrl->io_master_info.cci_client);
+	e_ctrl->io_master_info.cci_client = NULL;
 	platform_set_drvdata(pdev, NULL);
 	v4l2_set_subdevdata(&e_ctrl->v4l2_dev_str.sd, NULL);
-	kfree(e_ctrl);
+	CAM_MEM_FREE(e_ctrl);
+	e_ctrl = NULL;
 }
 
 const static struct component_ops cam_eeprom_component_ops = {

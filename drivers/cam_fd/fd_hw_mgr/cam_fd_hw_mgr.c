@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -2145,7 +2145,7 @@ int cam_fd_hw_mgr_init(struct device_node *of_node,
 		goto detach_smmu;
 	}
 
-	g_fd_hw_mgr.work_data = kcalloc(CAM_FD_WORKQ_NUM_TASK,
+	g_fd_hw_mgr.work_data = CAM_MEM_ZALLOC_ARRAY(CAM_FD_WORKQ_NUM_TASK,
 		sizeof(struct cam_fd_mgr_work_data), GFP_KERNEL);
 
 	for (i = 0; i < CAM_FD_WORKQ_NUM_TASK; i++)

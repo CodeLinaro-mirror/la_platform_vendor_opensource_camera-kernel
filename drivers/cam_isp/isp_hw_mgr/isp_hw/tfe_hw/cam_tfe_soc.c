@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
 #include "cam_cpas_api.h"
 #include "cam_tfe_soc.h"
 #include "cam_debug_util.h"
+#include "cam_mem_mgr_api.h"
 
 static bool cam_tfe_cpas_cb(uint32_t client_handle, void *userdata,
 	struct cam_cpas_irq_data *irq_data)
@@ -29,7 +31,7 @@ int cam_tfe_init_soc_resources(struct cam_hw_soc_info *soc_info,
 	struct cam_cpas_register_params   cpas_register_param;
 	int    rc = 0,  i = 0, num_pid = 0;
 
-	soc_private = kzalloc(sizeof(struct cam_tfe_soc_private),
+	soc_private = CAM_MEM_ZALLOC(sizeof(struct cam_tfe_soc_private),
 		GFP_KERNEL);
 	if (!soc_private) {
 		CAM_DBG(CAM_ISP, "Error! soc_private Alloc Failed");
@@ -98,7 +100,8 @@ clk_option:
 release_soc:
 	cam_soc_util_release_platform_resource(soc_info);
 free_soc_private:
-	kfree(soc_private);
+	CAM_MEM_FREE(soc_private);
+	soc_private = NULL;
 
 	return rc;
 }
@@ -136,7 +139,8 @@ int cam_tfe_deinit_soc_resources(struct cam_hw_soc_info *soc_info)
 				"Error Put dsp clk failed rc=%d", rc);
 	}
 
-	kfree(soc_private);
+	CAM_MEM_FREE(soc_private);
+	soc_private = NULL;
 
 	return rc;
 }

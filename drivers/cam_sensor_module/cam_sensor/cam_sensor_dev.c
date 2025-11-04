@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sensor_dev.h"
@@ -10,6 +10,7 @@
 #include "cam_sensor_core.h"
 #include "camera_main.h"
 #include "cam_compat.h"
+#include "cam_mem_mgr_api.h"
 
 static int cam_sensor_subdev_close_internal(struct v4l2_subdev *sd,
 	struct v4l2_subdev_fh *fh)
@@ -170,7 +171,7 @@ static int32_t cam_sensor_driver_i2c_probe(struct i2c_client *client,
 	}
 
 	/* Create sensor control structure */
-	s_ctrl = kzalloc(sizeof(*s_ctrl), GFP_KERNEL);
+	s_ctrl = CAM_MEM_ZALLOC(sizeof(*s_ctrl), GFP_KERNEL);
 	if (!s_ctrl)
 		return -ENOMEM;
 
@@ -198,7 +199,7 @@ static int32_t cam_sensor_driver_i2c_probe(struct i2c_client *client,
 		goto free_s_ctrl;
 
 	s_ctrl->i2c_data.per_frame =
-		kzalloc(sizeof(struct i2c_settings_array) *
+		CAM_MEM_ZALLOC(sizeof(struct i2c_settings_array) *
 		MAX_PER_FRAME_ARRAY, GFP_KERNEL);
 	if (s_ctrl->i2c_data.per_frame == NULL) {
 		rc = -ENOMEM;
@@ -206,7 +207,7 @@ static int32_t cam_sensor_driver_i2c_probe(struct i2c_client *client,
 	}
 
 	s_ctrl->i2c_data.frame_skip =
-		kzalloc(sizeof(struct i2c_settings_array) *
+		CAM_MEM_ZALLOC(sizeof(struct i2c_settings_array) *
 		MAX_PER_FRAME_ARRAY, GFP_KERNEL);
 	if (s_ctrl->i2c_data.frame_skip == NULL) {
 		rc = -ENOMEM;
@@ -238,12 +239,15 @@ static int32_t cam_sensor_driver_i2c_probe(struct i2c_client *client,
 	s_ctrl->sensordata->power_info.dev = soc_info->dev;
 
 	return rc;
+
 free_perframe:
-	kfree(s_ctrl->i2c_data.per_frame);
+	CAM_MEM_FREE(s_ctrl->i2c_data.per_frame);
+	s_ctrl->i2c_data.per_frame = NULL;
 unreg_subdev:
 	cam_unregister_subdev(&(s_ctrl->v4l2_dev_str));
 free_s_ctrl:
-	kfree(s_ctrl);
+	CAM_MEM_FREE(s_ctrl);
+	s_ctrl = NULL;
 	return rc;
 }
 
@@ -290,7 +294,7 @@ static int cam_sensor_component_bind(struct device *dev,
 		goto free_s_ctrl;
 
 	s_ctrl->i2c_data.per_frame =
-		kzalloc(sizeof(struct i2c_settings_array) *
+		CAM_MEM_ZALLOC(sizeof(struct i2c_settings_array) *
 		MAX_PER_FRAME_ARRAY, GFP_KERNEL);
 	if (s_ctrl->i2c_data.per_frame == NULL) {
 		rc = -ENOMEM;
@@ -298,7 +302,7 @@ static int cam_sensor_component_bind(struct device *dev,
 	}
 
 	s_ctrl->i2c_data.frame_skip =
-		kzalloc(sizeof(struct i2c_settings_array) *
+		CAM_MEM_ZALLOC(sizeof(struct i2c_settings_array) *
 		MAX_PER_FRAME_ARRAY, GFP_KERNEL);
 	if (s_ctrl->i2c_data.frame_skip == NULL) {
 		rc = -ENOMEM;
@@ -335,7 +339,8 @@ static int cam_sensor_component_bind(struct device *dev,
 	return rc;
 
 free_perframe:
-	kfree(s_ctrl->i2c_data.per_frame);
+	CAM_MEM_FREE(s_ctrl->i2c_data.per_frame);
+	s_ctrl->i2c_data.per_frame = NULL;
 unreg_subdev:
 	cam_unregister_subdev(&(s_ctrl->v4l2_dev_str));
 free_s_ctrl:
@@ -366,8 +371,10 @@ static void cam_sensor_component_unbind(struct device *dev,
 	for (i = 0; i < soc_info->num_clk; i++)
 		devm_clk_put(soc_info->dev, soc_info->clk[i]);
 
-	kfree(s_ctrl->i2c_data.per_frame);
-	kfree(s_ctrl->i2c_data.frame_skip);
+	CAM_MEM_FREE(s_ctrl->i2c_data.per_frame);
+	s_ctrl->i2c_data.per_frame = NULL;
+	CAM_MEM_FREE(s_ctrl->i2c_data.frame_skip);
+	s_ctrl->i2c_data.frame_skip = NULL;
 	platform_set_drvdata(pdev, NULL);
 	v4l2_set_subdevdata(&(s_ctrl->v4l2_dev_str.sd), NULL);
 	devm_kfree(&pdev->dev, s_ctrl);

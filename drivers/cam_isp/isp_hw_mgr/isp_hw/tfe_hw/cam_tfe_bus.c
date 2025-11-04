@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/ratelimit.h>
@@ -21,6 +22,7 @@
 #include "cam_debug_util.h"
 #include "cam_cpas_api.h"
 
+#include "cam_mem_mgr_api.h"
 
 static const char drv_name[] = "tfe_bus";
 
@@ -805,7 +807,7 @@ static int cam_tfe_bus_init_wm_resource(uint32_t index,
 {
 	struct cam_tfe_bus_wm_resource_data *rsrc_data;
 
-	rsrc_data = kzalloc(sizeof(struct cam_tfe_bus_wm_resource_data),
+	rsrc_data = CAM_MEM_ZALLOC(sizeof(struct cam_tfe_bus_wm_resource_data),
 		GFP_KERNEL);
 	if (!rsrc_data) {
 		CAM_DBG(CAM_ISP, "Failed to alloc for WM res priv");
@@ -845,7 +847,8 @@ static int cam_tfe_bus_deinit_wm_resource(
 	wm_res->res_priv = NULL;
 	if (!rsrc_data)
 		return -ENOMEM;
-	kfree(rsrc_data);
+	CAM_MEM_FREE(rsrc_data);
+	rsrc_data = NULL;
 
 	return 0;
 }
@@ -1120,7 +1123,7 @@ static int cam_tfe_bus_init_comp_grp(uint32_t index,
 {
 	struct cam_tfe_bus_comp_grp_data *rsrc_data = NULL;
 
-	rsrc_data = kzalloc(sizeof(struct cam_tfe_bus_comp_grp_data),
+	rsrc_data = CAM_MEM_ZALLOC(sizeof(struct cam_tfe_bus_comp_grp_data),
 		GFP_KERNEL);
 	if (!rsrc_data)
 		return -ENOMEM;
@@ -1162,7 +1165,8 @@ static int cam_tfe_bus_deinit_comp_grp(
 		CAM_ERR(CAM_ISP, "comp_grp_priv is NULL");
 		return -ENODEV;
 	}
-	kfree(rsrc_data);
+	CAM_MEM_FREE(rsrc_data);
+	rsrc_data = NULL;
 
 	return 0;
 }
@@ -1520,7 +1524,7 @@ static int cam_tfe_bus_init_tfe_out_resource(uint32_t  index,
 		return -EFAULT;
 	}
 
-	rsrc_data = kzalloc(sizeof(struct cam_tfe_bus_tfe_out_data),
+	rsrc_data = CAM_MEM_ZALLOC(sizeof(struct cam_tfe_bus_tfe_out_data),
 		GFP_KERNEL);
 	if (!rsrc_data) {
 		rc = -ENOMEM;
@@ -1578,7 +1582,8 @@ static int cam_tfe_bus_deinit_tfe_out_resource(
 
 	if (!rsrc_data)
 		return -ENOMEM;
-	kfree(rsrc_data);
+	CAM_MEM_FREE(rsrc_data);
+	rsrc_data = NULL;
 
 	return 0;
 }
@@ -2343,14 +2348,14 @@ int cam_tfe_bus_init(
 		goto end;
 	}
 
-	tfe_bus_local = kzalloc(sizeof(struct cam_tfe_bus), GFP_KERNEL);
+	tfe_bus_local = CAM_MEM_ZALLOC(sizeof(struct cam_tfe_bus), GFP_KERNEL);
 	if (!tfe_bus_local) {
 		CAM_DBG(CAM_ISP, "Failed to alloc for tfe_bus");
 		rc = -ENOMEM;
 		goto end;
 	}
 
-	bus_priv = kzalloc(sizeof(struct cam_tfe_bus_priv),
+	bus_priv = CAM_MEM_ZALLOC(sizeof(struct cam_tfe_bus_priv),
 		GFP_KERNEL);
 	if (!bus_priv) {
 		CAM_DBG(CAM_ISP, "Failed to alloc for tfe_bus_priv");
@@ -2456,10 +2461,12 @@ deinit_wm:
 	for (--i; i >= 0; i--)
 		cam_tfe_bus_deinit_wm_resource(&bus_priv->bus_client[i]);
 
-	kfree(tfe_bus_local->bus_priv);
+	CAM_MEM_FREE(tfe_bus_local->bus_priv);
+	tfe_bus_local->bus_priv = NULL;
 
 free_bus_local:
-	kfree(tfe_bus_local);
+	CAM_MEM_FREE(tfe_bus_local);
+	tfe_bus_local = NULL;
 
 end:
 	return rc;
@@ -2512,10 +2519,11 @@ int cam_tfe_bus_deinit(
 	INIT_LIST_HEAD(&bus_priv->used_comp_grp);
 
 	mutex_destroy(&bus_priv->common_data.bus_mutex);
-	kfree(tfe_bus_local->bus_priv);
+	CAM_MEM_FREE(tfe_bus_local->bus_priv);
+	tfe_bus_local->bus_priv = NULL;
 
 free_bus_local:
-	kfree(tfe_bus_local);
+	CAM_MEM_FREE(tfe_bus_local);
 
 	*tfe_bus = NULL;
 

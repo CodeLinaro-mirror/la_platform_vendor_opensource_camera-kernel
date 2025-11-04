@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_ois_dev.h"
@@ -11,6 +11,7 @@
 #include "cam_debug_util.h"
 #include "camera_main.h"
 #include "cam_compat.h"
+#include "cam_mem_mgr_api.h"
 
 static int cam_ois_subdev_close_internal(struct v4l2_subdev *sd,
 	struct v4l2_subdev_fh *fh)
@@ -193,9 +194,9 @@ static int cam_ois_i2c_driver_probe(struct i2c_client *client,
 		goto probe_failure;
 	}
 
-	o_ctrl = kzalloc(sizeof(*o_ctrl), GFP_KERNEL);
+	o_ctrl = CAM_MEM_ZALLOC(sizeof(*o_ctrl), GFP_KERNEL);
 	if (!o_ctrl) {
-		CAM_ERR(CAM_OIS, "kzalloc failed");
+		CAM_ERR(CAM_OIS, "CAM_MEM_ZALLOC failed");
 		rc = -ENOMEM;
 		goto probe_failure;
 	}
@@ -208,7 +209,7 @@ static int cam_ois_i2c_driver_probe(struct i2c_client *client,
 	o_ctrl->io_master_info.master_type = I2C_MASTER;
 	o_ctrl->io_master_info.client = client;
 
-	soc_private = kzalloc(sizeof(struct cam_ois_soc_private),
+	soc_private = CAM_MEM_ZALLOC(sizeof(struct cam_ois_soc_private),
 		GFP_KERNEL);
 	if (!soc_private) {
 		rc = -ENOMEM;
@@ -231,9 +232,11 @@ static int cam_ois_i2c_driver_probe(struct i2c_client *client,
 	return rc;
 
 soc_free:
-	kfree(soc_private);
+	CAM_MEM_FREE(soc_private);
+	soc_private = NULL;
 octrl_free:
-	kfree(o_ctrl);
+	CAM_MEM_FREE(o_ctrl);
+	o_ctrl = NULL;
 probe_failure:
 	return rc;
 }
@@ -270,10 +273,11 @@ int cam_ois_i2c_driver_remove_common(struct i2c_client *client)
 		(struct cam_ois_soc_private *)soc_info->soc_private;
 	power_info = &soc_private->power_info;
 
-	kfree(o_ctrl->soc_info.soc_private);
+	CAM_MEM_FREE(o_ctrl->soc_info.soc_private);
+	o_ctrl->soc_info.soc_private = NULL;
 	v4l2_set_subdevdata(&o_ctrl->v4l2_dev_str.sd, NULL);
-	kfree(o_ctrl);
-
+	CAM_MEM_FREE(o_ctrl);
+	o_ctrl = NULL;
 	return rc;
 }
 
@@ -285,7 +289,7 @@ static int cam_ois_component_bind(struct device *dev,
 	struct cam_ois_soc_private     *soc_private = NULL;
 	struct platform_device *pdev = to_platform_device(dev);
 
-	o_ctrl = kzalloc(sizeof(struct cam_ois_ctrl_t), GFP_KERNEL);
+	o_ctrl = CAM_MEM_ZALLOC(sizeof(struct cam_ois_ctrl_t), GFP_KERNEL);
 	if (!o_ctrl)
 		return -ENOMEM;
 
@@ -297,12 +301,12 @@ static int cam_ois_component_bind(struct device *dev,
 	o_ctrl->ois_device_type = MSM_CAMERA_PLATFORM_DEVICE;
 
 	o_ctrl->io_master_info.master_type = CCI_MASTER;
-	o_ctrl->io_master_info.cci_client = kzalloc(
+	o_ctrl->io_master_info.cci_client = CAM_MEM_ZALLOC(
 		sizeof(struct cam_sensor_cci_client), GFP_KERNEL);
 	if (!o_ctrl->io_master_info.cci_client)
 		goto free_o_ctrl;
 
-	soc_private = kzalloc(sizeof(struct cam_ois_soc_private),
+	soc_private = CAM_MEM_ZALLOC(sizeof(struct cam_ois_soc_private),
 		GFP_KERNEL);
 	if (!soc_private) {
 		rc = -ENOMEM;
@@ -339,11 +343,14 @@ static int cam_ois_component_bind(struct device *dev,
 unreg_subdev:
 	cam_unregister_subdev(&(o_ctrl->v4l2_dev_str));
 free_soc:
-	kfree(soc_private);
+	CAM_MEM_FREE(soc_private);
+	soc_private = NULL;
 free_cci_client:
-	kfree(o_ctrl->io_master_info.cci_client);
+	CAM_MEM_FREE(o_ctrl->io_master_info.cci_client);
+	o_ctrl->io_master_info.cci_client = NULL;
 free_o_ctrl:
-	kfree(o_ctrl);
+	CAM_MEM_FREE(o_ctrl);
+	o_ctrl = NULL;
 	return rc;
 }
 
@@ -376,12 +383,14 @@ static void cam_ois_component_unbind(struct device *dev,
 	soc_private =
 		(struct cam_ois_soc_private *)o_ctrl->soc_info.soc_private;
 	power_info = &soc_private->power_info;
-
-	kfree(o_ctrl->soc_info.soc_private);
-	kfree(o_ctrl->io_master_info.cci_client);
+	CAM_MEM_FREE(o_ctrl->soc_info.soc_private);
+	o_ctrl->soc_info.soc_private = NULL;
+	CAM_MEM_FREE(o_ctrl->io_master_info.cci_client);
+	o_ctrl->io_master_info.cci_client = NULL;
 	platform_set_drvdata(pdev, NULL);
 	v4l2_set_subdevdata(&o_ctrl->v4l2_dev_str.sd, NULL);
-	kfree(o_ctrl);
+	CAM_MEM_FREE(o_ctrl);
+	o_ctrl = NULL;
 }
 
 const static struct component_ops cam_ois_component_ops = {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -11,6 +12,7 @@
 #include "cam_io_util.h"
 #include "cam_irq_controller.h"
 #include "cam_debug_util.h"
+#include "cam_mem_mgr_api.h"
 
 /**
  * struct cam_irq_evt_handler:
@@ -116,14 +118,19 @@ int cam_irq_controller_deinit(void **irq_controller)
 			&controller->evt_handler_list_head,
 			struct cam_irq_evt_handler, list_node);
 		list_del_init(&evt_handler->list_node);
-		kfree(evt_handler->evt_bit_mask_arr);
-		kfree(evt_handler);
+		CAM_MEM_FREE(evt_handler->evt_bit_mask_arr);
+		evt_handler->evt_bit_mask_arr = NULL;
+		CAM_MEM_FREE(evt_handler);
+		evt_handler = NULL;
 	}
 
-	kfree(controller->th_payload.evt_status_arr);
-	kfree(controller->irq_status_arr);
-	kfree(controller->irq_register_arr);
-	kfree(controller);
+	CAM_MEM_FREE(controller->th_payload.evt_status_arr);
+	controller->th_payload.evt_status_arr = NULL;
+	CAM_MEM_FREE(controller->irq_status_arr);
+	controller->irq_status_arr = NULL;
+	CAM_MEM_FREE(controller->irq_register_arr);
+	controller->irq_register_arr = NULL;
+	CAM_MEM_FREE(controller);
 	*irq_controller = NULL;
 	return 0;
 }
@@ -146,13 +153,13 @@ int cam_irq_controller_init(const char       *name,
 		return rc;
 	}
 
-	controller = kzalloc(sizeof(struct cam_irq_controller), GFP_KERNEL);
+	controller = CAM_MEM_ZALLOC(sizeof(struct cam_irq_controller), GFP_KERNEL);
 	if (!controller) {
 		CAM_DBG(CAM_IRQ_CTRL, "Failed to allocate IRQ Controller");
 		return -ENOMEM;
 	}
 
-	controller->irq_register_arr = kzalloc(register_info->num_registers *
+	controller->irq_register_arr = CAM_MEM_ZALLOC(register_info->num_registers *
 		sizeof(struct cam_irq_register_obj), GFP_KERNEL);
 	if (!controller->irq_register_arr) {
 		CAM_DBG(CAM_IRQ_CTRL, "Failed to allocate IRQ register Arr");
@@ -160,7 +167,7 @@ int cam_irq_controller_init(const char       *name,
 		goto reg_alloc_error;
 	}
 
-	controller->irq_status_arr = kzalloc(register_info->num_registers *
+	controller->irq_status_arr = CAM_MEM_ZALLOC(register_info->num_registers *
 		sizeof(uint32_t), GFP_KERNEL);
 	if (!controller->irq_status_arr) {
 		CAM_DBG(CAM_IRQ_CTRL, "Failed to allocate IRQ status Arr");
@@ -169,7 +176,7 @@ int cam_irq_controller_init(const char       *name,
 	}
 
 	controller->th_payload.evt_status_arr =
-		kzalloc(register_info->num_registers * sizeof(uint32_t),
+		CAM_MEM_ZALLOC(register_info->num_registers * sizeof(uint32_t),
 		GFP_KERNEL);
 	if (!controller->th_payload.evt_status_arr) {
 		CAM_DBG(CAM_IRQ_CTRL,
@@ -222,11 +229,14 @@ int cam_irq_controller_init(const char       *name,
 	return rc;
 
 evt_mask_alloc_error:
-	kfree(controller->irq_status_arr);
+	CAM_MEM_FREE(controller->irq_status_arr);
+	controller->irq_status_arr = NULL;
 status_alloc_error:
-	kfree(controller->irq_register_arr);
+	CAM_MEM_FREE(controller->irq_register_arr);
+	controller->irq_register_arr = NULL;
 reg_alloc_error:
-	kfree(controller);
+	CAM_MEM_FREE(controller);
+	controller = NULL;
 
 	return rc;
 }
@@ -288,13 +298,13 @@ int cam_irq_controller_subscribe_irq(void *irq_controller,
 		return -EINVAL;
 	}
 
-	evt_handler = kzalloc(sizeof(struct cam_irq_evt_handler), GFP_KERNEL);
+	evt_handler = CAM_MEM_ZALLOC(sizeof(struct cam_irq_evt_handler), GFP_KERNEL);
 	if (!evt_handler) {
 		CAM_DBG(CAM_IRQ_CTRL, "Error allocating hlist_node");
 		return -ENOMEM;
 	}
 
-	evt_handler->evt_bit_mask_arr = kzalloc(sizeof(uint32_t) *
+	evt_handler->evt_bit_mask_arr = CAM_MEM_ZALLOC(sizeof(uint32_t) *
 		controller->num_registers, GFP_KERNEL);
 	if (!evt_handler->evt_bit_mask_arr) {
 		CAM_DBG(CAM_IRQ_CTRL, "Error allocating hlist_node");
@@ -351,7 +361,7 @@ int cam_irq_controller_subscribe_irq(void *irq_controller,
 	return evt_handler->index;
 
 free_evt_handler:
-	kfree(evt_handler);
+	CAM_MEM_FREE(evt_handler);
 	evt_handler = NULL;
 
 	return rc;
@@ -540,8 +550,10 @@ int cam_irq_controller_unsubscribe_irq(void *irq_controller,
 					controller->global_clear_offset);
 		}
 
-		kfree(evt_handler->evt_bit_mask_arr);
-		kfree(evt_handler);
+		CAM_MEM_FREE(evt_handler->evt_bit_mask_arr);
+		evt_handler->evt_bit_mask_arr = NULL;
+		CAM_MEM_FREE(evt_handler);
+		evt_handler = NULL;
 	}
 
 	if (need_lock)

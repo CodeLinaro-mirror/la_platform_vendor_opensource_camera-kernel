@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -28,6 +28,7 @@
 #include "cam_trace.h"
 #include "cam_common_util.h"
 #include "cam_compat.h"
+#include "cam_mem_mgr_api.h"
 
 #define SHARED_MEM_POOL_GRANULARITY 16
 
@@ -520,7 +521,8 @@ static void cam_smmu_page_fault_work(struct work_struct *work)
 		}
 	}
 	cam_smmu_dump_cb_info(idx);
-	kfree(payload);
+	CAM_MEM_FREE(payload);
+	payload = NULL;
 }
 
 static void cam_smmu_dump_cb_info(int idx)
@@ -831,7 +833,7 @@ static int cam_smmu_iommu_fault_handler(struct iommu_domain *domain,
 		return -EINVAL;
 	}
 
-	payload = kzalloc(sizeof(struct cam_smmu_work_payload), GFP_ATOMIC);
+	payload = CAM_MEM_ZALLOC(sizeof(struct cam_smmu_work_payload), GFP_ATOMIC);
 	if (!payload)
 		return -EINVAL;
 
@@ -1062,7 +1064,7 @@ static int cam_smmu_init_scratch_map(struct scratch_mapping *scratch_map,
 		goto bail;
 	}
 
-	scratch_map->bitmap = kzalloc(bitmap_size, GFP_KERNEL);
+	scratch_map->bitmap = CAM_MEM_ZALLOC(bitmap_size, GFP_KERNEL);
 	if (!scratch_map->bitmap) {
 		err = -ENOMEM;
 		goto bail;
@@ -2135,7 +2137,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 	}
 
 	/* fill up mapping_info */
-	*mapping_info = kzalloc(sizeof(struct cam_dma_buff_info), GFP_KERNEL);
+	*mapping_info = CAM_MEM_ZALLOC(sizeof(struct cam_dma_buff_info), GFP_KERNEL);
 	if (!(*mapping_info)) {
 		rc = -ENOSPC;
 		goto err_alloc;
@@ -2152,7 +2154,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 
 	if (!*paddr_ptr || !*len_ptr) {
 		CAM_ERR(CAM_SMMU, "Error: Space Allocation failed");
-		kfree(*mapping_info);
+		CAM_MEM_FREE(*mapping_info);
 		*mapping_info = NULL;
 		rc = -ENOSPC;
 		goto err_alloc;
@@ -2337,7 +2339,8 @@ static int cam_smmu_unmap_buf_and_remove_from_list(
 	list_del_init(&mapping_info->list);
 
 	/* free one buffer */
-	kfree(mapping_info);
+	CAM_MEM_FREE(mapping_info);
+	mapping_info = NULL;
 	return 0;
 }
 
@@ -2542,7 +2545,7 @@ static int cam_smmu_alloc_scratch_buffer_add_to_list(int idx,
 	 * This table will go inside the 'mapping' structure
 	 * where it will be held until put_scratch_buffer is called
 	 */
-	table = kzalloc(sizeof(struct sg_table), GFP_KERNEL);
+	table = CAM_MEM_ZALLOC(sizeof(struct sg_table), GFP_KERNEL);
 	if (!table) {
 		rc = -ENOMEM;
 		goto err_table_alloc;
@@ -2590,7 +2593,7 @@ static int cam_smmu_alloc_scratch_buffer_add_to_list(int idx,
 	}
 
 	/* Now update our mapping information within the cb_set struct */
-	mapping_info = kzalloc(sizeof(struct cam_dma_buff_info), GFP_KERNEL);
+	mapping_info = CAM_MEM_ZALLOC(sizeof(struct cam_dma_buff_info), GFP_KERNEL);
 	if (!mapping_info) {
 		rc = -ENOMEM;
 		goto err_mapping_info;
@@ -2630,7 +2633,8 @@ err_iommu_map:
 err_page_alloc:
 	sg_free_table(table);
 err_sg_alloc:
-	kfree(table);
+	CAM_MEM_FREE(table);
+	table = NULL;
 err_table_alloc:
 	return rc;
 }
@@ -2672,10 +2676,11 @@ static int cam_smmu_free_scratch_buffer_remove_from_list(
 	__free_pages(sg_page(mapping_info->table->sgl),
 			get_order(mapping_info->phys_len));
 	sg_free_table(mapping_info->table);
-	kfree(mapping_info->table);
+	CAM_MEM_FREE(mapping_info->table);
+	mapping_info->table = NULL;
 	list_del_init(&mapping_info->list);
 
-	kfree(mapping_info);
+	CAM_MEM_FREE(mapping_info);
 	mapping_info = NULL;
 
 	return rc;
@@ -2876,7 +2881,7 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 	*len_ptr = (size_t)sg_dma_len(table->sgl);
 
 	/* fill up mapping_info */
-	mapping_info = kzalloc(sizeof(struct cam_sec_buff_info), GFP_KERNEL);
+	mapping_info = CAM_MEM_ZALLOC(sizeof(struct cam_sec_buff_info), GFP_KERNEL);
 	if (!mapping_info) {
 		rc = -ENOMEM;
 		goto err_unmap_sg;
@@ -3016,7 +3021,8 @@ static int cam_smmu_secure_unmap_buf_and_remove_from_list(
 		mapping_info->ion_fd,  mapping_info->i_ino, idx);
 
 	/* free one buffer */
-	kfree(mapping_info);
+	CAM_MEM_FREE(mapping_info);
+	mapping_info = NULL;
 	return 0;
 }
 
@@ -3653,7 +3659,7 @@ static void cam_smmu_deinit_cb(struct cam_context_bank_info *cb)
 	}
 
 	if (cb->scratch_buf_support) {
-		kfree(cb->scratch_map.bitmap);
+		CAM_MEM_FREE(cb->scratch_map.bitmap);
 		cb->scratch_map.bitmap = NULL;
 	}
 }
@@ -3752,7 +3758,7 @@ end:
 	}
 
 	if (cb->scratch_buf_support) {
-		kfree(cb->scratch_map.bitmap);
+		CAM_MEM_FREE(cb->scratch_map.bitmap);
 		cb->scratch_map.bitmap = NULL;
 	}
 
