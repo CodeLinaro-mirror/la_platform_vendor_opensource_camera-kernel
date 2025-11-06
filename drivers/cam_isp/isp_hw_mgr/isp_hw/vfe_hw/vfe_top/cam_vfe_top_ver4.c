@@ -877,7 +877,8 @@ int cam_vfe_top_ver4_reserve(void *device_priv,
 					break;
 				}
 
-				if (!(vfe_priv->hw_ctxt_mask & acquire_args->hw_ctxt_mask)) {
+				if ((!(vfe_priv->hw_ctxt_mask & acquire_args->hw_ctxt_mask)) &&
+					!(acquire_args->is_offline)) {
 					CAM_DBG(CAM_ISP,
 						"VFE:%d Update hw ctxt mask: 0x%x for camif curr_mask_val: 0x%x",
 						top_priv->common_data.hw_intf->hw_idx,
