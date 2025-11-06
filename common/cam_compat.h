@@ -110,6 +110,25 @@ int cam_cpas_drv_channel_switch_for_dev(const struct device *dev);
 inline struct icc_path *cam_icc_get_path(struct device *dev,
 	const int src_id, const int dst_id, const char *path_name, bool use_path_name);
 
+#ifndef QCOM_SCM_CAMERA_MAX_QOS_CNT
+#define QCOM_SCM_CAMERA_MAX_QOS_CNT	2
+
+struct qcom_scm_camera_qos {
+	u32 offset;
+	u32 val;
+};
+
+/*
+ * Dummy function to override qcom_scm_camera_update_camnoc_qos
+ * when this definition is missing in the kernel.
+ */
+static inline int qcom_scm_camera_update_camnoc_qos(uint32_t use_case_id,
+	uint32_t cam_qos_cnt, struct qcom_scm_camera_qos *cam_qos)
+{
+	return 0;
+}
+#endif /* QCOM_SCM_CAMERA_MAX_QOS_CNT */
+
 int cam_update_camnoc_qos_settings(uint32_t use_case_id,
 	uint32_t num_arg, struct qcom_scm_camera_qos *scm_buf);
 
