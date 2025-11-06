@@ -15,7 +15,7 @@
 #include <media/cam_cpas.h>
 #include <media/cam_req_mgr.h>
 
-#include <dt-bindings/camera/msm-camera.h>
+#include <common/cam_dt_bindings.h>
 
 #include "cam_subdev.h"
 #include "cam_cpas_hw_intf.h"

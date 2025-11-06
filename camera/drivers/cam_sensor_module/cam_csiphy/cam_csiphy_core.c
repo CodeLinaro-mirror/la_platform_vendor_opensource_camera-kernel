@@ -6,7 +6,7 @@
 
 #include <linux/module.h>
 
-#include <dt-bindings/camera/msm-camera.h>
+#include <common/cam_dt_bindings.h>
 
 #include "cam_compat.h"
 #include "cam_csiphy_core.h"

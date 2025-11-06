@@ -22,7 +22,7 @@
 #include "cam_tasklet_util.h"
 #include "cam_common_util.h"
 #include "cam_tfe_csid_hw_intf.h"
-#include <dt-bindings/camera/msm-camera.h>
+#include <common/cam_dt_bindings.h>
 #include "cam_cpas_hw_intf.h"
 
 /* Timeout value in msec */

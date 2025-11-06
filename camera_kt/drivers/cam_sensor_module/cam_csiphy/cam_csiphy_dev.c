@@ -9,7 +9,7 @@
 #include "cam_csiphy_soc.h"
 #include "cam_csiphy_core.h"
 #include <media/cam_sensor.h>
-#include <dt-bindings/camera/msm-camera.h>
+#include <common/cam_dt_bindings.h>
 #include "camera_main.h"
 
 static struct dentry *root_dentry;

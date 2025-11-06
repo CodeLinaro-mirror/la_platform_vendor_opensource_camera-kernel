@@ -7,7 +7,7 @@
 #ifndef _CAM_DEBUG_UTIL_H_
 #define _CAM_DEBUG_UTIL_H_
 
-#include <dt-bindings/camera/msm-camera.h>
+#include <common/cam_dt_bindings.h>
 #include <linux/platform_device.h>
 #include "cam_trace.h"
 

@@ -11,7 +11,7 @@
 #include <media/cam_defs.h>
 #include <media/cam_req_mgr.h>
 
-#include <dt-bindings/camera/msm-camera.h>
+#include <common/cam_dt_bindings.h>
 
 #include "cam_ife_csid_common.h"
 #include "cam_ife_csid_hw_ver1.h"

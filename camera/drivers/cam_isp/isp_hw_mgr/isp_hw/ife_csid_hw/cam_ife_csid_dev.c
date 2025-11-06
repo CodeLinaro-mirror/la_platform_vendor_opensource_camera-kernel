@@ -13,7 +13,7 @@
 #include "cam_debug_util.h"
 #include "camera_main.h"
 #include "cam_cpas_api.h"
-#include <dt-bindings/camera/msm-camera.h>
+#include <common/cam_dt_bindings.h>
 
 static struct cam_hw_intf *cam_ife_csid_hw_list[CAM_IFE_CSID_HW_NUM_MAX] = {
 	0, 0, 0, 0};

@@ -7,7 +7,7 @@
 #include <linux/slab.h>
 #include <linux/mod_devicetable.h>
 #include <linux/of_device.h>
-#include <dt-bindings/camera/msm-camera.h>
+#include <common/cam_dt_bindings.h>
 #include "cam_tfe_csid_core.h"
 #include "cam_tfe_csid_dev.h"
 #include "cam_tfe_csid_hw_intf.h"

@@ -11,7 +11,7 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 
-#include <dt-bindings/camera/msm-camera.h>
+#include <common/cam_dt_bindings.h>
 
 #include "cam_cpas_api.h"
 #include "cam_cpas_hw_intf.h"

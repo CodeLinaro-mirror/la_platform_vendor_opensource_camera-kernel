@@ -8,7 +8,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/of_device.h>
 #include <linux/module.h>
-#include <dt-bindings/camera/msm-camera.h>
+#include <common/cam_dt_bindings.h>
 #include "cam_sfe_dev.h"
 #include "cam_sfe_core.h"
 #include "cam_sfe_soc.h"
