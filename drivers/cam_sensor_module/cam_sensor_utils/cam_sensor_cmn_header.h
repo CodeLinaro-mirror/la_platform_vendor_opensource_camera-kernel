@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SENSOR_CMN_HEADER_
@@ -23,6 +23,11 @@
 
 #define MAX_PER_FRAME_ARRAY 64
 #define BATCH_SIZE_MAX      16
+#define CAM_I3C_DEV_PROBE_TIMEOUT_MS           10
+#define CAM_I3C_DEV_PROBE_TIMEOUT_US          (CAM_I3C_DEV_PROBE_TIMEOUT_MS * 1000)
+#define I3C_SENSOR_DEV_ID_DT_PATH              "/soc/qcom,cam-i3c-id-table"
+#define MAX_I3C_DEVICE_ID_ENTRIES              (MAX_CAMERAS * 2)
+#define UA_PER_MA                              1000
 
 #define CAM_SENSOR_NAME    "cam-sensor"
 #define CAM_ACTUATOR_NAME  "cam-actuator"
