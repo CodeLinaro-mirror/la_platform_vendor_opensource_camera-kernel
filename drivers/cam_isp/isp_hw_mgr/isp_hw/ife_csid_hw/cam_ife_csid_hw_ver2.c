@@ -4864,7 +4864,6 @@ static bool cam_ife_csid_hw_ver2_use_master_slave_cfg(
 	struct cam_ife_csid_ver2_path_reg_info *path_reg = NULL;
 	struct cam_ife_csid_ver2_path_data *path_data;
 	struct cam_isp_resource_node    *res = NULL;
-	struct cam_isp_resource_node    *ppp_res = NULL;
 
 	csid_reg = (struct cam_ife_csid_ver2_reg_info *)csid_hw->core_info->csid_reg;
 	path_reg = csid_reg->path_reg[res_id];
@@ -4873,15 +4872,9 @@ static bool cam_ife_csid_hw_ver2_use_master_slave_cfg(
 
 	switch (res_id) {
 	case CAM_IFE_PIX_PATH_RES_RDI_0:
-		if (path_data->path_cfg.is_aeb_en || path_data->path_cfg.sfe_shdr ||
-			csid_hw->flags.rdi_lcr_en)
+		if (path_reg->use_master_slave_default || path_data->path_cfg.is_aeb_en ||
+			path_data->path_cfg.sfe_shdr || csid_hw->flags.rdi_lcr_en)
 			ret = true;
-
-		if (path_reg->use_master_slave_default) {
-			ppp_res = &csid_hw->path_res[CAM_IFE_PIX_PATH_RES_PPP];
-			ret = ppp_res->res_state > CAM_ISP_RESOURCE_STATE_AVAILABLE ? true : false;
-		}
-
 		break;
 	case CAM_IFE_PIX_PATH_RES_RDI_1:
 	case CAM_IFE_PIX_PATH_RES_RDI_2:
@@ -5151,13 +5144,21 @@ static int cam_ife_csid_ver2_init_config_rdi_path(
 
 	cam_ife_csid_ver2_res_master_slave_cfg(csid_hw, res->res_id);
 
-	if (csid_hw->debug_info.debug_val &
-		CAM_IFE_CSID_DEBUG_ENABLE_HBI_VBI_INFO) {
+	if (csid_hw->debug_info.debug_val & CAM_IFE_CSID_DEBUG_ENABLE_HBI_VBI_INFO) {
 		val = cam_io_r_mb(mem_base +
 			path_reg->base + path_data->reg_offsets->format_measure_cfg0_addr);
 		val |= cmn_reg->measure_en_hbi_vbi_cnt_mask;
 		cam_io_w_mb(val, mem_base +
 			path_reg->base + path_data->reg_offsets->format_measure_cfg0_addr);
+	} else if (cmn_reg->format_measure_live_cnt_shift_val) {
+		val = cam_io_r_mb(mem_base +
+			path_reg->format_measure_cfg0_addr);
+		val |= BIT(cmn_reg->format_measure_live_cnt_shift_val);
+		cam_io_w_mb(val, mem_base +
+			path_reg->format_measure_cfg0_addr);
+		CAM_DBG(CAM_ISP,
+			"CSID[%u] path: %s format_measure_cfg0: 0x%x live_cnt enabled",
+			csid_hw->hw_intf->hw_idx, res->res_name, val);
 	}
 
 	return rc;
@@ -5357,12 +5358,20 @@ static int cam_ife_csid_ver2_init_config_pxl_path(
 		cam_io_w_mb(val, path_reg_base + path_data->reg_offsets->err_recovery_cfg0_addr);
 	}
 
-	if (csid_hw->debug_info.debug_val &
-		CAM_IFE_CSID_DEBUG_ENABLE_HBI_VBI_INFO) {
+	if (csid_hw->debug_info.debug_val & CAM_IFE_CSID_DEBUG_ENABLE_HBI_VBI_INFO) {
 		val = cam_io_r_mb(mem_base +
 			path_reg->base + path_data->reg_offsets->format_measure_cfg0_addr);
 		val |= csid_reg->cmn_reg->measure_en_hbi_vbi_cnt_mask;
 		cam_io_w_mb(val, path_reg_base + path_data->reg_offsets->format_measure_cfg0_addr);
+	} else if (cmn_reg->format_measure_live_cnt_shift_val) {
+		val = cam_io_r_mb(mem_base +
+			path_reg->format_measure_cfg0_addr);
+		val |= BIT(cmn_reg->format_measure_live_cnt_shift_val);
+		cam_io_w_mb(val, mem_base +
+			path_reg->format_measure_cfg0_addr);
+		CAM_DBG(CAM_ISP,
+			"CSID[%u] path: %s format_measure_cfg0: 0x%x live_cnt enabled",
+			csid_hw->hw_intf->hw_idx, res->res_name, val);
 	}
 
 	cam_ife_csid_ver2_res_master_slave_cfg(csid_hw, res->res_id);

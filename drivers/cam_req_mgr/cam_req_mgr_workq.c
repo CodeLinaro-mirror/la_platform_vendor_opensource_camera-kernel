@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_req_mgr_workq.h"
@@ -200,7 +200,7 @@ int cam_req_mgr_workq_create(char *name, int32_t num_tasks,
 	struct cam_req_mgr_core_workq **workq, enum crm_workq_context in_irq,
 	int flags, void (*func)(struct work_struct *w))
 {
-	int32_t i, wq_flags = 0, max_active_tasks = 0;
+	int32_t i, wq_flags = 0;
 	struct crm_workq_task  *task;
 	struct cam_req_mgr_core_workq *crm_workq = NULL;
 	char buf[128] = "crm_workq-";
@@ -215,13 +215,12 @@ int cam_req_mgr_workq_create(char *name, int32_t num_tasks,
 		if (flags & CAM_WORKQ_FLAG_HIGH_PRIORITY)
 			wq_flags |= WQ_HIGHPRI;
 
-		if (flags & CAM_WORKQ_FLAG_SERIAL)
-			max_active_tasks = 1;
-
 		strlcat(buf, name, sizeof(buf));
 		CAM_DBG(CAM_CRM, "create workque crm_workq-%s", name);
-		crm_workq->job = alloc_workqueue(buf,
-			wq_flags, max_active_tasks, NULL);
+		if (flags & CAM_WORKQ_FLAG_SERIAL)
+			crm_workq->job = alloc_ordered_workqueue(buf, wq_flags);
+		else
+			crm_workq->job = alloc_workqueue(buf, wq_flags, 0);
 		if (!crm_workq->job) {
 			CAM_MEM_FREE(crm_workq);
 			return -ENOMEM;

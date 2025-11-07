@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sensor_dev.h"
@@ -413,6 +413,10 @@ static int cam_sensor_i2c_component_bind(struct device *dev,
 		INIT_LIST_HEAD(&(s_ctrl->i2c_data.bubble_update[i].list_head));
 	}
 
+	/* Initialize mutex and read buf list */
+	mutex_init(&(s_ctrl->cam_sensor_mutex));
+	INIT_LIST_HEAD(&(s_ctrl->read_buf_list));
+
 	cam_sensor_module_add_i2c_device((void *) s_ctrl, CAM_SENSOR_DEVICE);
 
 	s_ctrl->bridge_intf.device_hdl = -1;
@@ -479,6 +483,7 @@ static void cam_sensor_i2c_component_unbind(struct device *dev,
 	CAM_MEM_FREE(s_ctrl->i2c_data.frame_skip);
 	CAM_MEM_FREE(s_ctrl->i2c_data.bubble_update);
 	v4l2_set_subdevdata(&(s_ctrl->v4l2_dev_str.sd), NULL);
+	mutex_destroy(&(s_ctrl->cam_sensor_mutex));
 	CAM_MEM_FREE(s_ctrl);
 }
 
@@ -654,6 +659,10 @@ static int cam_sensor_component_bind(struct device *dev,
 		INIT_LIST_HEAD(&(s_ctrl->i2c_data.bubble_update[i].list_head));
 	}
 
+	/* Initialize mutex and read buf list */
+	mutex_init(&(s_ctrl->cam_sensor_mutex));
+	INIT_LIST_HEAD(&(s_ctrl->read_buf_list));
+
 	cam_sensor_module_add_i2c_device((void *) s_ctrl, CAM_SENSOR_DEVICE);
 
 	s_ctrl->bridge_intf.device_hdl = -1;
@@ -717,6 +726,7 @@ static void cam_sensor_component_unbind(struct device *dev,
 	CAM_MEM_FREE(s_ctrl->i2c_data.bubble_update);
 	platform_set_drvdata(pdev, NULL);
 	v4l2_set_subdevdata(&(s_ctrl->v4l2_dev_str.sd), NULL);
+	mutex_destroy(&(s_ctrl->cam_sensor_mutex));
 	devm_kfree(&pdev->dev, s_ctrl);
 }
 

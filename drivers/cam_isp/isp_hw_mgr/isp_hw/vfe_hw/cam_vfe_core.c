@@ -689,6 +689,7 @@ int cam_vfe_core_init(struct cam_vfe_hw_core_info  *core_info,
 {
 	int rc = -EINVAL;
 	struct cam_vfe_soc_private *soc_private = NULL;
+	uint64_t top_hm_base = 0;
 
 	CAM_DBG(CAM_ISP, "Enter");
 
@@ -697,9 +698,16 @@ int cam_vfe_core_init(struct cam_vfe_hw_core_info  *core_info,
 		CAM_ERR(CAM_ISP, "Invalid soc_private");
 		return -ENODEV;
 	}
+	rc = cam_vfe_top_get_top_hm_base(vfe_hw_info->top_hw_info,
+		vfe_hw_info->top_version, &top_hm_base);
+	if (rc) {
+		CAM_ERR(CAM_ISP, "Failed to get top_hm_base, rc=%d", rc);
+		return rc;
+	}
 
 	rc = cam_irq_controller_init(drv_name,
-		CAM_SOC_GET_REG_MAP_START(soc_info, VFE_CORE_BASE_IDX),
+		(CAM_SOC_GET_REG_MAP_START(soc_info, VFE_CORE_BASE_IDX) +
+		top_hm_base),
 		vfe_hw_info->irq_hw_info->top_irq_reg,
 		&core_info->vfe_irq_controller);
 	if (rc) {

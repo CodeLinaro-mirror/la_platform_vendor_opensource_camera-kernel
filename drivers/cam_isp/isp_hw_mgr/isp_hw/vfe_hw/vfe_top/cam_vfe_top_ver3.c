@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -19,17 +19,6 @@
 #define CAM_VFE_LITE_HW_RESET_AND_REG_VAL     0x00000002
 #define CAM_VFE_LITE_HW_RESET_HW_VAL          0x00000001
 #define CAM_CDM_WAIT_COMP_EVENT_BIT           0x2
-
-struct cam_vfe_top_ver3_common_data {
-	struct cam_vfe_top_ver3_hw_info            *hw_info;
-	struct cam_hw_intf                         *hw_intf;
-	struct cam_vfe_top_ver3_reg_offset_common  *common_reg;
-};
-
-struct cam_vfe_top_ver3_priv {
-	struct cam_vfe_top_ver3_common_data common_data;
-	struct cam_vfe_top_priv_common      top_common;
-};
 
 static int cam_vfe_top_ver3_get_path_port_map(struct cam_vfe_top_ver3_priv *top_priv,
 	void *cmd_args, uint32_t arg_size)
@@ -337,9 +326,10 @@ int cam_vfe_top_ver3_init_hw(void *device_priv,
 {
 	struct cam_vfe_top_ver3_priv   *top_priv = device_priv;
 	struct cam_vfe_top_ver3_common_data common_data = top_priv->common_data;
+	uint64_t top_hm_base;
 
 	top_priv->top_common.applied_clk_rate = 0;
-
+	top_hm_base = top_priv->common_data.hw_info->top_hm_base;
 	/**
 	 * Auto clock gating is enabled by default, but no harm
 	 * in setting the value we expect.
@@ -347,20 +337,20 @@ int cam_vfe_top_ver3_init_hw(void *device_priv,
 	CAM_DBG(CAM_ISP, "Enabling clock gating at IFE top");
 
 	cam_soc_util_w_mb(top_priv->top_common.soc_info, VFE_CORE_BASE_IDX,
-		common_data.common_reg->core_cgc_ovd_0, 0x0);
+		top_hm_base + common_data.common_reg->core_cgc_ovd_0, 0x0);
 
 	cam_soc_util_w_mb(top_priv->top_common.soc_info, VFE_CORE_BASE_IDX,
-		common_data.common_reg->core_cgc_ovd_1, 0x0);
+		top_hm_base + common_data.common_reg->core_cgc_ovd_1, 0x0);
 
 	cam_soc_util_w_mb(top_priv->top_common.soc_info, VFE_CORE_BASE_IDX,
-		common_data.common_reg->ahb_cgc_ovd, 0x0);
+		top_hm_base + common_data.common_reg->ahb_cgc_ovd, 0x0);
 
 	cam_soc_util_w_mb(top_priv->top_common.soc_info, VFE_CORE_BASE_IDX,
-		common_data.common_reg->noc_cgc_ovd, 0x0);
+		top_hm_base + common_data.common_reg->noc_cgc_ovd, 0x0);
 
 	top_priv->top_common.hw_version =
 		cam_io_r_mb(top_priv->top_common.soc_info->reg_map[0].mem_base +
-		common_data.common_reg->hw_version);
+		top_hm_base + common_data.common_reg->hw_version);
 
 	return 0;
 }
@@ -374,6 +364,7 @@ int cam_vfe_top_ver3_reset(void *device_priv,
 	struct cam_vfe_top_ver3_reg_offset_common *reg_common = NULL;
 	uint32_t *reset_reg_args = reset_core_args;
 	uint32_t reset_reg_val;
+	uint64_t top_hm_base;
 
 	if (!top_priv || !reset_reg_args) {
 		CAM_ERR(CAM_ISP, "Invalid arguments");
@@ -382,12 +373,22 @@ int cam_vfe_top_ver3_reset(void *device_priv,
 
 	soc_info = top_priv->top_common.soc_info;
 	reg_common = top_priv->common_data.common_reg;
+	top_hm_base = top_priv->common_data.hw_info->top_hm_base;
 
 	soc_private = soc_info->soc_private;
 	if (!soc_private) {
 		CAM_ERR(CAM_ISP, "Invalid soc_private");
 		return -ENODEV;
 	}
+
+	/* Mask All the IRQs except RESET */
+	if (!soc_private->is_ife_lite)
+		reset_reg_val = 0x00000001;
+	else
+		reset_reg_val = 0x00020000;
+
+	cam_io_w_mb(reset_reg_val, CAM_SOC_GET_REG_MAP_START(soc_info, VFE_CORE_BASE_IDX) +
+		top_hm_base + reg_common->top_reset_reg);
 
 	switch (*reset_reg_args) {
 	case CAM_VFE_HW_RESET_HW_AND_REG:
@@ -406,20 +407,10 @@ int cam_vfe_top_ver3_reset(void *device_priv,
 
 	CAM_DBG(CAM_ISP, "reset reg value: 0x%x", reset_reg_val);
 
-	/* Mask All the IRQs except RESET */
-	if (!soc_private->is_ife_lite)
-		cam_io_w_mb(0x00000001,
-			CAM_SOC_GET_REG_MAP_START(soc_info, VFE_CORE_BASE_IDX)
-			+ 0x3C);
-	else
-		cam_io_w_mb(0x00020000,
-			CAM_SOC_GET_REG_MAP_START(soc_info, VFE_CORE_BASE_IDX)
-			+ 0x28);
-
 	/* Reset HW */
 	cam_io_w_mb(reset_reg_val,
 		CAM_SOC_GET_REG_MAP_START(soc_info, VFE_CORE_BASE_IDX) +
-		reg_common->global_reset_cmd);
+		top_hm_base + reg_common->global_reset_cmd);
 
 	CAM_DBG(CAM_ISP, "Reset HW exit");
 	return 0;
@@ -503,21 +494,25 @@ int cam_vfe_top_ver3_release(void *device_priv,
 	void *release_args, uint32_t arg_size)
 {
 	struct cam_isp_resource_node            *mux_res;
+	struct cam_vfe_top_ver3_priv            *top_priv;
 
 	if (!device_priv || !release_args) {
 		CAM_ERR(CAM_ISP, "Error, Invalid input arguments");
 		return -EINVAL;
 	}
 
-	mux_res = (struct cam_isp_resource_node *)release_args;
+	mux_res  = (struct cam_isp_resource_node *)release_args;
+	top_priv = (struct cam_vfe_top_ver3_priv *)device_priv;
 
-	CAM_DBG(CAM_ISP, "%s Resource in state %d", mux_res->res_name,
-		mux_res->res_state);
+	CAM_DBG(CAM_ISP, "VFE:%u %s Resource in state %d", top_priv->common_data.hw_intf->hw_idx,
+		mux_res->res_name, mux_res->res_state);
 	if (mux_res->res_state < CAM_ISP_RESOURCE_STATE_RESERVED) {
 		CAM_ERR(CAM_ISP, "Error, Resource in Invalid res_state :%d",
 			mux_res->res_state);
 		return -EINVAL;
 	}
+
+	memset(&top_priv->sof_ts_reg_addr, 0, sizeof(top_priv->sof_ts_reg_addr));
 	mux_res->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 
 	return 0;
@@ -638,6 +633,38 @@ int cam_vfe_top_ver3_write(void *device_priv,
 	return -EPERM;
 }
 
+static int cam_vfe_top_ver3_set_primary_sof_timer_reg_addr(
+	struct cam_vfe_top_ver3_priv *top_priv, void *cmd_args)
+{
+	struct cam_ife_csid_ts_reg_addr *sof_ts_addr_update_args;
+
+	if (!cmd_args) {
+		CAM_ERR(CAM_ISP, "Error, Invalid args");
+		return -EINVAL;
+	}
+
+	sof_ts_addr_update_args = (struct cam_ife_csid_ts_reg_addr *)cmd_args;
+
+	if (!sof_ts_addr_update_args->curr0_ts_addr ||
+		!sof_ts_addr_update_args->curr1_ts_addr) {
+		CAM_ERR(CAM_ISP, "Invalid SOF Qtimer address: curr0: 0x%pK, curr1: 0x%pK",
+		sof_ts_addr_update_args->curr0_ts_addr,
+		sof_ts_addr_update_args->curr1_ts_addr);
+		return -EINVAL;
+	}
+
+	top_priv->sof_ts_reg_addr.curr0_ts_addr =
+		sof_ts_addr_update_args->curr0_ts_addr;
+	top_priv->sof_ts_reg_addr.curr1_ts_addr =
+		sof_ts_addr_update_args->curr1_ts_addr;
+
+	CAM_DBG(CAM_ISP, "Received sof timestamp reg addr cur0:0x%x cur1:0x%x",
+		top_priv->sof_ts_reg_addr.curr0_ts_addr,
+		top_priv->sof_ts_reg_addr.curr1_ts_addr);
+
+	return 0;
+}
+
 int cam_vfe_top_ver3_process_cmd(void *device_priv, uint32_t cmd_type,
 	void *cmd_args, uint32_t arg_size)
 {
@@ -715,6 +742,22 @@ int cam_vfe_top_ver3_process_cmd(void *device_priv, uint32_t cmd_type,
 	case CAM_ISP_HW_CMD_APPLY_CLK_BW_UPDATE:
 		rc = cam_vfe_top_apply_clk_bw_update(&top_priv->top_common, cmd_args, arg_size);
 		break;
+	case CAM_ISP_HW_CMD_IFE_DEBUG_CFG:
+		/*Not supported for v3*/
+		rc = 0;
+		break;
+	case CAM_ISP_HW_CMD_GET_SET_PRIM_SOF_TS_ADDR: {
+		struct cam_ife_csid_ts_reg_addr  *sof_addr_args =
+			(struct cam_ife_csid_ts_reg_addr *)cmd_args;
+
+		if (sof_addr_args->get_addr) {
+			CAM_ERR(CAM_ISP, "VFE does not support get of primary SOF ts addr");
+			rc = -EINVAL;
+		} else
+			rc = cam_vfe_top_ver3_set_primary_sof_timer_reg_addr(top_priv,
+				sof_addr_args);
+	}
+		break;
 	default:
 		rc = -EINVAL;
 		CAM_ERR(CAM_ISP, "Error, Invalid cmd:%d", cmd_type);
@@ -776,7 +819,7 @@ int cam_vfe_top_ver3_init(
 			top_priv->top_common.mux_rsrc[i].res_id =
 				CAM_ISP_HW_VFE_IN_CAMIF;
 
-			rc = cam_vfe_camif_ver3_init(hw_intf, soc_info,
+			rc = cam_vfe_camif_ver3_init((void *)top_priv, hw_intf, soc_info,
 				&ver3_hw_info->camif_hw_info,
 				&top_priv->top_common.mux_rsrc[i],
 				vfe_irq_controller);
@@ -790,7 +833,7 @@ int cam_vfe_top_ver3_init(
 			top_priv->top_common.mux_rsrc[i].res_id =
 				CAM_ISP_HW_VFE_IN_PDLIB;
 
-			rc = cam_vfe_camif_lite_ver3_init(hw_intf, soc_info,
+			rc = cam_vfe_camif_lite_ver3_init((void *)top_priv, hw_intf, soc_info,
 				&ver3_hw_info->pdlib_hw_info,
 				&top_priv->top_common.mux_rsrc[i],
 				vfe_irq_controller);
@@ -820,7 +863,7 @@ int cam_vfe_top_ver3_init(
 			scnprintf(top_priv->top_common.mux_rsrc[i].res_name,
 				CAM_ISP_RES_NAME_LEN, "RDI_%d", j);
 
-			rc = cam_vfe_camif_lite_ver3_init(hw_intf, soc_info,
+			rc = cam_vfe_camif_lite_ver3_init((void *)top_priv, hw_intf, soc_info,
 				ver3_hw_info->rdi_hw_info[j++],
 				&top_priv->top_common.mux_rsrc[i],
 				vfe_irq_controller);
@@ -832,7 +875,7 @@ int cam_vfe_top_ver3_init(
 			top_priv->top_common.mux_rsrc[i].res_id =
 				CAM_ISP_HW_VFE_IN_LCR;
 
-			rc = cam_vfe_camif_lite_ver3_init(hw_intf, soc_info,
+			rc = cam_vfe_camif_lite_ver3_init((void *)top_priv, hw_intf, soc_info,
 				&ver3_hw_info->lcr_hw_info,
 				&top_priv->top_common.mux_rsrc[i],
 				vfe_irq_controller);
@@ -858,6 +901,7 @@ int cam_vfe_top_ver3_init(
 	vfe_top->hw_ops.process_cmd = cam_vfe_top_ver3_process_cmd;
 	*vfe_top_ptr = vfe_top;
 
+	top_priv->common_data.hw_info      = ver3_hw_info;
 	top_priv->top_common.soc_info      = soc_info;
 	top_priv->common_data.hw_intf      = hw_intf;
 	top_priv->top_common.hw_idx        = hw_intf->hw_idx;

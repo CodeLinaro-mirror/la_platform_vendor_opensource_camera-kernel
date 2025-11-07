@@ -6350,6 +6350,7 @@ static int cam_icp_mgr_prepare_frame_process_cmd(
 	default:
 		CAM_ERR(CAM_ICP, "%s: Invalid hw dev type not supported: %u",
 			ctx_data->ctx_id_string, ctx_data->device_info->hw_dev_type);
+		CAM_MEM_FREE(ctx_info);
 		return -EINVAL;
 	}
 
@@ -7469,9 +7470,19 @@ static int cam_icp_mgr_prepare_hw_update(void *hw_mgr_priv,
 
 	hfi_cmd = (struct hfi_cmd_dev_async *)
 			&ctx_data->hfi_frame_process.hfi_frame_cmd[idx];
-	cam_icp_mgr_prepare_frame_process_cmd(
+	rc = cam_icp_mgr_prepare_frame_process_cmd(
 		ctx_data, hfi_cmd, packet->header.request_id,
 		fw_cmd_buf_iova_addr);
+	if (rc) {
+		if (ctx_data->hfi_frame_process.in_resource[idx] > 0)
+			cam_sync_destroy(
+				ctx_data->hfi_frame_process.in_resource[idx]);
+		clear_bit(idx, ctx_data->hfi_frame_process.bitmap);
+		ctx_data->hfi_frame_process.request_id[idx] = -1;
+		CAM_ERR(CAM_ICP, "%s: prepare hw update failed on req id %lld",
+			ctx_data->ctx_id_string, packet->header.request_id);
+		goto end;
+	}
 
 	prepare_args->num_hw_update_entries = 1;
 	prepare_args->hw_update_entries[0].addr = (uintptr_t)hfi_cmd;

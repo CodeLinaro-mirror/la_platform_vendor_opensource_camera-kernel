@@ -203,6 +203,11 @@ static uint32_t *cam_ope_bus_rd_update(struct ope_hw *ope_hw_info,
 	rd_reg = ope_hw_info->bus_rd_reg;
 	rd_reg_val = ope_hw_info->bus_rd_reg_val;
 	io_buf = ope_request->io_buf[batch_idx][io_idx];
+	if ((io_buf->resource_type < OPE_IN_RES_FULL) ||
+		(io_buf->resource_type >= OPE_IN_RES_MAX)) {
+		CAM_ERR(CAM_OPE, "Invalid res type:%d", io_buf->resource_type);
+		return NULL;
+	}
 
 	CAM_DBG(CAM_OPE,
 		"req_idx = %d req_id = %lld KMDbuf 0x%x offset %d rsc %d",

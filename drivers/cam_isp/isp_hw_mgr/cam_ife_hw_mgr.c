@@ -2175,7 +2175,7 @@ static void cam_ife_hw_mgr_dump_acquire_resources(
 	list_for_each_entry_safe(hw_mgr_res, hw_mgr_res_temp,
 		&hwr_mgr_ctx->res_list_ife_csid, list) {
 		for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
-			if (!hw_mgr_res || !hw_mgr_res->hw_res[i])
+			if (!hw_mgr_res->hw_res[i])
 				continue;
 
 			hw_res = hw_mgr_res->hw_res[i];
@@ -17779,7 +17779,7 @@ static int cam_ife_hw_mgr_handle_sfe_hw_dump_info(
 	list_for_each_entry(hw_mgr_res,
 		&ife_hw_mgr_ctx->res_list_ife_in_rd, list) {
 		for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
-			if (!hw_mgr_res || !hw_mgr_res->hw_res[i])
+			if (!hw_mgr_res->hw_res[i])
 				continue;
 			rsrc_node = hw_mgr_res->hw_res[i];
 			if ((event_info->res_type == CAM_ISP_RESOURCE_SFE_RD) &&
@@ -18079,6 +18079,16 @@ static int cam_ife_hw_mgr_handle_hw_epoch(
 	case CAM_ISP_HW_VFE_IN_RDI2:
 	case CAM_ISP_HW_VFE_IN_RDI3:
 	case CAM_ISP_HW_VFE_IN_RDI4:
+		if (!cam_isp_is_ctx_primary_rdi(ife_hw_mgr_ctx))
+			break;
+		if (atomic_read(&ife_hw_mgr_ctx->err_handle_pending))
+			break;
+
+		epoch_done_event_data.frame_id_meta = event_info->reg_val;
+		ife_hw_irq_epoch_cb(ife_hw_mgr_ctx->common.cb_priv,
+			CAM_ISP_HW_EVENT_EPOCH, (void *)&epoch_done_event_data);
+		break;
+
 	case CAM_ISP_HW_VFE_IN_PDLIB:
 	case CAM_ISP_HW_VFE_IN_LCR:
 		break;
@@ -18111,6 +18121,9 @@ static int cam_ife_hw_mgr_handle_hw_sof(
 	switch (event_info->res_id) {
 	case CAM_ISP_HW_VFE_IN_CAMIF:
 	case CAM_ISP_HW_VFE_IN_RD:
+		if (atomic_read(&ife_hw_mgr_ctx->err_handle_pending))
+			break;
+
 		/* if frame header is enabled reset qtimer ts */
 		if (ife_hw_mgr_ctx->ctx_config &
 			CAM_IFE_CTX_CFG_FRAME_HEADER_TS) {
@@ -18128,23 +18141,24 @@ static int cam_ife_hw_mgr_handle_hw_sof(
 				&sof_done_event_data.boot_time);
 			else {
 				if (!event_info->event_data) {
-					CAM_ERR(CAM_ISP, "SOF timestamp data is null: %s",
-						CAM_IS_NULL_TO_STR(event_info->event_data));
-					break;
-				}
-				sof_and_boot_time =
+					cam_ife_mgr_cmd_get_sof_timestamp(
+						ife_hw_mgr_ctx, &sof_done_event_data.timestamp,
+						&sof_done_event_data.boot_time, NULL, false);
+				} else {
+					sof_and_boot_time =
 					(struct cam_isp_sof_ts_data *)event_info->event_data;
-				sof_done_event_data.timestamp = sof_and_boot_time->sof_ts;
-				cam_ife_mgr_cmd_get_sof_timestamp(
-					ife_hw_mgr_ctx, &sof_done_event_data.timestamp,
-					&sof_done_event_data.boot_time, NULL, false);
+
+					sof_done_event_data.timestamp =
+						sof_and_boot_time->sof_ts;
+					cam_ife_mgr_cmd_get_sof_timestamp(
+						ife_hw_mgr_ctx,
+						&sof_done_event_data.timestamp,
+						&sof_done_event_data.boot_time, NULL, false);
+				}
 			}
 		}
 
 		cam_hw_mgr_reset_out_of_sync_cnt(ife_hw_mgr_ctx);
-
-		if (atomic_read(&ife_hw_mgr_ctx->err_handle_pending))
-			break;
 
 		ife_hw_irq_sof_cb(ife_hw_mgr_ctx->common.cb_priv,
 			CAM_ISP_HW_EVENT_SOF, (void *)&sof_done_event_data);
@@ -18156,25 +18170,26 @@ static int cam_ife_hw_mgr_handle_hw_sof(
 	case CAM_ISP_HW_VFE_IN_RDI2:
 	case CAM_ISP_HW_VFE_IN_RDI3:
 	case CAM_ISP_HW_VFE_IN_RDI4:
+		if (atomic_read(&ife_hw_mgr_ctx->err_handle_pending))
+			break;
+
 		if (!cam_isp_is_ctx_primary_rdi(ife_hw_mgr_ctx))
 			break;
 
 		if (!event_info->event_data) {
-			CAM_ERR(CAM_ISP, "SOF timestamp data is null: %s",
-				CAM_IS_NULL_TO_STR(event_info->event_data));
-			break;
+			cam_ife_mgr_cmd_get_sof_timestamp(
+				ife_hw_mgr_ctx, &sof_done_event_data.timestamp,
+				&sof_done_event_data.boot_time, NULL, false);
+		} else {
+			sof_and_boot_time =
+				(struct cam_isp_sof_ts_data *)event_info->event_data;
+			sof_done_event_data.timestamp = sof_and_boot_time->sof_ts;
+			cam_ife_mgr_cmd_get_sof_timestamp(
+				ife_hw_mgr_ctx, &sof_done_event_data.timestamp,
+				&sof_done_event_data.boot_time, NULL, false);
 		}
-		sof_and_boot_time =
-			(struct cam_isp_sof_ts_data *)event_info->event_data;
-		sof_done_event_data.timestamp = sof_and_boot_time->sof_ts;
-		cam_ife_mgr_cmd_get_sof_timestamp(
-			ife_hw_mgr_ctx, &sof_done_event_data.timestamp,
-			&sof_done_event_data.boot_time, NULL, false);
 
 		cam_hw_mgr_reset_out_of_sync_cnt(ife_hw_mgr_ctx);
-
-		if (atomic_read(&ife_hw_mgr_ctx->err_handle_pending))
-			break;
 
 		ife_hw_irq_sof_cb(ife_hw_mgr_ctx->common.cb_priv,
 			CAM_ISP_HW_EVENT_SOF, (void *)&sof_done_event_data);

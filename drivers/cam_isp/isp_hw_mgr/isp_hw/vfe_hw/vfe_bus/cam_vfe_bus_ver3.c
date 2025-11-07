@@ -755,6 +755,29 @@ static void cam_vfe_bus_ver3_get_constraint_errors(
 	}
 }
 
+static enum cam_isp_hw_vfe_in_mux
+	cam_vfe_bus_ver3_get_rup_comp_res_id(uint32_t  res_id)
+{
+	switch (res_id) {
+	case CAM_ISP_IFE_OUT_RES_RDI_0:
+		return CAM_ISP_HW_VFE_IN_RDI0;
+	case CAM_ISP_IFE_OUT_RES_RDI_1:
+		return CAM_ISP_HW_VFE_IN_RDI1;
+	case CAM_ISP_IFE_OUT_RES_RDI_2:
+		return CAM_ISP_HW_VFE_IN_RDI2;
+	case CAM_ISP_IFE_OUT_RES_RDI_3:
+		return CAM_ISP_HW_VFE_IN_RDI3;
+	case CAM_ISP_IFE_OUT_RES_RDI_4:
+		return CAM_ISP_HW_VFE_IN_RDI4;
+	case CAM_ISP_IFE_OUT_RES_2PD:
+		return CAM_ISP_HW_VFE_IN_PDLIB;
+	case CAM_ISP_IFE_OUT_RES_LCR:
+		return CAM_ISP_HW_VFE_IN_LCR;
+	default:
+		return CAM_ISP_HW_VFE_IN_CAMIF;
+	}
+}
+
 static int cam_vfe_bus_ver3_handle_rup_bottom_half(void *handler_priv,
 	void *evt_payload_priv)
 {
@@ -763,7 +786,7 @@ static int cam_vfe_bus_ver3_handle_rup_bottom_half(void *handler_priv,
 	struct cam_isp_resource_node         *vfe_out = NULL;
 	struct cam_vfe_bus_ver3_vfe_out_data *rsrc_data = NULL;
 	struct cam_isp_hw_event_info          evt_info;
-	uint32_t                              irq_status;
+	uint32_t                              irq_status, i;
 
 	if (!handler_priv || !evt_payload_priv) {
 		CAM_ERR(CAM_ISP, "Invalid params");
@@ -785,90 +808,16 @@ static int cam_vfe_bus_ver3_handle_rup_bottom_half(void *handler_priv,
 	evt_info.hw_idx = rsrc_data->common_data->core_index;
 	evt_info.res_type = CAM_ISP_RESOURCE_VFE_IN;
 
-	if (!rsrc_data->common_data->is_lite) {
-		if (irq_status & 0x1) {
-			CAM_DBG(CAM_ISP, "VFE:%u Received CAMIF RUP",
-				evt_info.hw_idx);
-			evt_info.res_id = CAM_ISP_HW_VFE_IN_CAMIF;
-			rsrc_data->common_data->event_cb(
-				rsrc_data->priv, CAM_ISP_HW_EVENT_REG_UPDATE,
-				(void *)&evt_info);
-		}
+	for (i = 0; i < CAM_VFE_BUS_VER3_SRC_GRP_MAX; i++) {
+		if (irq_status & BIT(i)) {
+			evt_info.res_id = cam_vfe_bus_ver3_get_rup_comp_res_id(vfe_out->res_id);
+			CAM_DBG(CAM_ISP, "VFE:%u Received RUP_grp:%d",
+				evt_info.hw_idx, evt_info.res_id);
 
-		if (irq_status & 0x2) {
-			CAM_DBG(CAM_ISP, "VFE:%u Received PDLIB RUP",
-				evt_info.hw_idx);
-			evt_info.res_id = CAM_ISP_HW_VFE_IN_PDLIB;
 			rsrc_data->common_data->event_cb(
 				rsrc_data->priv, CAM_ISP_HW_EVENT_REG_UPDATE,
 				(void *)&evt_info);
-		}
-
-		if (irq_status & 0x4)
-			CAM_DBG(CAM_ISP, "VFE:%u Received LCR RUP",
-				evt_info.hw_idx);
-
-		if (irq_status & 0x8) {
-			CAM_DBG(CAM_ISP, "VFE:%u Received RDI0 RUP",
-				evt_info.hw_idx);
-			evt_info.res_id = CAM_ISP_HW_VFE_IN_RDI0;
-			rsrc_data->common_data->event_cb(
-				rsrc_data->priv, CAM_ISP_HW_EVENT_REG_UPDATE,
-				(void *)&evt_info);
-		}
-
-		if (irq_status & 0x10) {
-			CAM_DBG(CAM_ISP, "VFE:%u Received RDI1 RUP",
-				evt_info.hw_idx);
-			evt_info.res_id = CAM_ISP_HW_VFE_IN_RDI1;
-			rsrc_data->common_data->event_cb(
-				rsrc_data->priv, CAM_ISP_HW_EVENT_REG_UPDATE,
-				(void *)&evt_info);
-		}
-
-		if (irq_status & 0x20) {
-			CAM_DBG(CAM_ISP, "VFE:%u Received RDI2 RUP",
-				evt_info.hw_idx);
-			evt_info.res_id = CAM_ISP_HW_VFE_IN_RDI2;
-			rsrc_data->common_data->event_cb(
-				rsrc_data->priv, CAM_ISP_HW_EVENT_REG_UPDATE,
-				(void *)&evt_info);
-		}
-	} else {
-		if (irq_status & 0x1) {
-			CAM_DBG(CAM_ISP, "VFE:%u Received RDI0 RUP",
-				evt_info.hw_idx);
-			evt_info.res_id = CAM_ISP_HW_VFE_IN_RDI0;
-			rsrc_data->common_data->event_cb(
-				rsrc_data->priv, CAM_ISP_HW_EVENT_REG_UPDATE,
-				(void *)&evt_info);
-		}
-
-		if (irq_status & 0x2) {
-			CAM_DBG(CAM_ISP, "VFE:%u Received RDI1 RUP",
-				evt_info.hw_idx);
-			evt_info.res_id = CAM_ISP_HW_VFE_IN_RDI1;
-			rsrc_data->common_data->event_cb(
-				rsrc_data->priv, CAM_ISP_HW_EVENT_REG_UPDATE,
-				(void *)&evt_info);
-		}
-
-		if (irq_status & 0x4) {
-			CAM_DBG(CAM_ISP, "VFE:%u Received RDI2 RUP",
-				evt_info.hw_idx);
-			evt_info.res_id = CAM_ISP_HW_VFE_IN_RDI2;
-			rsrc_data->common_data->event_cb(
-				rsrc_data->priv, CAM_ISP_HW_EVENT_REG_UPDATE,
-				(void *)&evt_info);
-		}
-
-		if (irq_status & 0x8) {
-			CAM_DBG(CAM_ISP, "VFE:%u Received RDI3 RUP",
-				evt_info.hw_idx);
-			evt_info.res_id = CAM_ISP_HW_VFE_IN_RDI3;
-			rsrc_data->common_data->event_cb(
-				rsrc_data->priv, CAM_ISP_HW_EVENT_REG_UPDATE,
-				(void *)&evt_info);
+			break;
 		}
 	}
 
@@ -5368,9 +5317,18 @@ static int cam_vfe_bus_ver3_dump_wm_mid_info(
 
 found:
 	out_rsrc_data = (struct cam_vfe_bus_ver3_vfe_out_data *)bus_priv->vfe_out[i].res_priv;
+	if (!out_rsrc_data) {
+		CAM_ERR(CAM_ISP, "Invalid vfe bus resource private, client reg index: %d.", i);
+		return -EINVAL;
+	}
+
 	get_res->out_res_id = bus_priv->vfe_out[i].res_id;
 	for (num_wm = 0; num_wm < out_rsrc_data->num_wm; num_wm++) {
 		wm_data = out_rsrc_data->wm_res[num_wm]->res_priv;
+
+		if (!wm_data)
+			continue;
+
 		if (wm_data->index == i) {
 			CAM_INFO(CAM_ISP, "MID:%d PID:%d pid_mask:0x%lx match for WM[%u: %s] ctxt:%d is_meta %s",
 				get_res->mid, get_res->pid, c_reg->pid_mask, i, c_reg->name, j,

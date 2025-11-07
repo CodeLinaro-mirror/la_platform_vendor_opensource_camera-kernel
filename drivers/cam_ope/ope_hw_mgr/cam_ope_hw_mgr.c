@@ -2422,7 +2422,7 @@ static int cam_ope_mgr_process_cmd_desc(struct cam_ope_hw_mgr *hw_mgr,
 		if ((len <= cmd_desc[i].offset) ||
 			(cmd_desc[i].size < cmd_desc[i].length) ||
 			((len - cmd_desc[i].offset) <
-			cmd_desc[i].length)) {
+			cmd_desc[i].size)) {
 			CAM_ERR(CAM_OPE, "Invalid offset or length");
 			goto end;
 		}

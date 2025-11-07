@@ -17,8 +17,6 @@
 
 #define CAM_VFE_TOP_MAX_LUT_DUMP_ENTRIES 6
 
-#define CAM_VFE_TOP_LOG_BUF_LEN          1024
-
 #define CAM_VFE_TOP_DEBUG_VEC_ERR_REGS               2
 #define CAM_VFE_TOP_DEBUG_VEC_FIFO_SIZE              4
 #define CAM_VFE_TOP_DEBUG_TIMESTAMP_IRQ_SEL_SHIFT    4

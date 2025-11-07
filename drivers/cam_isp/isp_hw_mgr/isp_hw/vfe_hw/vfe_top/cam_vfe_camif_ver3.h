@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_VFE_CAMIF_VER3_H_
@@ -24,7 +25,6 @@ struct cam_vfe_camif_ver3_pp_clc_reg {
 	uint32_t     debug_0;
 	uint32_t     test_bus_ctrl;
 	uint32_t     spare;
-	uint32_t     reg_update_cmd;
 };
 
 struct cam_vfe_camif_ver3_reg_data {
@@ -70,6 +70,7 @@ struct cam_vfe_camif_ver3_hw_info {
 	struct cam_vfe_top_ver3_reg_offset_common   *common_reg;
 	struct cam_vfe_camif_ver3_pp_clc_reg        *camif_reg;
 	struct cam_vfe_camif_ver3_reg_data          *reg_data;
+	uint64_t                                     path_reg_base;
 };
 
 int cam_vfe_camif_ver3_acquire_resource(
@@ -77,6 +78,7 @@ int cam_vfe_camif_ver3_acquire_resource(
 	void                          *acquire_param);
 
 int cam_vfe_camif_ver3_init(
+	void                          *top_priv,
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
 	void                          *camif_hw_info,

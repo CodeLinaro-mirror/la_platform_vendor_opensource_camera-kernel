@@ -23,7 +23,6 @@
 
 #define CAM_SHIFT_TOP_CORE_VER_4_CFG_DSP_EN            8
 #define CAM_VFE_CAMIF_IRQ_SOF_DEBUG_CNT_MAX            2
-#define CAM_VFE_LEN_LOG_BUF                            256
 #define CAM_VFE_QTIMER_DIV_FACTOR                      10000
 
 struct cam_vfe_top_ver4_common_data {
@@ -373,7 +372,7 @@ static void cam_vfe_top_ver4_read_debug_err_vectors(
 		CAM_VFE_TOP_DEBUG_VEC_ERR_REGS] = {0};
 	uint64_t                             timestamp;
 	size_t                               len = 0;
-	uint8_t                              log_buf[CAM_VFE_TOP_LOG_BUF_LEN];
+	uint8_t                              log_buf[CAM_VFE_LEN_LOG_BUF];
 	uint32_t                             debug_cfg_offset = 0;
 
 	soc_info    =  top_priv->top_common.soc_info;
@@ -428,7 +427,7 @@ static void cam_vfe_top_ver4_read_debug_err_vectors(
 
 			while (temp) {
 				if (temp & 0x1) {
-					CAM_INFO_BUF(CAM_ISP, log_buf, CAM_VFE_TOP_LOG_BUF_LEN,
+					CAM_INFO_BUF(CAM_ISP, log_buf, CAM_VFE_LEN_LOG_BUF,
 						&len, "%s ", module_desc[k + (j * 32)].desc);
 				}
 				temp >>= 1;
@@ -438,7 +437,7 @@ static void cam_vfe_top_ver4_read_debug_err_vectors(
 		CAM_INFO(CAM_ISP,
 			"%s HM CLC(s) error that occurred in time order %d at timestamp %lld: %s",
 			hm_type, i, timestamp, log_buf);
-		memset(log_buf, 0x0, sizeof(uint8_t) * CAM_VFE_TOP_LOG_BUF_LEN);
+		memset(log_buf, 0x0, sizeof(uint8_t) * CAM_VFE_LEN_LOG_BUF);
 	}
 
 	cam_io_w_mb((debug_cfg | (0x1 << CAM_VFE_TOP_DEBUG_TIMESTAMP_IRQ_CLEAR_SHIFT)),
@@ -514,7 +513,7 @@ static void cam_vfe_top_ver4_check_module_status(
 	uint32_t i, j, idle_status;
 	uint64_t val = 0;
 	size_t len = 0;
-	uint8_t line_buf[CAM_VFE_LEN_LOG_BUF], log_buf[1024];
+	uint8_t line_buf[256], log_buf[CAM_VFE_LEN_LOG_BUF];
 
 	if (!status_list)
 		return;
@@ -537,12 +536,12 @@ static void cam_vfe_top_ver4_check_module_status(
 			cam_vfe_top_ver4_check_module_idle(&(*status_list)[i][j], top_priv,
 				&idle_status, &is_mc, reg_type);
 
-			snprintf(line_buf, CAM_VFE_LEN_LOG_BUF,
+			snprintf(line_buf, 256,
 				"\n\t%s [I:%llu V:%llu R:%llu] idle: 0x%x, is_mc: %s",
 				(*status_list)[i][j].clc_name, ((val >> 2) & 1),
 				((val >> 1) & 1), (val & 1), idle_status, CAM_BOOL_TO_YESNO(is_mc));
 
-			strlcat(log_buf, line_buf, 1024);
+			strlcat(log_buf, line_buf, CAM_VFE_LEN_LOG_BUF);
 			found = true;
 		}
 
@@ -551,7 +550,7 @@ static void cam_vfe_top_ver4_check_module_status(
 
 		len = 0;
 		found = false;
-		memset(log_buf, 0, sizeof(uint8_t)*1024);
+		memset(log_buf, 0, sizeof(uint8_t) * CAM_VFE_LEN_LOG_BUF);
 	}
 }
 
@@ -632,6 +631,7 @@ static void cam_vfe_top_ver4_print_debug_reg_status(
 	common_reg =  top_priv->common_data.common_reg;
 	base       =  soc_info->reg_map[VFE_CORE_BASE_IDX].mem_base;
 	log_buf    =  top_priv->log_buf;
+	memset(log_buf, 0x0, sizeof(uint8_t) * CAM_VFE_LEN_LOG_BUF);
 
 	switch (reg_type) {
 	case VFE_TOP_DEBUG_REG:
@@ -802,7 +802,7 @@ static void cam_vfe_top_ver4_print_diag_sensor_frame_count_info(
 	void __iomem                           *base;
 	uint32_t                                val, shift, diag_cfg0, diag_cfg1 = 0;
 	int                                     i, j;
-	uint8_t                                 log_buf[1024];
+	uint8_t                                 log_buf[CAM_VFE_LEN_LOG_BUF];
 	size_t                                  len = 0;
 
 	top_priv    =  vfe_priv->top_priv;
@@ -840,8 +840,8 @@ static void cam_vfe_top_ver4_print_diag_sensor_frame_count_info(
 		for (j = 0; j < common_data->hw_info->diag_sensor_info[i].num_fields; j++) {
 			field = &common_data->hw_info->diag_sensor_info[i].field[j];
 			shift = ffs(field->bitmask) - 1;
-			CAM_INFO_BUF(CAM_ISP, log_buf, 1024, &len, "%s: 0x%x, ",
-				field->name, ((val & field->bitmask) >> shift));
+			CAM_INFO_BUF(CAM_ISP, log_buf, CAM_VFE_LEN_LOG_BUF, &len,
+				"%s: 0x%x, ", field->name, ((val & field->bitmask) >> shift));
 		}
 
 		CAM_INFO(CAM_ISP, "VFE[%u] res_id: %d diag_sensor_status_%d: %s",
@@ -865,8 +865,8 @@ print_frame_stats:
 		for (j = 0; j < common_data->hw_info->diag_frame_info[i].num_fields; j++) {
 			field = &common_data->hw_info->diag_frame_info[i].field[j];
 			shift = ffs(field->bitmask) - 1;
-			CAM_INFO_BUF(CAM_ISP, log_buf, 1024, &len, "%s: 0x%x, ",
-				field->name, ((val & field->bitmask) >> shift));
+			CAM_INFO_BUF(CAM_ISP, log_buf, CAM_VFE_LEN_LOG_BUF, &len,
+				"%s: 0x%x, ", field->name, ((val & field->bitmask) >> shift));
 		}
 
 		CAM_INFO(CAM_ISP, "VFE[%u] res_id: %d diag_frame_count_status_%d: %s",
