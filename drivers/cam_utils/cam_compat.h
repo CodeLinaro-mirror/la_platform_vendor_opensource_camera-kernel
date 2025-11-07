@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_COMPAT_H_
@@ -48,6 +48,12 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
 MODULE_IMPORT_NS(DMA_BUF);
+#endif
+
+#if (KERNEL_VERSION(6, 7, 0) <= LINUX_VERSION_CODE)
+#define CAM_SUBDEV_NAME_SIZE 32
+#else
+#define CAM_SUBDEV_NAME_SIZE V4L2_SUBDEV_NAME_SIZE
 #endif
 
 struct cam_fw_alloc_info {
