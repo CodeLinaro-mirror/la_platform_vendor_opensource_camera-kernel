@@ -178,5 +178,6 @@
 
 /* Group name for common clock source*/
 #define CAM_COMMON_ICP_SRC_CLK       1
+#define CAM_COMMON_TFE_SRC_CLK       2
 
 #endif

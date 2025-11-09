@@ -1094,6 +1094,8 @@ static int cam_soc_util_clk_aggregate_register_entry(
 		aggregate_clk->cmn_src_id = cmn_clk_id;
 		aggregate_clk->curr_clk_rate = 0;
 		aggregate_clk->clk_id = -1;
+		snprintf(aggregate_clk->name, CAM_MAX_CLK_NAME_LEN, "%s", clk_name);
+
 		INIT_LIST_HEAD(&aggregate_clk->list);
 		INIT_LIST_HEAD(&aggregate_clk->client_list);
 		list_add_tail(&aggregate_clk->list, &aggregate_clk_list);
