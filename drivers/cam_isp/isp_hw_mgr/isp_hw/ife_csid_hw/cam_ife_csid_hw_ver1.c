@@ -1734,7 +1734,13 @@ int cam_ife_csid_ver1_reserve(void *hw_priv,
 				csid_hw->hw_intf->hw_idx, reserve->res_id);
 		return -EINVAL;
 	}
+
 	res = &csid_hw->path_res[reserve->res_id];
+	if (reserve->is_new_csid_acq && csid_hw->counters.csi2_reserve_cnt) {
+		CAM_DBG(CAM_ISP, "CSID %d already acquired csi2_reserve_cnt: %d",
+			csid_hw->hw_intf->hw_idx, csid_hw->counters.csi2_reserve_cnt);
+		return -EBUSY;
+	}
 
 	if (res->res_state != CAM_ISP_RESOURCE_STATE_AVAILABLE) {
 		CAM_DBG(CAM_ISP, "CSID %d Res_id %d state %d",

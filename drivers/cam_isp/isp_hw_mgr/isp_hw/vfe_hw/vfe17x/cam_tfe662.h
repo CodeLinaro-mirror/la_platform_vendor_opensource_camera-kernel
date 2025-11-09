@@ -382,8 +382,7 @@ static struct cam_vfe_bus_ver3_hw_info tfe662_bus_hw_info = {
 	.bus_wr_base                          = 0x3000,
 	.support_dyn_offset                   = true,
 	.supported_irq                        = CAM_VFE_HW_IRQ_CAP_BUF_DONE |
-						CAM_VFE_HW_IRQ_CAP_RUP |
-						CAM_VFE_HW_IRQ_CAP_RESET,
+						CAM_VFE_HW_IRQ_CAP_RUP,
 
 	/*
 	 * client_base is w.r.t bus_wr_base. If bus_wr_base is 0,
@@ -798,6 +797,7 @@ static struct cam_vfe_bus_ver3_hw_info tfe662_bus_hw_info = {
 
 static struct cam_vfe_irq_hw_info tfe662_irq_hw_info = {
 	.reset_mask    = 0x1,
+	.supported_irq = CAM_VFE_HW_IRQ_CAP_RESET,
 	.top_irq_reg   = &tfe662_top_irq_reg_info,
 };
 
