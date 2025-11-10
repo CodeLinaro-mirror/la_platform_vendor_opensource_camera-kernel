@@ -390,6 +390,7 @@ static uint32_t *cam_ope_bus_wm_disable(struct ope_hw *ope_hw_info,
 	struct ope_bus_wr_io_port_cdm_batch *io_port_cdm_batch;
 	struct ope_bus_wr_io_port_cdm_info *io_port_cdm;
 	struct cam_cdm_utils_ops *cdm_ops;
+	struct cam_ope_request *ope_request;
 	size_t avaliable_size;
 	uint32_t size;
 
@@ -406,6 +407,7 @@ static uint32_t *cam_ope_bus_wm_disable(struct ope_hw *ope_hw_info,
 	ctx_data = prepare->ctx_data;
 	req_idx = prepare->req_idx;
 	cdm_ops = ctx_data->ope_cdm.cdm_ops;
+	ope_request = ctx_data->req_list[req_idx];
 
 	bus_wr_ctx = wr_info->bus_wr_ctx[ctx_id];
 	io_port_cdm_batch = &bus_wr_ctx->io_port_cdm_batch;
