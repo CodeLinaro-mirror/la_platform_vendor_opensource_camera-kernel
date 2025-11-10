@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/uaccess.h>
@@ -265,6 +265,7 @@ static int cam_jpeg_process_next_hw_update(void *priv, void *data,
 	cdm_cmd->userdata = NULL;
 	cdm_cmd->cookie = 0;
 	cdm_cmd->cmd_arrary_count = 0;
+	cdm_cmd->fast_complete = NULL;
 
 	/* insert cdm chage base cmd */
 	rc = cam_jpeg_insert_cdm_change_base(config_args,
@@ -691,8 +692,8 @@ static int cam_jpeg_insert_cdm_change_base(
 		return rc;
 	}
 
-	if (config_args->hw_update_entries[CAM_JPEG_CHBASE_CMD_BUFF_IDX].offset >=
-		ch_base_len) {
+	if ((config_args->hw_update_entries[CAM_JPEG_CHBASE_CMD_BUFF_IDX].offset +
+		(2 * sizeof(uint32_t))) >= ch_base_len) {
 		CAM_ERR(CAM_JPEG, "Not enough buf offset %d len %d",
 			config_args->hw_update_entries[CAM_JPEG_CHBASE_CMD_BUFF_IDX].offset,
 			ch_base_len);

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/uaccess.h>
@@ -111,7 +111,6 @@ static int cam_ope_mgr_process_cmd(void *priv, void *data)
 
 	mutex_lock(&hw_mgr->hw_mgr_mutex);
 	cdm_cmd = task_data->data;
-
 	if (!cdm_cmd) {
 		CAM_ERR(CAM_OPE, "Invalid params%pK", cdm_cmd);
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
@@ -150,6 +149,7 @@ static int cam_ope_mgr_process_cmd(void *priv, void *data)
 
 	cam_ope_req_timer_reset(ctx_data);
 
+	cdm_cmd->fast_complete = NULL;
 	rc = cam_cdm_submit_bls(ctx_data->ope_cdm.cdm_handle, cdm_cmd);
 
 	if (!rc)

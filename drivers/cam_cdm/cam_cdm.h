@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_CDM_H_
@@ -503,6 +503,7 @@ struct cam_cdm_bl_cb_request_entry {
 	void *userdata;
 	uint32_t cookie;
 	struct list_head entry;
+	bool fast_callback_enabled;
 };
 
 /* struct cam_cdm_hw_intf_cmd_submit_bl - cdm interface submit command.*/
@@ -511,7 +512,22 @@ struct cam_cdm_hw_intf_cmd_submit_bl {
 	struct cam_cdm_bl_request *data;
 };
 
-/* struct cam_cdm_bl_fifo - CDM hw memory struct */
+/**
+ * struct cam_cdm_bl_fifo - CDM hw memory struct
+ *
+ * @bl_complete:          Completion variable of BL Done
+ * @work_queue:           Workq for postponed work
+ * @bl_request_list:      BL request list, adding nodes during submitting Gen IRQ and popping nodes
+ *                        in workq after receiving corresponding IRQ
+ * @fifo_lock:            Mutex lock to make sure intacticity of bl_request_list
+ * @bl_tag:               Tag for BL entry
+ * @bl_depth:             Length for each BL FIFO queue, normally it's set to 64
+ * @last_bl_tag_done:     Tag for last bl done
+ * @work_record:          Number of scheduled workq task
+ * @fast_complete:        Array of pointers to fast completion variable submitted from clients
+ *                        during submitting genirq, BL tag is used as index
+ * @fast_complete_lock:   Spinlock to avoid race conditions in fast complete array
+ */
 struct cam_cdm_bl_fifo {
 	struct completion bl_complete;
 	struct workqueue_struct *work_queue;
@@ -521,6 +537,8 @@ struct cam_cdm_bl_fifo {
 	uint32_t bl_depth;
 	uint8_t last_bl_tag_done;
 	atomic_t work_record;
+	struct completion *fast_complete[CAM_CDM_BL_FIFO_LENGTH_MAX_DEFAULT];
+	spinlock_t fast_complete_lock;
 };
 
 /**

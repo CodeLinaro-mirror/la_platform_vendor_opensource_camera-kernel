@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -853,21 +853,19 @@ int cam_hw_cdm_submit_gen_irq(
 	struct cam_cdm_bl_request *cdm_cmd = req->data;
 	dma_addr_t hw_vaddr_ptr = 0;
 	int rc;
-	bool bit_wr_enable = false;
+	bool bit_wr_enable = (core->offsets->reg_data->num_bl_fifo > 1);
+	bool fast_callback_enabled = false;
 	size_t len, genirq_cmd_size;
+	uint8_t bl_tag = core->bl_fifo[fifo_idx].bl_tag;
+	unsigned long flags;
 
-	if (core->bl_fifo[fifo_idx].bl_tag > (core->bl_fifo[fifo_idx].bl_depth - 1)) {
-		CAM_ERR(CAM_CDM, "Invalid BL Tag: %d, BL Depth: %d Fifo_idx: %d",
-			core->bl_fifo[fifo_idx].bl_tag,
-			core->bl_fifo[fifo_idx].bl_depth,
-			fifo_idx);
+	if (bl_tag > (core->bl_fifo[fifo_idx].bl_depth - 1)) {
+		CAM_ERR(CAM_CDM, "Invalid BL Tag: %u, BL Depth: %d, Fifo_idx: %d",
+			bl_tag, core->bl_fifo[fifo_idx].bl_depth, fifo_idx);
 		return -EINVAL;
 	}
 
 	genirq_cmd_size = 4 * core->ops->cdm_required_size_genirq();
-
-	CAM_DBG(CAM_CDM, "Last Tag: 0x%x Total BLs: %d, Cookie: %d",
-		core->bl_fifo[fifo_idx].bl_tag, cdm_cmd->cmd_arrary_count, cdm_cmd->cookie);
 
 	rc = cam_mem_get_io_buf(cdm_cmd->genirq_buff->handle, core->iommu_hdl.non_secure,
 		&hw_vaddr_ptr, &len, NULL, NULL);
@@ -876,37 +874,45 @@ int cam_hw_cdm_submit_gen_irq(
 		return -EINVAL;
 	}
 
-	node = CAM_MEM_ZALLOC(sizeof(struct cam_cdm_bl_cb_request_entry),
-			GFP_KERNEL);
+	/*
+	 * Register fast config complete in CDM only when fast complete struct
+	 * is sent from clients
+	 */
+	spin_lock_irqsave(&core->bl_fifo[fifo_idx].fast_complete_lock, flags);
+	if (cdm_cmd->fast_complete && bl_tag < CAM_CDM_BL_FIFO_LENGTH_MAX_DEFAULT) {
+		core->bl_fifo[fifo_idx].fast_complete[bl_tag] = cdm_cmd->fast_complete;
+		fast_callback_enabled = true;
+	}
+
+	spin_unlock_irqrestore(&core->bl_fifo[fifo_idx].fast_complete_lock, flags);
+
+	CAM_DBG(CAM_CDM, "Last Tag: %u, Total BLs: %d, Cookie: %d, Fast callback enabled: %s",
+		bl_tag, cdm_cmd->cmd_arrary_count, cdm_cmd->cookie,
+		CAM_BOOL_TO_YESNO(fast_callback_enabled));
+
+	node = CAM_MEM_ZALLOC(sizeof(struct cam_cdm_bl_cb_request_entry), GFP_KERNEL);
 	if (!node) {
 		CAM_ERR(CAM_CDM, "Failed while getting memory for the Node");
 		return -ENOMEM;
 	}
 
-	if (core->offsets->reg_data->num_bl_fifo > 1)
-		bit_wr_enable = true;
-
 	node->request_type = CAM_HW_CDM_BL_CB_CLIENT;
 	node->client_hdl = req->handle;
 	node->cookie = cdm_cmd->cookie;
-	node->bl_tag = core->bl_fifo[fifo_idx].bl_tag;
+	node->bl_tag = bl_tag;
 	node->userdata = cdm_cmd->userdata;
+	node->fast_callback_enabled = fast_callback_enabled;
 	list_add_tail(&node->entry, &core->bl_fifo[fifo_idx].bl_request_list);
 
 	core->ops->cdm_write_genirq(
 		cdm_cmd->genirq_buff->cpu_addr + (cdm_cmd->genirq_buff->used_bytes / 4),
-		core->bl_fifo[fifo_idx].bl_tag, bit_wr_enable, fifo_idx);
-	rc = cam_hw_cdm_bl_write(cdm_hw,
-		(uint32_t)(hw_vaddr_ptr + cdm_cmd->genirq_buff->offset),
-		genirq_cmd_size - 1,
-		core->bl_fifo[fifo_idx].bl_tag, cdm_cmd->gen_irq_arb, fifo_idx);
+		bl_tag, bit_wr_enable, fifo_idx);
+	rc = cam_hw_cdm_bl_write(cdm_hw, (uint32_t)(hw_vaddr_ptr + cdm_cmd->genirq_buff->offset),
+		genirq_cmd_size - 1, bl_tag, cdm_cmd->gen_irq_arb, fifo_idx);
 	if (rc) {
-		CAM_ERR(CAM_CDM, "CDM hw bl write failed for gen irq bltag=%d",
-			core->bl_fifo[fifo_idx].bl_tag);
-		list_del_init(&node->entry);
-		CAM_MEM_FREE(node);
-		node = NULL;
-		return -EIO;
+		CAM_ERR(CAM_CDM, "CDM hw bl write failed for gen irq bl_tag = %u", bl_tag);
+		rc = -EIO;
+		goto free_node;
 	}
 
 	CAM_DBG(CAM_CDM, "GenIRQ BL: First Word: 0x%llx Second Word: 0x%llx",
@@ -927,22 +933,25 @@ int cam_hw_cdm_submit_gen_irq(
 			CAM_ERR(CAM_PRESIL,
 				"Failed to send CDM gen irq cmd buffer fifo_idx:%d mem_handle:%d rc:%d",
 				fifo_idx, cdm_cmd->genirq_buff->handle, rc);
-			return rc;
+			goto free_node;
 		}
 	}
 
 	if (cam_hw_cdm_commit_bl_write(cdm_hw, fifo_idx)) {
 		CAM_ERR(CAM_CDM,
-			"Cannot commit the genirq BL with Tag: %d",
+			"Cannot commit the genirq BL with Tag: %u",
 			core->bl_fifo[fifo_idx].bl_tag);
-		list_del_init(&node->entry);
-		CAM_MEM_FREE(node);
-		node = NULL;
 		rc = -EIO;
+		goto free_node;
 	}
 
 	trace_cam_log_event("CDM_START", "CDM_START_IRQ", cdm_cmd->cookie, 0);
 
+	return rc;
+
+free_node:
+	list_del_init(&node->entry);
+	CAM_MEM_FREE(node);
 	return rc;
 }
 
@@ -1251,10 +1260,11 @@ static void cam_hw_cdm_reset_cleanup(
 	uint32_t            handle)
 {
 	struct cam_cdm *core = (struct cam_cdm *)cdm_hw->core_info;
-	int i;
+	int i, j;
 	struct cam_cdm_bl_cb_request_entry *node, *tnode;
 	bool flush_hw = false;
 	bool reset_err = false;
+	unsigned long flags;
 
 	if (test_bit(CAM_CDM_ERROR_HW_STATUS, &core->cdm_status) ||
 		test_bit(CAM_CDM_FLUSH_HW_STATUS, &core->cdm_status))
@@ -1296,6 +1306,12 @@ static void cam_hw_cdm_reset_cleanup(
 		core->bl_fifo[i].bl_tag = 0;
 		core->bl_fifo[i].last_bl_tag_done = -1;
 		atomic_set(&core->bl_fifo[i].work_record, 0);
+
+		spin_lock_irqsave(&core->bl_fifo[i].fast_complete_lock, flags);
+		for (j = 0; j < CAM_CDM_BL_FIFO_LENGTH_MAX_DEFAULT; j++)
+			core->bl_fifo[i].fast_complete[j] = NULL;
+
+		spin_unlock_irqrestore(&core->bl_fifo[i].fast_complete_lock, flags);
 	}
 }
 
@@ -1367,8 +1383,12 @@ static void cam_hw_cdm_work(struct work_struct *work)
 			list_for_each_entry_safe(node, tnode,
 				&core->bl_fifo[fifo_idx].bl_request_list, entry) {
 				if (node->request_type == CAM_HW_CDM_BL_CB_CLIENT) {
-					cam_cdm_notify_clients(cdm_hw,
-						CAM_CDM_CB_STATUS_BL_SUCCESS, (void *)node);
+					if (!node->fast_callback_enabled)
+						cam_cdm_notify_clients(cdm_hw,
+							CAM_CDM_CB_STATUS_BL_SUCCESS, (void *)node);
+					else
+						CAM_DBG(CAM_CDM,
+							"Fast callback is enabled and client is notified at ISR already");
 				} else if (node->request_type == CAM_HW_CDM_BL_CB_INTERNAL) {
 					CAM_ERR(CAM_CDM, "Invalid node=%pK %d",
 						node, node->request_type);
@@ -1524,11 +1544,12 @@ irqreturn_t cam_hw_cdm_irq(int irq_num, void *data)
 	struct cam_cdm *cdm_core = cdm_hw->core_info;
 	struct cam_cdm_work_payload *payload[CAM_CDM_BL_FIFO_MAX] = {0};
 	uint8_t rst_done_cnt = 0;
-	uint32_t user_data = 0;
+	uint32_t user_data = 0, inline_irq_data;
 	uint32_t irq_status[CAM_CDM_BL_FIFO_MAX] = {0};
 	uint32_t irq_context_summary = 0xF;
 	bool work_status;
 	int i;
+	struct completion *fast_complete;
 
 	CAM_DBG(CAM_CDM, "Got irq hw_version 0x%x from %s%u",
 		cdm_core->hw_version, soc_info->label_name,
@@ -1589,50 +1610,53 @@ irqreturn_t cam_hw_cdm_irq(int irq_num, void *data)
 			continue;
 		}
 
-		payload[i] = CAM_MEM_ZALLOC(sizeof(struct cam_cdm_work_payload),
-			GFP_ATOMIC);
-
-		if (!payload[i]) {
-			CAM_ERR(CAM_CDM,
-				"failed to allocate memory for fifo %d payload",
-				i);
-			continue;
-		}
-
 		if (irq_status[i] & CAM_CDM_IRQ_STATUS_INLINE_IRQ_MASK) {
-
-			payload[i]->irq_data = (user_data >> (i * 0x8)) &
+			inline_irq_data = (user_data >> (i * 0x8)) &
 				CAM_CDM_IRQ_STATUS_USR_DATA_MASK;
 
-			if (payload[i]->irq_data == CAM_CDM_DBG_GEN_IRQ_USR_DATA)
+			if (inline_irq_data == CAM_CDM_DBG_GEN_IRQ_USR_DATA)
 				CAM_INFO(CAM_CDM, "Debug gen_irq received");
 
 			atomic_inc(&cdm_core->bl_fifo[i].work_record);
+
+			spin_lock(&cdm_core->bl_fifo[i].fast_complete_lock);
+			fast_complete = cdm_core->bl_fifo[i].fast_complete[inline_irq_data];
+			if (fast_complete) {
+				complete_all(fast_complete);
+				cdm_core->bl_fifo[i].fast_complete[inline_irq_data] = NULL;
+			}
+
+			spin_unlock(&cdm_core->bl_fifo[i].fast_complete_lock);
 		}
 
 		CAM_DBG(CAM_CDM,
 			"Rcvd of fifo %d userdata 0x%x tag 0x%x irq_stat 0x%x",
-			i, user_data, payload[i]->irq_data, irq_status[i]);
+			i, user_data, inline_irq_data, irq_status[i]);
+
+		trace_cam_log_event("CDM_DONE", "CDM_DONE_IRQ", irq_status[i],
+			cdm_hw->soc_info.index);
+		if (cam_cdm_write_hw_reg(cdm_hw,
+			cdm_core->offsets->irq_reg[i]->irq_clear, irq_status[i])) {
+			CAM_ERR(CAM_CDM, "Failed to Write %s%u HW IRQ Clear",
+				soc_info->label_name,
+				soc_info->index);
+			return IRQ_HANDLED;
+		}
+
+		payload[i] = CAM_MEM_ZALLOC(sizeof(struct cam_cdm_work_payload), GFP_ATOMIC);
+		if (!payload[i]) {
+			CAM_ERR(CAM_CDM,
+				"failed to allocate memory for fifo %d payload", i);
+			continue;
+		}
 
 		payload[i]->fifo_idx = i;
 		payload[i]->irq_status = irq_status[i];
 		payload[i]->hw = cdm_hw;
+		payload[i]->irq_data = inline_irq_data;
 
 		INIT_WORK((struct work_struct *)&payload[i]->work,
 			cam_hw_cdm_work);
-
-		trace_cam_log_event("CDM_DONE", "CDM_DONE_IRQ",
-			payload[i]->irq_status,
-			cdm_hw->soc_info.index);
-		if (cam_cdm_write_hw_reg(cdm_hw,
-				cdm_core->offsets->irq_reg[i]->irq_clear,
-				payload[i]->irq_status)) {
-			CAM_ERR(CAM_CDM, "Failed to Write %s%u HW IRQ Clear",
-				soc_info->label_name,
-				soc_info->index);
-			CAM_MEM_FREE(payload[i]);
-			return IRQ_HANDLED;
-		}
 
 		payload[i]->workq_scheduled_ts = ktime_get();
 
@@ -2073,7 +2097,8 @@ end:
 static inline void cam_hw_cdm_clear_bl_requests(struct cam_cdm *cdm_core)
 {
 	struct cam_cdm_bl_cb_request_entry *node, *tnode;
-	int i;
+	int i, j;
+	unsigned long flags = 0;
 
 	for (i = 0; i < cdm_core->offsets->reg_data->num_bl_fifo; i++) {
 		list_for_each_entry_safe(node, tnode,
@@ -2082,6 +2107,13 @@ static inline void cam_hw_cdm_clear_bl_requests(struct cam_cdm *cdm_core)
 			CAM_MEM_FREE(node);
 			node = NULL;
 		}
+
+		/* Reset all fast complete variable */
+		spin_lock_irqsave(&cdm_core->bl_fifo[i].fast_complete_lock, flags);
+		for (j = 0; j < CAM_CDM_BL_FIFO_LENGTH_MAX_DEFAULT; j++)
+			cdm_core->bl_fifo[i].fast_complete[j] = NULL;
+
+		spin_unlock_irqrestore(&cdm_core->bl_fifo[i].fast_complete_lock, flags);
 	}
 }
 
@@ -2368,10 +2400,12 @@ static int cam_hw_cdm_component_bind(struct device *dev,
 
 	for (i = 0; i < CAM_CDM_BL_FIFO_MAX; i++) {
 		INIT_LIST_HEAD(&cdm_core->bl_fifo[i].bl_request_list);
-
 		mutex_init(&cdm_core->bl_fifo[i].fifo_lock);
-
 		init_completion(&cdm_core->bl_fifo[i].bl_complete);
+		spin_lock_init(&cdm_core->bl_fifo->fast_complete_lock);
+
+		for (j = 0; j < CAM_CDM_BL_FIFO_LENGTH_MAX_DEFAULT; j++)
+			cdm_core->bl_fifo[i].fast_complete[j] = NULL;
 
 		len = strscpy(work_q_name, cdm_hw->soc_info.label_name,
 				sizeof(work_q_name));

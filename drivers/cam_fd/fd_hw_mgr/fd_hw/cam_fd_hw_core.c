@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_fd_hw_core.h"
@@ -1013,6 +1013,7 @@ int cam_fd_hw_start(void *hw_priv, void *hw_start_args, uint32_t arg_size)
 		cdm_cmd->userdata = NULL;
 		cdm_cmd->cookie = 0;
 		cdm_cmd->gen_irq_arb = false;
+		cdm_cmd->fast_complete = NULL;
 
 		for (i = 0 ; i <= start_args->num_hw_update_entries; i++) {
 			cmd = (start_args->hw_update_entries + i);
