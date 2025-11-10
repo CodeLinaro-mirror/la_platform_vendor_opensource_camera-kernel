@@ -10,6 +10,7 @@
 #include "cam_mem_mgr.h"
 #include "cam_packet_util.h"
 #include "cam_debug_util.h"
+#include "cam_common_util.h"
 
 #define CAM_UNIQUE_SRC_HDL_MAX 50
 
@@ -101,6 +102,42 @@ int cam_packet_util_validate_packet(struct cam_packet *packet,
 	}
 
 	return 0;
+}
+
+int cam_packet_util_copy_pkt_to_kmd(struct cam_packet *packet_u, struct cam_packet **packet,
+		size_t remain_len)
+{
+	int rc = 0;
+	uint32_t packet_size;
+
+	packet_size = packet_u->header.size;
+	if (packet_size >= sizeof(struct cam_packet) && packet_size <= remain_len) {
+		rc = cam_common_mem_kdup((void **) packet,
+			packet_u, packet_size);
+		if (rc) {
+			CAM_ERR(CAM_UTIL, "Alloc and copy request %lld packet fail",
+				packet_u->header.request_id);
+			return -EINVAL;
+		}
+		(*packet)->header.size = packet_size;
+	} else {
+		CAM_ERR(CAM_UTIL, "Invalid packet header size %u",
+			packet_size);
+		return -EINVAL;
+	}
+
+	if (cam_packet_util_validate_packet(*packet, remain_len)) {
+		CAM_ERR(CAM_UTIL, "Invalid packet params");
+		rc = -EINVAL;
+		goto free_packet;
+	}
+	return rc;
+
+free_packet:
+	cam_common_mem_free(*packet);
+	*packet = NULL;
+
+	return rc;
 }
 
 int cam_packet_util_get_kmd_buffer(struct cam_packet *packet,
