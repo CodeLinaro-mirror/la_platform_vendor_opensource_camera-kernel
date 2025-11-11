@@ -291,7 +291,15 @@ def _define_module(target, variant):
                 ],
             },
         },
-        copts = ["-include", "$(location :camera_banner)"],
+        copts = [
+                "-include",
+               "$(location :camera_banner)",
+               ] + select({
+                   "//build/kernel/kleaf:socrepo_true": [
+                   "-DCONFIG_SPECTRA_POWER_DOMAIN_SET_HW_MODE",
+                   ],
+                   "//conditions:default": [],
+                   }),
         deps = base_deps + deps,
         kconfig = "Kconfig",
         defconfig = "{}_defconfig".format(tv),

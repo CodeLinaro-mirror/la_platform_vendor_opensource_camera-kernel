@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of.h>
@@ -41,6 +42,15 @@ static int cam_ois_get_dt_data(struct cam_ois_ctrl_t *o_ctrl)
 		return rc;
 	}
 
+	if (soc_info->is_a_genpd_device) {
+		rc = cam_soc_util_initialize_power_domain(soc_info);
+		if (rc) {
+			CAM_ERR(CAM_SENSOR, "Failed to initalize the GDSC for dev: %s",
+				soc_info->dev_name);
+			return rc;
+		}
+	}
+
 	/* Initialize regulators to default parameters */
 	for (i = 0; i < soc_info->num_rgltr; i++) {
 		soc_info->rgltr[i] = devm_regulator_get(soc_info->dev,
@@ -50,7 +60,7 @@ static int cam_ois_get_dt_data(struct cam_ois_ctrl_t *o_ctrl)
 			rc = rc ? rc : -EINVAL;
 			CAM_ERR(CAM_OIS, "get failed for regulator %s",
 				 soc_info->rgltr_name[i]);
-			return rc;
+			goto uninitialize_power_domain;
 		}
 		CAM_DBG(CAM_OIS, "get for regulator %s",
 			soc_info->rgltr_name[i]);
@@ -63,14 +73,14 @@ static int cam_ois_get_dt_data(struct cam_ois_ctrl_t *o_ctrl)
 
 	if (!soc_info->gpio_data->cam_gpio_common_tbl_size) {
 		CAM_INFO(CAM_OIS, "No GPIO found");
-		return -EINVAL;
+		goto uninitialize_power_domain;
 	}
 
 	rc = cam_sensor_util_init_gpio_pin_tbl(soc_info,
 		&power_info->gpio_num_info);
 	if ((rc < 0) || (!power_info->gpio_num_info)) {
 		CAM_ERR(CAM_OIS, "No/Error OIS GPIOs");
-		return -EINVAL;
+		goto uninitialize_power_domain;
 	}
 
 	for (i = 0; i < soc_info->num_clk; i++) {
@@ -80,10 +90,15 @@ static int cam_ois_get_dt_data(struct cam_ois_ctrl_t *o_ctrl)
 			CAM_ERR(CAM_SENSOR, "get failed for %s",
 				soc_info->clk_name[i]);
 			rc = -ENOENT;
-			return rc;
+			goto uninitialize_power_domain;
 		}
 	}
 
+	return rc;
+
+uninitialize_power_domain:
+	if (soc_info->is_a_genpd_device)
+		cam_soc_util_uninitialize_power_domain(soc_info);
 	return rc;
 }
 /**
