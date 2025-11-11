@@ -16,15 +16,175 @@ include $(KBUILD_EXTRA_CONFIGS)
 endif
 
 # List of all camera-kernel headers
-
 ifeq ($(CAMERA_ARCH), qcm6490)
-cam_include_dirs := $(shell find $(CAMERA_KERNEL_ROOT)/camera_kt -name '*.h' ! -path '*/tfe_hw/*' ! -path '*/tfe_csid_hw/*' ! -path '*/sfe_hw/*' ! -path '*/ppi_hw/*' -exec dirname {} \; | uniq)
-cam_include_dirs += $(shell dirname `find $(CAMERA_KERNEL_ROOT)/common -name '*.h'` | uniq)
+ccflags-y += \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/include/uapi/camera/media \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_jpeg \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_jpeg/jpeg_hw/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_jpeg/jpeg_hw/jpeg_enc_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_jpeg/jpeg_hw/jpeg_dma_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_cdm \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_eeprom \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_sensor_io \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_sensor \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_res_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_hdmi_bdg \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_ois \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_csiphy \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_csiphy/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_ir_led \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_flash \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_cci \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_dp_bdg \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_actuator \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_sensor_utils \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_tpg \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_tpg/tpg_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_tpg/tpg_hw/tpg_hw_v_1_0 \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_tpg/tpg_hw/tpg_hw_v_1_2 \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_tpg/tpg_hw/tpg_hw_v_1_3 \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_tpg/tpg_hw/tpg_hw_v_1_4 \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_cust \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_cust/cam_custom_hw_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_cust/cam_custom_hw_mgr/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_cust/cam_custom_hw_mgr/cam_custom_hw1 \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_cust/cam_custom_hw_mgr/cam_custom_csid \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_ope \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_ope/ope_hw_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_ope/ope_hw_mgr/ope_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_icp \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_icp/fw_inc \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_icp/icp_hw/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_icp/icp_hw/icp_hw_mgr/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_icp/icp_hw/icp_hw_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_icp/icp_hw/a5_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_icp/icp_hw/bps_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_icp/icp_hw/ipe_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_icp/icp_hw/ofe_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_lrme \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_lrme/lrme_hw_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_lrme/lrme_hw_mgr/lrme_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_core \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_cpas \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_cpas/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_cpas/cpas_top \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_cpas/camss_top \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_req_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_utils \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_smmu \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sync \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_fd \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_fd/fd_hw_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_fd/fd_hw_mgr/fd_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/hw_utils \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/hw_utils/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/hw_utils/irq_controller \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe_top \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe_top/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe_bus \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe_bus/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe17x \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw/ife_csid_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw/tfe_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw/tfe_csid_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw/sfe_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_isp/isp_hw_mgr/isp_hw/top_tpg \
+	-I$(CAMERA_KERNEL_ROOT)/common
 else
-cam_include_dirs := $(shell dirname `find $(CAMERA_KERNEL_ROOT)/camera -name '*.h'` | uniq)
-cam_include_dirs += $(shell dirname `find $(CAMERA_KERNEL_ROOT)/common -name '*.h'` | uniq)
+ccflags-y += \
+	-I$(CAMERA_KERNEL_ROOT)/camera/include/uapi/camera/media \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_core \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cpas \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cpas/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cpas/cpas_top \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cpas/camss_top \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_req_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_utils \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_csiphy \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_sensor_utils \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_eeprom \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_sensor_io \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_cci \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_smmu \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sync \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_fd \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_fd/fd_hw_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_fd/fd_hw_mgr/fd_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_presil/inc \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/hw_utils/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/hw_utils/irq_controller \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/ppi_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/ife_csid_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/sfe_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/sfe_hw/sfe_bus/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/sfe_hw/sfe_top \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/sfe_hw/sfe_bus \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe_bus/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe_bus \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe_top \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe_top/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe17x \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/tfe_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/tfe_csid_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/top_tpg \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cust \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cust/cam_custom_hw_mgr/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cust/cam_custom_hw_mgr/cam_custom_csid \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cust/cam_custom_hw_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cust/cam_custom_hw_mgr/cam_custom_hw1 \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cdm \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_icp \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_icp/fw_inc \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_icp/icp_hw/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_icp/icp_hw/icp_hw_mgr/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_icp/icp_hw/icp_proc \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_icp/icp_hw/icp_proc/icp_common \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_icp/icp_hw/icp_proc/icp_v1_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_icp/icp_hw/icp_proc/icp_v2_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_icp/icp_hw/bps_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_icp/icp_hw/ipe_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_icp/icp_hw/ofe_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_jpeg \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_jpeg/jpeg_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_jpeg/jpeg_hw/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_jpeg/jpeg_hw/jpeg_enc_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_jpeg/jpeg_hw/jpeg_dma_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_lrme \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_lrme/lrme_hw_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_lrme/lrme_hw_mgr/lrme_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cre \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cre/cam_cre_hw_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cre/cam_cre_hw_mgr/cre_hw/include \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cre/cam_cre_hw_mgr/cre_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_cre/cam_cre_hw_mgr/cre_hw/top \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_ope \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_ope/ope_hw_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_ope/ope_hw_mgr/ope_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_tpg \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_flash \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_actuator \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_ois \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_hdmi_bdg \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_ir_led \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_dp_bdg \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_res_mgr \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_sensor \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_csiphy/include \
+	-I$(CAMERA_KERNEL_ROOT)/common
 endif
-
 
 ifeq ($(CAMERA_ARCH), qcm6490)
 # Include UAPI headers
@@ -33,7 +193,6 @@ USERINCLUDE +=                              \
 # Include Kernel headers
 LINUXINCLUDE +=                                                  \
 	-I$(KERNEL_ROOT)                                         \
-	$(addprefix -I,$(cam_include_dirs))                      \
 	-I$(CAMERA_KERNEL_ROOT)/camera_kt/include/uapi/camera/media \
 	-I$(CAMERA_KERNEL_ROOT)/camera_kt/include/uapi/camera       \
 	-I$(CAMERA_KERNEL_ROOT)/camera_kt/include/uapi              \
@@ -256,7 +415,6 @@ USERINCLUDE +=                              \
 # Include Kernel headers
 LINUXINCLUDE +=                                                       \
 	-I$(KERNEL_ROOT)                                              \
-	$(addprefix -I,$(cam_include_dirs))                           \
 	-I$(CAMERA_KERNEL_ROOT)/camera/include/uapi/camera/media \
 	-I$(CAMERA_KERNEL_ROOT)/camera/include/uapi/camera       \
 	-I$(CAMERA_KERNEL_ROOT)/camera/include/uapi              \
