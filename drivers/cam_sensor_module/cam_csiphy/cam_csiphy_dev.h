@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_CSIPHY_DEV_H_
@@ -64,10 +65,42 @@
 #define DPHY_LANE_3    BIT(6)
 #define DPHY_CLK_LN    BIT(7)
 
+/* Lane info packing for scm call */
+#define LANE_0_SEL                   BIT(0)
+#define LANE_1_SEL                   BIT(1)
+#define LANE_2_SEL                   BIT(2)
+#define LANE_3_SEL                   BIT(3)
+#define CPHY_LANE_SELECTION_SHIFT    8
+#define DPHY_LANE_SELECTION_SHIFT    16
+#define MAX_SUPPORTED_PHY_IDX        7
+
 enum cam_csiphy_state {
 	CAM_CSIPHY_INIT,
 	CAM_CSIPHY_ACQUIRE,
 	CAM_CSIPHY_START,
+};
+
+/**
+ * struct cam_csiphy_secure_info
+ *
+ * This is an internal struct that is a reflection of the one
+ * passed over from csid
+ *
+ * @phy_lane_sel_mask: This value to be filled completely by csiphy
+ * @lane_assign:       Lane_cfg value sent over from csid is
+ *                     equivalent to lane_assign here
+ * @vc_mask:           Virtual channel masks (Unused for mobile usecase)
+ * @csid_hw_idx_mask:  Bit position denoting CSID(s) in use for secure
+ *                     session
+ * @cdm_hw_idx_mask:   Bit position denoting CDM in use for secure
+ *                     session
+ */
+struct cam_csiphy_secure_info {
+	uint32_t phy_lane_sel_mask;
+	uint32_t lane_assign;
+	uint32_t vc_mask;
+	uint32_t csid_hw_idx_mask;
+	uint32_t cdm_hw_idx_mask;
 };
 
 /**
@@ -218,19 +251,27 @@ struct csiphy_ctrl_t {
  * @csiphy_3phase              :  To identify DPHY or CPHY
  * @mipi_flags                 :  MIPI phy flags
  * @csiphy_cpas_cp_reg_mask    :  CP reg mask for phy instance
+ * @csiphy_phy_lane_sel_mask   :  Generic format for CP information for PHY and lane
  * @hdl_data                   :  CSIPHY handle table
+ * @secure_info                :  All domain-id security related information packed in proper
+ *                                format for mink call
+ * @secure_info_updated        :  If all information in the secure_info struct above
+ *                                is passed and formatted properly from CSID driver
  */
 struct cam_csiphy_param {
-	uint16_t                   lane_assign;
-	uint8_t                    lane_cnt;
-	uint8_t                    secure_mode;
-	uint32_t                   lane_enable;
-	uint64_t                   settle_time;
-	uint64_t                   data_rate;
-	int                        csiphy_3phase;
-	uint16_t                   mipi_flags;
-	uint64_t                   csiphy_cpas_cp_reg_mask;
-	struct csiphy_hdl_tbl      hdl_data;
+	uint16_t                         lane_assign;
+	uint8_t                          lane_cnt;
+	uint8_t                          secure_mode;
+	uint32_t                         lane_enable;
+	uint64_t                         settle_time;
+	uint64_t                         data_rate;
+	int                              csiphy_3phase;
+	uint16_t                         mipi_flags;
+	uint64_t                         csiphy_cpas_cp_reg_mask;
+	uint64_t                         csiphy_phy_lane_sel_mask;
+	struct csiphy_hdl_tbl            hdl_data;
+	struct cam_csiphy_secure_info    secure_info;
+	bool                             secure_info_updated;
 };
 
 /**
