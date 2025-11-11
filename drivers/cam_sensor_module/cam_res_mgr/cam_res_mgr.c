@@ -559,7 +559,7 @@ end:
 EXPORT_SYMBOL(cam_res_mgr_gpio_request);
 
 bool cam_res_mgr_util_check_if_gpio_is_shared(
-	struct gpio *gpio_tbl, uint8_t size)
+	struct cam_soc_gpio *gpio_tbl, uint8_t size)
 {
 	int i = 0;
 	bool found = false;
@@ -645,7 +645,7 @@ static void cam_res_mgr_gpio_free(struct device *dev, uint gpio)
 }
 
 void cam_res_mgr_gpio_free_arry(struct device *dev,
-		const struct gpio *array, size_t num)
+		const struct cam_soc_gpio *array, size_t num)
 {
 	while (num--)
 		cam_res_mgr_gpio_free(dev, (array[num]).gpio);

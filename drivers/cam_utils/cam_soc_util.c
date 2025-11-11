@@ -3281,7 +3281,7 @@ static int cam_soc_util_get_dt_gpio_req_tbl(struct device_node *of_node,
 	if (!val_array)
 		return -ENOMEM;
 
-	gconf->cam_gpio_req_tbl = CAM_MEM_ZALLOC_ARRAY(count, sizeof(struct gpio),
+	gconf->cam_gpio_req_tbl = CAM_MEM_ZALLOC_ARRAY(count, sizeof(struct cam_soc_gpio),
 		GFP_KERNEL);
 	if (!gconf->cam_gpio_req_tbl) {
 		rc = -ENOMEM;
@@ -3397,7 +3397,7 @@ static int cam_soc_util_get_gpio_info(struct cam_hw_soc_info *soc_info)
 	}
 
 	gconf->cam_gpio_common_tbl = CAM_MEM_ZALLOC_ARRAY(gpio_array_size,
-				sizeof(struct gpio), GFP_KERNEL);
+				sizeof(struct cam_soc_gpio), GFP_KERNEL);
 	if (!gconf->cam_gpio_common_tbl) {
 		rc = -ENOMEM;
 		goto free_gpio_conf;
@@ -3435,7 +3435,7 @@ static int cam_soc_util_request_gpio_table(
 	uint8_t size = 0;
 	struct cam_soc_gpio_data *gpio_conf =
 			soc_info->gpio_data;
-	struct gpio *gpio_tbl = NULL;
+	struct cam_soc_gpio *gpio_tbl = NULL;
 
 
 	if (!gpio_conf) {
