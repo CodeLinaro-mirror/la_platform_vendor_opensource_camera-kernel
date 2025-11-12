@@ -388,7 +388,7 @@ int cam_mem_mgr_cache_ops(struct cam_mem_cache_ops_cmd *cmd)
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
 	CAM_DBG(CAM_MEM, "Calling dmap buf APIs for cache operations");
 	cache_dir = DMA_BIDIRECTIONAL;
-#else
+#elif defined(CONFIG_CAM_ION_SUPPORT)
 	unsigned long dmabuf_flag = 0;
 	rc = dma_buf_get_flags(tbl.bufq[idx].dma_buf, &dmabuf_flag);
 	if (rc) {
@@ -682,6 +682,7 @@ static int cam_mem_util_get_dma_buf(size_t len,
 	struct dma_buf **buf)
 {
 	int rc = 0;
+#ifdef CONFIG_CAM_ION_SUPPORT
 	unsigned int heap_id;
 	int32_t ion_flag = 0;
 	struct timespec64 ts1, ts2;
@@ -726,6 +727,7 @@ static int cam_mem_util_get_dma_buf(size_t len,
 		trace_cam_log_event("IONAllocProfile", "size and time in micro",
 			len, microsec);
 	}
+#endif
 
 	return rc;
 }
