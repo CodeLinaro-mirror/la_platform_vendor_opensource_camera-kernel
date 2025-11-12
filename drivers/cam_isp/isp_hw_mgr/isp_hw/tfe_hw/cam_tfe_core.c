@@ -324,10 +324,10 @@ static void cam_tfe_log_error_irq_status(
 	soc_info = top_priv->common_data.soc_info;
 	soc_private = top_priv->common_data.soc_info->soc_private;
 
-	CAM_INFO(CAM_ISP, "current monotonic time stamp seconds %lld:%lld",
+	CAM_INFO(CAM_ISP, "current monotonic time stamp seconds %lld:%ld",
 		ts.tv_sec, ts.tv_nsec/1000);
 	CAM_INFO(CAM_ISP,
-		"ERROR time %lld:%lld SOF %lld:%lld EPOCH %lld:%lld EOF %lld:%lld",
+		"ERROR time %lld:%ld SOF %lld:%ld EPOCH %lld:%ld EOF %lld:%ld",
 		top_priv->error_ts.tv_sec,
 		top_priv->error_ts.tv_nsec/NSEC_PER_USEC,
 		top_priv->sof_ts.tv_sec,
@@ -441,7 +441,7 @@ static void cam_tfe_log_error_irq_status(
 		core_info->tfe_bus->bus_priv, false, evt_payload, true);
 
 	CAM_INFO(CAM_ISP,
-		"TFE clock rate:%d TFE total bw applied:%lld",
+		"TFE clock rate:%lu TFE total bw applied:%lld",
 		top_priv->hw_clk_rate,
 		top_priv->total_bw_applied);
 	cam_cpas_log_votes();
@@ -963,7 +963,7 @@ static int cam_tfe_top_set_hw_clk_rate(
 	if (!rc)
 		top_priv->hw_clk_rate = max_clk_rate;
 	else
-		CAM_ERR(CAM_ISP, "TFE:%d set src clock rate:%lld failed, rc=%d",
+		CAM_ERR(CAM_ISP, "TFE:%d set src clock rate:%lu failed, rc=%d",
 		top_priv->common_data.soc_info->index, max_clk_rate,  rc);
 
 	return rc;
@@ -1017,7 +1017,7 @@ static int cam_tfe_top_dynamic_clock_update(
 	rc = cam_soc_util_set_src_clk_rate(soc_info, *clk_rate);
 	if (rc) {
 		CAM_ERR(CAM_ISP,
-			"unable to set clock dynamically rate:%lld",
+			"unable to set clock dynamically rate:%u",
 			*clk_rate);
 		return rc;
 	}

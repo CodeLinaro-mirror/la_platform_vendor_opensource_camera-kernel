@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -40,7 +40,7 @@ static void cam_mem_mgr_print_tbl(void)
 	for (i = 1; i < CAM_MEM_BUFQ_MAX; i++) {
 		CAM_CONVERT_TIMESTAMP_FORMAT((tbl.bufq[i].timestamp), hrs, min, sec, ms);
 		CAM_INFO(CAM_MEM,
-			"%llu:%llu:%llu:%llu idx %d fd %d size %llu active %d buf_handle %d refCount %d",
+			"%llu:%llu:%llu:%llu idx %d fd %d size %zu active %d buf_handle %d refCount %d",
 			hrs, min, sec, ms, i, tbl.bufq[i].fd, tbl.bufq[i].len, tbl.bufq[i].active,
 			tbl.bufq[i].buf_handle, kref_read(&tbl.bufq[i].krefcount));
 	}
@@ -346,7 +346,7 @@ int cam_mem_get_cpu_buf(int32_t buf_handle, uintptr_t *vaddr_ptr, size_t *len)
 		*vaddr_ptr = tbl.bufq[idx].kmdvaddr;
 		*len = tbl.bufq[idx].len;
 	} else {
-		CAM_ERR(CAM_MEM, "No KMD access requested, kmdvddr= %p, idx= %d, buf_handle= %d",
+		CAM_ERR(CAM_MEM, "No KMD access requested, kmdvddr= %lu, idx= %d, buf_handle= %d",
 			tbl.bufq[idx].kmdvaddr, idx, buf_handle);
 		rc = -EINVAL;
 	}
@@ -588,7 +588,7 @@ static int cam_mem_util_get_dma_buf(size_t len,
 		*buf = dma_heap_buffer_alloc(try_heap, len, O_RDWR, 0);
 		if (IS_ERR(*buf)) {
 			CAM_WARN(CAM_MEM,
-				"Failed in allocating from try heap, heap=%pK, len=%zu, err=%d",
+				"Failed in allocating from try heap, heap=%pK, len=%zu, err=%ld",
 				try_heap, len, PTR_ERR(*buf));
 			*buf = NULL;
 		}
@@ -916,7 +916,7 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd_v2 *cmd)
 	}
 	if (!dmabuf) {
 		CAM_ERR(CAM_MEM,
-			"Ion Alloc return NULL dmabuf! fd=%d, i_ino=%lu, len=%d", fd, i_ino, len);
+			"Ion Alloc return NULL dmabuf! fd=%d, i_ino=%lu, len=%zu", fd, i_ino, len);
 		cam_mem_mgr_print_tbl();
 		return rc;
 	}
@@ -960,7 +960,7 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd_v2 *cmd)
 
 		if (rc) {
 			CAM_ERR(CAM_MEM,
-				"Failed in map_hw_va len=%llu, flags=0x%x, fd=%d, region=%d, num_hdl=%d, rc=%d",
+				"Failed in map_hw_va len=%zu, flags=0x%x, fd=%d, region=%d, num_hdl=%d, rc=%d",
 				len, cmd->flags,
 				fd, region, cmd->num_hdl, rc);
 			if (rc == -EALREADY) {
@@ -1115,7 +1115,7 @@ int cam_mem_mgr_map(struct cam_mem_mgr_map_cmd_v2 *cmd)
 			is_internal);
 		if (rc) {
 			CAM_ERR(CAM_MEM,
-				"Failed in map_hw_va, flags=0x%x, fd=%d, len=%llu, region=%d, num_hdl=%d, rc=%d",
+				"Failed in map_hw_va, flags=0x%x, fd=%d, len=%zu, region=%d, num_hdl=%d, rc=%d",
 				cmd->flags, cmd->fd, len,
 				CAM_SMMU_REGION_IO, cmd->num_hdl, rc);
 			if (rc == -EALREADY) {
@@ -1496,7 +1496,7 @@ void cam_mem_put_cpu_buf(int32_t buf_handle)
 	} else if (tbl.bufq[idx].release_deferred) {
 		CAM_CONVERT_TIMESTAMP_FORMAT((tbl.bufq[idx].timestamp), hrs, min, sec, ms);
 		CAM_ERR(CAM_MEM,
-			"%llu:%llu:%llu:%llu idx %d fd %d i_ino %lu size %llu active %d buf_handle %d krefCount %d urefCount %d buf_name %s",
+			"%llu:%llu:%llu:%llu idx %d fd %d i_ino %lu size %zu active %d buf_handle %d krefCount %d urefCount %d buf_name %s",
 			hrs, min, sec, ms, idx, tbl.bufq[idx].fd, tbl.bufq[idx].i_ino,
 			tbl.bufq[idx].len, tbl.bufq[idx].active, tbl.bufq[idx].buf_handle,
 			krefcount, urefcount, tbl.bufq[idx].buf_name);
@@ -1548,7 +1548,7 @@ void cam_mem_put_kref(int32_t buf_handle)
 warn:
 	CAM_CONVERT_TIMESTAMP_FORMAT((tbl.bufq[idx].timestamp), hrs, min, sec, ms);
 	CAM_ERR(CAM_MEM,
-		"%llu:%llu:%llu:%llu idx %d fd %d size %llu active %d buf_handle %d krefCount %d urefCount %d",
+		"%llu:%llu:%llu:%llu idx %d fd %d size %zu active %d buf_handle %d krefCount %d urefCount %d",
 		hrs, min, sec, ms, idx, tbl.bufq[idx].fd,
 		tbl.bufq[idx].len, tbl.bufq[idx].active, tbl.bufq[idx].buf_handle,
 		krefcount, urefcount);
@@ -1622,7 +1622,7 @@ int cam_mem_mgr_release(struct cam_mem_mgr_release_cmd *cmd)
 	} else if (tbl.bufq[idx].release_deferred) {
 		CAM_CONVERT_TIMESTAMP_FORMAT((tbl.bufq[idx].timestamp), hrs, min, sec, ms);
 		CAM_ERR(CAM_MEM,
-			"%llu:%llu:%llu:%llu idx %d fd %d i_ino %lu size %llu active %d buf_handle %d krefCount %d urefCount %d buf_name %s",
+			"%llu:%llu:%llu:%llu idx %d fd %d i_ino %lu size %zu active %d buf_handle %d krefCount %d urefCount %d buf_name %s",
 			hrs, min, sec, ms, idx, tbl.bufq[idx].fd, tbl.bufq[idx].i_ino,
 			tbl.bufq[idx].len, tbl.bufq[idx].active, tbl.bufq[idx].buf_handle,
 			krefcount, urefcount, tbl.bufq[idx].buf_name);

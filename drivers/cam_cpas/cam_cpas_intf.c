@@ -680,7 +680,8 @@ int cam_cpas_prepare_subpart_info(enum cam_subparts_index idx, uint32_t num_subp
 	soc_private = (struct cam_cpas_private_soc *)cpas_hw->soc_info.soc_private;
 
 	if (!soc_private) {
-		CAM_ERR(CAM_CPAS, "Invalid soc_private: 0x%x", soc_private);
+		CAM_ERR(CAM_CPAS, "Invalid soc_private: 0x%lx",
+			(unsigned long)(uintptr_t)soc_private);
 		mutex_unlock(&cpas_hw->hw_mutex);
 		return -EINVAL;
 	}

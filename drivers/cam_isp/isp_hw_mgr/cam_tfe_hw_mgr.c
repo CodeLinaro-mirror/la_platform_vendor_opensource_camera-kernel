@@ -1913,13 +1913,13 @@ void cam_tfe_cam_cdm_callback(uint32_t handle, void *userdata,
 		status == CAM_CDM_CB_STATUS_HW_ERROR) {
 		ctx = userdata;
 		CAM_INFO(CAM_ISP,
-			"req_id =%d ctx_id =%d Bl_cmd_count =%d status=%d",
+			"req_id =%llu ctx_id =%d Bl_cmd_count =%d status=%d",
 			ctx->applied_req_id, ctx->ctx_index,
 			ctx->last_submit_bl_cmd.bl_count, status);
 
 		for (i = 0; i < ctx->last_submit_bl_cmd.bl_count; i++) {
 			CAM_INFO(CAM_ISP,
-				"BL(%d) hdl=0x%x addr=0x%x len=%d input_len =%d offset=0x%x type=%d",
+				"BL(%d) hdl=0x%x addr=0x%llx len=%zu input_len =%d offset=0x%x type=%d",
 				i, ctx->last_submit_bl_cmd.cmd[i].mem_handle,
 				ctx->last_submit_bl_cmd.cmd[i].hw_addr,
 				ctx->last_submit_bl_cmd.cmd[i].len,
@@ -2017,7 +2017,7 @@ int cam_tfe_cshiphy_callback(
 				phy_clock_rate, &updated_csid_clk);
 			if (rc) {
 				CAM_ERR(CAM_ISP,
-					"csid clock update failed: %d, csid:%lld tfe:%lld",
+					"csid clock update failed: %d, csid:%u tfe:%u",
 					rc, csid_clock_rate, tfe_clock_rate);
 				goto end;
 			}
@@ -2030,7 +2030,7 @@ int cam_tfe_cshiphy_callback(
 					&updated_csid_clk, &updated_tfe_clk);
 				if (rc) {
 					CAM_ERR(CAM_ISP,
-						"tfe clock update failed: %d, csid:%lld tfe:%lld",
+						"tfe clock update failed: %d, csid:%u tfe:%u",
 						rc, updated_csid_clk, tfe_clock_rate);
 					goto end;
 				}
@@ -2046,7 +2046,7 @@ int cam_tfe_cshiphy_callback(
 				&csid_clock_rate, &updated_tfe_clk);
 			if (rc) {
 				CAM_ERR(CAM_ISP,
-					"tfe clock update failed: %d, csid:%lld tfe:%lld",
+					"tfe clock update failed: %d, csid:%u tfe:%u",
 					rc, csid_clock_rate, tfe_clock_rate);
 				goto end;
 			}
@@ -2065,7 +2065,7 @@ end:
 		(updated_csid_clk > updated_tfe_clk) ||
 		(*phy_clock_rate > updated_tfe_clk)) {
 		CAM_ERR(CAM_ISP,
-			"improper clock rates, phy:%lld csid:%lld tfe:%lld",
+			"improper clock rates, phy:%u csid:%u tfe:%u",
 			*phy_clock_rate, updated_csid_clk, updated_tfe_clk);
 
 		return -EINVAL;
@@ -3077,7 +3077,7 @@ static int cam_tfe_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 		master_base_idx = ctx->base[0].idx;
 
 	/*Change slave mode*/
-	if (csid_halt_type == CAM_CSID_HALT_IMMEDIATELY)
+	if ((int)csid_halt_type == (int)CAM_CSID_HALT_IMMEDIATELY)
 		cam_tfe_mgr_csid_change_halt_mode(ctx,
 			CAM_TFE_CSID_HALT_MODE_INTERNAL);
 
@@ -4182,7 +4182,7 @@ static int cam_isp_tfe_packet_generic_blob_handler(void *user_data,
 			(struct cam_isp_tfe_csid_clock_config *)blob_data;
 
 		if (blob_size < sizeof(struct cam_isp_tfe_csid_clock_config)) {
-			CAM_ERR(CAM_ISP, "Invalid blob size %u expected %u",
+			CAM_ERR(CAM_ISP, "Invalid blob size %u expected %lu",
 				blob_size,
 				sizeof(struct cam_isp_tfe_csid_clock_config));
 			return -EINVAL;
@@ -4251,7 +4251,7 @@ static int cam_tfe_update_dual_config(
 			goto put_ref;
 		}
 	} else {
-		CAM_ERR(CAM_ISP, "Invalid packet header size %u",
+		CAM_ERR(CAM_ISP, "Invalid packet header size %zu",
 			packet_size);
 		rc = -EINVAL;
 		goto put_ref;
