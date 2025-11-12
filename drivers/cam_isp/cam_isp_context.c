@@ -123,7 +123,7 @@ static int __cam_isp_ctx_dump_event_record(
 
 	if (!cpu_addr || !buf_len || !offset || !ctx_isp) {
 		CAM_ERR(CAM_ISP, "Invalid args %pK %zu %pK %pK",
-			cpu_addr, buf_len, offset, ctx_isp);
+			(void *)cpu_addr, buf_len, offset, ctx_isp);
 		return -EINVAL;
 	}
 	for (i = 0; i < CAM_ISP_CTX_EVENT_MAX; i++) {
@@ -4854,7 +4854,7 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 		&& (packet->header.request_id <= ctx->last_flush_req)
 		&& ctx->last_flush_req && packet->header.request_id) {
 		CAM_WARN(CAM_ISP,
-			"last flushed req is %lld, config dev(init) for req %lld",
+			"last flushed req is %u, config dev(init) for req %lld",
 			ctx->last_flush_req, packet->header.request_id);
 		rc = -EBADR;
 		goto free_req;
@@ -6277,7 +6277,7 @@ static int cam_isp_context_dump_requests(void *data,
 		ctx_isp = (struct cam_isp_context *) ctx->ctx_priv;
 		if (ctx_isp->isp_device_type == CAM_IFE_DEVICE_TYPE)
 			CAM_ERR(CAM_ISP,
-				"Page fault on resource id:%s (0x%x) ctx id:%d frame id:%d reported id:%lld applied id:%lld",
+				"Page fault on resource id:%s (0x%x) ctx id:%d frame id:%lld reported id:%lld applied id:%lld",
 				__cam_isp_resource_handle_id_to_type(
 				resource_type),
 				resource_type, ctx->ctx_id, ctx_isp->frame_id,
@@ -6285,7 +6285,7 @@ static int cam_isp_context_dump_requests(void *data,
 				ctx_isp->last_applied_req_id);
 		else
 			CAM_ERR(CAM_ISP,
-				"Page fault on resource id:%s (0x%x) ctx id:%d frame id:%d reported id:%lld applied id:%lld",
+				"Page fault on resource id:%s (0x%x) ctx id:%d frame id:%lld reported id:%lld applied id:%lld",
 				__cam_isp_tfe_resource_handle_id_to_type(
 				resource_type),
 				resource_type, ctx->ctx_id, ctx_isp->frame_id,

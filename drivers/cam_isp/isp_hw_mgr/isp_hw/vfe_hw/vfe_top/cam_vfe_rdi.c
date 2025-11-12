@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -535,7 +535,7 @@ static int cam_vfe_rdi_handle_irq_bottom_half(void *handler_priv,
 	if (irq_rdi_status) {
 		ktime_get_boottime_ts64(&ts);
 		CAM_INFO(CAM_ISP,
-			"current monotonic time stamp seconds %lld:%lld",
+			"current monotonic time stamp seconds %lld:%ld",
 			ts.tv_sec, ts.tv_nsec/1000);
 
 		cam_vfe_rdi_cpas_reg_dump(rdi_priv);
@@ -543,7 +543,7 @@ static int cam_vfe_rdi_handle_irq_bottom_half(void *handler_priv,
 		CAM_INFO(CAM_ISP, "ife_clk_src:%lld",
 			soc_private->ife_clk_src);
 		CAM_INFO(CAM_ISP,
-			"ERROR time %lld:%lld SOF %lld:%lld",
+			"ERROR time %lld:%ld SOF %lld:%ld",
 			rdi_priv->error_ts.tv_sec,
 			rdi_priv->error_ts.tv_nsec,
 			rdi_priv->sof_ts.tv_sec,

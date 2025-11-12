@@ -66,8 +66,9 @@ int cam_ope_get_hw_caps(void *hw_priv, void *get_hw_cap_args,
 	core_info = (struct cam_ope_device_core_info *)ope_dev->core_info;
 
 	if ((!soc_info) || (!core_info)) {
-		CAM_ERR(CAM_OPE, "soc_info = %x core_info = %x",
-			soc_info, core_info);
+		CAM_ERR(CAM_OPE, "soc_info = %llx core_info = %llx",
+			(unsigned long long)(uintptr_t)soc_info,
+			(unsigned long long)(uintptr_t)core_info);
 		return -EINVAL;
 	}
 
@@ -501,7 +502,7 @@ int ope_validate_buff_offset(size_t buf_len,
 	if ((buf_len <= cmd_buf->offset) ||
 		(cmd_buf->size < cmd_buf->length) ||
 		((buf_len - cmd_buf->offset) < cmd_buf->length)) {
-		CAM_ERR(CAM_OPE, "invalid offset:0x%x, mem_hdl:0x%x buf_len:%llu",
+		CAM_ERR(CAM_OPE, "invalid offset:0x%x, mem_hdl:0x%x buf_len:%u",
 					cmd_buf->offset,
 					cmd_buf->mem_handle,
 					cmd_buf->length);
@@ -1689,16 +1690,17 @@ int cam_ope_process_cmd(void *device_priv, uint32_t cmd_type,
 	uint32_t device_idx;
 
 	if (!device_priv) {
-		CAM_ERR(CAM_OPE, "Invalid args %x for cmd %u",
-			device_priv, cmd_type);
+		CAM_ERR(CAM_OPE, "Invalid args %llx for cmd %u",
+			(unsigned long long)(uintptr_t)device_priv, cmd_type);
 		return -EINVAL;
 	}
 
 	soc_info = &ope_dev->soc_info;
 	core_info = (struct cam_ope_device_core_info *)ope_dev->core_info;
 	if ((!soc_info) || (!core_info)) {
-		CAM_ERR(CAM_OPE, "soc_info = %x core_info = %x",
-			soc_info, core_info);
+		CAM_ERR(CAM_OPE, "soc_info = %llx core_info = %llx",
+			(unsigned long long)(uintptr_t)soc_info,
+			(unsigned long long)(uintptr_t)core_info);
 		return -EINVAL;
 	}
 

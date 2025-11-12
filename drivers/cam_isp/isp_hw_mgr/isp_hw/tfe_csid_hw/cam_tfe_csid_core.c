@@ -1960,7 +1960,7 @@ static int cam_tfe_csid_get_time_stamp(
 			U64_MAX - time_delta) {
 			CAM_WARN(CAM_ISP, "boottimestamp overflowed");
 			CAM_INFO(CAM_ISP,
-			"currQTimer %lx prevQTimer %lx prevBootTimer %lx torn %d",
+			"currQTimer %llx prevQTimer %llx prevBootTimer %llx torn %d",
 				time_stamp->time_stamp_val,
 				csid_hw->prev_qtimer_ts,
 				csid_hw->prev_boot_timestamp, torn);
@@ -2664,12 +2664,12 @@ static int cam_tfe_csid_set_csid_clock_dynamically(
 	soc_info = &csid_hw->hw_info->soc_info;
 	clk_rate = (uint32_t *)cmd_args;
 
-	CAM_DBG(CAM_ISP, "CSID clock rate %lld", *clk_rate);
+	CAM_DBG(CAM_ISP, "CSID clock rate %u", *clk_rate);
 
 	rc = cam_soc_util_set_src_clk_rate(soc_info, *clk_rate);
 	if (rc) {
 		CAM_ERR(CAM_ISP,
-			"unable to set clock dynamically rate:%lld", *clk_rate);
+			"unable to set clock dynamically rate:%u", *clk_rate);
 		return rc;
 	}
 
@@ -2753,7 +2753,7 @@ static int cam_tfe_csid_get_regdump(struct cam_tfe_csid_hw *csid_hw,
 		path_data->start_line, path_data->end_line,
 		path_data->width, path_data->height);
 	CAM_INFO(CAM_ISP,
-		"clock:%d crop_enable:%d vc:%d dt:%d informat:%d outformat:%d",
+		"clock:%llu crop_enable:%d vc:%d dt:%d informat:%d outformat:%d",
 		path_data->clk_rate, path_data->crop_enable,
 		path_data->vc, path_data->dt,
 		path_data->in_format, path_data->out_format);
@@ -3550,7 +3550,7 @@ handle_fatal_error:
 			irq_status[TFE_CSID_IRQ_REG_RX],
 			irq_status[TFE_CSID_IRQ_REG_IPP]);
 		CAM_ERR(CAM_ISP,
-			"RDI0: 0x%x RDI1: 0x%x RDI2: 0x%x CSID clk:%d",
+			"RDI0: 0x%x RDI1: 0x%x RDI2: 0x%x CSID clk:%llu",
 			irq_status[TFE_CSID_IRQ_REG_RDI0],
 			irq_status[TFE_CSID_IRQ_REG_RDI1],
 			irq_status[TFE_CSID_IRQ_REG_RDI2],

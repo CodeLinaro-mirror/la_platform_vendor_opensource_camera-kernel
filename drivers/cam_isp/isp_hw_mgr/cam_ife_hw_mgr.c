@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -1163,7 +1163,7 @@ static int cam_ife_hw_mgr_release_hw_for_ctx(
 
 	/* clean up the callback function */
 	ife_ctx->common.cb_priv = NULL;
-	memset(ife_ctx->common.event_cb, 0, sizeof(ife_ctx->common.event_cb));
+	ife_ctx->common.event_cb = NULL;
 
 	CAM_DBG(CAM_ISP, "release context completed ctx id:%d",
 		ife_ctx->ctx_index);
@@ -6337,7 +6337,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 
 		if (blob_size < sizeof(struct cam_isp_csid_qcfa_config)) {
 			CAM_ERR(CAM_ISP,
-				"Invalid qcfa blob size %u expected %u",
+				"Invalid qcfa blob size %u expected %lu",
 				blob_size,
 				sizeof(struct cam_isp_csid_qcfa_config));
 			return -EINVAL;
@@ -6439,7 +6439,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 
 		if (blob_size < sizeof(struct cam_isp_csid_epd_config)) {
 			CAM_ERR(CAM_ISP,
-				"Invalid epd config blob size %u expected %u",
+				"Invalid epd config blob size %u expected %lu",
 				blob_size,
 				sizeof(struct cam_isp_csid_epd_config));
 			return -EINVAL;
@@ -6455,7 +6455,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		struct cam_isp_sensor_blanking_config  *sensor_blanking_config;
 
 		if (blob_size < sizeof(struct cam_isp_sensor_blanking_config)) {
-			CAM_ERR(CAM_ISP, "Invalid blob size %zu expected %zu",
+			CAM_ERR(CAM_ISP, "Invalid blob size %u expected %zu",
 				blob_size,
 				sizeof(struct cam_isp_sensor_blanking_config));
 			return -EINVAL;
@@ -6474,7 +6474,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		struct cam_isp_sensor_config *csid_dim_config;
 
 		if (blob_size < sizeof(struct cam_isp_sensor_config)) {
-			CAM_ERR(CAM_ISP, "Invalid blob size %zu expected %zu",
+			CAM_ERR(CAM_ISP, "Invalid blob size %u expected %zu",
 				blob_size,
 				sizeof(struct cam_isp_sensor_config));
 			return -EINVAL;
@@ -6494,7 +6494,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		struct cam_isp_tpg_core_config *tpg_config;
 
 		if (blob_size < sizeof(struct cam_isp_tpg_core_config)) {
-			CAM_ERR(CAM_ISP, "Invalid blob size %zu expected %zu",
+			CAM_ERR(CAM_ISP, "Invalid blob size %u expected %zu",
 				blob_size,
 				sizeof(struct cam_isp_tpg_core_config));
 			return -EINVAL;
@@ -7296,7 +7296,7 @@ static int cam_ife_mgr_user_dump_hw(
 		true);
 	if (rc) {
 		CAM_ERR(CAM_ISP,
-			"Dump failed req: %lld handle %u offset %u",
+			"Dump failed req: %lld handle %u offset %zu",
 			dump_args->request_id,
 			dump_args->buf_handle,
 			dump_args->offset);
