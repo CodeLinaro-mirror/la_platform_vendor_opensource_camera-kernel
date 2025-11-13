@@ -580,6 +580,9 @@ static void cam_flash_platform_remove(struct platform_device *pdev)
 #endif
 {
 	component_del(&pdev->dev, &cam_flash_component_ops);
+
+	cam_soc_util_uninitialize_power_domain(&pdev->dev);
+
 #if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
 #endif
@@ -590,6 +593,9 @@ static int32_t cam_flash_platform_probe(struct platform_device *pdev)
 	int rc = 0;
 
 	CAM_DBG(CAM_FLASH, "Adding Flash Sensor component");
+
+	cam_soc_util_initialize_power_domain(&pdev->dev);
+
 	rc = component_add(&pdev->dev, &cam_flash_component_ops);
 	if (rc)
 		CAM_ERR(CAM_FLASH, "failed to add component rc: %d", rc);
@@ -766,6 +772,9 @@ static int cam_flash_i2c_driver_probe(struct i2c_client *client)
 	}
 
 	CAM_DBG(CAM_FLASH, "Adding sensor flash component");
+
+	cam_soc_util_initialize_power_domain(&client->dev);
+
 	rc = component_add(&client->dev, &cam_flash_i2c_component_ops);
 	if (rc)
 		CAM_ERR(CAM_FLASH, "failed to add component rc: %d", rc);
@@ -791,6 +800,9 @@ static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
 	}
 
 	CAM_DBG(CAM_FLASH, "Adding sensor flash component");
+
+	cam_soc_util_initialize_power_domain(&client->dev);
+
 	rc = component_add(&client->dev, &cam_flash_i2c_component_ops);
 	if (rc)
 		CAM_ERR(CAM_FLASH, "failed to add component rc: %d", rc);
@@ -802,6 +814,8 @@ static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
 void cam_flash_i2c_component_del_wrapper(struct i2c_client *client)
 {
 	component_del(&client->dev, &cam_flash_i2c_component_ops);
+
+	cam_soc_util_uninitialize_power_domain(&client->dev);
 }
 
 MODULE_DEVICE_TABLE(of, cam_flash_dt_match);

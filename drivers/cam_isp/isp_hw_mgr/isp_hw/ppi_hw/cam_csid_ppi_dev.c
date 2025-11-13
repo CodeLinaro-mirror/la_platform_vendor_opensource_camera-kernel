@@ -147,6 +147,9 @@ int cam_csid_ppi_probe(struct platform_device *pdev)
 	int rc = 0;
 
 	CAM_DBG(CAM_ISP, "Adding PPI component");
+
+	cam_soc_util_initialize_power_domain(&pdev->dev);
+
 	rc = component_add(&pdev->dev, &cam_ppi_component_ops);
 	if (rc)
 		CAM_ERR(CAM_ISP, "failed to add component rc: %d", rc);
@@ -161,6 +164,9 @@ void cam_csid_ppi_remove(struct platform_device *pdev)
 #endif
 {
 	component_del(&pdev->dev, &cam_ppi_component_ops);
+
+	cam_soc_util_uninitialize_power_domain(&pdev->dev);
+
 #if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
 #endif

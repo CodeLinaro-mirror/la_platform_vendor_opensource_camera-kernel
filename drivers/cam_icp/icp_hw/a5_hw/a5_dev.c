@@ -229,6 +229,9 @@ int cam_a5_probe(struct platform_device *pdev)
 	int rc = 0;
 
 	CAM_DBG(CAM_ICP, "Adding A5 component");
+
+	cam_soc_util_initialize_power_domain(&pdev->dev);
+
 	rc = component_add(&pdev->dev, &cam_a5_component_ops);
 	if (rc)
 		CAM_ERR(CAM_ICP, "failed to add component rc: %d", rc);
@@ -243,6 +246,9 @@ static void cam_a5_remove(struct platform_device *pdev)
 #endif
 {
 	component_del(&pdev->dev, &cam_a5_component_ops);
+
+	cam_soc_util_uninitialize_power_domain(&pdev->dev);
+
 #if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
 #endif

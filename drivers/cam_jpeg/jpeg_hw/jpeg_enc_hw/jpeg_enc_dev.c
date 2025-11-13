@@ -237,6 +237,9 @@ static void cam_jpeg_enc_remove(struct platform_device *pdev)
 #endif
 {
 	component_del(&pdev->dev, &cam_jpeg_enc_component_ops);
+
+	cam_soc_util_uninitialize_power_domain(&pdev->dev);
+
 #if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
 #endif
@@ -247,6 +250,9 @@ static int cam_jpeg_enc_probe(struct platform_device *pdev)
 	int rc = 0;
 
 	CAM_DBG(CAM_JPEG, "Adding JPEG component");
+
+	cam_soc_util_initialize_power_domain(&pdev->dev);
+
 	rc = component_add(&pdev->dev, &cam_jpeg_enc_component_ops);
 	if (rc)
 		CAM_ERR(CAM_JPEG, "failed to add component rc: %d", rc);

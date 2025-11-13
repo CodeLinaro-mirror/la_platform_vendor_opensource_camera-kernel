@@ -370,15 +370,6 @@ int cam_eeprom_parse_dt(struct cam_eeprom_ctrl_t *e_ctrl)
 			soc_private->i2c_info.slave_addr);
 	}
 
-	if (soc_info->is_a_genpd_device) {
-		rc = cam_soc_util_initialize_power_domain(soc_info);
-		if (rc) {
-			CAM_ERR(CAM_EEPROM, "Failed to initalize the GDSC for dev: %s",
-				soc_info->dev_name);
-			return rc;
-		}
-	}
-
 	for (i = 0; i < soc_info->num_clk; i++) {
 		soc_info->clk[i] = devm_clk_get(soc_info->dev,
 			soc_info->clk_name[i]);
@@ -386,7 +377,7 @@ int cam_eeprom_parse_dt(struct cam_eeprom_ctrl_t *e_ctrl)
 			CAM_ERR(CAM_EEPROM, "get failed for %s",
 				soc_info->clk_name[i]);
 			rc = -ENOENT;
-			goto uninitialize_power_domain;
+			return rc;
 		}
 	}
 
@@ -399,16 +390,11 @@ int cam_eeprom_parse_dt(struct cam_eeprom_ctrl_t *e_ctrl)
 			rc = rc ? rc : -EINVAL;
 			CAM_ERR(CAM_EEPROM, "get failed for regulator %s",
 				 soc_info->rgltr_name[i]);
-			goto uninitialize_power_domain;
+			return rc;
 		}
 		CAM_DBG(CAM_EEPROM, "get for regulator %s",
 			soc_info->rgltr_name[i]);
 	}
 
-	return rc;
-
-uninitialize_power_domain:
-	if (soc_info->is_a_genpd_device)
-		cam_soc_util_uninitialize_power_domain(soc_info);
 	return rc;
 }

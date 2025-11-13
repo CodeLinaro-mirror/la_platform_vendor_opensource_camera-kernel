@@ -5471,6 +5471,9 @@ static int cam_smmu_probe(struct platform_device *pdev)
 
 	dev->dma_parms = NULL;
 	CAM_DBG(CAM_SMMU, "Adding SMMU component: %s", pdev->name);
+
+	cam_soc_util_initialize_power_domain(&pdev->dev);
+
 	if (of_device_is_compatible(dev->of_node, "qcom,msm-cam-smmu")) {
 		rc = cam_alloc_smmu_context_banks(dev);
 		if (rc < 0) {
@@ -5524,6 +5527,8 @@ static void cam_smmu_remove(struct platform_device *pdev)
 		return -ENODEV;
 #endif
 	}
+
+	cam_soc_util_uninitialize_power_domain(&pdev->dev);
 
 #if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;

@@ -305,15 +305,6 @@ int32_t cam_sensor_parse_dt(struct cam_sensor_ctrl_t *s_ctrl)
 	/* Initialize mutex */
 	mutex_init(&(s_ctrl->cam_sensor_mutex));
 
-	if (soc_info->is_a_genpd_device) {
-		rc = cam_soc_util_initialize_power_domain(soc_info);
-		if (rc) {
-			CAM_ERR(CAM_SENSOR, "Failed to initalize the GDSC for dev: %s",
-				soc_info->dev_name);
-			return rc;
-		}
-	}
-
 	/* Initialize default parameters */
 	for (i = 0; i < soc_info->num_clk; i++) {
 		soc_info->clk[i] = devm_clk_get(soc_info->dev,
@@ -322,7 +313,7 @@ int32_t cam_sensor_parse_dt(struct cam_sensor_ctrl_t *s_ctrl)
 			CAM_ERR(CAM_SENSOR, "get failed for %s",
 				 soc_info->clk_name[i]);
 			rc = -ENOENT;
-			goto uninitialize_power_domain;
+			return rc;
 		}
 	}
 	/* Initialize regulators to default parameters */
@@ -334,17 +325,11 @@ int32_t cam_sensor_parse_dt(struct cam_sensor_ctrl_t *s_ctrl)
 			rc = rc ? rc : -EINVAL;
 			CAM_ERR(CAM_SENSOR, "get failed for regulator %s",
 				 soc_info->rgltr_name[i]);
-			goto uninitialize_power_domain;
+			return rc;
 		}
 		CAM_DBG(CAM_SENSOR, "get for regulator %s",
 			soc_info->rgltr_name[i]);
 	}
 
 	return rc;
-
-uninitialize_power_domain:
-	if (soc_info->is_a_genpd_device)
-		cam_soc_util_uninitialize_power_domain(soc_info);
-	return rc;
-
 }
