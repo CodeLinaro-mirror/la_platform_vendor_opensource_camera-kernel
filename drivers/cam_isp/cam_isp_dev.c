@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -11,6 +11,7 @@
 #include <linux/iommu.h>
 #include <linux/timer.h>
 #include <linux/kernel.h>
+#include <linux/vmalloc.h>
 
 #include <media/cam_req_mgr.h>
 #include "cam_isp_dev.h"

@@ -18923,8 +18923,7 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 	case CAM_HW_MGR_CMD_INTERNAL:
 		if (!hw_cmd_args->u.internal_args) {
 			CAM_ERR(CAM_ISP, "Invalid cmd arguments");
-			WARN_ONCE(1, "Invalid command %d",
-					hw_cmd_args->u.internal_args);
+			WARN_ONCE(1, "Invalid command");
 			return -EINVAL;
 		}
 
