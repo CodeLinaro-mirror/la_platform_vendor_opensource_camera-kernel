@@ -10137,18 +10137,19 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 
 			/* Append fast crop settings */
 			if ((fast_crop_settings_avaliable) && (cdm_cmd->cmd_arrary_count == 1)) {
-				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].bl_addr.mem_handle =
+				cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].bl_addr.mem_handle =
 					block_info->cmd_mem_hdl;
-				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset =
+				cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].offset =
 					block_info->cmd_offset;
-				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].len = block_info->cmd_size;
-				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].arbitrate = false;
+				cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].len =
+					block_info->cmd_size;
+				cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].arbitrate = false;
 				CAM_DBG(CAM_ISP,
 					"ctx id:%u append crop settings for request id: %llu, mem_handle:0x%x, len:%d offset:%d",
 					ctx->ctx_index, cfg->request_id,
-					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].bl_addr.mem_handle,
-					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].len,
-					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset);
+					block_info->cmd_mem_hdl,
+					cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].len,
+					cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].offset);
 				cdm_cmd->cmd_arrary_count++;
 				rc = cam_isp_notify_crop_setting_applied(cfg, block_info);
 				if (rc) {
@@ -10164,18 +10165,18 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 				(cdm_cmd->cmd_arrary_count == 1) &&
 				(ctx->crop_update_entry.len > 0) &&
 				(!fast_crop_settings_avaliable)) {
-				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].bl_addr.mem_handle =
+				cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].bl_addr.mem_handle =
 					ctx->crop_update_entry.handle;
-				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset =
+				cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].offset =
 					ctx->crop_update_entry.offset;
-				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].len =
+				cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].len =
 					ctx->crop_update_entry.len;
-				cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].arbitrate = false;
+				cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].arbitrate = false;
 				CAM_DBG(CAM_ISP,
 					"ctx id:%u updated req#%llu's crop info for request id: %llu, mem_handle:0x%x, len:%d offset:%d",
 					ctx->ctx_index, ctx->latest_crop_update_req, cfg->request_id,
-					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].len,
-					cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset);
+					cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].len,
+					cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].offset);
 				cdm_cmd->cmd_arrary_count++;
 				cfg->applied_crop_req_id = ctx->latest_crop_update_req;
 			} else {
@@ -10214,10 +10215,11 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 				CAM_ERR(CAM_ISP, "Unexpected BL type %d",
 					cmd->flags);
 
-			cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].bl_addr.mem_handle = cmd->handle;
-			cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].offset = cmd->offset;
-			cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].len = cmd->len;
-			cdm_cmd->cmd[cdm_cmd->cmd_arrary_count].arbitrate = false;
+			cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].bl_addr.mem_handle =
+				cmd->handle;
+			cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].offset = cmd->offset;
+			cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].len = cmd->len;
+			cdm_cmd->cmd_flex[cdm_cmd->cmd_arrary_count].arbitrate = false;
 
 			cdm_cmd->cmd_arrary_count++;
 		}

@@ -2748,10 +2748,10 @@ static int cam_tfe_mgr_config_hw(void *hw_mgr_priv,
 				CAM_ERR(CAM_ISP, "Unexpected BL type %d",
 					cmd->flags);
 
-			cdm_cmd->cmd[i - skip].bl_addr.mem_handle = cmd->handle;
-			cdm_cmd->cmd[i - skip].offset = cmd->offset;
-			cdm_cmd->cmd[i - skip].len = cmd->len;
-			cdm_cmd->cmd[i - skip].arbitrate = false;
+			cdm_cmd->cmd_flex[i - skip].bl_addr.mem_handle = cmd->handle;
+			cdm_cmd->cmd_flex[i - skip].offset = cmd->offset;
+			cdm_cmd->cmd_flex[i - skip].len = cmd->len;
+			cdm_cmd->cmd_flex[i - skip].arbitrate = false;
 		}
 		cdm_cmd->cmd_arrary_count = cfg->num_hw_update_entries - skip;
 		reinit_completion(&ctx->config_done_complete);
@@ -2774,16 +2774,16 @@ static int cam_tfe_mgr_config_hw(void *hw_mgr_priv,
 	for (i = 0; i < cdm_cmd->cmd_arrary_count; i++) {
 		if (cdm_cmd->type == CAM_CDM_BL_CMD_TYPE_MEM_HANDLE) {
 			ctx->last_submit_bl_cmd.cmd[i].mem_handle =
-				cdm_cmd->cmd[i].bl_addr.mem_handle;
+				cdm_cmd->cmd_flex[i].bl_addr.mem_handle;
 
 			rc = cam_mem_get_io_buf(
-			cdm_cmd->cmd[i].bl_addr.mem_handle,
+			cdm_cmd->cmd_flex[i].bl_addr.mem_handle,
 			g_tfe_hw_mgr.mgr_common.cmd_iommu_hdl,
 			&ctx->last_submit_bl_cmd.cmd[i].hw_addr,
 			&ctx->last_submit_bl_cmd.cmd[i].len, NULL);
 		} else if (cdm_cmd->type ==
 			CAM_CDM_BL_CMD_TYPE_HW_IOVA) {
-			if (!cdm_cmd->cmd[i].bl_addr.hw_iova) {
+			if (!cdm_cmd->cmd_flex[i].bl_addr.hw_iova) {
 				CAM_ERR(CAM_CDM,
 					"Submitted Hw bl hw_iova is invalid %d:%d",
 					i, cdm_cmd->cmd_arrary_count);
@@ -2792,9 +2792,9 @@ static int cam_tfe_mgr_config_hw(void *hw_mgr_priv,
 			}
 			rc = 0;
 			ctx->last_submit_bl_cmd.cmd[i].hw_addr =
-			(uint64_t)cdm_cmd->cmd[i].bl_addr.hw_iova;
+			(uint64_t)cdm_cmd->cmd_flex[i].bl_addr.hw_iova;
 			ctx->last_submit_bl_cmd.cmd[i].len =
-			cdm_cmd->cmd[i].len + cdm_cmd->cmd[i].offset;
+			cdm_cmd->cmd_flex[i].len + cdm_cmd->cmd_flex[i].offset;
 			ctx->last_submit_bl_cmd.cmd[i].mem_handle = 0;
 		} else
 			CAM_INFO(CAM_ISP,
@@ -2802,11 +2802,11 @@ static int cam_tfe_mgr_config_hw(void *hw_mgr_priv,
 				cdm_cmd->type, i);
 
 		ctx->last_submit_bl_cmd.cmd[i].offset =
-			cdm_cmd->cmd[i].offset;
+			cdm_cmd->cmd_flex[i].offset;
 		ctx->last_submit_bl_cmd.cmd[i].type =
 			cdm_cmd->type;
 		ctx->last_submit_bl_cmd.cmd[i].input_len =
-		 cdm_cmd->cmd[i].len;
+		 cdm_cmd->cmd_flex[i].len;
 	}
 
 	if (!cfg->init_packet)
