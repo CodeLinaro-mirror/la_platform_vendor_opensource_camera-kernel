@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -201,10 +202,16 @@ const static struct component_ops cam_cre_subdev_component_ops = {
 	.unbind = cam_cre_subdev_component_unbind,
 };
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_cre_subdev_remove(struct platform_device *pdev)
+#else
+static void cam_cre_subdev_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_cre_subdev_component_ops);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static int cam_cre_subdev_probe(struct platform_device *pdev)

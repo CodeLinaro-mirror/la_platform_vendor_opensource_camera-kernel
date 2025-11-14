@@ -617,10 +617,16 @@ const static struct component_ops cam_sensor_component_ops = {
 	.unbind = cam_sensor_component_unbind,
 };
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_sensor_platform_remove(struct platform_device *pdev)
+#else
+static void cam_sensor_platform_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_sensor_component_ops);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_sensor_driver_dt_match[] = {
