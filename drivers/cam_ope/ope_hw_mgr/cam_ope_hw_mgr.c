@@ -386,7 +386,7 @@ static int cam_ope_dump_hang_patches(struct cam_packet *packet,
 
 	/* process patch descriptor */
 	patch_desc = (struct cam_patch_desc *)
-		((uint32_t *) &packet->payload +
+		((uint32_t *) &packet->payload_flex +
 		packet->patch_offset/4);
 
 	for (i = 0; i < packet->num_patches; i++) {
@@ -474,7 +474,7 @@ static int cam_ope_mgr_put_cmd_buf(struct cam_packet *packet)
 	struct cam_cmd_buf_desc *cmd_desc = NULL;
 
 	cmd_desc = (struct cam_cmd_buf_desc *)
-		((uint32_t *) &packet->payload + packet->cmd_buf_offset/4);
+		((uint32_t *) &packet->payload_flex + packet->cmd_buf_offset/4);
 
 	for (i = 0; i < packet->num_cmd_buf; i++) {
 		rc = cam_packet_util_validate_cmd_desc(&cmd_desc[i]);
@@ -623,7 +623,7 @@ static int cam_ope_dump_frame_process(struct cam_packet *packet,
 	uint32_t *cpu_addr_local = NULL, *cpu_addr_u = NULL;
 
 	cmd_desc = (struct cam_cmd_buf_desc *)
-		((uint32_t *) &packet->payload + packet->cmd_buf_offset/4);
+		((uint32_t *) &packet->payload_flex + packet->cmd_buf_offset/4);
 	for (i = 0; i < packet->num_cmd_buf; i++) {
 		rc = cam_packet_util_validate_cmd_desc(&cmd_desc[i]);
 		if (rc)
@@ -2391,7 +2391,7 @@ static int cam_ope_mgr_process_cmd_desc(struct cam_ope_hw_mgr *hw_mgr,
 	uint32_t *cpu_addr_local = NULL, *cpu_addr_u = NULL;
 
 	cmd_desc = (struct cam_cmd_buf_desc *)
-		((uint32_t *) &packet->payload + packet->cmd_buf_offset/4);
+		((uint32_t *) &packet->payload_flex + packet->cmd_buf_offset/4);
 
 	*ope_cmd_buf_addr = 0;
 	for (i = 0; i < packet->num_cmd_buf; i++, num_cmd_buf++) {
@@ -2464,7 +2464,7 @@ static bool cam_ope_mgr_is_valid_inconfig(struct cam_packet *packet)
 	bool in_config_valid = false;
 	struct cam_buf_io_cfg *io_cfg_ptr = NULL;
 
-	io_cfg_ptr = (struct cam_buf_io_cfg *) ((uint32_t *) &packet->payload +
+	io_cfg_ptr = (struct cam_buf_io_cfg *) ((uint32_t *) &packet->payload_flex +
 					packet->io_configs_offset/4);
 
 	for (i = 0 ; i < packet->num_io_configs; i++)
@@ -2491,7 +2491,7 @@ static bool cam_ope_mgr_is_valid_outconfig(struct cam_packet *packet)
 	bool out_config_valid = false;
 	struct cam_buf_io_cfg *io_cfg_ptr = NULL;
 
-	io_cfg_ptr = (struct cam_buf_io_cfg *) ((uint32_t *) &packet->payload +
+	io_cfg_ptr = (struct cam_buf_io_cfg *) ((uint32_t *) &packet->payload_flex +
 					packet->io_configs_offset/4);
 
 	for (i = 0 ; i < packet->num_io_configs; i++)
@@ -3286,7 +3286,7 @@ static int cam_ope_process_generic_cmd_buffer(
 	cmd_generic_blob.io_buf_addr = io_buf_addr;
 
 	cmd_desc = (struct cam_cmd_buf_desc *)
-		((uint32_t *) &packet->payload + packet->cmd_buf_offset/4);
+		((uint32_t *) &packet->payload_flex + packet->cmd_buf_offset/4);
 
 	for (i = 0; i < packet->num_cmd_buf; i++) {
 		rc = cam_packet_util_validate_cmd_desc(&cmd_desc[i]);
@@ -4305,7 +4305,7 @@ static void cam_ope_mgr_dump_pf_data(
 	CAM_INFO(CAM_OPE, "Fault port %d", *resource_type);
 
 stripedump:
-	io_cfg = (struct cam_buf_io_cfg *)((uint32_t *)&packet->payload +
+	io_cfg = (struct cam_buf_io_cfg *)((uint32_t *)&packet->payload_flex +
 			packet->io_configs_offset / 4);
 
 	if (!ope_request)
