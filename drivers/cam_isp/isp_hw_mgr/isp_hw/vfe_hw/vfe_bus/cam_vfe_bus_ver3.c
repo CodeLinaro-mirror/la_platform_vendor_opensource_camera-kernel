@@ -1307,13 +1307,13 @@ static int cam_vfe_bus_ver3_res_update_config_wm(
 
 	switch (rsrc_data->en_cfg) {
 	case 0x1:
-		strlcpy(wm_mode, "line-based", wm_mode_size);
+		strscpy(wm_mode, "line-based", wm_mode_size);
 		break;
 	case ((0x1 << 16) | 0x1):
-		strlcpy(wm_mode, "frame-based", wm_mode_size);
+		strscpy(wm_mode, "frame-based", wm_mode_size);
 		break;
 	case ((0x2 << 16) | 0x1):
-		strlcpy(wm_mode, "index-based", wm_mode_size);
+		strscpy(wm_mode, "index-based", wm_mode_size);
 		break;
 	}
 
