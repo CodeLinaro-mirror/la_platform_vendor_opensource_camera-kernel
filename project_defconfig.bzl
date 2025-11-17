@@ -39,6 +39,8 @@ project_configs = select({
         "CONFIG_SPECTRA_CRE=y",
         "CONFIG_SPECTRA_SECURE_CAMERA_25=y",
         "CONFIG_INTERCONNECT_QCOM=y",
+        "CONFIG_SPECTRA_USE_RPMH_DRV_API=n",
+        "CONFIG_SPECTRA_LLCC_STALING=n",
     ],
 })
 
