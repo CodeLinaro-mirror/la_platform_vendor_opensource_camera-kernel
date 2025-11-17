@@ -1121,19 +1121,19 @@ static int cam_req_mgr_component_master_bind(struct device *dev)
 	if (rc < 0) {
 		CAM_ERR(CAM_CPAS,
 			"Failed to create debug attribute, rc=%d\n", rc);
-		goto sysfs_fail;
+		goto req_mgr_device_deinit;
 	}
 
 	/* Set up debugfs and worker for thread property update */
 	rc = cam_worker_wrapper_prop_update_init();
-	if (rc && rc != -EOPNOTSUPP) {
+	if (rc) {
 		CAM_ERR(CAM_CRM, "Failed at setting up prop update debugfs, rc: %d", rc);
-		goto sysfs_fail;
+		goto sysfs_remove;
 	}
 
 	return rc;
 
-sysfs_fail:
+sysfs_remove:
 	sysfs_remove_file(&dev->kobj, &camera_debug_sysfs_attr.attr);
 req_mgr_device_deinit:
 	cam_req_mgr_destroy_timer_slab();

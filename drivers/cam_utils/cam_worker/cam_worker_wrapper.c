@@ -491,7 +491,7 @@ int cam_worker_wrapper_prop_update_init(void)
 	/* Only when kthread is in use, thread property can be tuned */
 	if (!IS_KTHREAD_IN_USE) {
 		CAM_INFO(CAM_WORKER, "Kthread is not in use, not available to tune property");
-		return -EOPNOTSUPP;
+		return 0;
 	}
 
 	rc = cam_kthread_property_update_init();
