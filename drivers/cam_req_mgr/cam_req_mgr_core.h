@@ -425,6 +425,7 @@ struct cam_req_mgr_connected_device {
  * @curr_setting         : Current setting ID applied on the link
  * @new_setting_period_packet : New setting period and pattern received from UMD for UL path
  * @is_new_setting_available  : Flag to indicate if new setting is available from UMD
+ * @num_trigger_devices       : Number of trigger devices
  */
 struct cam_req_mgr_core_link {
 	int32_t                              link_hdl;
@@ -472,6 +473,7 @@ struct cam_req_mgr_core_link {
 	bool                                 is_new_setting_available;
 	bool                                 is_setting_period_valid;
 	bool                                 is_setting_sticky;
+	uint32_t                             num_trigger_devices;
 };
 
 /**
