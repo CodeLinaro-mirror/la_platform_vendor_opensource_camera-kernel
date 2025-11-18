@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -2899,6 +2899,7 @@ static void __cam_req_mgr_destroy_link_info(struct cam_req_mgr_core_link *link)
 	link->num_devs = 0;
 	link->max_delay = CAM_PIPELINE_DELAY_0;
 	link->min_delay = CAM_PIPELINE_DELAY_2;
+	link->is_standby = false;
 }
 
 /**
@@ -2960,6 +2961,7 @@ static struct cam_req_mgr_core_link *__cam_req_mgr_reserve_link(
 
 	link->parent = (void *)session;
 	link->is_sending_req = false;
+	link->is_standby = false;
 
 	for (i = 0; i < MAXIMUM_LINKS_PER_SESSION - 1; i++)
 		link->sync_link[i] = NULL;
@@ -3085,6 +3087,13 @@ static int __cam_req_mgr_flush_dev_with_max_pd(struct cam_req_mgr_core_link *lin
 	bool enable_standby = cam_req_mgr_check_for_functional_flush_caps(
 			CAM_REQ_MGR_ENABLE_SENSOR_STANDBY, flush_info);
 
+	enable_standby = (!g_crm_core_dev->disable_sensor_standby && enable_standby);
+
+	/* Standby flag on link is updated during flush and reset during synced resume */
+	link->is_standby = enable_standby;
+	CAM_DBG(CAM_CRM, "Link has been put on standby: %s, link->hdl: 0x%x",
+		CAM_BOOL_TO_YESNO(link->is_standby), link->link_hdl);
+
 	for (i = 0; i < link->num_devs; i++) {
 		device = &link->l_dev[i];
 		if (device->dev_info.p_delay > max_pd)
@@ -3094,8 +3103,7 @@ static int __cam_req_mgr_flush_dev_with_max_pd(struct cam_req_mgr_core_link *lin
 		flush_req.dev_hdl = device->dev_hdl;
 		flush_req.req_id = flush_info->req_id;
 		flush_req.type = flush_info->flush_type;
-		flush_req.enable_sensor_standby =
-			(!g_crm_core_dev->disable_sensor_standby && enable_standby);
+		flush_req.enable_sensor_standby = enable_standby;
 
 		if (device->ops && device->ops->flush_req)
 			rc = device->ops->flush_req(&flush_req);
@@ -3614,18 +3622,24 @@ int cam_req_mgr_process_add_req(void *priv, void *data)
 
 		if (!(link->properties_mask & CAM_LINK_PROPERTY_SENSOR_STANDBY_AFTER_EOF)) {
 			/*
-			 * If dynamic EOF feature is enabled, CSID does not listen to EOF IRQ
-			 * by default except only when there're requests that need to be triggered
-			 * at EOF
+			 * If dynamic EOF feature is enabled and no standby is happening,
+			 * CSID starts listening to EOF IRQ when EOF triggered requests come.
+			 * If some devices (e.g. sensor) is at standby, EOF IRQ will be
+			 * registered during resume.
 			 */
-			for (i = 0; i < link->num_devs; i++) {
-				tmp_dev = &link->l_dev[i];
-				evt_data.evt_type = CAM_REQ_MGR_LINK_EVT_REGISTER_EOF;
-				evt_data.dev_hdl = tmp_dev->dev_hdl;
-				evt_data.link_hdl = link->link_hdl;
-				evt_data.u.enable_eof_irq = true;
-				if (tmp_dev->ops && tmp_dev->ops->process_evt)
-					tmp_dev->ops->process_evt(&evt_data);
+			if (!link->is_standby) {
+				for (i = 0; i < link->num_devs; i++) {
+					tmp_dev = &link->l_dev[i];
+					if (tmp_dev->dev_info.dev_id != CAM_REQ_MGR_DEVICE_IFE)
+						continue;
+
+					evt_data.evt_type = CAM_REQ_MGR_LINK_EVT_REGISTER_EOF;
+					evt_data.dev_hdl = tmp_dev->dev_hdl;
+					evt_data.link_hdl = link->link_hdl;
+					evt_data.u.enable_eof_irq = true;
+					if (tmp_dev->ops && tmp_dev->ops->process_evt)
+						tmp_dev->ops->process_evt(&evt_data);
+				}
 			}
 		}
 	}
@@ -3717,6 +3731,13 @@ int cam_req_mgr_issue_resume(void *priv, void *data)
 	}
 
 	link = (struct cam_req_mgr_core_link *)priv;
+
+	/*
+	 * The following send_evt will resume CRM and devices from standby, reset the flag
+	 * here to unblock any EOF IRQ registration afterwards (dynamic EOF is enabled)
+	 */
+	link->is_standby = false;
+
 	rc = __cam_req_mgr_send_evt(0, CAM_REQ_MGR_LINK_EVT_RESUME_HW,
 		CRM_KMD_ERR_MAX, link);
 
@@ -4662,6 +4683,18 @@ static int cam_req_mgr_cb_notify_msg(
 				"cam-isp", msg->u.ife_hw_name);
 			break;
 		}
+	}
+		break;
+	case CAM_REQ_MGR_MSG_CHECK_DYN_EOF_UNDER_RESUME: {
+		CAM_DBG(CAM_CRM,
+			"Check for dynamic EOF during resume, link hdl: 0x%x, link property mask: 0x%x, eof event cnt: %d",
+			link->link_hdl, link->properties_mask, atomic_read(&link->eof_event_cnt));
+
+		if ((link->properties_mask & CAM_LINK_PROPERTY_SENSOR_STANDBY_AFTER_EOF) ||
+			!atomic_read(&link->eof_event_cnt))
+			msg->u.pending_eof_event = false;
+		else
+			msg->u.pending_eof_event = true;
 	}
 		break;
 	default:
@@ -5872,6 +5905,7 @@ int cam_req_mgr_link_control(struct cam_req_mgr_link_control *control)
 			__cam_req_mgr_send_evt(0, CAM_REQ_MGR_LINK_EVT_RESUME,
 				CRM_KMD_ERR_MAX, link);
 		} else if (control->ops == CAM_REQ_MGR_LINK_DEACTIVATE) {
+			link->is_standby = false;
 			/* notify nodes */
 			__cam_req_mgr_send_evt(0, CAM_REQ_MGR_LINK_EVT_PAUSE,
 				CRM_KMD_ERR_MAX, link);
