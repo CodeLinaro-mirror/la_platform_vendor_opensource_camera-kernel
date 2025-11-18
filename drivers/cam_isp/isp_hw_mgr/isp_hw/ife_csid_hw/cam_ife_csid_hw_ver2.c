@@ -688,7 +688,8 @@ static int cam_ife_csid_ver2_eof_irq_enable(
 	struct cam_ife_csid_ver2_reg_info    *csid_reg;
 	struct cam_ife_csid_ver2_path_data   *path_data;
 	struct cam_isp_resource_node         *res;
-	uint32_t                              i, irq_mask = 0;
+	uint32_t                              i;
+	uint32_t                              irq_masks[1];
 	void                                 *irq_controller;
 	int                                   irq_handle, rc = 0;
 
@@ -702,6 +703,7 @@ static int cam_ife_csid_ver2_eof_irq_enable(
 	}
 
 	csid_reg = (struct cam_ife_csid_ver2_reg_info *)csid_hw->core_info->csid_reg;
+	memset(irq_masks, 0, sizeof(irq_masks));
 	for (i = CAM_IFE_PIX_PATH_RES_RDI_0; i < CAM_IFE_PIX_PATH_RES_MAX; i++) {
 		res = &csid_hw->path_res[i];
 		path_data = (struct cam_ife_csid_ver2_path_data *)res->res_priv;
@@ -711,12 +713,12 @@ static int cam_ife_csid_ver2_eof_irq_enable(
 		switch (res->res_id) {
 		case CAM_IFE_PIX_PATH_RES_IPP:
 			if (csid_reg->cmn_reg->capabilities & CAM_IFE_CSID_CAP_MULTI_CTXT) {
-				irq_mask = csid_reg->ipp_mc_reg->comp_eof_mask;
+				irq_masks[0] = csid_reg->ipp_mc_reg->comp_eof_mask;
 				irq_handle = csid_hw->top_mc_irq_handle;
 				irq_controller = csid_hw->top_irq_controller[
 					CAM_IFE_CSID_TOP_IRQ_STATUS_REG0];
 			} else {
-				irq_mask = path_data->reg_offsets->eof_irq_mask;
+				irq_masks[0] = path_data->reg_offsets->eof_irq_mask;
 				irq_handle = path_data->path_cfg.irq_handle;
 				irq_controller = csid_hw->path_irq_controller[res->res_id];
 			}
@@ -725,7 +727,7 @@ static int cam_ife_csid_ver2_eof_irq_enable(
 			if (!res->is_rdi_primary_res)
 				continue;
 
-			irq_mask = path_data->reg_offsets->eof_irq_mask;
+			irq_masks[0] = path_data->reg_offsets->eof_irq_mask;
 			irq_handle = path_data->path_cfg.irq_handle;
 			irq_controller = csid_hw->path_irq_controller[res->res_id];
 			break;
@@ -734,7 +736,7 @@ static int cam_ife_csid_ver2_eof_irq_enable(
 				!(csid_reg->cmn_reg->capabilities & CAM_IFE_CSID_CAP_MULTI_CTXT))
 				continue;
 
-			irq_mask = path_data->reg_offsets->eof_irq_mask;
+			irq_masks[0] = path_data->reg_offsets->eof_irq_mask;
 			irq_handle = path_data->path_cfg.irq_handle;
 			irq_controller = csid_hw->path_irq_controller[res->res_id];
 			break;
@@ -743,7 +745,7 @@ static int cam_ife_csid_ver2_eof_irq_enable(
 		}
 
 		rc = cam_irq_controller_update_irq(
-			irq_controller, irq_handle, eof_irq_enable, &irq_mask);
+			irq_controller, irq_handle, eof_irq_enable, irq_masks);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "CSID[%u] Failed at EOF IRQ %s, res_id: %d",
 				csid_hw->hw_intf->hw_idx,

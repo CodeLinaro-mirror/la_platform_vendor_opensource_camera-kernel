@@ -3336,7 +3336,7 @@ static int cam_ife_csid_ver1_sof_irq_debug(
 	bool sof_irq_enable = false;
 	struct cam_hw_soc_info                  *soc_info;
 	struct cam_ife_csid_ver1_reg_info *csid_reg;
-	uint32_t data_idx;
+	int data_idx = 0;
 
 	if (*((uint32_t *)cmd_args) == 1)
 		sof_irq_enable = true;
@@ -3353,8 +3353,8 @@ static int cam_ife_csid_ver1_sof_irq_debug(
 	csid_reg = (struct cam_ife_csid_ver1_reg_info *)
 			csid_hw->core_info->csid_reg;
 
-	data_idx = csid_hw->rx_cfg.phy_sel -
-		csid_reg->csi2_reg->phy_tpg_base_id;
+	data_idx = (int)(csid_hw->rx_cfg.phy_sel -
+		csid_reg->csi2_reg->phy_tpg_base_id);
 
 	for (i = 0; i < csid_reg->cmn_reg->num_pix; i++) {
 
@@ -3413,12 +3413,17 @@ static int cam_ife_csid_ver1_sof_irq_debug(
 	CAM_INFO(CAM_ISP, "SOF freeze: CSID SOF irq %s",
 		(sof_irq_enable) ? "enabled" : "disabled");
 
-	CAM_INFO(CAM_ISP, "Notify CSIPHY: %d",
-			csid_hw->rx_cfg.phy_sel);
-
-	cam_subdev_notify_message(CAM_CSIPHY_DEVICE_TYPE,
-		CAM_SUBDEV_MESSAGE_REG_DUMP, (void *)&data_idx);
-
+	if (data_idx < 0)
+		CAM_WARN(CAM_ISP,
+			"CSID[%u]: Can't notify csiphy:%d incorrect phy selected=%d",
+			csid_hw->hw_intf->hw_idx, csid_hw->rx_cfg.phy_sel, data_idx);
+	else {
+		CAM_INFO(CAM_ISP,
+			"CSID[%u]: Notify csiphy: %d phy selected=%d",
+			csid_hw->hw_intf->hw_idx, csid_hw->rx_cfg.phy_sel, data_idx);
+		cam_subdev_notify_message(CAM_CSIPHY_DEVICE_TYPE,
+			CAM_SUBDEV_MESSAGE_REG_DUMP, (void *)&data_idx);
+	}
 	return 0;
 }
 
@@ -4120,7 +4125,7 @@ static int cam_ife_csid_ver1_rx_bottom_half_handler(
 	uint32_t                                    event_type = 0;
 	size_t                                      len = 0;
 	struct cam_hw_soc_info                     *soc_info;
-	uint32_t                                    data_idx;
+	int                                         data_idx = 0;
 
 	if (!csid_hw || !evt_payload) {
 		CAM_ERR(CAM_ISP,
@@ -4133,8 +4138,8 @@ static int cam_ife_csid_ver1_rx_bottom_half_handler(
 	csid_reg = (struct cam_ife_csid_ver1_reg_info *)
 			csid_hw->core_info->csid_reg;
 	csi2_reg = csid_reg->csi2_reg;
-	data_idx = csid_hw->rx_cfg.phy_sel -
-		csid_reg->csi2_reg->phy_tpg_base_id;
+	data_idx = (int)(csid_hw->rx_cfg.phy_sel -
+		csid_reg->csi2_reg->phy_tpg_base_id);
 
 	irq_status = evt_payload->irq_status[CAM_IFE_CSID_IRQ_REG_RX]
 			& csi2_reg->fatal_err_mask;
@@ -4262,9 +4267,18 @@ static int cam_ife_csid_ver1_rx_bottom_half_handler(
 		if (!event_type)
 			event_type |= CAM_ISP_HW_ERROR_CSID_FATAL;
 
-		cam_subdev_notify_message(CAM_CSIPHY_DEVICE_TYPE,
-			CAM_SUBDEV_MESSAGE_REG_DUMP,
-			(void *)&data_idx);
+		if (data_idx < 0)
+			CAM_WARN(CAM_ISP,
+				"CSID[%u]: Can't notify csiphy:%d incorrect phy selected=%d",
+				csid_hw->hw_intf->hw_idx, csid_hw->rx_cfg.phy_sel, data_idx);
+		else {
+			CAM_INFO(CAM_ISP,
+				"CSID[%u]: Notify csiphy: %d phy selected=%d",
+				csid_hw->hw_intf->hw_idx, csid_hw->rx_cfg.phy_sel, data_idx);
+			cam_subdev_notify_message(CAM_CSIPHY_DEVICE_TYPE,
+				CAM_SUBDEV_MESSAGE_REG_DUMP,
+				(void *)&data_idx);
+		}
 
 		cam_ife_csid_ver1_handle_event_err(csid_hw, evt_payload, event_type);
 		csid_hw->flags.reset_awaited = true;
