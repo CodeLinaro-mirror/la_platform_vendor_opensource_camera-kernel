@@ -85,8 +85,8 @@ static inline int hfi_get_client_info(int client_handle, struct hfi_info **hfi)
 
 	*hfi = g_hfi.hfi[idx];
 	if (!g_hfi.hfi[idx]) {
-		CAM_ERR(CAM_HFI, "[%s] HFI interface not setup for client hdl: %d",
-			g_hfi.hfi[idx]->client_name, client_handle);
+		CAM_ERR(CAM_HFI, "HFI interface not setup for client hdl: %d",
+			client_handle);
 		return -ENODEV;
 	}
 
