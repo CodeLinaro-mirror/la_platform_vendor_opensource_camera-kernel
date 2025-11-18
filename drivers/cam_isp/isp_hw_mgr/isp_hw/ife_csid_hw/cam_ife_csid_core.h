@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_IFE_CSID_HW_H_
@@ -578,10 +579,10 @@ struct cam_csid_evt_payload {
  * @hw_intf:                  contain the csid hw interface information
  * @hw_info:                  csid hw device information
  * @csid_info:                csid hw specific information
- * @tasklet:                  tasklet to handle csid errors
+ * @worker_ctx:               worker to handle csid errors
  * @priv:                     private data to be sent with callback
  * @free_payload_list:        list head for payload
- * @evt_payload:              Event payload to be passed to tasklet
+ * @evt_payload:              Event payload to be passed to worker
  * @res_type:                 CSID in resource type
  * @csi2_rx_cfg:              Csi2 rx decoder configuration for csid
  * @tpg_cfg:                  TPG configuration
@@ -620,7 +621,7 @@ struct cam_ife_csid_hw {
 	struct cam_hw_intf              *hw_intf;
 	struct cam_hw_info              *hw_info;
 	struct cam_ife_csid_hw_info     *csid_info;
-	void                            *tasklet;
+	void                            *worker_ctx;
 	void                            *priv;
 	struct list_head                 free_payload_list;
 	struct cam_csid_evt_payload      evt_payload[CAM_CSID_EVT_PAYLOAD_MAX];

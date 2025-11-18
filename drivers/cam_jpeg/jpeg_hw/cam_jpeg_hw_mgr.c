@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/uaccess.h>
@@ -24,11 +24,11 @@
 #include "cam_jpeg_hw_mgr.h"
 #include "cam_smmu_api.h"
 #include "cam_mem_mgr.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_mem_mgr.h"
 #include "cam_cdm_intf_api.h"
 #include "cam_debug_util.h"
 #include "cam_common_util.h"
+#include "cam_worker_wrapper_api.h"
 
 #define CAM_JPEG_HW_ENTRIES_MAX  20
 #define CAM_JPEG_CHBASE          0
@@ -197,8 +197,8 @@ static int cam_jpeg_mgr_process_irq(void *priv, void *data)
 	size_t cmd_buf_len;
 	struct cam_jpeg_config_inout_param_info *p_params;
 	struct cam_jpeg_hw_cfg_req *p_cfg_req = NULL;
-	struct crm_workq_task *task;
-	struct cam_jpeg_process_frame_work_data_t *wq_task_data;
+	struct cam_worker_wrapper_taskdata_args    task;
+	struct cam_jpeg_process_frame_work_data_t *work_task_data;
 	struct cam_jpeg_misr_dump_args misr_args;
 
 	if (!data || !priv) {
@@ -286,25 +286,25 @@ static int cam_jpeg_mgr_process_irq(void *priv, void *data)
 	hw_mgr->dev_hw_cfg_args[dev_type][0] = NULL;
 	mutex_unlock(&g_jpeg_hw_mgr.hw_mgr_mutex);
 
-	task = cam_req_mgr_workq_get_task(
-		g_jpeg_hw_mgr.work_process_frame);
-	if (!task) {
+	rc = cam_worker_wrapper_get(g_jpeg_hw_mgr.worker_process_frame, &task);
+	if (rc) {
 		CAM_ERR(CAM_JPEG, "no empty task");
 		return -EINVAL;
 	}
 
-	wq_task_data = (struct cam_jpeg_process_frame_work_data_t *)
-		task->payload;
-	if (!task_data) {
-		CAM_ERR(CAM_JPEG, "task_data is NULL");
+	work_task_data = (struct cam_jpeg_process_frame_work_data_t *)
+		cam_worker_wrapper_get_task_payload(g_jpeg_hw_mgr.worker_process_frame, &task);
+	if (!work_task_data) {
+		CAM_ERR(CAM_JPEG, "work_task_data is NULL");
 		return -EINVAL;
 	}
-	wq_task_data->data = (void *)dev_type;
-	wq_task_data->request_id = 0;
-	wq_task_data->type = CAM_JPEG_WORKQ_TASK_CMD_TYPE;
-	task->process_cb = cam_jpeg_mgr_process_cmd;
-	rc = cam_req_mgr_workq_enqueue_task(task, &g_jpeg_hw_mgr,
-		CRM_TASK_PRIORITY_0);
+	work_task_data->data = (void *)dev_type;
+	work_task_data->request_id = 0;
+	work_task_data->type = CAM_JPEG_WORKQ_TASK_CMD_TYPE;
+
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(g_jpeg_hw_mgr.worker_process_frame, &task,
+		&g_jpeg_hw_mgr, work_task_data, cam_jpeg_mgr_process_cmd);
 	if (rc) {
 		CAM_ERR(CAM_JPEG, "could not enque task %d", rc);
 		return rc;
@@ -649,7 +649,7 @@ static int cam_jpeg_mgr_config_hw(void *hw_mgr_priv, void *config_hw_args)
 	struct cam_jpeg_hw_ctx_data *ctx_data = NULL;
 	uintptr_t request_id = 0;
 	struct cam_hw_update_entry *hw_update_entries;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args    task;
 	struct cam_jpeg_process_frame_work_data_t *task_data;
 	struct cam_jpeg_hw_cfg_req *p_cfg_req = NULL;
 
@@ -693,8 +693,9 @@ static int cam_jpeg_mgr_config_hw(void *hw_mgr_priv, void *config_hw_args)
 	hw_update_entries = config_args->hw_update_entries;
 	CAM_DBG(CAM_JPEG, "ctx_data = %pK req_id = %lld %zd",
 		ctx_data, request_id, (uintptr_t)config_args->priv);
-	task = cam_req_mgr_workq_get_task(g_jpeg_hw_mgr.work_process_frame);
-	if (!task) {
+
+	rc = cam_worker_wrapper_get(g_jpeg_hw_mgr.worker_process_frame, &task);
+	if (rc) {
 		CAM_ERR(CAM_JPEG, "no empty task");
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
 		rc = -ENOMEM;
@@ -703,7 +704,7 @@ static int cam_jpeg_mgr_config_hw(void *hw_mgr_priv, void *config_hw_args)
 
 
 	task_data = (struct cam_jpeg_process_frame_work_data_t *)
-		task->payload;
+		cam_worker_wrapper_get_task_payload(g_jpeg_hw_mgr.worker_process_frame, &task);
 	if (!task_data) {
 		CAM_ERR(CAM_JPEG, "task_data is NULL");
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
@@ -719,11 +720,11 @@ static int cam_jpeg_mgr_config_hw(void *hw_mgr_priv, void *config_hw_args)
 
 	task_data->data = (void *)(uintptr_t)p_cfg_req->dev_type;
 	task_data->request_id = request_id;
-	task_data->type = CAM_JPEG_WORKQ_TASK_CMD_TYPE;
-	task->process_cb = cam_jpeg_mgr_process_cmd;
+	task_data->type = CAM_JPEG_WORKER_TASK_CMD_TYPE;
 
-	rc = cam_req_mgr_workq_enqueue_task(task, &g_jpeg_hw_mgr,
-		CRM_TASK_PRIORITY_0);
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(g_jpeg_hw_mgr.worker_process_frame, &task,
+		&g_jpeg_hw_mgr, task_data, cam_jpeg_mgr_process_cmd);
 	if (rc) {
 		CAM_ERR(CAM_JPEG, "failed to enqueue task %d", rc);
 		goto err_after_get_task;
@@ -1347,37 +1348,34 @@ copy_error:
 	return rc;
 }
 
-static void cam_req_mgr_process_workq_jpeg_command_queue(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
-static void cam_req_mgr_process_workq_jpeg_message_queue(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
-static int cam_jpeg_setup_workqs(void)
+static int cam_jpeg_setup_workqer(void)
 {
 	int rc, i;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
-	rc = cam_req_mgr_workq_create(
-		"jpeg_command_queue",
-		CAM_JPEG_WORKQ_NUM_TASK,
-		&g_jpeg_hw_mgr.work_process_frame,
-		CRM_WORKQ_USAGE_NON_IRQ, 0,
-		cam_req_mgr_process_workq_jpeg_command_queue);
+	worker_init_args.name = "jpeg_command_queue";
+	worker_init_args.num_tasks = CAM_JPEG_WORKER_NUM_TASK;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_NON_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &g_jpeg_hw_mgr.worker_process_frame;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc) {
 		CAM_ERR(CAM_JPEG, "unable to create a worker %d", rc);
 		goto work_process_frame_failed;
 	}
 
-	rc = cam_req_mgr_workq_create(
-		"jpeg_message_queue",
-		CAM_JPEG_WORKQ_NUM_TASK,
-		&g_jpeg_hw_mgr.work_process_irq_cb,
-		CRM_WORKQ_USAGE_IRQ, 0,
-		cam_req_mgr_process_workq_jpeg_message_queue);
+	worker_init_args.name = "jpeg_message_queue";
+	worker_init_args.num_tasks = CAM_JPEG_WORKER_NUM_TASK;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &g_jpeg_hw_mgr.worker_process_irq_cb;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc) {
 		CAM_ERR(CAM_JPEG, "unable to create a worker %d", rc);
 		goto work_process_irq_cb_failed;
@@ -1385,7 +1383,7 @@ static int cam_jpeg_setup_workqs(void)
 
 	g_jpeg_hw_mgr.process_frame_work_data =
 		kzalloc(sizeof(struct cam_jpeg_process_frame_work_data_t) *
-			CAM_JPEG_WORKQ_NUM_TASK, GFP_KERNEL);
+			CAM_JPEG_WORKER_NUM_TASK, GFP_KERNEL);
 	if (!g_jpeg_hw_mgr.process_frame_work_data) {
 		rc = -ENOMEM;
 		goto work_process_frame_data_failed;
@@ -1393,19 +1391,21 @@ static int cam_jpeg_setup_workqs(void)
 
 	g_jpeg_hw_mgr.process_irq_cb_work_data =
 		kzalloc(sizeof(struct cam_jpeg_process_irq_work_data_t) *
-			CAM_JPEG_WORKQ_NUM_TASK, GFP_KERNEL);
+			CAM_JPEG_WORKER_NUM_TASK, GFP_KERNEL);
 	if (!g_jpeg_hw_mgr.process_irq_cb_work_data) {
 		rc = -ENOMEM;
 		goto work_process_irq_cb_data_failed;
 	}
 
-	for (i = 0; i < CAM_JPEG_WORKQ_NUM_TASK; i++)
-		g_jpeg_hw_mgr.work_process_irq_cb->task.pool[i].payload =
-			&g_jpeg_hw_mgr.process_irq_cb_work_data[i];
+	for (i = 0; i < CAM_JPEG_WORKER_NUM_TASK; i++)
+		cam_worker_wrapper_payload_bind(
+			g_jpeg_hw_mgr.worker_process_irq_cb,
+			&g_jpeg_hw_mgr.process_irq_cb_work_data[i], i);
 
-	for (i = 0; i < CAM_JPEG_WORKQ_NUM_TASK; i++)
-		g_jpeg_hw_mgr.work_process_frame->task.pool[i].payload =
-			&g_jpeg_hw_mgr.process_frame_work_data[i];
+	for (i = 0; i < CAM_JPEG_WORKER_NUM_TASK; i++)
+		cam_worker_wrapper_payload_bind(
+			g_jpeg_hw_mgr.worker_process_frame,
+			&g_jpeg_hw_mgr.process_frame_work_data[i], i);
 
 	INIT_LIST_HEAD(&g_jpeg_hw_mgr.hw_config_req_list);
 	INIT_LIST_HEAD(&g_jpeg_hw_mgr.free_req_list);
@@ -1420,9 +1420,9 @@ static int cam_jpeg_setup_workqs(void)
 work_process_irq_cb_data_failed:
 	kfree(g_jpeg_hw_mgr.process_frame_work_data);
 work_process_frame_data_failed:
-	cam_req_mgr_workq_destroy(&g_jpeg_hw_mgr.work_process_irq_cb);
+	cam_worker_wrapper_deinit(g_jpeg_hw_mgr.worker_process_irq_cb);
 work_process_irq_cb_failed:
-	cam_req_mgr_workq_destroy(&g_jpeg_hw_mgr.work_process_frame);
+	cam_worker_wrapper_deinit(g_jpeg_hw_mgr.worker_process_frame);
 work_process_frame_failed:
 
 	return rc;
@@ -1968,9 +1968,9 @@ int cam_jpeg_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 	g_jpeg_hw_mgr.jpeg_caps.dev_ver[CAM_JPEG_DEV_DMA].hw_ver.incr  = 0;
 	g_jpeg_hw_mgr.jpeg_caps.dev_ver[CAM_JPEG_DEV_DMA].hw_ver.reserved = 0;
 
-	rc = cam_jpeg_setup_workqs();
+	rc = cam_jpeg_setup_workqer();
 	if (rc) {
-		CAM_ERR(CAM_JPEG, "setup work qs failed  %d", rc);
+		CAM_ERR(CAM_JPEG, "setup worker qs failed  %d", rc);
 		goto cdm_iommu_failed;
 	}
 

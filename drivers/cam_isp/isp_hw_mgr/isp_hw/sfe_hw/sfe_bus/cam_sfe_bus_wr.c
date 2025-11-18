@@ -17,7 +17,6 @@
 #include "cam_ife_hw_mgr.h"
 #include "cam_sfe_hw_intf.h"
 #include "cam_irq_controller.h"
-#include "cam_tasklet_util.h"
 #include "cam_sfe_bus.h"
 #include "cam_sfe_bus_wr.h"
 #include "cam_sfe_core.h"
@@ -25,6 +24,7 @@
 #include "cam_debug_util.h"
 #include "cam_cpas_api.h"
 #include "cam_trace.h"
+#include "cam_worker_wrapper_api.h"
 
 static const char drv_name[] = "sfe_bus_wr";
 
@@ -178,7 +178,7 @@ struct cam_sfe_bus_wr_priv {
 
 	int                                 bus_irq_handle;
 	int                                 error_irq_handle;
-	void                               *tasklet_info;
+	void                               *worker_ctx;
 };
 
 static int cam_sfe_bus_wr_process_cmd(
@@ -355,7 +355,7 @@ static enum cam_sfe_bus_wr_packer_format
 static int cam_sfe_bus_acquire_wm(
 	struct cam_sfe_bus_wr_priv            *bus_priv,
 	struct cam_isp_out_port_generic_info  *out_port_info,
-	void                                  *tasklet,
+	void                                  *worker_ctx,
 	enum cam_sfe_bus_sfe_out_type          sfe_out_res_id,
 	enum cam_sfe_bus_plane_type            plane,
 	struct cam_isp_resource_node          *wm_res,
@@ -374,7 +374,7 @@ static int cam_sfe_bus_acquire_wm(
 	}
 
 	wm_res->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
-	wm_res->tasklet_info = tasklet;
+	wm_res->worker_ctx = worker_ctx;
 
 	rsrc_data = wm_res->res_priv;
 	wm_idx = rsrc_data->index;
@@ -513,7 +513,7 @@ static int cam_sfe_bus_release_wm(void   *bus_priv,
 	rsrc_data->en_cfg = 0;
 	rsrc_data->is_dual = 0;
 
-	wm_res->tasklet_info = NULL;
+	wm_res->worker_ctx = NULL;
 	wm_res->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 
 	CAM_DBG(CAM_SFE, "SFE:%d Release WM:%d",
@@ -687,7 +687,7 @@ static bool cam_sfe_bus_match_comp_grp(
 static int cam_sfe_bus_acquire_comp_grp(
 	struct cam_sfe_bus_wr_priv           *bus_priv,
 	struct cam_isp_out_port_generic_info *out_port_info,
-	void                                 *tasklet,
+	void                                 *worker_ctx,
 	uint32_t                              is_dual,
 	uint32_t                              is_master,
 	struct cam_isp_resource_node        **comp_grp,
@@ -711,7 +711,7 @@ static int cam_sfe_bus_acquire_comp_grp(
 
 	if (!previously_acquired) {
 		rsrc_data->intra_client_mask = 0x1;
-		comp_grp_local->tasklet_info = tasklet;
+		comp_grp_local->worker_ctx = worker_ctx;
 		comp_grp_local->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
 
 		rsrc_data->is_master = is_master;
@@ -793,7 +793,7 @@ static int cam_sfe_bus_release_comp_grp(
 		in_rsrc_data->addr_sync_mode = 0;
 		in_rsrc_data->composite_mask = 0;
 
-		comp_grp->tasklet_info = NULL;
+		comp_grp->worker_ctx = NULL;
 		comp_grp->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 
 		list_add_tail(&comp_grp->list, &bus_priv->free_comp_grp);
@@ -997,10 +997,10 @@ static int cam_sfe_bus_acquire_sfe_out(void *priv, void *acquire_args,
 	}
 	mutex_unlock(&rsrc_data->common_data->bus_mutex);
 
-	//bus_priv->tasklet_info = acq_args->tasklet;
+	//bus_priv->worker_ctx = acq_args->;worker_ctx
 	rsrc_node->rdi_only_ctx = 0;
 	rsrc_node->res_id = out_acquire_args->out_port_info->res_type;
-	rsrc_node->tasklet_info = acq_args->tasklet;
+	rsrc_node->worker_ctx = acq_args->worker_ctx;
 	rsrc_node->cdm_ops = out_acquire_args->cdm_ops;
 	rsrc_data->cdm_util_ops = out_acquire_args->cdm_ops;
 	rsrc_data->format = out_acquire_args->out_port_info->format;
@@ -1009,7 +1009,7 @@ static int cam_sfe_bus_acquire_sfe_out(void *priv, void *acquire_args,
 	for (i = 0; i < rsrc_data->num_wm; i++) {
 		rc = cam_sfe_bus_acquire_wm(bus_priv,
 			out_acquire_args->out_port_info,
-			acq_args->tasklet,
+			acq_args->worker_ctx,
 			sfe_out_res_id,
 			i,
 			&rsrc_data->wm_res[i],
@@ -1028,7 +1028,7 @@ static int cam_sfe_bus_acquire_sfe_out(void *priv, void *acquire_args,
 	/* Acquire composite group using COMP GRP ID */
 	rc = cam_sfe_bus_acquire_comp_grp(bus_priv,
 		out_acquire_args->out_port_info,
-		acq_args->tasklet,
+		acq_args->worker_ctx,
 		out_acquire_args->is_dual,
 		out_acquire_args->is_master,
 		&rsrc_data->comp_grp,
@@ -1096,7 +1096,7 @@ static int cam_sfe_bus_release_sfe_out(void *bus_priv, void *release_args,
 			rsrc_data->comp_grp);
 	rsrc_data->comp_grp = NULL;
 
-	sfe_out->tasklet_info = NULL;
+	sfe_out->worker_ctx = NULL;
 	sfe_out->cdm_ops = NULL;
 	rsrc_data->cdm_util_ops = NULL;
 
@@ -1238,8 +1238,7 @@ static int cam_sfe_bus_start_sfe_out(
 		sfe_out,
 		sfe_out->top_half_handler,
 		sfe_out->bottom_half_handler,
-		sfe_out->tasklet_info,
-		&tasklet_bh_api);
+		sfe_out->worker_ctx);
 	if (sfe_out->irq_handle < 1) {
 		CAM_ERR(CAM_SFE, "Subscribe IRQ failed for sfe out_res: %d",
 			sfe_out->res_id);
@@ -2075,7 +2074,6 @@ static int cam_sfe_bus_wr_init_hw(void *hw_priv,
 		bus_priv,
 		cam_sfe_bus_wr_handle_bus_irq,
 		NULL,
-		NULL,
 		NULL);
 
 	if (bus_priv->bus_irq_handle < 1) {
@@ -2084,7 +2082,7 @@ static int cam_sfe_bus_wr_init_hw(void *hw_priv,
 		return -EFAULT;
 	}
 
-	if (bus_priv->tasklet_info != NULL) {
+	if (bus_priv->worker_ctx != NULL) {
 		bus_priv->error_irq_handle = cam_irq_controller_subscribe_irq(
 			bus_priv->common_data.bus_irq_controller,
 			CAM_IRQ_PRIORITY_0,
@@ -2092,8 +2090,7 @@ static int cam_sfe_bus_wr_init_hw(void *hw_priv,
 			bus_priv,
 			cam_sfe_bus_wr_err_irq_top_half,
 			cam_sfe_bus_wr_irq_bottom_half,
-			bus_priv->tasklet_info,
-			&tasklet_bh_api);
+			bus_priv->worker_ctx);
 
 		if (bus_priv->error_irq_handle < 1) {
 			CAM_ERR(CAM_SFE, "Failed to subscribe BUS Error IRQ");

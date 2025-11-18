@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_ISP_CONTEXT_H_
@@ -14,7 +15,6 @@
 
 #include "cam_context.h"
 #include "cam_isp_hw_mgr_intf.h"
-#include "cam_req_mgr_workq.h"
 
 #define CAM_IFE_QTIMER_MUL_FACTOR        10000
 #define CAM_IFE_QTIMER_DIV_FACTOR        192
@@ -322,7 +322,7 @@ struct cam_isp_context {
 	unsigned int                          init_timestamp;
 	uint32_t                              isp_device_type;
 	atomic_t                              rxd_epoch;
-	struct cam_req_mgr_core_workq        *workq;
+	void                                 *worker_ctx;
 	int32_t                               trigger_id;
 	int64_t                               last_bufdone_err_apply_req_id;
 };

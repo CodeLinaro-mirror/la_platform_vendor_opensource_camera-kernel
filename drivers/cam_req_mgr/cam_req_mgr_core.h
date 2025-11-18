@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef _CAM_REQ_MGR_CORE_H_
 #define _CAM_REQ_MGR_CORE_H_
@@ -10,6 +10,7 @@
 #include "cam_req_mgr_interface.h"
 #include "cam_req_mgr_core_defs.h"
 #include "cam_req_mgr_timer.h"
+#include "cam_worker_wrapper_api.h"
 
 #define CAM_REQ_MGR_MAX_LINKED_DEV     16
 #define MAX_REQ_SLOTS                  48
@@ -25,7 +26,7 @@
 #define FORCE_ENABLE_RECOVERY   1
 #define AUTO_RECOVERY           0
 
-#define CRM_WORKQ_NUM_TASKS 60
+#define CRM_WORKER_NUM_TASKS 60
 
 #define MAX_SYNC_COUNT 65535
 
@@ -58,18 +59,18 @@ enum crm_req_eof_trigger_type {
  * enum crm_workq_task_type
  * @codes: to identify which type of task is present
  */
-enum crm_workq_task_type {
-	CRM_WORKQ_TASK_GET_DEV_INFO,
-	CRM_WORKQ_TASK_SETUP_LINK,
-	CRM_WORKQ_TASK_DEV_ADD_REQ,
-	CRM_WORKQ_TASK_APPLY_REQ,
-	CRM_WORKQ_TASK_NOTIFY_SOF,
-	CRM_WORKQ_TASK_NOTIFY_EOF,
-	CRM_WORKQ_TASK_NOTIFY_ERR,
-	CRM_WORKQ_TASK_NOTIFY_FREEZE,
-	CRM_WORKQ_TASK_SCHED_REQ,
-	CRM_WORKQ_TASK_FLUSH_REQ,
-	CRM_WORKQ_TASK_INVALID,
+enum crm_worker_task_type {
+	CRM_WORKER_TASK_GET_DEV_INFO,
+	CRM_WORKER_TASK_SETUP_LINK,
+	CRM_WORKER_TASK_DEV_ADD_REQ,
+	CRM_WORKER_TASK_APPLY_REQ,
+	CRM_WORKER_TASK_NOTIFY_SOF,
+	CRM_WORKER_TASK_NOTIFY_EOF,
+	CRM_WORKER_TASK_NOTIFY_ERR,
+	CRM_WORKER_TASK_NOTIFY_FREEZE,
+	CRM_WORKER_TASK_SCHED_REQ,
+	CRM_WORKER_TASK_FLUSH_REQ,
+	CRM_WORKER_TASK_INVALID,
 };
 
 /**
@@ -85,7 +86,7 @@ enum crm_workq_task_type {
  * -
  */
 struct crm_task_payload {
-	enum crm_workq_task_type type;
+	enum crm_worker_task_type type;
 	union {
 		struct cam_req_mgr_sched_request        sched_req;
 		struct cam_req_mgr_flush_info           flush_info;
@@ -340,7 +341,8 @@ struct cam_req_mgr_connected_device {
  * @link_hdl             : Link identifier
  * @num_devs             : num of connected devices to this link
  * @max_delay            : Max of pipeline delay of all connected devs
- * @workq                : Pointer to handle workq related jobs
+ * @worker_ctx           : Pointer to handle worker related jobs
+ * @task_data            : Pointer to an array of task data to be processed by worker cb
  * @pd_mask              : each set bit indicates the device with pd equal to
  *                          bit position is available.
  * - List of connected devices
@@ -391,12 +393,13 @@ struct cam_req_mgr_core_link {
 	int32_t                              link_hdl;
 	int32_t                              num_devs;
 	enum cam_pipeline_delay              max_delay;
-	struct cam_req_mgr_core_workq       *workq;
+	void                                *worker_ctx;
+	void                                *task_data;
 	int32_t                              pd_mask;
 	struct cam_req_mgr_connected_device *l_dev;
 	struct cam_req_mgr_req_data          req;
 	struct cam_req_mgr_timer            *watchdog;
-	struct completion                    workq_comp;
+	struct completion                    worker_comp;
 	enum cam_req_mgr_link_state          state;
 	void                                *parent;
 	struct mutex                         lock;
@@ -422,7 +425,7 @@ struct cam_req_mgr_core_link {
 	atomic_t                             eof_event_cnt;
 	bool                                 skip_init_frame;
 	uint64_t                             last_sof_trigger_jiffies;
-	bool                                 wq_congestion;
+	bool                                 work_congestion;
 };
 
 /**

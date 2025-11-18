@@ -16,7 +16,6 @@
 #include "cam_ife_hw_mgr.h"
 #include "cam_vfe_hw_intf.h"
 #include "cam_irq_controller.h"
-#include "cam_tasklet_util.h"
 #include "cam_vfe_bus.h"
 #include "cam_vfe_bus_ver3.h"
 #include "cam_vfe_core.h"
@@ -25,6 +24,7 @@
 #include "cam_cpas_api.h"
 #include "cam_trace.h"
 #include "cam_compat.h"
+#include "cam_worker_wrapper_api.h"
 
 static const char drv_name[] = "vfe_bus";
 
@@ -212,7 +212,7 @@ struct cam_vfe_bus_ver3_priv {
 	int                                 bus_irq_handle;
 	int                                 rup_irq_handle;
 	int                                 error_irq_handle;
-	void                               *tasklet_info;
+	void                               *worker_ctx;
 	uint32_t                            max_out_res;
 };
 
@@ -1060,7 +1060,7 @@ static int cam_vfe_bus_ver3_handle_rup_bottom_half(void *handler_priv,
 static int cam_vfe_bus_ver3_acquire_wm(
 	struct cam_vfe_bus_ver3_priv          *ver3_bus_priv,
 	struct cam_isp_out_port_generic_info  *out_port_info,
-	void                                  *tasklet,
+	void                                  *worker_ctx,
 	enum cam_vfe_bus_ver3_vfe_out_type     vfe_out_res_id,
 	enum cam_vfe_bus_plane_type            plane,
 	struct cam_isp_resource_node          *wm_res,
@@ -1079,7 +1079,7 @@ static int cam_vfe_bus_ver3_acquire_wm(
 		return -EALREADY;
 	}
 	wm_res->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
-	wm_res->tasklet_info = tasklet;
+	wm_res->worker_ctx = worker_ctx;
 
 	rsrc_data = wm_res->res_priv;
 	wm_idx = rsrc_data->index;
@@ -1403,7 +1403,7 @@ static int cam_vfe_bus_ver3_release_wm(void   *bus_priv,
 	rsrc_data->ubwc_lossy_threshold_1 = 0;
 	rsrc_data->ubwc_offset_lossy_variance = 0;
 	rsrc_data->ubwc_bandwidth_limit = 0;
-	wm_res->tasklet_info = NULL;
+	wm_res->worker_ctx = NULL;
 	wm_res->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 
 	CAM_DBG(CAM_ISP, "VFE:%d Release WM:%d",
@@ -1601,7 +1601,7 @@ static bool cam_vfe_bus_ver3_match_comp_grp(
 
 static int cam_vfe_bus_ver3_acquire_comp_grp(
 	struct cam_vfe_bus_ver3_priv         *ver3_bus_priv,
-	void                                *tasklet,
+	void                                *worker_ctx,
 	uint32_t                             is_dual,
 	uint32_t                             is_master,
 	struct cam_isp_resource_node       **comp_grp,
@@ -1626,7 +1626,7 @@ static int cam_vfe_bus_ver3_acquire_comp_grp(
 
 	if (!previously_acquired) {
 		rsrc_data->intra_client_mask = 0x1;
-		comp_grp_local->tasklet_info = tasklet;
+		comp_grp_local->worker_ctx = worker_ctx;
 		comp_grp_local->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
 
 		rsrc_data->is_master = is_master;
@@ -1709,7 +1709,7 @@ static int cam_vfe_bus_ver3_release_comp_grp(
 		in_rsrc_data->addr_sync_mode = 0;
 		in_rsrc_data->composite_mask = 0;
 
-		comp_grp->tasklet_info = NULL;
+		comp_grp->worker_ctx = NULL;
 		comp_grp->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 
 		list_add_tail(&comp_grp->list, &ver3_bus_priv->free_comp_grp);
@@ -2037,10 +2037,10 @@ static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
 	}
 	mutex_unlock(&rsrc_data->common_data->bus_mutex);
 
-	ver3_bus_priv->tasklet_info = acq_args->tasklet;
+	ver3_bus_priv->worker_ctx = acq_args->worker_ctx;
 	rsrc_node->rdi_only_ctx = 0;
 	rsrc_node->res_id = out_acquire_args->out_port_info->res_type;
-	rsrc_node->tasklet_info = acq_args->tasklet;
+	rsrc_node->worker_ctx = acq_args->worker_ctx;
 	rsrc_node->cdm_ops = out_acquire_args->cdm_ops;
 	rsrc_data->cdm_util_ops = out_acquire_args->cdm_ops;
 	rsrc_data->format = out_acquire_args->out_port_info->format;
@@ -2053,7 +2053,7 @@ static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
 	for (i = 0; i < rsrc_data->num_wm; i++) {
 		rc = cam_vfe_bus_ver3_acquire_wm(ver3_bus_priv,
 			out_acquire_args->out_port_info,
-			acq_args->tasklet,
+			acq_args->worker_ctx,
 			vfe_out_res_id,
 			i,
 			&rsrc_data->wm_res[i],
@@ -2071,7 +2071,7 @@ static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
 
 	/* Acquire composite group using COMP GRP ID */
 	rc = cam_vfe_bus_ver3_acquire_comp_grp(ver3_bus_priv,
-		acq_args->tasklet,
+		acq_args->worker_ctx,
 		out_acquire_args->is_dual,
 		out_acquire_args->is_master,
 		&rsrc_data->comp_grp,
@@ -2139,7 +2139,7 @@ static int cam_vfe_bus_ver3_release_vfe_out(void *bus_priv, void *release_args,
 			rsrc_data->comp_grp);
 	rsrc_data->comp_grp = NULL;
 
-	vfe_out->tasklet_info = NULL;
+	vfe_out->worker_ctx = NULL;
 	vfe_out->cdm_ops = NULL;
 	rsrc_data->cdm_util_ops = NULL;
 
@@ -2222,8 +2222,7 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 		vfe_out,
 		vfe_out->top_half_handler,
 		vfe_out->bottom_half_handler,
-		vfe_out->tasklet_info,
-		&tasklet_bh_api);
+		vfe_out->worker_ctx);
 
 	if (vfe_out->irq_handle < 1) {
 		CAM_ERR(CAM_ISP, "Subscribe IRQ failed for VFE out_res %d",
@@ -2255,8 +2254,7 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 				vfe_out,
 				cam_vfe_bus_ver3_handle_rup_top_half,
 				cam_vfe_bus_ver3_handle_rup_bottom_half,
-				vfe_out->tasklet_info,
-				&tasklet_bh_api);
+				vfe_out->worker_ctx);
 
 		if (common_data->rup_irq_handle[source_group] < 1) {
 			CAM_ERR(CAM_ISP, "Failed to subscribe RUP IRQ");
@@ -3526,7 +3524,6 @@ static int cam_vfe_bus_ver3_init_hw(void *hw_priv,
 		bus_priv,
 		cam_vfe_bus_ver3_handle_bus_irq,
 		NULL,
-		NULL,
 		NULL);
 
 	if (bus_priv->bus_irq_handle < 1) {
@@ -3543,7 +3540,6 @@ static int cam_vfe_bus_ver3_init_hw(void *hw_priv,
 			bus_priv,
 			cam_vfe_bus_ver3_handle_rup_irq,
 			NULL,
-			NULL,
 			NULL);
 
 		if (bus_priv->rup_irq_handle < 1) {
@@ -3553,7 +3549,7 @@ static int cam_vfe_bus_ver3_init_hw(void *hw_priv,
 		}
 	}
 
-	if (bus_priv->tasklet_info != NULL) {
+	if (bus_priv->worker_ctx != NULL) {
 		bus_priv->error_irq_handle = cam_irq_controller_subscribe_irq(
 			bus_priv->common_data.bus_irq_controller,
 			CAM_IRQ_PRIORITY_0,
@@ -3561,8 +3557,7 @@ static int cam_vfe_bus_ver3_init_hw(void *hw_priv,
 			bus_priv,
 			cam_vfe_bus_ver3_err_irq_top_half,
 			cam_vfe_bus_ver3_err_irq_bottom_half,
-			bus_priv->tasklet_info,
-			&tasklet_bh_api);
+			bus_priv->worker_ctx);
 
 		if (bus_priv->error_irq_handle < 1) {
 			CAM_ERR(CAM_ISP, "Failed to subscribe BUS Error IRQ");

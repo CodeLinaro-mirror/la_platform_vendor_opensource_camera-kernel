@@ -416,7 +416,7 @@ struct cam_csid_evt_payload {
  * @hw_intf:                  contain the csid hw interface information
  * @hw_info:                  csid hw device information
  * @csid_info:                csid hw specific information
- * @tasklet:                  tasklet to handle csid errors
+ * @worker_ctx:               worker to handle csid errors
  * @free_payload_list:        list head for payload
  * @evt_payload:              Event payload to be passed to tasklet
  * @in_res_id:                csid in resource type
@@ -456,7 +456,7 @@ struct cam_tfe_csid_hw {
 	struct cam_hw_intf                 *hw_intf;
 	struct cam_hw_info                 *hw_info;
 	struct cam_tfe_csid_hw_info        *csid_info;
-	void                               *tasklet;
+	void                               *worker_ctx;
 	struct list_head                    free_payload_list;
 	struct cam_csid_evt_payload   evt_payload[CAM_CSID_EVT_PAYLOAD_MAX];
 	uint32_t                            in_res_id;

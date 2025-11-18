@@ -13,7 +13,6 @@
 #include "ope_hw.h"
 #include "cam_hw_mgr_intf.h"
 #include "cam_hw_intf.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_mem_mgr.h"
 #include "cam_smmu_api.h"
 #include "cam_soc_util.h"
@@ -22,14 +21,15 @@
 #include "ope_hw.h"
 #include "cam_cdm_intf_api.h"
 #include "cam_req_mgr_timer.h"
+#include "cam_worker_wrapper_api.h"
 
 #define OPE_CTX_MAX               32
 #define CAM_FRAME_CMD_MAX         20
 
 
-#define OPE_WORKQ_NUM_TASK        100
-#define OPE_WORKQ_TASK_CMD_TYPE   1
-#define OPE_WORKQ_TASK_MSG_TYPE   2
+#define OPE_WORKER_NUM_TASK        100
+#define OPE_WORKER_TASK_CMD_TYPE   1
+#define OPE_WORKER_TASK_MSG_TYPE   2
 
 #define OPE_PACKET_SIZE           0
 #define OPE_PACKET_TYPE           1
@@ -516,9 +516,9 @@ struct cam_ope_hw_intf_data {
  * @devices:              OPE devices
  * @ope_dev_data:         OPE device specific data
  * @ope_caps:             OPE capabilities
- * @cmd_work:             Command work
- * @msg_work:             Message work
- * @timer_work:           Timer work
+ * @cmd_worker_ctx:       Command work
+ * @msg_worker_ctx:       Message work
+ * @timer_worker_ctx:     Timer work
  * @cmd_work_data:        Command work data
  * @msg_work_data:        Message work data
  * @timer_work_data:      Timer work data
@@ -549,10 +549,9 @@ struct cam_ope_hw_mgr {
 	struct cam_ope_hw_intf_data *ope_dev_data[OPE_DEV_MAX];
 	struct ope_query_cap_cmd ope_caps;
 	uint64_t last_callback_time;
-
-	struct cam_req_mgr_core_workq *cmd_work;
-	struct cam_req_mgr_core_workq *msg_work;
-	struct cam_req_mgr_core_workq *timer_work;
+	void *cmd_worker_ctx;
+	void *msg_worker_ctx;
+	void *timer_worker_ctx;
 	struct ope_cmd_work_data *cmd_work_data;
 	struct ope_msg_work_data *msg_work_data;
 	struct ope_clk_work_data *timer_work_data;

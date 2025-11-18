@@ -23,6 +23,7 @@
 #include "cam_req_mgr_debug.h"
 #include "cam_cpas_api.h"
 #include "cam_subdev.h"
+#include "cam_worker_wrapper_api.h"
 
 static const char isp_dev_name[] = "cam-isp";
 
@@ -1741,16 +1742,17 @@ static int __cam_isp_ctx_schedule_apply_req_offline(
 	struct cam_isp_context *ctx_isp)
 {
 	int rc = 0;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args task;
 
-	task = cam_req_mgr_workq_get_task(ctx_isp->workq);
-	if (!task) {
+	rc = cam_worker_wrapper_get(ctx_isp->worker_ctx, &task);
+	if (rc) {
 		CAM_ERR(CAM_ISP, "No task for worker");
 		return -ENOMEM;
 	}
 
-	task->process_cb = __cam_isp_ctx_apply_req_offline;
-	rc = cam_req_mgr_workq_enqueue_task(task, ctx_isp, CRM_TASK_PRIORITY_0);
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(ctx_isp->worker_ctx, &task,
+		ctx_isp, NULL, __cam_isp_ctx_apply_req_offline);
 	if (rc)
 		CAM_ERR(CAM_ISP, "Failed to schedule task rc:%d", rc);
 
@@ -1892,7 +1894,7 @@ static int __cam_isp_ctx_notify_sof_in_activated_state(
 		if (ctx_isp->last_sof_timestamp ==
 			ctx_isp->sof_timestamp_val) {
 			CAM_DBG(CAM_ISP,
-				"Tasklet delay detected! Bubble frame check skipped, sof_timestamp: %lld",
+				"Worker delay detected! Bubble frame check skipped, sof_timestamp: %lld",
 				ctx_isp->sof_timestamp_val);
 			goto notify_only;
 		}
@@ -4214,7 +4216,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_state(
 		if (ctx_isp->last_sof_timestamp ==
 			ctx_isp->sof_timestamp_val) {
 			CAM_DBG(CAM_ISP,
-				"Tasklet delay detected! Bubble frame: %lld check skipped, sof_timestamp: %lld, ctx_id: %d",
+				"Worker delay detected! Bubble frame: %lld check skipped, sof_timestamp: %lld, ctx_id: %d",
 				ctx_isp->frame_id,
 				ctx_isp->sof_timestamp_val,
 				ctx->ctx_id);
@@ -5285,11 +5287,6 @@ end:
 	return rc;
 }
 
-static void cam_req_mgr_process_workq_offline_ife_worker(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
 static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 	void *args)
 {
@@ -5303,6 +5300,7 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 	struct cam_hw_cmd_args           hw_cmd_args;
 	struct cam_isp_hw_cmd_args       isp_hw_cmd_args;
 	struct cam_isp_acquire_hw_info  *acquire_hw_info = NULL;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	if (!ctx->hw_mgr_intf) {
 		CAM_ERR(CAM_ISP, "HW interface is not ready");
@@ -5415,13 +5413,18 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 		ctx_isp->substate_machine = NULL;
 		ctx_isp->offline_context = true;
 
-		rc = cam_req_mgr_workq_create("offline_ife", 20,
-			&ctx_isp->workq, CRM_WORKQ_USAGE_IRQ, 0,
-			cam_req_mgr_process_workq_offline_ife_worker);
+		worker_init_args.name = "offline_ife";
+		worker_init_args.num_tasks = 20;
+		worker_init_args.max_active = 0;
+		worker_init_args.in_irq = WORKER_USAGE_IRQ;
+		worker_init_args.flag = 0;
+		worker_init_args.priv_data = NULL;
+		worker_init_args.index = 0;
+		worker_init_args.worker_ctx_priv = &ctx_isp->worker_ctx;
+		rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 		if (rc)
 			CAM_ERR(CAM_ISP,
-				"Failed to create workq for offline IFE rc:%d",
-				rc);
+				"Failed to create worker for offline IFE rc:%d", rc);
 	} else {
 		CAM_DBG(CAM_ISP, "Session has PIX or PIX and RDI resources");
 		ctx_isp->substate_machine_irq =
@@ -5702,7 +5705,7 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 
 	/*
 	 * Only place to change state before calling the hw due to
-	 * hardware tasklet has higher priority that can cause the
+	 * hardware worker has higher priority that can cause the
 	 * irq handling comes early
 	 */
 	ctx->state = CAM_CTX_ACTIVATED;

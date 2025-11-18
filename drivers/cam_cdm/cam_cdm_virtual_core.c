@@ -20,26 +20,26 @@
 #include "cam_cdm_core_common.h"
 #include "cam_cdm_soc.h"
 #include "cam_io_util.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_common_util.h"
+#include "cam_worker_wrapper_api.h"
 
 #define CAM_CDM_VIRTUAL_NAME "qcom,cam_virtual_cdm"
 
-static void cam_virtual_cdm_work(struct work_struct *work)
+static int cam_virtual_cdm_work(void *priv, void *data)
 {
 	struct cam_cdm_work_payload *payload;
 	struct cam_hw_info *cdm_hw;
 	struct cam_cdm *core;
 
-	payload = container_of(work, struct cam_cdm_work_payload, work);
+	payload = (struct cam_cdm_work_payload *)priv;
 	if (payload) {
 		cdm_hw = payload->hw;
 		core = (struct cam_cdm *)cdm_hw->core_info;
 
 		cam_common_util_thread_switch_delay_detect(
-			"Virtual CDM workq schedule",
-			payload->workq_scheduled_ts,
-			CAM_WORKQ_SCHEDULE_TIME_THRESHOLD);
+			"Virtual CDM worker schedule",
+			payload->worker_scheduled_ts,
+			CAM_WORKER_SCHEDULE_TIME_THRESHOLD);
 
 		if (payload->irq_status & 0x2) {
 			struct cam_cdm_bl_cb_request_entry *node;
@@ -75,6 +75,7 @@ static void cam_virtual_cdm_work(struct work_struct *work)
 		kfree(payload);
 	}
 
+	return 0;
 }
 
 int cam_virtual_cdm_submit_bl(struct cam_hw_info *cdm_hw,
@@ -84,6 +85,7 @@ int cam_virtual_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 	int i, rc = -EINVAL;
 	struct cam_cdm_bl_request *cdm_cmd = req->data;
 	struct cam_cdm *core = (struct cam_cdm *)cdm_hw->core_info;
+	struct cam_worker_wrapper_taskdata_args task;
 
 	mutex_lock(&client->lock);
 	for (i = 0; i < req->data->cmd_arrary_count ; i++) {
@@ -189,13 +191,28 @@ int cam_virtual_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 					payload->irq_status = 0x2;
 					payload->irq_data = core->bl_tag;
 					payload->hw = cdm_hw;
-					INIT_WORK((struct work_struct *)
-						&payload->work,
-						cam_virtual_cdm_work);
-					payload->workq_scheduled_ts =
-						ktime_get();
-					queue_work(core->work_queue,
-						&payload->work);
+					payload->worker_scheduled_ts = ktime_get();
+					rc = cam_worker_wrapper_get(core->worker_ctx, &task);
+					if (rc) {
+						CAM_ERR(CAM_CDM,
+							"Failed to queue work for cdm: irq=0x%x",
+							payload->irq_status);
+						kfree(payload);
+						kfree(node);
+						goto end;
+					}
+
+					task.task_priority = WORKER_TASK_PRIORITY_0;
+					rc = cam_worker_wrapper_enqueue(core->worker_ctx,
+						&task, payload,
+						NULL, cam_virtual_cdm_work);
+					if (rc) {
+						CAM_ERR(CAM_CDM,
+							"Failed to enqueue task for cdm.");
+						kfree(payload);
+						kfree(node);
+						goto end;
+					}
 				}
 			}
 			core->bl_tag++;
@@ -228,6 +245,7 @@ int cam_virtual_cdm_probe(struct platform_device *pdev)
 	struct cam_cdm_private_dt_data *soc_private = NULL;
 	int rc;
 	struct cam_cpas_register_params cpas_parms;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	cdm_hw_intf = kzalloc(sizeof(struct cam_hw_intf), GFP_KERNEL);
 	if (!cdm_hw_intf)
@@ -299,9 +317,24 @@ int cam_virtual_cdm_probe(struct platform_device *pdev)
 	cdm_core->id = CAM_CDM_VIRTUAL;
 	memcpy(cdm_core->name, CAM_CDM_VIRTUAL_NAME,
 		sizeof(CAM_CDM_VIRTUAL_NAME));
-	cdm_core->work_queue = alloc_workqueue(cdm_core->name,
-		WQ_UNBOUND | WQ_MEM_RECLAIM | WQ_SYSFS,
-		CAM_CDM_INFLIGHT_WORKS);
+
+	/* worker ctx init */
+	worker_init_args.name = cdm_core->name;
+	worker_init_args.num_tasks = CAM_CDM_WORKER_NUM_TASK;
+	worker_init_args.max_active = CAM_CDM_INFLIGHT_WORKS;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = (CAM_WORKER_FLAG_UNBOUND | CAM_WORKER_FLAG_MEM_RECLAIM |
+		CAM_WORKER_FLAG_SYSFS);
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &cdm_core->worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
+	if (rc) {
+		CAM_ERR(CAM_CDM, "Worker allocation failed for cdm %s",
+			cdm_core->name);
+		goto failed_worker_create;
+	}
+
 	cdm_core->ops = NULL;
 
 	cpas_parms.cam_cpas_client_cb = cam_cdm_cpas_cb;
@@ -336,10 +369,15 @@ intf_registration_failed:
 	cam_cpas_unregister_client(cdm_core->cpas_handle);
 cpas_registration_failed:
 	kfree(cdm_hw->soc_info.soc_private);
-	flush_workqueue(cdm_core->work_queue);
-	destroy_workqueue(cdm_core->work_queue);
+	cam_worker_wrapper_flush(cdm_core->worker_ctx);
+	cam_worker_wrapper_deinit(cdm_core->worker_ctx);
 	mutex_unlock(&cdm_hw->hw_mutex);
 	mutex_destroy(&cdm_hw->hw_mutex);
+failed_worker_create:
+	kfree(cdm_hw->soc_info.soc_private);
+	mutex_unlock(&cdm_hw->hw_mutex);
+	mutex_destroy(&cdm_hw->hw_mutex);
+
 soc_load_failed:
 	kfree(cdm_hw->core_info);
 	kfree(cdm_hw);
@@ -391,8 +429,8 @@ int cam_virtual_cdm_remove(struct platform_device *pdev)
 		return rc;
 	}
 
-	flush_workqueue(cdm_core->work_queue);
-	destroy_workqueue(cdm_core->work_queue);
+	cam_worker_wrapper_flush(cdm_core->worker_ctx);
+	cam_worker_wrapper_deinit(cdm_core->worker_ctx);
 	mutex_destroy(&cdm_hw->hw_mutex);
 	kfree(cdm_hw->soc_info.soc_private);
 	kfree(cdm_hw->core_info);

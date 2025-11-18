@@ -37,3 +37,27 @@ config SPECTRA_SECURE_CAMERA_25
 		buffers for the secure camera images by
 		lending the buffers to a trusted virtual machine.
 
+config RT_MAP_WORKER_WORKQ
+	bool "enable workqueue bottom half to replace default tasklet"
+	help
+		This config enables the use of workqueue within worker wrapper
+		for realtime needs.
+		Which supports the replacement of the default tasklet option
+		with workqueue for bottom half.
+
+config RT_MAP_WORKER_KTHREAD
+	bool "enable kthread bottom half to replace default tasklet"
+	help
+		This config enables the use of kthread within worker wrapper
+		for realtime needs.
+		It supports the replacement of the default tasklet option
+		with kthread for bottom half
+
+config NRT_MAP_WORKER_KTHREAD
+	bool "enable kthread bottom half to replace default workqueue solution"
+	help
+		This config enables the use of kthread within worker wrapper
+		for non-realtime needs.
+		It supports the replacement of the default workqueue option
+		with kthread for bottom half
+
