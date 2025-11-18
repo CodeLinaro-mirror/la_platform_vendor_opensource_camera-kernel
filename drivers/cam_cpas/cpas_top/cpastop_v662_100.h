@@ -608,6 +608,7 @@ static struct cam_cpas_info cam662_cpas100_cpas_info = {
 	.qchannel_info = {&cam662_cpas100_qchannel_info},
 	.num_qchannel = 1,
 	.tpg_mux_info = &cam662_cpas100_cpas_tpg_mux_info,
+	.camera_arch = CAM_CPAS_HW_MIMAS_ARCH,
 };
 
 static struct cam_cpas_hw_info cam662_cpas100_hw_info = {

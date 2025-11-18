@@ -427,6 +427,53 @@ end:
 }
 EXPORT_SYMBOL(cam_cpas_is_feature_supported);
 
+int cam_cpas_get_icp_caps_map(struct cam_cpas_caps_map *cpas_map,
+	uint32_t hw_mgr_id)
+{
+	struct cam_hw_info *cpas_hw = NULL;
+	struct cam_cpas *cpas_core = NULL;
+
+	if (!cpas_map || (hw_mgr_id >= CAM_ICP_MAX_HW_CAPS_MASK)) {
+		CAM_ERR(CAM_CPAS,
+			"Invalid cpas_map parameter: %pK hw_mgr_id: %u",
+			cpas_map, hw_mgr_id);
+		return -EINVAL;
+	}
+
+	if (!CAM_CPAS_INTF_INITIALIZED()) {
+		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
+		return -ENODEV;
+	}
+
+	cpas_hw = (struct cam_hw_info *) g_cpas_intf->hw_intf->hw_priv;
+	cpas_core = (struct cam_cpas *) cpas_hw->core_info;
+
+	switch (cpas_core->hw_info->cpas_info->camera_arch) {
+	case CAM_CPAS_HW_TITAN_ARCH:
+		cpas_map->icp_bit = (hw_mgr_id == 0) ? CPAS_ICP_BIT : CPAS_ICP1_BIT;
+		cpas_map->ipe_bit = CPAS_TITAN_IPE0_CAP_BIT;
+		cpas_map->bps_bit = CPAS_BPS_BIT;
+		cpas_map->ofe_bit = CPAS_OFE_BIT;
+		break;
+	case CAM_CPAS_HW_MIMAS_ARCH:
+		cpas_map->icp_bit = CPAS_MIMAS_ICP_CAP_BIT;
+		cpas_map->ipe_bit = CPAS_MIMAS_IPE_CAP_BIT;
+		cpas_map->bps_bit = CPAS_MIMAS_BPS_CAP_BIT;
+		cpas_map->ofe_bit = 0;
+		break;
+	default:
+		CAM_ERR(CAM_CPAS, "Invalid camera arch :%d",
+			cpas_core->hw_info->cpas_info->camera_arch);
+		return -EINVAL;
+	}
+
+	CAM_DBG(CAM_CPAS, "CPAS camera_arch:%d icp:0x%x ipe:0x%x bps:0x%x ofe:0x%x",
+		cpas_core->hw_info->cpas_info->camera_arch, cpas_map->icp_bit,
+		cpas_map->ipe_bit, cpas_map->bps_bit, cpas_map->ofe_bit);
+
+	return 0;
+}
+
 int cam_cpas_get_cpas_hw_version(uint32_t *hw_version)
 {
 	struct cam_hw_info *cpas_hw = NULL;

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef CAM_ICP_HW_MGR_H
@@ -47,16 +47,6 @@
 
 #define ICP_OVER_CLK_THRESHOLD  5
 #define ICP_TWO_DEV_BW_SHARE_RATIO 2
-
-#define CPAS_IPE0_BIT           0x1000
-#define CPAS_IPE1_BIT           0x2000
-#define CPAS_BPS_BIT            0x400
-#define CPAS_ICP_BIT            0x1
-#define CPAS_ICP1_BIT           0x4
-#define CPAS_OFE_BIT            0x10
-
-/* Used for targets >= 480 and its variants */
-#define CPAS_TITAN_IPE0_CAP_BIT 0x800
 
 #define CAM_ICP_CTX_STATE_IN_USE    0x1
 #define CAM_ICP_CTX_STATE_ACQUIRED  0x2

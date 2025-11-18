@@ -594,6 +594,20 @@ struct cam_tpg_mux_regs {
 };
 
 /**
+ * enum cam_cpas_hw_arch : CPAS hardware architecture types
+ *
+ * @CAM_CPAS_HW_TITAN_ARCH: Titan-based architecture
+ * @CAM_CPAS_HW_MIMAS_ARCH: Mimas-based architecture
+ * @CAM_CPAS_HW_MAX_ARCH: Max architecture placeholder
+ *
+ */
+enum cam_cpas_hw_arch {
+	CAM_CPAS_HW_TITAN_ARCH,
+	CAM_CPAS_HW_MIMAS_ARCH,
+	CAM_CPAS_HW_MAX_ARCH,
+};
+
+/**
  * struct cam_cpas_info: CPAS information
  *
  * @qchannel_info: CPAS qchannel info
@@ -602,6 +616,8 @@ struct cam_tpg_mux_regs {
  * @num_qchannel: Number of qchannel
  * @subpart_info: Subpart info
  * @tpg_mux_info: Top TPG Mux regs info
+ * @camera_arch: Indicates to which camera arch HW belongs
+ *
  */
 struct cam_cpas_info {
 	struct cam_cpas_camnoc_qchannel *qchannel_info[CAM_CAMNOC_QCHANNEL_MAX];
@@ -610,6 +626,7 @@ struct cam_cpas_info {
 	struct cam_cpas_secure_info *hw_caps_secure_info;
 	struct cam_cpas_subpart_info *subpart_info;
 	struct cam_tpg_mux_regs *tpg_mux_info;
+	enum cam_cpas_hw_arch camera_arch;
 };
 
 /**

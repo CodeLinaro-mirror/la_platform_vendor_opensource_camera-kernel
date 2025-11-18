@@ -45,6 +45,7 @@
 #include "cam_presil_hw_access.h"
 #include "cam_icp_proc.h"
 #include "cam_worker_wrapper_api.h"
+#include "cam_cpas_hw_intf.h"
 
 #define ICP_DEVICE_IDLE_TIMEOUT 400
 
@@ -9613,13 +9614,28 @@ static int cam_icp_mgr_alloc_devs(struct device_node *np, struct cam_icp_hw_mgr 
 	struct cam_hw_intf **alloc_devices = NULL;
 	int rc, i;
 	enum cam_icp_hw_type icp_hw_type;
-	uint32_t num = 0, num_cpas_mask = 0, cpas_hw_mask[MAX_HW_CAPS_MASK] = {0};
+	uint32_t num = 0, num_cpas_mask = 0;
+	uint32_t cpas_hw_mask[CAM_ICP_MAX_HW_CAPS_MASK] = {0};
+	struct cam_cpas_caps_map *caps_map;
+
+	caps_map = CAM_MEM_KZALLOC(sizeof(struct cam_cpas_caps_map),
+		GFP_KERNEL);
+	if (!caps_map) {
+		CAM_ERR(CAM_ICP, "Failed to allocate memory for CPAS caps map");
+		return -ENOMEM;
+	}
+
+	rc = cam_cpas_get_icp_caps_map(caps_map, hw_mgr->hw_mgr_id);
+	if (rc) {
+		CAM_ERR(CAM_ICP, "Failed to get ICP caps map");
+		goto free_caps_map;
+	}
 
 	rc = cam_icp_alloc_processor_devs(np, &icp_hw_type, &alloc_devices, hw_dev_cnt);
 	if (rc) {
 		CAM_ERR(CAM_ICP, "[%s] proc devices allocation failed rc=%d",
 			hw_mgr->hw_mgr_name, rc);
-		return rc;
+		goto free_caps_map;
 	}
 
 	if (!CAM_ICP_IS_VALID_HW_DEV_TYPE(icp_hw_type)) {
@@ -9628,7 +9644,7 @@ static int cam_icp_mgr_alloc_devs(struct device_node *np, struct cam_icp_hw_mgr 
 		rc = -EINVAL;
 		CAM_MEM_FREE(devices);
 		CAM_MEM_FREE(alloc_devices);
-		return rc;
+		goto free_caps_map;
 	}
 
 	if (hw_dev_cnt[icp_hw_type] > CAM_ICP_MAX_ICP_PROC_PER_DEV) {
@@ -9642,7 +9658,7 @@ static int cam_icp_mgr_alloc_devs(struct device_node *np, struct cam_icp_hw_mgr 
 	devices[icp_hw_type] = alloc_devices;
 	hw_mgr->hw_cap_mask |= BIT(icp_hw_type);
 	num_cpas_mask = max(num_cpas_mask, (uint32_t)(ICP_CAPS_MASK_IDX + 1));
-	cpas_hw_mask[ICP_CAPS_MASK_IDX] |= icp_cpas_mask[hw_mgr->hw_mgr_id];
+	cpas_hw_mask[ICP_CAPS_MASK_IDX] |= caps_map->icp_bit;
 
 	rc = of_property_read_u32(np, "num-ipe", &num);
 	if (!rc) {
@@ -9657,7 +9673,7 @@ static int cam_icp_mgr_alloc_devs(struct device_node *np, struct cam_icp_hw_mgr 
 		devices[CAM_ICP_DEV_IPE] = alloc_devices;
 		hw_mgr->hw_cap_mask |= BIT(CAM_ICP_DEV_IPE);
 		num_cpas_mask = max(num_cpas_mask, (uint32_t)(IPE_CAPS_MASK_IDX + 1));
-		cpas_hw_mask[IPE_CAPS_MASK_IDX] |= CPAS_TITAN_IPE0_CAP_BIT;
+		cpas_hw_mask[IPE_CAPS_MASK_IDX] |= caps_map->ipe_bit;
 	}
 
 	rc = of_property_read_u32(np, "num-bps", &num);
@@ -9673,7 +9689,7 @@ static int cam_icp_mgr_alloc_devs(struct device_node *np, struct cam_icp_hw_mgr 
 		devices[CAM_ICP_DEV_BPS] = alloc_devices;
 		hw_mgr->hw_cap_mask |= BIT(CAM_ICP_DEV_BPS);
 		num_cpas_mask = max(num_cpas_mask, (uint32_t)(BPS_CAPS_MASK_IDX + 1));
-		cpas_hw_mask[BPS_CAPS_MASK_IDX] |= CPAS_BPS_BIT;
+		cpas_hw_mask[BPS_CAPS_MASK_IDX] |= caps_map->bps_bit;
 	}
 
 	rc = of_property_read_u32(np, "num-ofe", &num);
@@ -9689,7 +9705,7 @@ static int cam_icp_mgr_alloc_devs(struct device_node *np, struct cam_icp_hw_mgr 
 		devices[CAM_ICP_DEV_OFE] = alloc_devices;
 		hw_mgr->hw_cap_mask |= BIT(CAM_ICP_DEV_OFE);
 		num_cpas_mask = max(num_cpas_mask, (uint32_t)(OFE_CAPS_MASK_IDX + 1));
-		cpas_hw_mask[OFE_CAPS_MASK_IDX] |= CPAS_OFE_BIT;
+		cpas_hw_mask[OFE_CAPS_MASK_IDX] |= caps_map->ofe_bit;
 	}
 
 	rc = cam_icp_mgr_verify_hw_caps(hw_mgr, cpas_hw_mask, num_cpas_mask);
@@ -9707,9 +9723,12 @@ static int cam_icp_mgr_alloc_devs(struct device_node *np, struct cam_icp_hw_mgr 
 	hw_mgr->synx_signaling_en = of_property_read_bool(np, "synx_signaling_en");
 	hw_mgr->fw_based_sys_caching = cam_cpas_is_fw_based_sys_caching_supported();
 
-	return 0;
+free_caps_map:
+	CAM_MEM_KFREE(caps_map);
+	return rc;
 
 free_devs:
+	CAM_MEM_KFREE(caps_map);
 	CAM_MEM_FREE(alloc_devices);
 	for (i = 0; i < CAM_ICP_HW_MAX; i++)
 		CAM_MEM_FREE(devices[i]);
