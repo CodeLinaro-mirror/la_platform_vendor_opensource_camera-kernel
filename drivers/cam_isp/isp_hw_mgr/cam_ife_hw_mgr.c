@@ -10863,6 +10863,7 @@ end:
 	ctx->flags.skip_reg_dump_buf_put = false;
 	ctx->flags.dump_on_error = false;
 	ctx->flags.dump_on_flush = false;
+	ctx->flags.fast_crop_en = false;
 	return rc;
 }
 

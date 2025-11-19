@@ -4405,6 +4405,11 @@ int cam_req_mgr_fast_crop_sync_cmd(struct cam_req_mgr_fast_crop_sync *fast_crop_
 		cam_session->fast_crop_sync.offset, cam_session->fast_crop_sync.size,
 		cam_session->fast_crop_shared_buf_kmdvaddr);
 
+	mutex_unlock(&cam_session->lock);
+	mutex_unlock(&g_crm_core_dev->crm_lock);
+
+	return rc;
+
 put_cpu_buf:
 	cam_mem_put_cpu_buf(cam_session->fast_crop_sync.mem_hdl);
 end:
