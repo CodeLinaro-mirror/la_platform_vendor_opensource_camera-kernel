@@ -797,7 +797,8 @@ static int __cam_isp_ctx_no_crm_apply_trigger_util(void *priv, void *data)
 				"Skip sensor notification as no open request ctx:%u",
 				ctx->ctx_id);
 			ctx_isp->sensor_pd_handled = false;
-			if (ctx_isp->is_settingbuf_enable)
+			if (ctx_isp->is_settingbuf_enable &&
+				(ctx_isp->last_applied_req_id > ctx->last_flush_req))
 				rc = cam_isp_ctx_scratchbuf_cfg(ctx_isp);
 			ctx_isp->sensor_req_info.correction = 0;
 		}
@@ -914,7 +915,8 @@ static int __cam_isp_ctx_notify_trigger_util(
 
 			ctx_isp->sensor_pd_handled = true;
 
-			if (ctx_isp->is_settingbuf_enable)
+			if (ctx_isp->is_settingbuf_enable &&
+				(ctx_isp->last_applied_req_id > ctx->last_flush_req))
 				rc = cam_isp_ctx_scratchbuf_cfg(ctx_isp);
 
 			ctx_isp->sensor_req_info.prev_applied_req =
@@ -11644,6 +11646,8 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 				req->request_id, cam_ctx->ctx_id);
 
 		isp_setting_id = req_isp->hw_update_data.setting_id;
+		CAM_DBG(CAM_ISP, "Sensor setting id: %llu, IFE setting id: %llu",
+			sensor_setting_id, isp_setting_id);
 
 		if (ctx_isp->setting_buf_info.prev_isp_settings > isp_setting_id) {
 			ctx_isp->setting_buf_info.isp_count++;
