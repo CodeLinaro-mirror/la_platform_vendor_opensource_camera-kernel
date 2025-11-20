@@ -90,6 +90,11 @@ static int cam_fd_dev_close_internal(struct v4l2_subdev *sd,
 		return -EINVAL;
 	}
 
+	if(fd_dev.open_cnt != 0){
+		CAM_ERR(CAM_OPE, "fd_dev.open_cnt %d",fd_dev.open_cnt);
+		fd_dev.open_cnt = 0;
+	}
+
 	cam_node_shutdown(node);
 
 	return 0;
