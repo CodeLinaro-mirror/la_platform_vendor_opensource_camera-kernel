@@ -207,3 +207,11 @@ config VIDEO_QCOM_CAMERA
 	  driver compilation.
 	  To compile this driver as a module named camera.ko
 	  choose m here.
+
+config SPECTRA_CRE
+	bool "enable camera CRE module"
+	help
+	  This option enables camera CRE module
+	  compilation. Camera CRE module will be functional.
+	  This enables CRE driver code files
+	  which interacts with CRE HW.
