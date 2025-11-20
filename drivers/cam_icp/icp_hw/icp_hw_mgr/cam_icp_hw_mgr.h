@@ -110,6 +110,7 @@ struct hfi_mini_dump_info;
  * @fw_uncached: Memory info for fw uncached nested region
  * @device: Memory info for the device region
  * @fw_uncached_region: region support for fw uncached
+ * @device_mem_region: mem region support for device
  */
 struct icp_hfi_mem_info {
 	struct cam_mem_mgr_memory_desc qtbl;
@@ -131,6 +132,7 @@ struct icp_hfi_mem_info {
 	struct cam_smmu_region_info fw_uncached;
 	struct cam_smmu_region_info device;
 	bool fw_uncached_region;
+	bool device_mem_region;
 };
 
 /**

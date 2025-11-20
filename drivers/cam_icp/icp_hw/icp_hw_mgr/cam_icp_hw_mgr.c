@@ -3725,7 +3725,10 @@ static inline void cam_icp_free_device_mem(struct cam_icp_hw_mgr *hw_mgr)
 
 static void cam_icp_free_hfi_mem(struct cam_icp_hw_mgr *hw_mgr)
 {
-	cam_icp_free_device_mem(hw_mgr);
+	if (hw_mgr->hfi_mem.device_mem_region) {
+		cam_icp_free_device_mem(hw_mgr);
+		hw_mgr->hfi_mem.device_mem_region = false;
+	}
 
 	if (hw_mgr->hfi_mem.fw_uncached_region) {
 		cam_mem_mgr_free_memory_region(&hw_mgr->hfi_mem.fw_uncached_generic);
@@ -4212,9 +4215,12 @@ static inline int cam_icp_allocate_device_mem(struct cam_icp_hw_mgr *hw_mgr)
 	rc = cam_smmu_get_region_info(hw_mgr->iommu_hdl,
 		CAM_SMMU_REGION_DEVICE, &hw_mgr->hfi_mem.device);
 	if (rc) {
-		CAM_ERR(CAM_ICP, "[%s] Unable to get device memory info, rc: %d",
+		CAM_WARN(CAM_ICP, "[%s] Unable to get device memory info, rc: %d",
 			hw_mgr->hw_mgr_name, rc);
+		hw_mgr->hfi_mem.device_mem_region = false;
 		return rc;
+	} else {
+		hw_mgr->hfi_mem.device_mem_region = true;
 	}
 
 	/* Allocate sys caching if supported by CPAS in DTSI */
@@ -4299,7 +4305,7 @@ static int cam_icp_allocate_hfi_mem(struct cam_icp_hw_mgr *hw_mgr)
 	}
 
 	rc = cam_icp_allocate_device_mem(hw_mgr);
-	if (rc) {
+	if (rc && rc != -ENODEV) {
 		CAM_ERR(CAM_ICP, "[%s] Unable to allocate device memory, rc: %d",
 			hw_mgr->hw_mgr_name, rc);
 		goto alloc_device_failed;
@@ -4337,7 +4343,10 @@ static int cam_icp_allocate_hfi_mem(struct cam_icp_hw_mgr *hw_mgr)
 	return rc;
 
 alloc_shared_failed:
-	cam_icp_free_device_mem(hw_mgr);
+	if (hw_mgr->hfi_mem.device_mem_region) {
+		cam_icp_free_device_mem(hw_mgr);
+		hw_mgr->hfi_mem.device_mem_region = false;
+	}
 alloc_device_failed:
 	cam_smmu_unmap_phy_mem_region(hw_mgr->iommu_hdl, CAM_SMMU_REGION_QDSS, 0);
 alloc_qdss_failed:
