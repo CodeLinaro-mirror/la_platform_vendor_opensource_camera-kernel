@@ -2375,7 +2375,8 @@ int cam_mem_mgr_reserve_memory_region(struct cam_mem_mgr_request_desc *inp,
 		return -EINVAL;
 	}
 
-	rc = cam_mem_util_get_dma_buf(inp->size, 0, CAM_MEMMGR_ALLOC_KERNEL, &buf, &i_ino);
+	rc = cam_mem_util_get_dma_buf(inp->size, inp->flags,
+		CAM_MEMMGR_ALLOC_KERNEL, &buf, &i_ino);
 
 	if (rc) {
 		CAM_ERR(CAM_MEM, "ION alloc failed for sec heap buffer");

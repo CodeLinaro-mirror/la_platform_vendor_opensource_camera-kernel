@@ -3575,7 +3575,7 @@ static int cam_icp_allocate_hfi_mem(struct cam_icp_hw_mgr *hw_mgr)
 		alloc.size = qtbl_size + cmdq_size + msgq_size + dbgq_size +
 			sfr_size + sec_heap_size;
 		alloc.align = 0;
-		alloc.flags = CAM_MEM_FLAG_KMD_ACCESS;
+		alloc.flags = CAM_MEM_FLAG_KMD_ACCESS | CAM_MEM_FLAG_CACHE;
 		alloc.smmu_hdl = hw_mgr->iommu_hdl;
 		rc = cam_mem_mgr_reserve_memory_region(&alloc,
 			CAM_SMMU_REGION_FWUNCACHED, &out);
