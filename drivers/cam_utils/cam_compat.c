@@ -641,13 +641,21 @@ static int inline cam_subdev_list_cmp(struct cam_subdev *entry_1, struct cam_sub
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 13, 0))
 struct file *cam_fcheck_files(struct files_struct *files, uint32_t fd)
 {
-       return fcheck_files(files, fd);
+	return fcheck_files(files, fd);
 }
+#else
+#if (KERNEL_VERSION(6, 12, 0) <= LINUX_VERSION_CODE)
+struct file *cam_fcheck_files(struct files_struct *files, uint32_t fd)
+{
+	return lookup_fdget_rcu(fd);
+}
+
 #else
 struct file *cam_fcheck_files(struct files_struct *files, uint32_t fd)
 {
-       return files_lookup_fd_rcu(files, fd);
+	return files_lookup_fd_rcu(files, fd);
 }
+#endif
 #endif
 
 #if (KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE)

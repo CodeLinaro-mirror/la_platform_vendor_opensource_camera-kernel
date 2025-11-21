@@ -5,7 +5,6 @@
  */
 
 #include <linux/of_address.h>
-#include <linux/qcom_scm.h>
 #include <linux/soc/qcom/mdt_loader.h>
 
 #include "cam_cpas_api.h"
