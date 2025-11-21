@@ -1480,8 +1480,19 @@ static int cam_icp_check_clk_update(struct cam_icp_hw_mgr *hw_mgr,
 	CAM_DBG(CAM_PERF, "busy = %d req_id = %lld", busy, req_id);
 
 	clk_info = &ctx_data->hfi_frame_process.clk_info[idx];
-	if (!clk_info->frame_cycles)
-		return cam_icp_default_clk_update(hw_mgr_clk_info);
+	if (!clk_info->frame_cycles) {
+		if (!ctx_data->prev_fc)
+			return cam_icp_default_clk_update(hw_mgr_clk_info);
+
+		clk_info->frame_cycles = ctx_data->prev_fc;
+		clk_info->budget_ns = ctx_data->prev_budget_ns;
+		CAM_DBG(CAM_ICP, "Default to previous fc: %llu, budget: %llu",
+			clk_info->frame_cycles,
+			clk_info->budget_ns);
+	}
+
+	ctx_data->prev_fc = clk_info->frame_cycles;
+	ctx_data->prev_budget_ns = clk_info->budget_ns;
 
 	ctx_data->clk_info.rt_flag = clk_info->rt_flag;
 
@@ -5647,7 +5658,6 @@ static int cam_icp_packet_generic_blob_handler(void *user_data,
 				clk_info_v2->axi_path[i].mnoc_ab_bw,
 				clk_info_v2->axi_path[i].mnoc_ib_bw);
 		}
-
 		break;
 
 	case CAM_ICP_CMD_GENERIC_BLOB_CFG_IO:
@@ -6989,6 +6999,9 @@ static int cam_icp_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	rc = cam_icp_get_acquire_info(hw_mgr, args, ctx_data);
 	if (rc)
 		goto acquire_info_failed;
+
+	ctx_data->prev_fc = 0;
+	ctx_data->prev_budget_ns = 0;
 
 	icp_dev_acquire_info = ctx_data->icp_dev_acquire_info;
 	dev_type = icp_dev_acquire_info->dev_type;
