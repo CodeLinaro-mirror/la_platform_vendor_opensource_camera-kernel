@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_COMPAT_H_
@@ -11,7 +11,11 @@
 #include <linux/platform_device.h>
 #include <linux/component.h>
 #include <linux/iommu.h>
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+#include <linux/firmware/qcom/qcom_scm.h>
+#else
 #include <linux/qcom_scm.h>
+#endif
 #include <linux/list_sort.h>
 #include <soc/qcom/of_common.h>
 #include <linux/spi/spi.h>
@@ -160,5 +164,18 @@ int cam_mem_buf_dma_buf_get_memparcel_hdl(struct dma_buf *dmabuf,
 	uint32_t *smmu_proxy_buf_hdl, struct cam_csf_version *csf_version);
 
 int cam_synx_enable_resources(uint32_t client_idx, uint32_t signal_id, bool enable);
+
+int cam_iommu_map(struct iommu_domain *domain,
+	size_t firmware_start, phys_addr_t fw_hdl, size_t firmware_len,
+	int prot);
+
+size_t cam_iommu_map_sg(struct iommu_domain *domain,
+	dma_addr_t iova_start, struct scatterlist *sgl, uint64_t orig_nents,
+	int prot);
+
+int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info);
+
+uint16_t cam_get_named_gpio(struct cam_hw_soc_info *soc_info,
+	int index);
 
 #endif /* _CAM_COMPAT_H_ */

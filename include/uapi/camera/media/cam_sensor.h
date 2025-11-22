@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __UAPI_CAM_SENSOR_H__
@@ -22,6 +22,8 @@
 #define PREAMBLE_PATTEN_CAL_MASK  BIT(2)
 
 #define CAM_SENSOR_GET_QUERY_CAP_V2
+#define CAM_SENSOR_TRIGGER_EVENT_V2
+#define CAM_SENSOR_RES_INFO_V2
 
 /* Sensor Driver cmd buffer meta type */
 #define CAM_SENSOR_PACKET_GENERIC_BLOB             1
@@ -47,6 +49,9 @@
 /* Sensor Sync Event Blob Type */
 #define CAM_SENSOR_GENERIC_BLOB_SYNC_CMD_INFO      6
 
+/* Sensor Debug Event Blob Type */
+#define CAM_SENSOR_GENERIC_BLOB_DEBUG_CMD_INFO     7
+
 /* Sensor GPIO Output Configuration */
 #define CAM_SENSOR_GPIO_CONFIG_OUTPUT              0
 
@@ -71,6 +76,9 @@
 /* Sensor EOF Frame Event */
 #define CAM_SENSOR_EOF_FRAME_EVENT                 1
 
+/* Sensor Frame Line Event */
+#define CAM_SENSOR_FRAME_LINE_EVENT                2
+
 /* Sensor Max Event */
 #define CAMERA_SENSOR_EVENT_MAX                    5
 
@@ -85,6 +93,11 @@
 /* CSIPHY CDR tolerance operations */
 #define CAM_CSIPHY_CDR_ADD_TOLERANCE               1
 #define CAM_CSIPHY_CDR_SUB_TOLERANCE               2
+
+/* Actuator Event Controlled Blob Type */
+#define CAM_ACTUATOR_GENERIC_BLOB_FRAME_EVENT_INFO 0
+#define CAM_ACTUATOR_GENERIC_BLOB_EVENT_INFO       1
+#define CAM_ACTUATOR_GENERIC_BLOB_EVENT_CMD_INFO   2
 
 enum camera_sensor_cmd_type {
 	CAMERA_SENSOR_CMD_TYPE_INVALID,
@@ -1122,6 +1135,27 @@ struct cam_flash_query_cap_info {
 } __attribute__ ((packed));
 
 /**
+ * struct cam_actuator_event_control_info - Contains actuator event control info
+ *
+ * enable_event_Controlled and event_name is the key property, it specifies the
+ * combinations of other properties enclosed in this
+ * structure.
+ *
+ * @version                 : version of cmd buffer
+ * @enable_event_controlled : enable event Controlled actuator
+ * @event_name              : event name
+ * @value                   : value
+ * @reserved                : reserved
+ */
+struct cam_actuator_event_control_info {
+	__s32 version;
+	__s32 enable_event_controlled;
+	__s32 event_name;
+	__s32 value;
+	__s64 reserved;
+} __attribute__((packed));
+
+/**
  * struct cam_cmd_sensor_res_info - Contains sensor res info
  *
  * vc/dt is the key property, it specifies the
@@ -1148,6 +1182,55 @@ struct cam_sensor_res_info {
 	__u16 params[4];
 } __attribute__((packed));
 
+
+/**
+ * struct cam_sensor_stream_data - Stream information for each stream
+ *
+ * @version  : Version of the structure
+ * @size     : Size of the structure
+ * @vc       : Virtual Channel
+ * @dt       : Data Type
+ * @type     : Stream Type
+ * @reserved : Reserved for future use
+ */
+struct cam_sensor_stream_data {
+	__u32 version;
+	__u32 size;
+	__u16 vc;
+	__u16 dt;
+	__u32 type;
+	__u64 reserved;
+} __attribute__((packed));
+
+/**
+ * struct cam_sensor_res_info_v2 - Contains sensor res info version 2
+ *
+ * vc/dt is the key property, it specifies the
+ * combinations of other properties enclosed in this
+ * structure. This version includes additional parameters
+ * for enhanced sensor configuration.
+ *
+ * @version            : Version to indicate the change
+ * @size               : Size of the structure (includes stream data)
+ * @num_streams        : Number of streams
+ * @frame_duration     : Frame duration
+ * @req_id             : Request Id
+ * @num_valid_params   : Number of valid params
+ * @valid_param_mask   : Valid param mask
+ * @stream_info_offset : Stream Info offset (points to stream data at end)
+ * @params             : params
+ */
+struct cam_sensor_res_info_v2 {
+	__u32 version;
+	__u32 total_size;
+	__u32 num_streams;
+	__u32 num_valid_params;
+	__u64 frame_duration;
+	__u64 req_id;
+	__u32 valid_param_mask;
+	__u32 stream_info_offset;
+	__u16 params[4];
+} __attribute__((packed));
 /**
  * struct cam_sensor_qtimer_info - Contains sensor qtimer info
  *
@@ -1252,6 +1335,27 @@ struct cam_sensor_sync_cmd_info {
 } __attribute__((packed));
 
 /**
+ * struct cam_sensor_debug_event_info - Contains sensor debug event info
+ *
+ * event is the key property, it specifies the
+ * combinations of other properties enclosed in this
+ * structure.
+ *
+ * @version              : version of cmd buffer
+ * @debug_id             : events offset
+ * @debug_string_offset  : debug string offset
+ * @debug_string_size    : debug string size
+ * @reserved             : reserved
+ */
+struct cam_sensor_debug_event_info {
+	__u32 version;
+	__u32 debug_id;
+	__u32 debug_string_offset;
+	__u32 debug_string_size;
+	__u64 reserved;
+} __attribute__((packed));
+
+/**
  * struct cam_sensor_events- Contains events info
  *
  * sequence of events
@@ -1275,6 +1379,33 @@ struct cam_sensor_events {
 	__u32 cmd_count;
 	__u32 cmd_flag[CAMERA_SENSOR_EVENT_MAX];
 	__u32 cmd_sequence[CAMERA_SENSOR_EVENT_MAX];
+	__u64 reserved;
+} __attribute__((packed));
+
+/**
+ * struct cam_sensor_events_v2- Contains events info
+ *
+ * sequence of events
+ *
+ * @version               : version
+ * @event_name		  : event name
+ * @event_flag            : parallel execution of cmd
+ * @event_arg_count       : event argument
+ * @event_arg_offset      : event argument sequence
+ * @cmd_count		  : number of commands
+ * @cmd_flag_offset       : parallel execution of cmd
+ * @cmd_sequence_offset	  : sequence of commands
+ * @reserved              : reserved
+ */
+struct cam_sensor_events_v2 {
+	__u32 version;
+	__u32 event_name;
+	__u32 event_flag;
+	__u32 event_arg_count;
+	__u32 event_arg_offset;
+	__u32 cmd_count;
+	__u32 cmd_flag_offset;
+	__u32 cmd_sequence_offset;
 	__u64 reserved;
 } __attribute__((packed));
 
