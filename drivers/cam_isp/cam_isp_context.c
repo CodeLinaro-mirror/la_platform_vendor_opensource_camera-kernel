@@ -8265,6 +8265,7 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 	struct cam_kmd_buf_info *kmd_buff_info = NULL;
 	unsigned long flags;
 	int i;
+	struct cam_isp_ul_resource_update_entry *res_data;
 
 	if (ctx_isp->hw_ctx) {
 		rel_arg.ctxt_to_hw_map = ctx_isp->hw_ctx;
@@ -8325,6 +8326,17 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 		kmd_buff_info = &ctx_isp->setting_data[i].req_isp.hw_update_data.kmd_cmd_buff_info;
 		cam_mem_put_kref(kmd_buff_info->handle);
 	}
+
+	res_data = ctx_isp->ul_data.resource_data;
+	if (res_data) {
+		for (i = 0; i < MAX_IO_RESOURCES; i++) {
+			if (res_data[i].is_producer_q_valid) {
+				res_data[i].is_producer_q_valid = false;
+				cam_mem_put_cpu_buf(res_data[i].producer_q_hdl);
+			}
+		}
+	}
+
 	__cam_isp_ctx_free_mem_hw_entries(ctx);
 	cam_req_mgr_worker_destroy(&ctx_isp->worker);
 	ctx->state = CAM_CTX_ACQUIRED;
