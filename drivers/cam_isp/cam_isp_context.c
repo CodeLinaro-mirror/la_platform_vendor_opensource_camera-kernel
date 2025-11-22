@@ -4376,6 +4376,39 @@ static int __cam_isp_ctx_buf_done_in_bubble_applied(
 	return rc;
 }
 
+static void cam_isp_ctx_reset_producer_q_for_req(struct cam_isp_context *ctx_isp,
+	struct cam_isp_ctx_req               *req_isp)
+{
+	struct cam_isp_ul_resource_update_entry *res_data;
+	int i, j, k;
+	uint8_t *producer_queue;
+
+	res_data = ctx_isp->ul_data.resource_data;
+	for (i = 0; i < req_isp->num_fence_map_out; i++) {
+		for (j = 0; j < MAX_IO_RESOURCES; j++) {
+			if (req_isp->fence_map_out[i].resource_handle != res_data[j].resource_type)
+				continue;
+
+			if (!res_data[j].is_producer_q_valid)
+				break;
+
+			producer_queue = (uint8_t *)res_data[j].producer_q_kmdvaddr;
+
+			for (k = 0; k < res_data[j].buf_count; k++) {
+				if (res_data[j].out_map_entries[k].image_buf_addr[0] !=
+					req_isp->fence_map_out[i].image_buf_addr[0]) {
+					continue;
+				}
+				CAM_INFO(CAM_ISP, "resetting producer q for frame drop ctx %d",
+					ctx_isp->base->ctx_id);
+				producer_queue[k] = 0;
+				break;
+			}
+			break;
+		}
+	}
+}
+
 static uint32_t get_evt_param(uint32_t error_type)
 {
 	switch (error_type) {
@@ -4522,6 +4555,7 @@ static int __cam_isp_ctx_handle_error(struct cam_isp_context *ctx_isp,
 					INC_VAL(wr_idx, 1, MAX_IO_PACKETS));
 				complete(&ctx_isp->ul_fp_params.fast_path_buf_done);
 				spin_unlock_irqrestore(&ctx_isp->ul_fp_params.fast_path_lock, flags);
+				cam_isp_ctx_reset_producer_q_for_req(ctx_isp, req_isp);
 			}
 			for (i = 0; i < req_isp->num_fence_map_out && !ctx_isp->ul_path_en; i++) {
 				fence_map_out =
@@ -4575,7 +4609,7 @@ static int __cam_isp_ctx_handle_error(struct cam_isp_context *ctx_isp,
 						req_isp->fence_map_out[i].sync_id,
 						ctx->ctx_id);
 					memset(&param, 0, sizeof(param));
-					param.sync_obj = fence_map_out[i].sync_id;
+					param.sync_obj = fence_map_out->sync_id;
 					param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 					param.event_cause = evt_param;
 					if (!ctx_isp->independent_crm_en)
@@ -4591,6 +4625,8 @@ static int __cam_isp_ctx_handle_error(struct cam_isp_context *ctx_isp,
 					fence_map_out->sync_id = -1;
 				}
 			}
+			if (ctx_isp->ul_path_en)
+				cam_isp_ctx_reset_producer_q_for_req(ctx_isp, req_isp);
 			list_del_init(&req->list);
 			__cam_isp_ctx_move_req_to_free_list(ctx, req);
 			ctx_isp->waitlist_req_cnt--;
@@ -4646,6 +4682,9 @@ end:
 			break;
 		}
 
+		if (req->request_id > ctx_isp->last_applied_req_id)
+			break;
+
 		for (i = 0; i < req_isp->num_fence_map_out; i++) {
 			if (req_isp->fence_map_out[i].sync_id != -1) {
 				memset(&param, 0, sizeof(param));
@@ -4669,7 +4708,12 @@ end:
 	if (ctx_isp->offline_context)
 		goto exit;
 
-	error = CRM_KMD_ERR_FATAL;
+	if (!ctx_isp->error_recovery_en || ((error_type != CAM_ISP_HW_ERROR_CSID_FRAME_SIZE) &&
+		(error_type != CAM_ISP_HW_ERROR_CSID_RX) &&
+		(error_type != CAM_ISP_HW_ERROR_CSID_CCIF_VIOLATION) &&
+		(error_type != CAM_ISP_HW_ERROR_RECOVERY_OVERFLOW)  &&
+		(error_type != CAM_ISP_HW_ERROR_VIOLATION)))
+		error = CRM_KMD_ERR_FATAL;
 	if (req_isp_to_report && req_isp_to_report->bubble_report)
 		if (error_event_data->recovery_enabled)
 			error = CRM_KMD_ERR_BUBBLE;
@@ -5418,39 +5462,6 @@ static int cam_isp_ctx_reapply_iq_config(struct cam_context *ctx, struct cam_ctx
 	atomic_set(&ctx_isp->apply_in_progress, 0);
 
 	return rc;
-}
-
-static void cam_isp_ctx_reset_producer_q_for_req(struct cam_isp_context *ctx_isp,
-	struct cam_isp_ctx_req               *req_isp)
-{
-	struct cam_isp_ul_resource_update_entry *res_data;
-	int i, j, k;
-	uint8_t *producer_queue;
-
-	res_data = ctx_isp->ul_data.resource_data;
-	for (i = 0; i < req_isp->num_fence_map_out; i++) {
-		for (j = 0; j < MAX_IO_RESOURCES; j++) {
-			if (req_isp->fence_map_out[i].resource_handle != res_data[j].resource_type)
-				continue;
-
-			if (!res_data[j].is_producer_q_valid)
-				break;
-
-			producer_queue = (uint8_t *)res_data[j].producer_q_kmdvaddr;
-
-			for (k = 0; k < res_data[j].buf_count; k++) {
-				if (res_data[j].out_map_entries[k].image_buf_addr[0] !=
-					req_isp->fence_map_out[i].image_buf_addr[0]) {
-					continue;
-				}
-				CAM_INFO(CAM_ISP, "resetting producer q for frame drop ctx %d",
-					ctx_isp->base->ctx_id);
-				producer_queue[k] = 0;
-				break;
-			}
-			break;
-		}
-	}
 }
 
 static int __cam_isp_ctx_apply_dropped_req_in_bubble_state(
@@ -8061,6 +8072,14 @@ static struct cam_isp_ctx_irq_ops
 	},
 	/* HW ERROR */
 	{
+		.irq_ops = {
+			NULL,
+			NULL,
+			__cam_isp_ctx_reg_upd_in_hw_error,
+			NULL,
+			NULL,
+			NULL,
+		},
 	},
 	/* HALT */
 	{
@@ -9902,6 +9921,8 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 		(param.op_flags & CAM_IFE_CTX_FAST_CROP_EN);
 	ctx_isp->ul_path_en =
 		(param.op_flags & CAM_IFE_CTX_UL_PATH);
+	ctx_isp->error_recovery_en =
+		(param.op_flags & CAM_IFE_CTX_ERR_RECOVERY);
 
 	memset(&ctx_isp->ul_data, 0, sizeof(ctx_isp->ul_data));
 	if (ctx_isp->ul_path_en) {
