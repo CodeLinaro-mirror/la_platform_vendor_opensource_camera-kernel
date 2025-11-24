@@ -592,8 +592,11 @@ static enum cam_vfe_bus_ver3_vfe_out_type
 }
 
 static enum cam_vfe_bus_ver3_packer_format
-	cam_vfe_bus_ver3_get_packer_fmt(uint32_t out_fmt, int wm_index)
+	cam_vfe_bus_ver3_get_packer_fmt(
+	struct cam_vfe_bus_ver3_reg_offset_common *common_reg,
+	uint32_t out_fmt, int wm_index)
 {
+
 	switch (out_fmt) {
 	case CAM_FORMAT_MIPI_RAW_6:
 	case CAM_FORMAT_MIPI_RAW_16:
@@ -635,9 +638,13 @@ static enum cam_vfe_bus_ver3_packer_format
 		return PACKER_FMT_VER3_PLAIN_32;
 	case CAM_FORMAT_PLAIN32_20:
 		return PACKER_FMT_VER3_PLAIN32_20BPP;
+	case CAM_FORMAT_PD10:
+		if (common_reg->capabilities & CAM_VFE_COMMON_CAP_PD10_PACKED_PLAIN128)
+			return PACKER_FMT_VER3_PLAIN_128;
+
+		return PACKER_FMT_VER3_PLAIN_64;
 	case CAM_FORMAT_PLAIN64:
 	case CAM_FORMAT_ARGB_16:
-	case CAM_FORMAT_PD10:
 		return PACKER_FMT_VER3_PLAIN_64;
 	case CAM_FORMAT_UBWC_TP10:
 	case CAM_FORMAT_GBR_UBWC_TP10:
@@ -959,7 +966,7 @@ static int cam_vfe_bus_ver3_config_rdi_wm(
 	case CAM_FORMAT_PLAIN16_10_LSB:
 		if (rsrc_data->use_wm_pack) {
 			rsrc_data->cfg.pack_fmt = cam_vfe_bus_ver3_get_packer_fmt(
-				rsrc_data->cfg.format, rsrc_data->index);
+				common_reg, rsrc_data->cfg.format, rsrc_data->index);
 			/* LSB aligned */
 			rsrc_data->cfg.pack_fmt |= (1 << rsrc_data->common_data->pack_align_shift);
 
@@ -1047,10 +1054,14 @@ static int cam_vfe_bus_ver3_config_ports_with_ubwc(
 		break;
 	case CAM_FORMAT_PD10:
 		/**
-		 * For PD10 format, on Lanai and older, width and height
-		 * halved for all planes
+		 * For PD10 format, height should be halved and
+		 * width halved if packed plain64 else width/4
+		 * if packed plain128.
 		 */
-		rsrc_data->cfg.width /= 2;
+		if (common_reg->capabilities & CAM_VFE_COMMON_CAP_PD10_PACKED_PLAIN128)
+			rsrc_data->cfg.width = DIV_ROUND_UP(rsrc_data->cfg.width, 4);
+		else
+			rsrc_data->cfg.width /= 2;
 		rsrc_data->cfg.height /= 2;
 		break;
 	default:
@@ -1241,8 +1252,8 @@ static int cam_vfe_bus_ver3_acquire_wm(
 	rsrc_data->cfg.format = out_acq_args->out_port_info->format;
 	rsrc_data->use_wm_pack = (out_acq_args->use_wm_pack ||
 				out_acq_args->out_port_info->use_wm_pack);
-	rsrc_data->cfg.pack_fmt = cam_vfe_bus_ver3_get_packer_fmt(rsrc_data->cfg.format,
-		wm_idx);
+	rsrc_data->cfg.pack_fmt = cam_vfe_bus_ver3_get_packer_fmt(
+		rsrc_data->common_data->common_reg, rsrc_data->cfg.format, wm_idx);
 
 	rsrc_data->cfg.width = out_acq_args->out_port_info->width;
 	rsrc_data->cfg.height = out_acq_args->out_port_info->height;
@@ -3949,7 +3960,7 @@ static int cam_vfe_bus_ver3_update_wm(void *priv, void *cmd_args, uint32_t arg_s
 	uint32_t num_regval_pairs = 0;
 	uint32_t i, j, size = 0;
 	int hw_cntxt_id = -1;
-	uint32_t frame_inc = 0, val;
+	uint32_t frame_inc = 0, val, skip_stride_align = 0;
 	uint32_t iova_addr, iova_offset, image_buf_offset = 0, stride, slice_h;
 	dma_addr_t iova;
 
@@ -4069,13 +4080,19 @@ static int cam_vfe_bus_ver3_update_wm(void *priv, void *cmd_args, uint32_t arg_s
 			slice_h = io_cfg->planes[i].slice_height;
 		}
 
+		skip_stride_align =
+			bus_priv->bus_hw_info->bus_client_reg[wm_data->index].skip_stride_align;
+
 		val = stride;
 		CAM_DBG(CAM_ISP, "VFE:%u io config stride val %u wm config stride: %u",
 			bus_priv->common_data.core_index, val, cfg->stride);
-		val = ALIGNUP(val, 16);
-		if (val != stride)
-			CAM_DBG(CAM_ISP, "VFE:%u Warning unaligned stride %u expected %u",
-				bus_priv->common_data.core_index, stride, val);
+
+		if (!skip_stride_align) {
+			val = ALIGNUP(val, 16);
+			if (val != stride)
+				CAM_DBG(CAM_ISP, "VFE:%u Warning unaligned stride %u expected %u",
+					bus_priv->common_data.core_index, stride, val);
+		}
 
 		if (cfg->stride != val || !wm_data->init_cfg_done ||
 			((wm_data->out_rsrc_data->mc_based ||
@@ -4755,13 +4772,19 @@ static int cam_vfe_bus_ver3_update_wm_config_v2(
 		wm_data->update_wm_format = false;
 		if (wm_config->packer_format && (cfg->format != wm_config->packer_format)) {
 			cfg->format = wm_config->packer_format;
-			packer_fmt = cam_vfe_bus_ver3_get_packer_fmt(wm_config->packer_format,
-				wm_data->index);
+			packer_fmt = cam_vfe_bus_ver3_get_packer_fmt(
+				common_reg, wm_config->packer_format, wm_data->index);
 			if (cam_vfe_bus_ver3_needs_lsb_alignment(wm_data->cfg.format))
 				packer_fmt |= (1 << bus_priv->common_data.pack_align_shift);
 
 			cfg->pack_fmt = packer_fmt;
 			wm_data->update_wm_format = true;
+		}
+
+		if ((common_reg->capabilities & CAM_VFE_COMMON_CAP_PD10_PACKED_PLAIN128) &&
+			cfg->format == CAM_FORMAT_PD10) {
+			cfg->width = DIV_ROUND_UP(cfg->width, 4);
+			cfg->height /= 2;
 		}
 
 		if ((vfe_out_data->out_type >= CAM_VFE_BUS_VER3_VFE_OUT_RDI0) &&
@@ -4847,7 +4870,7 @@ static int cam_vfe_bus_ver3_update_wm_config(
 			(wm_data->cfg.format != wm_config->packer_format)) {
 			wm_data->cfg.format = wm_config->packer_format;
 			packer_fmt = cam_vfe_bus_ver3_get_packer_fmt(
-				wm_config->packer_format, wm_data->index);
+				common_reg, wm_config->packer_format, wm_data->index);
 
 			/* Reconfigure only for valid packer fmt */
 			if (packer_fmt != PACKER_FMT_VER3_MAX) {

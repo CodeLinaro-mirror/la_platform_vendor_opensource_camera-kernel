@@ -32,7 +32,7 @@
 #define CAM_VFE_COMMON_CAP_CORE_MUX_CFG         BIT(1)
 #define CAM_VFE_COMMON_CAP_DEBUG_ERR_VEC        BIT(2)
 #define CAM_VFE_COMMON_CAP_SPLIT_CTXT_RD_WR_SEL BIT(3)
-
+#define CAM_VFE_COMMON_CAP_PD10_PACKED_PLAIN128 BIT(4)
 
 enum cam_isp_hw_vfe_in_mux {
 	CAM_ISP_HW_VFE_IN_CAMIF       = 0,
