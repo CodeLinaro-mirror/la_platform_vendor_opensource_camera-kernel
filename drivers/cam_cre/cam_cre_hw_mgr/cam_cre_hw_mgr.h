@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef CAM_CRE_HW_MGR_H
@@ -14,16 +14,15 @@
 #include "cam_cre_hw_intf.h"
 #include "cam_hw_mgr_intf.h"
 #include "cam_hw_intf.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_mem_mgr.h"
 #include "cam_context.h"
 #include "cre_top.h"
 
 #define CRE_CTX_MAX                  32
 
-#define CRE_WORKQ_NUM_TASK           64
-#define CRE_WORKQ_TASK_CMD_TYPE      1
-#define CRE_WORKQ_TASK_MSG_TYPE      2
+#define CRE_WORKER_NUM_TASK          64
+#define CRE_WORKER_TASK_CMD_TYPE     1
+#define CRE_WORKER_TASK_MSG_TYPE     2
 
 #define CRE_PACKET_MAX_CMD_BUFS      1
 
@@ -362,9 +361,9 @@ struct cam_cre_ctx {
  * @ctx:               CRE context
  * @devices:           CRE devices
  * @cre_caps:          CRE capabilities
- * @cmd_work:          Command work
- * @msg_work:          Message work
- * @timer_work:        Timer work
+ * @cmd_worker_ctx:    Command work
+ * @msg_worker_ctx:    Message work
+ * @timer_worker_ctx:  Timer work
  * @cmd_work_data:     Command work data
  * @msg_work_data:     Message work data
  * @timer_work_data:   Timer work data
@@ -389,9 +388,9 @@ struct cam_cre_hw_mgr {
 	struct   cam_hw_intf  **devices[CRE_DEV_MAX];
 	struct   cam_cre_query_cap_cmd cre_caps;
 
-	struct cam_req_mgr_core_workq *cmd_work;
-	struct cam_req_mgr_core_workq *msg_work;
-	struct cam_req_mgr_core_workq *timer_work;
+	void    *cmd_worker_ctx;
+	void    *msg_worker_ctx;
+	void    *timer_worker_ctx;
 	struct cre_cmd_work_data *cmd_work_data;
 	struct cre_msg_work_data *msg_work_data;
 	struct cre_clk_work_data *timer_work_data;

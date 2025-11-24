@@ -5,9 +5,9 @@
  */
 
 #include "cam_sync_util.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_common_util.h"
 #include "cam_mem_mgr_api.h"
+#include "cam_worker_wrapper_api.h"
 
 extern unsigned long cam_sync_monitor_mask;
 
@@ -662,9 +662,9 @@ int cam_sync_util_cb_dispatch(void *priv, void *data)
 	void *cb = cb_info->callback_func;
 
 	cam_common_util_thread_switch_delay_detect(
-		"cam_sync_workq", "schedule", cb,
-		cb_info->workq_scheduled_ts,
-		CAM_WORKQ_SCHEDULE_TIME_THRESHOLD);
+		"cam_sync_worker", "schedule", cb,
+		cb_info->worker_scheduled_ts,
+		CAM_WORKER_SCHEDULE_TIME_THRESHOLD);
 	sync_data(cb_info->sync_obj, cb_info->status, cb_info->cb_data);
 
 	CAM_MEM_FREE(cb_info);
@@ -675,13 +675,13 @@ int cam_sync_util_cb_dispatch(void *priv, void *data)
 void cam_sync_util_dispatch_signaled_cb(int32_t sync_obj,
 	uint32_t status, uint32_t event_cause)
 {
-	int                         rc = 0;
-	struct sync_callback_info  *sync_cb;
-	struct sync_user_payload   *payload_info;
-	struct sync_callback_info  *temp_sync_cb;
-	struct sync_table_row      *signalable_row;
-	struct sync_user_payload   *temp_payload_info;
-	struct crm_workq_task      *task = NULL;
+	int                                      rc = 0;
+	struct sync_callback_info               *sync_cb;
+	struct sync_user_payload                *payload_info;
+	struct sync_callback_info               *temp_sync_cb;
+	struct sync_table_row                   *signalable_row;
+	struct sync_user_payload                *temp_payload_info;
+	struct cam_worker_wrapper_taskdata_args  task;
 
 	signalable_row = sync_dev->sync_table + sync_obj;
 	if (signalable_row->state == CAM_SYNC_STATE_INVALID) {
@@ -701,16 +701,16 @@ void cam_sync_util_dispatch_signaled_cb(int32_t sync_obj,
 			cam_generic_fence_update_monitor_array(sync_obj,
 				&sync_dev->table_lock, sync_dev->mon_data,
 				CAM_FENCE_OP_UNREGISTER_ON_SIGNAL);
-		task = cam_req_mgr_workq_get_task(sync_dev->workq);
-		if (!task) {
+		rc = cam_worker_wrapper_get(sync_dev->worker_ctx, &task);
+		if (rc) {
 			CAM_ERR(CAM_SYNC,
-				"Failed to get workq task for sync object:%s[%d]",
+				"Failed to get worker task for sync object:%s[%d]",
 				signalable_row->name,
 				sync_obj);
 		} else {
-			task->process_cb = cam_sync_util_cb_dispatch;
-			rc = cam_req_mgr_workq_enqueue_task(
-				task, sync_cb, CRM_TASK_PRIORITY_0);
+			task.task_priority = WORKER_TASK_PRIORITY_0;
+			rc = cam_worker_wrapper_enqueue(sync_dev->worker_ctx, &task,
+				sync_cb, NULL, cam_sync_util_cb_dispatch);
 			if (rc)
 				CAM_ERR(CAM_SYNC,
 					"Failed to enqueue task for sync object:%s[%d]",

@@ -470,8 +470,8 @@ int cam_vfe_top_ver3_reserve(void *device_priv,
 
 			top_priv->top_common.mux_rsrc[i].cdm_ops =
 				acquire_args->cdm_ops;
-			top_priv->top_common.mux_rsrc[i].tasklet_info =
-				args->tasklet;
+			top_priv->top_common.mux_rsrc[i].worker_ctx =
+				args->worker_ctx;
 			top_priv->top_common.mux_rsrc[i].res_state =
 				CAM_ISP_RESOURCE_STATE_RESERVED;
 			acquire_args->rsrc_node =

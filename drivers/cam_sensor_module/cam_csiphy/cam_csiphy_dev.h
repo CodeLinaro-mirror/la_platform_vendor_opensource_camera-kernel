@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_CSIPHY_DEV_H_
@@ -379,12 +379,6 @@ struct cam_csiphy_param {
 	uint32_t                         channel_type;
 	uint32_t                         t3_prepare;
 	uint32_t                         t3_preamble;
-};
-
-struct csiphy_work_queue {
-	struct csiphy_device *csiphy_dev;
-	int32_t acquire_idx;
-	struct work_struct work;
 };
 
 /**

@@ -182,16 +182,16 @@ static int cam_actuator_init_subdev(struct cam_actuator_ctrl_t *a_ctrl)
 static int cam_actuator_i2c_component_bind(struct device *dev,
 	struct device *master_dev, void *data)
 {
-	int32_t                          rc = 0;
-	int32_t                          i = 0;
-	struct i2c_client               *client;
-	struct cam_actuator_ctrl_t      *a_ctrl;
-	struct cam_hw_soc_info          *soc_info = NULL;
-	struct cam_actuator_soc_private *soc_private = NULL;
-	struct timespec64                ts_start, ts_end;
-	long                             microsec = 0;
-	struct device_node              *np = NULL;
-	const char                      *drv_name;
+	int32_t                             rc = 0, i = 0;
+	struct i2c_client                  *client;
+	struct cam_actuator_ctrl_t         *a_ctrl;
+	struct cam_hw_soc_info             *soc_info = NULL;
+	struct cam_actuator_soc_private    *soc_private = NULL;
+	struct timespec64                   ts_start, ts_end;
+	long                                microsec = 0;
+	struct device_node                 *np = NULL;
+	const char                         *drv_name;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	CAM_GET_TIMESTAMP(ts_start);
 
@@ -271,8 +271,15 @@ static int cam_actuator_i2c_component_bind(struct device *dev,
 	INIT_LIST_HEAD(&(a_ctrl->read_buf_list));
 
 	/* Create worker for actuator park with 1 task */
-	rc = cam_req_mgr_workq_create("cam_actuator_worker", 1, &a_ctrl->workq,
-		CRM_WORKQ_USAGE_NON_IRQ, 0, cam_actuator_process_workq);
+	worker_init_args.name = "cam_actuator_worker";
+	worker_init_args.num_tasks = 1;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_NON_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &a_ctrl->worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc < 0) {
 		CAM_ERR(CAM_ACTUATOR, "Unable to create worker");
 		goto free_and_destroy;
@@ -336,7 +343,7 @@ static void cam_actuator_i2c_component_unbind(struct device *dev,
 	cam_actuator_shutdown(a_ctrl);
 	mutex_unlock(&(a_ctrl->actuator_mutex));
 	cam_unregister_subdev(&(a_ctrl->v4l2_dev_str));
-	cam_req_mgr_workq_destroy(&(a_ctrl->workq));
+	cam_worker_wrapper_deinit(a_ctrl->worker_ctx);
 	mutex_destroy(&a_ctrl->actuator_park_mutex);
 	mutex_destroy(&(a_ctrl->actuator_mutex));
 	cam_sensor_util_release_resources(&(a_ctrl->io_master_info), &(a_ctrl->soc_info));
@@ -430,13 +437,14 @@ void cam_actuator_driver_i2c_remove(
 static int cam_actuator_platform_component_bind(struct device *dev,
 	struct device *master_dev, void *data)
 {
-	int32_t                           rc = 0;
-	int32_t                           i = 0;
-	struct cam_actuator_ctrl_t       *a_ctrl = NULL;
-	struct cam_actuator_soc_private  *soc_private = NULL;
-	struct platform_device           *pdev = to_platform_device(dev);
-	struct timespec64                 ts_start, ts_end;
-	long                              microsec = 0;
+	int32_t                             rc = 0;
+	int32_t                             i = 0;
+	struct cam_actuator_ctrl_t         *a_ctrl = NULL;
+	struct cam_actuator_soc_private    *soc_private = NULL;
+	struct platform_device             *pdev = to_platform_device(dev);
+	struct timespec64                   ts_start, ts_end;
+	long                                microsec = 0;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	CAM_GET_TIMESTAMP(ts_start);
 
@@ -493,9 +501,15 @@ static int cam_actuator_platform_component_bind(struct device *dev,
 	INIT_LIST_HEAD(&(a_ctrl->read_buf_list));
 
 	/* Create worker for actuator park with 1 task */
-	rc = cam_req_mgr_workq_create("cam_actuator_worker", 1,
-			&a_ctrl->workq, CRM_WORKQ_USAGE_NON_IRQ, 0,
-			cam_actuator_process_workq);
+	worker_init_args.name = "cam_actuator_worker";
+	worker_init_args.num_tasks = 1;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_NON_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &a_ctrl->worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc < 0) {
 		CAM_ERR(CAM_ACTUATOR, "Unable to create worker");
 		goto free_and_destroy;
@@ -504,7 +518,7 @@ static int cam_actuator_platform_component_bind(struct device *dev,
 	rc = cam_actuator_parse_dt(a_ctrl, &(pdev->dev));
 	if (rc < 0) {
 		CAM_ERR(CAM_ACTUATOR, "Paring actuator dt failed rc %d", rc);
-		goto destroy_workq;
+		goto destroy_worker;
 	}
 
 	/* Fill platform device id*/
@@ -512,7 +526,7 @@ static int cam_actuator_platform_component_bind(struct device *dev,
 
 	rc = cam_actuator_init_subdev(a_ctrl);
 	if (rc)
-		goto destroy_workq;
+		goto destroy_worker;
 
 	a_ctrl->bridge_intf.device_hdl = -1;
 	a_ctrl->bridge_intf.link_hdl = -1;
@@ -539,8 +553,8 @@ static int cam_actuator_platform_component_bind(struct device *dev,
 
 	return rc;
 
-destroy_workq:
-	cam_req_mgr_workq_destroy(&(a_ctrl->workq));
+destroy_worker:
+	cam_worker_wrapper_deinit(a_ctrl->worker_ctx);
 free_and_destroy:
 	CAM_MEM_FREE(a_ctrl->i2c_data.per_frame);
 	mutex_destroy(&a_ctrl->actuator_park_mutex);
@@ -570,7 +584,7 @@ static void cam_actuator_platform_component_unbind(struct device *dev,
 	cam_actuator_shutdown(a_ctrl);
 	mutex_unlock(&(a_ctrl->actuator_mutex));
 	cam_unregister_subdev(&(a_ctrl->v4l2_dev_str));
-	cam_req_mgr_workq_destroy(&(a_ctrl->workq));
+	cam_worker_wrapper_deinit(a_ctrl->worker_ctx);
 	mutex_destroy(&a_ctrl->actuator_park_mutex);
 	mutex_destroy(&(a_ctrl->actuator_mutex));
 	cam_sensor_util_release_resources(&(a_ctrl->io_master_info), &(a_ctrl->soc_info));

@@ -88,7 +88,6 @@ def _define_module(target, variant):
             "drivers/cam_req_mgr/cam_req_mgr_dev.c",
             "drivers/cam_req_mgr/cam_req_mgr_util.c",
             "drivers/cam_req_mgr/cam_mem_mgr.c",
-            "drivers/cam_req_mgr/cam_req_mgr_workq.c",
             "drivers/cam_req_mgr/cam_req_mgr_timer.c",
             "drivers/cam_req_mgr/cam_req_mgr_debug.c",
             "drivers/cam_utils/cam_soc_util.c",
@@ -97,6 +96,10 @@ def _define_module(target, variant):
             "drivers/cam_utils/cam_trace.c",
             "drivers/cam_utils/cam_common_util.c",
             "drivers/cam_utils/cam_compat.c",
+            "drivers/cam_utils/cam_worker/cam_tasklet/cam_tasklet_util.c",
+            "drivers/cam_utils/cam_worker/cam_workq/cam_workq.c",
+            "drivers/cam_utils/cam_worker/cam_worker_wrapper.c",
+            "drivers/cam_utils/irq_controller/cam_irq_controller.c",
             "drivers/cam_core/cam_context.c",
             "drivers/cam_core/cam_context_utils.c",
             "drivers/cam_core/cam_node.c",
@@ -131,9 +134,7 @@ def _define_module(target, variant):
             },
             "CONFIG_SPECTRA_ISP": {
                 True: [
-                    "drivers/cam_isp/isp_hw_mgr/hw_utils/cam_tasklet_util.c",
                     "drivers/cam_isp/isp_hw_mgr/hw_utils/cam_isp_packet_parser.c",
-                    "drivers/cam_isp/isp_hw_mgr/hw_utils/irq_controller/cam_irq_controller.c",
                     "drivers/cam_isp/isp_hw_mgr/isp_hw/ife_csid_hw/cam_ife_csid_dev.c",
                     "drivers/cam_isp/isp_hw_mgr/isp_hw/ife_csid_hw/cam_ife_csid_soc.c",
                     "drivers/cam_isp/isp_hw_mgr/isp_hw/ife_csid_hw/cam_ife_csid_common.c",

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, 2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_CDM_H_
@@ -12,7 +12,6 @@
 #include <linux/random.h>
 #include <linux/spinlock_types.h>
 #include <linux/mutex.h>
-#include <linux/workqueue.h>
 #include <linux/bug.h>
 
 #include "cam_cdm_intf_api.h"
@@ -27,6 +26,7 @@
 #define CAM_CDM_INFLIGHT_WORKS            5
 #define CAM_CDM_HW_RESET_TIMEOUT          300
 #define CAM_CDM_PAUSE_CORE_US_TIMEOUT     10000
+#define CAM_CDM_WORKER_NUM_TASK           100
 
 #define CAM_CDM_CAP_PAUSE_CORE            BIT(0)
 
@@ -491,8 +491,7 @@ struct cam_cdm_work_payload {
 	uint32_t irq_status;
 	uint32_t irq_data;
 	int fifo_idx;
-	ktime_t workq_scheduled_ts;
-	struct work_struct work;
+	ktime_t worker_scheduled_ts;
 };
 
 /* struct cam_cdm_bl_cb_request_entry - callback entry for work to process.*/
@@ -516,7 +515,7 @@ struct cam_cdm_hw_intf_cmd_submit_bl {
  * struct cam_cdm_bl_fifo - CDM hw memory struct
  *
  * @bl_complete:          Completion variable of BL Done
- * @work_queue:           Workq for postponed work
+ * @worker_ctx:           Worker for postponed work
  * @bl_request_list:      BL request list, adding nodes during submitting Gen IRQ and popping nodes
  *                        in workq after receiving corresponding IRQ
  * @fifo_lock:            Mutex lock to make sure intacticity of bl_request_list
@@ -530,7 +529,7 @@ struct cam_cdm_hw_intf_cmd_submit_bl {
  */
 struct cam_cdm_bl_fifo {
 	struct completion bl_complete;
-	struct workqueue_struct *work_queue;
+	void *worker_ctx;
 	struct list_head bl_request_list;
 	struct mutex fifo_lock;
 	uint8_t bl_tag;
@@ -549,7 +548,7 @@ struct cam_cdm_bl_fifo {
  * @id:                  enum for possible CDM hardwares
  * @flags:               enum to tell if CDM is private of shared
  * @reset_complete:      completion event to make CDM wait for reset
- * @work_queue:          workqueue to schedule work for virtual CDM
+ * @worker_ctx:          Worker to schedule work for virtual CDM
  * @bl_request_list:     bl_request list for submitted commands in
  *                       virtual CDM
  * @version:             CDM version with major, minor, incr and reserved
@@ -574,7 +573,7 @@ struct cam_cdm {
 	enum cam_cdm_id id;
 	enum cam_cdm_flags flags;
 	struct completion reset_complete;
-	struct workqueue_struct *work_queue;
+	void *worker_ctx;
 	struct list_head bl_request_list;
 	struct cam_hw_version version;
 	uint32_t hw_version;

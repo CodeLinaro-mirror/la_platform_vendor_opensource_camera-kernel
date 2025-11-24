@@ -54,11 +54,6 @@ int cam_flash_led_prepare(struct led_trigger *trigger, int options,
 	return rc;
 }
 
-void cam_flash_work_queue_handler(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
 static int cam_flash_pmic_flush_nrt(struct cam_flash_ctrl *fctrl)
 {
 	int j = 0;
@@ -563,7 +558,7 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 	struct cam_flash_private_soc *soc_private = NULL;
 	int i = 0;
 	int rc = 0;
-	struct crm_workq_task *task = NULL;
+	struct cam_worker_wrapper_taskdata_args task;
 
 	if (!flash_ctrl || !flash_data) {
 		CAM_ERR(CAM_FLASH, "Fctrl or Data NULL");
@@ -675,17 +670,20 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 					&flash_ctrl->precise_flash.on_timer,
 					flash_ctrl->precise_flash.on_timer.function);
 
-				task = cam_req_mgr_workq_get_task(
-					flash_ctrl->precise_flash.timer_workq);
-				if (!task) {
+				rc = cam_worker_wrapper_get(
+					flash_ctrl->precise_flash.timer_worker_ctx,
+					&task);
+				if (rc) {
 					CAM_ERR(CAM_FLASH, "cam_flash[%u] No empty task",
 						flash_ctrl->soc_info.index);
 					return -EINVAL;
 				}
 
-				task->process_cb = cam_flash_task_handler;
-				rc = cam_req_mgr_workq_enqueue_task(
-					task, flash_ctrl, CRM_TASK_PRIORITY_0);
+				task.task_priority = WORKER_TASK_PRIORITY_0;
+				rc = cam_worker_wrapper_enqueue(
+					flash_ctrl->precise_flash.timer_worker_ctx,
+					&task, flash_ctrl, NULL,
+					cam_flash_task_handler);
 				if (rc) {
 					CAM_ERR(CAM_FLASH,
 						"cam_flash[%u] Failed to schedule task rc:%d",

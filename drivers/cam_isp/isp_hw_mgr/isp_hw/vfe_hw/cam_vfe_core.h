@@ -67,7 +67,7 @@ struct cam_vfe_hw_core_info {
 	struct cam_vfe_top                 *vfe_top;
 	struct cam_vfe_bus                 *vfe_bus;
 	struct cam_vfe_bus                 *vfe_rd_bus;
-	void                               *tasklet_info;
+	void                               *worker_ctx;
 };
 /**
  * struct cam_vfe_core_debug_data - Placeholder for Debug data for bus and top

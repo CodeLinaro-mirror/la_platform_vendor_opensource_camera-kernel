@@ -495,26 +495,23 @@ end:
 	return rc;
 }
 
-void cam_actuator_process_workq(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
 static int cam_actuator_schedule_park_lens_task(
 	struct cam_actuator_ctrl_t *a_ctrl)
 {
 	int32_t rc = 0;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args task;
 
-	task = cam_req_mgr_workq_get_task(a_ctrl->workq);
-	if (!task) {
+	rc = cam_worker_wrapper_get(a_ctrl->worker_ctx, &task);
+	if (rc) {
 		CAM_ERR(CAM_ACTUATOR, "No empty task available");
 		return -ENOMEM;
 	}
 
-	task->process_cb = &cam_actuator_park_lens_cb;
-	rc = cam_req_mgr_workq_enqueue_task(task,
-		(void *)a_ctrl, CRM_TASK_PRIORITY_0);
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(a_ctrl->worker_ctx, &task,
+		(void *)a_ctrl, NULL, &cam_actuator_park_lens_cb);
+	if (rc)
+		CAM_ERR(CAM_ACTUATOR, "enqueue work process to worker failed.");
 
 	return rc;
 }

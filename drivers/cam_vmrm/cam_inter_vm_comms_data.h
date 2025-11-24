@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __CAM_INTER_VM_COMMS_DATA_H__
@@ -12,8 +12,9 @@
 #include <linux/bug.h>
 #include <linux/workqueue.h>
 
-#define CAM_INTER_VM_COMMS_WQ_NAME            "cam_inter_vm_comms_wq"
+#define CAM_INTER_VM_COMMS_WORKER_NAME        "cam_inter_vm_comms_worker"
 #define CAM_INTER_VM_COMMS_MAX_PENDING_WORKS  5
+#define CAM_INTER_VM_COMMS_NUM_TASK           100
 
 /**
  * @brief cam_inter_vm_comms_handle
@@ -26,20 +27,18 @@
  * @param is_comms_terminated  : Indicates whether the communication has been terminated.
  * @param comms_protocol_data  : Data specific to the underlying communication protocol.
  * @param is_server_vm         : Indicates whether this handle corresponds to PVM.
- * @param msg_recv_wq          : Work queue to process incoming messages.
- * @param msg_recv_work        : Work struct to process incoming messages.
+ * @param worker_ctx           : Worker to process incoming messages.
  */
 struct cam_inter_vm_comms_handle {
 	struct mutex              comms_lock;
-	void                      *msg_buffer;
+	void                     *msg_buffer;
 	size_t                    msg_size;
 	handle_message_cb         message_cb;
 	bool                      is_comms_established;
 	bool                      is_comms_terminated;
-	void                      *comms_protocol_data;
+	void                     *comms_protocol_data;
 	bool                      is_server_vm;
-	struct workqueue_struct   *msg_recv_wq;
-	struct work_struct        msg_recv_work;
+	void                     *worker_ctx;
 };
 
 #endif /*__CAM_INTER_VM_COMMS_DATA_H__*/

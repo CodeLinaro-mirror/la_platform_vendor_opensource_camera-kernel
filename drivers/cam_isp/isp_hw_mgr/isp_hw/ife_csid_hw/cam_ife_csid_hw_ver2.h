@@ -824,7 +824,7 @@ struct cam_ife_csid_ver2_reg_info {
  * @clk_rate:                 clk rate for csid hw
  * @res_type:                 cur res type for active hw
  * @dual_core_idx:            core idx in case of dual csid
- * @tasklet:                  Tasklet for irq events
+ * @worker_ctx:               Worker for irq events
  * @reset_irq_handle:         Reset irq handle
  * @buf_done_irq_handle:      Buf done irq handle
  * @top_err_irq_handle:       Top Err IRQ handle
@@ -872,7 +872,7 @@ struct cam_ife_csid_ver2_hw {
 	uint64_t                               clk_rate;
 	uint32_t                               res_type;
 	uint32_t                               dual_core_idx;
-	void                                  *tasklet;
+	void                                  *worker_ctx;
 	int                                    reset_irq_handle;
 	int                                    buf_done_irq_handle;
 	int                                    top_err_irq_handle

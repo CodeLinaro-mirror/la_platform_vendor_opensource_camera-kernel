@@ -9,7 +9,6 @@
 #include <linux/list.h>
 #include <linux/timer.h>
 #include <linux/ratelimit.h>
-#include "cam_tasklet_util.h"
 #include "cam_isp_hw_mgr_intf.h"
 #include "cam_vfe_soc.h"
 #include "cam_vfe_core.h"
@@ -410,7 +409,7 @@ int cam_vfe_start(void *hw_priv, void *start_args, uint32_t arg_size)
 
 	core_info = (struct cam_vfe_hw_core_info *)vfe_hw->core_info;
 	isp_res = (struct cam_isp_resource_node  *)start_args;
-	core_info->tasklet_info = isp_res->tasklet_info;
+	core_info->worker_ctx = isp_res->worker_ctx;
 
 	mutex_lock(&vfe_hw->hw_mutex);
 	if (isp_res->res_type == CAM_ISP_RESOURCE_VFE_IN) {
