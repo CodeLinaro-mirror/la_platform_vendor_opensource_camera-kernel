@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_CPAS_HW_H_
@@ -272,7 +272,6 @@ struct cam_cpas_monitor {
  * @ahb_bus_client: AHB Bus client info
  * @axi_port: AXI port info for a specific axi index
  * @camnoc_axi_port: CAMNOC AXI port info for a specific camnoc axi index
- * @cam_subpart_info: camera subparts fuse description
  * @internal_ops: CPAS HW internal ops
  * @work_queue: Work queue handle
  * @irq_count: atomic irq count
@@ -299,7 +298,6 @@ struct cam_cpas {
 	struct cam_cpas_bus_client ahb_bus_client;
 	struct cam_cpas_axi_port axi_port[CAM_CPAS_MAX_AXI_PORTS];
 	struct cam_cpas_axi_port camnoc_axi_port[CAM_CPAS_MAX_AXI_PORTS];
-	struct cam_cpas_subpart_info *cam_subpart_info;
 	struct cam_cpas_internal_ops internal_ops;
 	struct workqueue_struct *work_queue;
 	atomic_t irq_count;

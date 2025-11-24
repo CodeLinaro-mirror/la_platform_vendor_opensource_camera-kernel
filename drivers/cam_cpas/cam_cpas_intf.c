@@ -169,10 +169,12 @@ bool cam_cpas_is_part_supported(uint32_t flag, uint32_t hw_map, uint32_t part_in
 	struct cam_hw_info *cpas_hw = g_cpas_intf->hw_intf->hw_priv;
 	struct cam_cpas *cpas_core = NULL;
 	struct cam_cpas_subpart_info *cam_subpart_info = NULL;
+	struct cam_camnoc_info *camnoc_info = NULL;
 
 	mutex_lock(&cpas_hw->hw_mutex);
 	cpas_core = cpas_hw->core_info;
-	cam_subpart_info = cpas_core->cam_subpart_info;
+	camnoc_info = cpas_core->camnoc_info;
+	cam_subpart_info = camnoc_info->subpart_info;
 
 	if (!cam_subpart_info) {
 		CAM_DBG(CAM_CPAS, "Invalid address of cam_subpart_info");

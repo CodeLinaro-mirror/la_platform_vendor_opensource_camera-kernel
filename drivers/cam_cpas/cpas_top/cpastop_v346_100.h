@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CPASTOP_V346_100_H_
@@ -311,6 +311,18 @@ static struct cam_camnoc_err_logger_info cam346_cpas100_err_logger_offsets = {
 	.errlog3_high =  0xD3C, /* ERRLOGGER_ERRLOG3_HIGH */
 };
 
+static struct cam_cpas_subpart_info cam346_cpas100_camera_subpart_info = {
+	.num_bits = 2,
+	/*
+	 * Below fuse indexing is based on software fuse definition which is in SMEM and provided
+	 * by XBL team.
+	 */
+	.hw_bitmap_mask = {
+		{CAM_CPAS_ISP_FUSE, BIT(0)},
+		{CAM_CPAS_ISP_FUSE, BIT(1)},
+	}
+};
+
 static struct cam_camnoc_info cam346_cpas100_camnoc_info = {
 	.specific = &cam_cpas_v346_100_camnoc_specific[0],
 	.specific_size =  ARRAY_SIZE(cam_cpas_v346_100_camnoc_specific),
@@ -319,6 +331,7 @@ static struct cam_camnoc_info cam346_cpas100_camnoc_info = {
 	.irq_err_size = ARRAY_SIZE(cam_cpas_v346_100_irq_err),
 	.err_logger = &cam346_cpas100_err_logger_offsets,
 	.errata_wa_list = NULL,
+	.subpart_info = &cam346_cpas100_camera_subpart_info,
 };
 
 static struct cam_cpas_camnoc_qchannel cam346_cpas100_qchannel_info = {
