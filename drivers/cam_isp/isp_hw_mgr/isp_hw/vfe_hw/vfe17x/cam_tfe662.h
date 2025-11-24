@@ -580,6 +580,7 @@ static struct cam_vfe_bus_ver3_hw_info tfe662_bus_hw_info = {
 				BIT_ULL(PACKER_FMT_VER3_PLAIN_128) |
 				BIT_ULL(PACKER_FMT_VER3_PLAIN_16_10BPP),
 			.name                     = "PDAF",
+			.line_based               = 1,
 			.mid                      = {26},
 			.num_mid                  = 1,
 			.out_type                 = CAM_VFE_BUS_VER3_VFE_OUT_PDAF,
