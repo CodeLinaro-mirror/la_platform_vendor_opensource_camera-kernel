@@ -7312,6 +7312,20 @@ err:
 	return rc;
 }
 
+static bool cam_ife_hw_mgr_is_secure_context(
+	struct cam_ife_hw_mgr_ctx           *ife_ctx)
+{
+	bool is_secure = FALSE;
+	int i;
+	for (i = 0; i < max_ife_out_res; i++) {
+		if (ife_ctx->res_list_ife_out[i].res_id && ife_ctx->res_list_ife_out[i].is_secure) {
+			is_secure = TRUE;
+			break;
+		}
+	}
+	return is_secure;
+}
+
 #ifdef CONFIG_TZ_DCP_API_VER_2
 static int cam_ife_mgr_get_mapped_port_idx(uint32_t hw_type, uint32_t res_id)
 {
@@ -7410,20 +7424,6 @@ inline int cam_ife_mgr_is_tpg(uint32_t res_id)
 		is_tpg = TRUE;
 	}
 	return is_tpg;
-}
-
-static bool cam_ife_hw_mgr_is_secure_context(
-	struct cam_ife_hw_mgr_ctx           *ife_ctx)
-{
-	bool is_secure = FALSE;
-	int i;
-	for (i = 0; i < max_ife_out_res; i++) {
-		if (ife_ctx->res_list_ife_out[i].res_id && ife_ctx->res_list_ife_out[i].is_secure) {
-			is_secure = TRUE;
-			break;
-		}
-	}
-	return is_secure;
 }
 
 static int cam_ife_hw_mgr_secure_phy_contexts(
@@ -19130,6 +19130,10 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			break;
 		case CAM_ISP_HW_MGR_SET_HWFENCE_MODE:
 			rc = cam_ife_mgr_set_hwfence_mode(ctx, isp_hw_cmd_args);
+			break;
+		case CAM_ISP_HW_MGR_GET_SECURE_MODE:
+			isp_hw_cmd_args->u.is_secure = cam_ife_hw_mgr_is_secure_context(ctx);
+			rc = 0;
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "Invalid HW mgr command:0x%x",
