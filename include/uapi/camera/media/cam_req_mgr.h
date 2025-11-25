@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __UAPI_LINUX_CAM_REQ_MGR_H
@@ -64,6 +64,7 @@
 #define V4L_EVENT_CAM_REQ_MGR_NODE_EVENT                                4
 #define V4L_EVENT_CAM_REQ_MGR_SOF_UNIFIED_TS                            5
 #define V4L_EVENT_CAM_REQ_MGR_PF_ERROR                                  6
+#define V4L_EVENT_CAM_REQ_MGR_HOTPLUG_EVT                               7
 
 /* SOF Event status */
 #define CAM_REQ_MGR_SOF_EVENT_SUCCESS           0
@@ -938,6 +939,17 @@ struct cam_req_mgr_pf_err_msg {
 };
 
 /**
+ * struct cam_req_mgr_hotplug_msg
+ * @status: plug in/out
+ * @slot_id: slot_id of the sensor
+ */
+struct cam_req_mgr_hotplug_msg {
+    __u32 status;
+    __u32 slot_id;
+    __u32 type;
+};
+
+/**
  * struct cam_req_mgr_message - 64 bytes is the max size that can be sent as v4l2 evt
  * @session_hdl: session to which the frame belongs to
  * @reserved: reserved field
@@ -953,6 +965,7 @@ struct cam_req_mgr_message {
 		struct cam_req_mgr_custom_msg custom_msg;
 		struct cam_req_mgr_node_msg node_msg;
 		struct cam_req_mgr_pf_err_msg pf_err_msg;
+		struct cam_req_mgr_hotplug_msg hotplug_msg;
 	} u;
 };
 #endif /* __UAPI_LINUX_CAM_REQ_MGR_H */
