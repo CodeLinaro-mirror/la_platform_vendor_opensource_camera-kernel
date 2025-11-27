@@ -819,25 +819,25 @@ inline char *cam_soc_util_get_gdsc_mode_string(enum cam_gdsc_control_mode ctrl_m
 
 /**
  * cam_soc_util_initialize_power_domain()
- * @brief:             Enables the required power domain.This is performed during bind
+ * @brief:             Enables the required power domain.This is performed during probe
                        and doesn't actually turn on the power domain. The client is
                        required to call get_sync following this to turn it on.
  *
- * @soc_info:          SOC info for the device associated with the power domain.
+ * @dev:               The device associated with the power domain.
  *
  * @return:            0 on success, or an error code otherwise
  */
-inline int cam_soc_util_initialize_power_domain(struct cam_hw_soc_info *soc_info);
+inline int cam_soc_util_initialize_power_domain(struct device *dev);
 
 /**
  * cam_soc_util_uninitialize_power_domain()
- * @brief:             Disables the required power domain. This is performed during unbind.
+ * @brief:             Disables the required power domain. This is performed during device remove.
  *
- * @soc_info:          SOC info for the device associated with the power domain.
+ * @dev:               The device associated with the power domain.
  *
  * @return:            0 on success, or an error code otherwise
  */
-inline int cam_soc_util_uninitialize_power_domain(struct cam_hw_soc_info *soc_info);
+inline int cam_soc_util_uninitialize_power_domain(struct device *dev);
 
 /**
  * cam_soc_util_turn_on_power_domain()

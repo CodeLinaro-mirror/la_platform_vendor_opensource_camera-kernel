@@ -2019,32 +2019,34 @@ inline char *cam_soc_util_get_gdsc_mode_string(enum cam_gdsc_control_mode ctrl_m
 	}
 }
 
-inline int cam_soc_util_initialize_power_domain(struct cam_hw_soc_info *soc_info)
+inline int cam_soc_util_initialize_power_domain(struct device *dev)
 {
-	if (!soc_info || !soc_info->dev) {
-		CAM_ERR(CAM_UTIL, "%s is NULL", soc_info? "soc_info->dev": "soc_info");
+	if (unlikely(!dev)) {
+		CAM_ERR(CAM_UTIL, "Invalid device");
 		return -EINVAL;
 	}
 
 	/* Runtime power management should be enabled before trying
 	 * to turn them on or off, i.e, calling get_sync or put_sync.
 	 */
-	pm_runtime_enable(soc_info->dev);
+	if (dev->pm_domain)
+		pm_runtime_enable(dev);
 
 	return 0;
 }
 
-inline int cam_soc_util_uninitialize_power_domain(struct cam_hw_soc_info *soc_info)
+inline int cam_soc_util_uninitialize_power_domain(struct device *dev)
 {
-	if (!soc_info || !soc_info->dev) {
-		CAM_ERR(CAM_UTIL, "%s is NULL", soc_info? "soc_info->dev": "soc_info");
+	if (unlikely(!dev)) {
+		CAM_ERR(CAM_UTIL, "Invalid device");
 		return -EINVAL;
 	}
 
 	/* Return value has to be handled if we support PM runtime
 	 * callbacks for device suspend and resume.
 	 */
-	pm_runtime_disable(soc_info->dev);
+	if (dev->pm_domain)
+		pm_runtime_disable(dev);
 
 	return 0;
 }
@@ -2784,15 +2786,6 @@ int cam_soc_util_request_platform_resource(
 		soc_info->num_reg_map++;
 	}
 
-	if (soc_info->is_a_genpd_device) {
-		rc = cam_soc_util_initialize_power_domain(soc_info);
-		if (rc) {
-			CAM_ERR(CAM_UTIL, "Failed to initalize the GDSC for dev: %s",
-				soc_info->dev_name);
-			goto unmap_base;
-		}
-	}
-
 	for (i = 0; i < soc_info->num_rgltr; i++) {
 		if (soc_info->rgltr_name[i] == NULL) {
 			CAM_ERR(CAM_UTIL, "can't find regulator name");
@@ -2925,8 +2918,6 @@ put_regulator:
 		}
 	}
 
-	if (soc_info->is_a_genpd_device)
-		cam_soc_util_uninitialize_power_domain(soc_info);
 unmap_base:
 	if (i == -1)
 		i = soc_info->num_reg_map;
@@ -2972,9 +2963,6 @@ int cam_soc_util_release_platform_resource(struct cam_hw_soc_info *soc_info)
 			soc_info->rgltr[i] = NULL;
 		}
 	}
-
-	if (soc_info->is_a_genpd_device)
-		cam_soc_util_uninitialize_power_domain(soc_info);
 
 	for (i = soc_info->num_reg_map - 1; i >= 0; i--) {
 		iounmap(soc_info->reg_map[i].mem_base);

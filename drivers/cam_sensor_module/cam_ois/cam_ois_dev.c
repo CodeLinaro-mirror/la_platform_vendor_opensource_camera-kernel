@@ -261,9 +261,6 @@ static void cam_ois_i2c_component_unbind(struct device *dev,
 	CAM_INFO(CAM_OIS, "i2c driver remove invoked");
 	soc_info = &o_ctrl->soc_info;
 
-	if (soc_info->is_a_genpd_device)
-		cam_soc_util_uninitialize_power_domain(soc_info);
-
 	for (i = 0; i < soc_info->num_clk; i++)
 		devm_clk_put(soc_info->dev, soc_info->clk[i]);
 
@@ -304,6 +301,9 @@ static int cam_ois_i2c_driver_probe(struct i2c_client *client)
 	}
 
 	CAM_DBG(CAM_OIS, "Adding sensor ois component");
+
+	cam_soc_util_initialize_power_domain(&client->dev);
+
 	rc = component_add(&client->dev, &cam_ois_i2c_component_ops);
 	if (rc)
 		CAM_ERR(CAM_OIS, "failed to add component rc: %d", rc);
@@ -329,6 +329,9 @@ static int cam_ois_i2c_driver_probe(struct i2c_client *client,
 	}
 
 	CAM_DBG(CAM_OIS, "Adding sensor ois component");
+
+	cam_soc_util_initialize_power_domain(&client->dev);
+
 	rc = component_add(&client->dev, &cam_ois_i2c_component_ops);
 	if (rc)
 		CAM_ERR(CAM_OIS, "failed to add component rc: %d", rc);
@@ -340,6 +343,8 @@ static int cam_ois_i2c_driver_probe(struct i2c_client *client,
 void cam_ois_i2c_component_del_wrapper(struct i2c_client *client)
 {
 	component_del(&client->dev, &cam_ois_i2c_component_ops);
+
+	cam_soc_util_uninitialize_power_domain(&client->dev);
 }
 
 static int cam_ois_component_bind(struct device *dev,
@@ -432,10 +437,6 @@ static void cam_ois_component_unbind(struct device *dev,
 
 	CAM_INFO(CAM_OIS, "platform driver remove invoked");
 	soc_info = &o_ctrl->soc_info;
-
-	if (soc_info->is_a_genpd_device)
-		cam_soc_util_uninitialize_power_domain(soc_info);
-
 	for (i = 0; i < soc_info->num_clk; i++)
 		devm_clk_put(soc_info->dev, soc_info->clk[i]);
 
@@ -466,6 +467,9 @@ static int32_t cam_ois_platform_driver_probe(
 	int rc = 0;
 
 	CAM_DBG(CAM_OIS, "Adding OIS Sensor component");
+
+	cam_soc_util_initialize_power_domain(&pdev->dev);
+
 	rc = component_add(&pdev->dev, &cam_ois_component_ops);
 	if (rc)
 		CAM_ERR(CAM_OIS, "failed to add component rc: %d", rc);
@@ -480,6 +484,9 @@ static void cam_ois_platform_driver_remove(struct platform_device *pdev)
 #endif
 {
 	component_del(&pdev->dev, &cam_ois_component_ops);
+
+	cam_soc_util_uninitialize_power_domain(&pdev->dev);
+
 #if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
 #endif
