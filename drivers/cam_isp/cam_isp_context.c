@@ -4777,7 +4777,7 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 	struct cam_hw_cmd_args           hw_cmd_args;
 	struct cam_isp_hw_cmd_args       isp_hw_cmd_args;
 	uint32_t                         packet_opcode = 0;
-	struct cam_kmd_buf_info *kmd_buff = NULL;
+	struct cam_kmd_buf_info          *kmd_buff = NULL;
 
 	CAM_DBG(CAM_ISP, "get free request object......");
 
