@@ -4516,6 +4516,14 @@ static int cam_req_mgr_cb_notify_trigger(
 		goto end;
 	}
 
+	if (link->state < CAM_CRM_LINK_STATE_READY) {
+		spin_unlock_bh(&link->req.reset_link_spin_lock);
+		CAM_ERR_RATE_LIMIT(CAM_CRM, "Trigger received in link_state %d link_hdl %x",
+			link->state, trigger_data->link_hdl);
+		rc = -EINVAL;
+		goto end;
+	}
+
 	state.req_state = CAM_CRM_NOTIFY_TRIGGER;
 	state.req_id = in_q->slot[in_q->rd_idx].req_id;
 	state.dev_hdl = -1;
