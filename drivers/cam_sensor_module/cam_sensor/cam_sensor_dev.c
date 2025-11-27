@@ -403,6 +403,9 @@ static void cam_sensor_i2c_component_unbind(struct device *dev,
 	cam_unregister_subdev(&(s_ctrl->v4l2_dev_str));
 	soc_info = &s_ctrl->soc_info;
 
+	if (soc_info->is_a_genpd_device)
+		cam_soc_util_uninitialize_power_domain(soc_info);
+
 	kfree(s_ctrl->i2c_data.per_frame);
 	kfree(s_ctrl->i2c_data.per_frame_event_settings);
 	kfree(s_ctrl->i2c_data.frame_skip);
@@ -600,6 +603,10 @@ static void cam_sensor_component_unbind(struct device *dev,
 	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
 	cam_unregister_subdev(&(s_ctrl->v4l2_dev_str));
 	soc_info = &s_ctrl->soc_info;
+
+	if (soc_info->is_a_genpd_device)
+		cam_soc_util_uninitialize_power_domain(soc_info);
+
 	for (i = 0; i < soc_info->num_clk; i++)
 		devm_clk_put(soc_info->dev, soc_info->clk[i]);
 
