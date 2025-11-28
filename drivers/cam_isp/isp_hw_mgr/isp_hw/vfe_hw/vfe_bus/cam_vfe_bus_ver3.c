@@ -4757,8 +4757,7 @@ static int cam_vfe_bus_ver3_update_wm_config_v2(
 		}
 
 		if ((vfe_out_data->out_type >= CAM_VFE_BUS_VER3_VFE_OUT_RDI0) &&
-			(vfe_out_data->out_type <= CAM_VFE_BUS_VER3_VFE_OUT_RDI4) &&
-			(wm_data->update_wm_format || update_wm_mode))
+			(vfe_out_data->out_type <= CAM_VFE_BUS_VER3_VFE_OUT_RDI4))
 			cam_vfe_bus_ver3_config_rdi_wm(wm_data);
 
 		CAM_DBG(CAM_ISP,
