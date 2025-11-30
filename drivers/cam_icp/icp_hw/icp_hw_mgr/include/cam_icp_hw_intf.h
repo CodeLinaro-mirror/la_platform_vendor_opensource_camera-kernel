@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef CAM_ICP_HW_INTF_H
@@ -32,9 +32,6 @@
 #define IPE_CAPS_MASK_IDX 0
 #define BPS_CAPS_MASK_IDX 0
 #define OFE_CAPS_MASK_IDX 1
-
-/* max caps mask is max value of all device caps mask index added by 1 */
-#define MAX_HW_CAPS_MASK 2
 
 /*
  * icp inter vm commnication timeout must be higher,
