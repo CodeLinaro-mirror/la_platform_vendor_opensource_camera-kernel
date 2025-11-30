@@ -6116,6 +6116,8 @@ static inline void cam_ife_mgr_acquire_get_feature_flag_params_v3(
 	in_port->can_use_lite             = in->feature_mask & CAM_ISP_CAN_USE_LITE_MODE;
 	in_port->aeb_mode                 = in->feature_mask & CAM_ISP_AEB_MODE_EN;
 	in_port->dynamic_hdr_switch_en    = in->feature_mask & CAM_ISP_HDR_MODE_DYNAMIC_SWITCH_EN;
+	in_port->qcfa_bin                 = in->feature_mask & CAM_ISP_IFE_FLAG_QCFA_BIN;
+	in_port->horizontal_bin           = in->feature_mask & CAM_ISP_IFE_FLAG_HORIZONTAL_BIN;
 }
 
 static inline void cam_ife_mgr_acquire_get_feature_flag_params(
