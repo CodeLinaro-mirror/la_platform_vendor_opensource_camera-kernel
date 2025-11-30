@@ -101,6 +101,11 @@ include $(CAMERA_KERNEL_ROOT)/config/parrot.mk
 CONFIG_CAMERA_FLAG_FOUND := y
 endif
 
+ifeq ($(CONFIG_ARCH_CHORA), y)
+include $(CAMERA_KERNEL_ROOT)/config/chora.mk
+CONFIG_CAMERA_FLAG_FOUND := y
+endif
+
 ifneq ($(KBUILD_EXTRA_CONFIGS),)
 include $(KBUILD_EXTRA_CONFIGS)
 endif
