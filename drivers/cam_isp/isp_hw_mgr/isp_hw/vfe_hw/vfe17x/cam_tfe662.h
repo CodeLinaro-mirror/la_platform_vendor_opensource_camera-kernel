@@ -11,6 +11,287 @@
 #include "cam_vfe_bus_ver3.h"
 #include "cam_irq_controller.h"
 
+static struct cam_vfe_camif_ver3_module_desc tfe662_ipp_mod_desc[] = {
+	{
+		.id = 0,
+		.desc = "CLC_CHANNEL_GAIN_W4",
+	},
+	{
+		.id  = 1,
+		.desc = "CLC_BPC_PDPC_W0",
+	},
+	{
+		.id = 2,
+		.desc = "CLC_LSC_W2",
+	},
+	{
+		.id = 3,
+		.desc = "CLC_SHARED_LB_W0",
+	},
+	{
+		.id = 4,
+		.desc = "CLC_WB_BDS_W0",
+	},
+	{
+		.id = 5,
+		.desc = "CLC_CROP_RND_CLAMP_POST_BDS_W5",
+	},
+	{
+		.id = 6,
+		.desc = "CLC_BLS_W2",
+	},
+	{
+		.id = 7,
+		.desc = "CLC_BAYER_GLUT_W0",
+	},
+	{
+		.id = 8,
+		.desc = "CLC_BAYER_DS4_W2",
+	},
+	{
+		.id = 9,
+		.desc = "CLC_COLOR_XFORM_DS4_W7",
+	},
+	{
+		.id = 10,
+		.desc = "CLC_CHROMA_DS2_W9",
+	},
+	{
+		.id = 11,
+		.desc = "CLC_CROP_RND_CLAMP_Y_DS4_W1",
+	},
+	{
+		.id = 12,
+		.desc = "CLC_CROP_RND_CLAMP_C_DS4_W1",
+	},
+	{
+		.id = 13,
+		.desc = "CLC_R2PD_DS4_W1",
+	},
+	{
+		.id = 14,
+		.desc = "CLC_DOWNSCALE_4TO1_Y_W1",
+	},
+	{
+		.id  = 15,
+		.desc = "CLC_DOWNSCALE_4TO1_C_W5",
+	},
+	{
+		.id = 16,
+		.desc = "CLC_CROP_RND_CLAMP_Y_DS16_W1",
+	},
+	{
+		.id = 17,
+		.desc = "CLC_CROP_RND_CLAMP_C_DS16_W1",
+	},
+	{
+		.id = 18,
+		.desc = "CLC_R2PD_DS16_W3",
+	},
+	{
+		.id = 19,
+		.desc = "CLC_WB_GAIN_W3",
+	},
+	{
+		.id = 20,
+		.desc = "CLC_BAYER_DS2_W1",
+	},
+	{
+		.id = 21,
+		.desc = "CLC_GTM_W0",
+	},
+	{
+		.id = 22,
+		.desc = "CLC_COLOR_XFORM_AI_DS_W7",
+	},
+	{
+		.id = 23,
+		.desc = "CLC_DOWNSCALE_MN_Y_W7",
+	},
+	{
+		.id = 24,
+		.desc = "CLC_DOWNSCALE_MN_C_W8",
+	},
+	{
+		.id = 25,
+		.desc = "CLC_CROP_RND_CLAMP_Y_AI_DS_W1",
+	},
+	{
+		.id = 26,
+		.desc = "CLC_CROP_RND_CLAMP_C_AI_DS_W1",
+	},
+	{
+		.id = 27,
+		.desc = "CLC_CROP_RND_CLAMP_IDEAL_RAW_W5",
+	},
+	{
+		.id = 28,
+		.desc = "CLC_ABF_W0",
+	},
+	{
+		.id = 29,
+		.desc = "CLC_STATS_BG_W0",
+	},
+	{
+		.id = 30,
+		.desc = "CLC_STATS_BHIST_W0",
+	},
+	{
+		.id = 31,
+		.desc = "CLC_STATS_AWB_BG_W0",
+	},
+	{
+		.id = 32,
+		.desc = "CLC_STATS_AEC_BG_W1",
+	},
+	{
+		.id = 33,
+		.desc = "CLC_STATS_BAF_W0",
+	},
+	{
+		.id = 34,
+		.desc = "CLC_STATS_RS_W3",
+	},
+	{
+		.id = 35,
+		.desc = "CLC_DELAY_LINE_W0",
+	},
+};
+
+static struct cam_vfe_top_err_irq_desc tfe662_camif_top_violation_irq_err_desc[] = {
+	{
+		.bitmask = BIT(0),
+		.err_name = "PP_CAMIF_VIOLATION_IRQ",
+		.desc = "CCIF protocol violation within camif of pixel pipeline",
+	},
+	{
+		.bitmask = BIT(1),
+		.err_name = "PP_VIOLATION_IRQ",
+		.desc =
+			"CCIF protocol violation within any of the modules in pixel pipeline.",
+	},
+	{
+		.bitmask  = BIT(5),
+		.err_name  = "DIAG_VIOLATION_IRQ",
+		.desc = "Sensor: HBI is less than the Minimum Required HBI.",
+		.debug = "Check sensor config",
+	},
+};
+
+static struct cam_vfe_top_err_irq_desc tfe662_camif_top_overflow_irq_err_desc[] = {
+	{
+		.bitmask = BIT(16),
+		.err_name = "PIXEL_PIPE_OVERFLOW_IRQ",
+		.desc = "Overflow in the Pixel Pipe",
+	},
+};
+
+static struct cam_vfe_top_err_irq_desc tfe662_camif_bus_overflow_irq_err_desc[] = {
+	{
+		.bitmask = BIT(0),
+		.err_name = "VIDEO_OUT BUS OVERFLOW",
+	},
+	{
+		.bitmask = BIT(1),
+		.err_name = "IDEAL_RAW BUS OVERFLOW",
+	},
+	{
+		.bitmask = BIT(2),
+		.err_name  = "Stats BE Tintless BUS OVERFLOW",
+	},
+	{
+		.bitmask = BIT(3),
+		.err_name  = "Stats BHIST BUS OVERFLOW",
+	},
+	{
+		.bitmask  = BIT(4),
+		.err_name  = "Stats AWB BG BUS OVERFLOW",
+	},
+	{
+		.bitmask  = BIT(5),
+		.err_name  = "Stats AEC BG BUS OVERFLOW",
+	},
+	{
+		.bitmask = BIT(6),
+		.err_name = "Stats BAF BUS OVERFLOW",
+	},
+	{
+		.bitmask  = BIT(10),
+		.err_name  = "PDAF BUS OVERFLOW",
+	},
+	{
+		.bitmask  = BIT(11),
+		.err_name  = "DS4 BUS OVERFLOW",
+	},
+	{
+		.bitmask = BIT(12),
+		.err_name = "DS16 BUS OVERFLOW",
+	},
+	{
+		.bitmask = BIT(13),
+		.err_name = "AI_OUT_Y BUS OVERFLOW",
+	},
+	{
+		.bitmask = BIT(14),
+		.err_name  = "AI_OUT_C BUS OVERFLOW",
+	},
+	{
+		.bitmask = BIT(15),
+		.err_name  = "Stats RS BUS OVERFLOW",
+	},
+};
+
+static struct cam_vfe_top_err_irq_desc tfe662_camif_rdi_top_violation_irq_err_desc[] = {
+	{
+		.bitmask = BIT(2),
+		.err_name  = "RDI0_CAMIF_VIOLATION_IRQ",
+		.desc = "CCIF protocol violation within camif of RDI0 pipeline.",
+	},
+	{
+		.bitmask = BIT(3),
+		.err_name  = "RDI1_CAMIF_VIOLATION_IRQ",
+		.desc = "CCIF protocol violation within camif of RDI1 pipeline.",
+	},
+	{
+		.bitmask  = BIT(4),
+		.err_name  = "RDI2_CAMIF_VIOLATION_IRQ",
+		.desc = "CCIF protocol violation within camif of RDI2 pipeline.",
+	},
+};
+
+static struct cam_vfe_top_err_irq_desc tfe662_camif_rdi_top_overflow_irq_err_desc[] = {
+	{
+		.bitmask = BIT(17),
+		.err_name = "RDI0_OVERFLOW_IRQ",
+		.desc = "overflow in the RDI0 Pipe.",
+	},
+	{
+		.bitmask = BIT(18),
+		.err_name  = "RDI1_OVERFLOW_IRQ",
+		.desc = "overflow in the RDI1 Pipe.",
+	},
+	{
+		.bitmask = BIT(19),
+		.err_name  = "RDI2_OVERFLOW_IRQ",
+		.desc = "overflow in the RDI2 Pipe.",
+	},
+};
+
+static struct cam_vfe_top_err_irq_desc tfe662_camif_rdi_bus_overflow_irq_err_desc[] = {
+	{
+		.bitmask = BIT(7),
+		.err_name = "RDI0 BUS OVERFLOW",
+	},
+	{
+		.bitmask = BIT(8),
+		.err_name  = "RDI1 BUS OVERFLOW",
+	},
+	{
+		.bitmask = BIT(9),
+		.err_name  = "RDI2 BUS OVERFLOW",
+	},
+};
+
 /*
  * Top HM registers, Offsets w.r.t top_hm_base. If top_hm_base is 0,
  * make these offsets relative core start address.
@@ -207,6 +488,18 @@ struct cam_vfe_camif_lite_ver3_hw_info tfe662_rdi_hw_info_arr[3] = {
 		.camif_lite_reg = &tfe662_camif_rdi[0],
 		.reg_data       = &tfe662_camif_rdi_reg_data[0],
 		.path_reg_base  = 0x1E00,
+
+		.num_top_violation_errors  =
+					ARRAY_SIZE(tfe662_camif_rdi_top_violation_irq_err_desc),
+		.top_violation_err_desc    = tfe662_camif_rdi_top_violation_irq_err_desc,
+		.num_top_overflow_errors   =
+					ARRAY_SIZE(tfe662_camif_rdi_top_overflow_irq_err_desc),
+		.top_overflow_err_desc     = tfe662_camif_rdi_top_overflow_irq_err_desc,
+		.num_bus_overflow_errors   =
+					ARRAY_SIZE(tfe662_camif_rdi_bus_overflow_irq_err_desc),
+		.bus_overflow_err_desc     = tfe662_camif_rdi_bus_overflow_irq_err_desc,
+		.lcr_violation_mask = 0x3F00,
+		.pd_violation_mask  = 0x0F0000,
 	},
 	{
 		.common_reg     = &tfe662_top_common_reg,
@@ -214,12 +507,36 @@ struct cam_vfe_camif_lite_ver3_hw_info tfe662_rdi_hw_info_arr[3] = {
 		.reg_data       = &tfe662_camif_rdi_reg_data[1],
 		.path_reg_base  = 0x2000,
 
+		.num_top_violation_errors  =
+					ARRAY_SIZE(tfe662_camif_rdi_top_violation_irq_err_desc),
+		.top_violation_err_desc    = tfe662_camif_rdi_top_violation_irq_err_desc,
+		.num_top_overflow_errors   =
+					ARRAY_SIZE(tfe662_camif_rdi_top_overflow_irq_err_desc),
+		.top_overflow_err_desc     = tfe662_camif_rdi_top_overflow_irq_err_desc,
+		.num_bus_overflow_errors   =
+					ARRAY_SIZE(tfe662_camif_rdi_bus_overflow_irq_err_desc),
+		.bus_overflow_err_desc     = tfe662_camif_rdi_bus_overflow_irq_err_desc,
+		.lcr_violation_mask = 0x3F00,
+		.pd_violation_mask  = 0x0F0000,
+
 	},
 	{
 		.common_reg     = &tfe662_top_common_reg,
 		.camif_lite_reg = &tfe662_camif_rdi[0],
 		.reg_data       = &tfe662_camif_rdi_reg_data[2],
 		.path_reg_base  = 0x2200,
+
+		.num_top_violation_errors  =
+					ARRAY_SIZE(tfe662_camif_rdi_top_violation_irq_err_desc),
+		.top_violation_err_desc    = tfe662_camif_rdi_top_violation_irq_err_desc,
+		.num_top_overflow_errors   =
+					ARRAY_SIZE(tfe662_camif_rdi_top_overflow_irq_err_desc),
+		.top_overflow_err_desc     = tfe662_camif_rdi_top_overflow_irq_err_desc,
+		.num_bus_overflow_errors   =
+					ARRAY_SIZE(tfe662_camif_rdi_bus_overflow_irq_err_desc),
+		.bus_overflow_err_desc     = tfe662_camif_rdi_bus_overflow_irq_err_desc,
+		.lcr_violation_mask = 0x3F00,
+		.pd_violation_mask  = 0x0F0000,
 	},
 };
 
@@ -247,6 +564,17 @@ static struct cam_vfe_top_ver3_hw_info tfe662_top_hw_info = {
 		.camif_reg      = &vfe662_camif_reg,
 		.reg_data       = &vfe_662_camif_reg_data,
 		.path_reg_base  = 0x1C00,
+		.ipp_module_desc = tfe662_ipp_mod_desc,
+		.num_top_violation_errors  =
+					ARRAY_SIZE(tfe662_camif_top_violation_irq_err_desc),
+		.top_violation_err_desc    = tfe662_camif_top_violation_irq_err_desc,
+		.num_top_overflow_errors   =
+					ARRAY_SIZE(tfe662_camif_top_overflow_irq_err_desc),
+		.top_overflow_err_desc     = tfe662_camif_top_overflow_irq_err_desc,
+		.num_bus_overflow_errors   =
+					ARRAY_SIZE(tfe662_camif_bus_overflow_irq_err_desc),
+		.bus_overflow_err_desc     = tfe662_camif_bus_overflow_irq_err_desc,
+		.violation_mask            = 0x3F,
 	},
 	.rdi_hw_info[0] = &tfe662_rdi_hw_info_arr[0],
 	.rdi_hw_info[1] = &tfe662_rdi_hw_info_arr[1],
