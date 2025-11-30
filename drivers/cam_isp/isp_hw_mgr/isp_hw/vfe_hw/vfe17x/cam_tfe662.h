@@ -706,6 +706,7 @@ static struct cam_vfe_bus_ver3_hw_info tfe662_bus_hw_info = {
 				.perf_cnt_val = 0xB0,
 			},
 		},
+		.capabilities = CAM_VFE_COMMON_CAP_PD10_PACKED_PLAIN128,
 	},
 	.bus_wr_base                          = 0x3000,
 	.support_dyn_offset                   = true,
@@ -911,6 +912,7 @@ static struct cam_vfe_bus_ver3_hw_info tfe662_bus_hw_info = {
 			.line_based               = 1,
 			.mid                      = {26},
 			.num_mid                  = 1,
+			.skip_stride_align        = true,
 			.out_type                 = CAM_VFE_BUS_VER3_VFE_OUT_PDAF,
 			.mc_based                 = false,
 			.pid_mask                 = BIT_ULL(6) | BIT_ULL(7),
@@ -950,6 +952,7 @@ static struct cam_vfe_bus_ver3_hw_info tfe662_bus_hw_info = {
 				BIT_ULL(PACKER_FMT_VER3_MIPI12) |
 				BIT_ULL(PACKER_FMT_VER3_MIPI14) |
 				BIT_ULL(PACKER_FMT_VER3_PLAIN_8) |
+				BIT_ULL(PACKER_FMT_VER3_PLAIN_8_LSB_MSB_10) |
 				BIT_ULL(PACKER_FMT_VER3_PLAIN_128) |
 				BIT_ULL(PACKER_FMT_VER3_PLAIN_16_10BPP) |
 				BIT_ULL(PACKER_FMT_VER3_PLAIN_16_12BPP) |
@@ -972,6 +975,7 @@ static struct cam_vfe_bus_ver3_hw_info tfe662_bus_hw_info = {
 				BIT_ULL(PACKER_FMT_VER3_MIPI12) |
 				BIT_ULL(PACKER_FMT_VER3_MIPI14) |
 				BIT_ULL(PACKER_FMT_VER3_PLAIN_8) |
+				BIT_ULL(PACKER_FMT_VER3_PLAIN_8_LSB_MSB_10) |
 				BIT_ULL(PACKER_FMT_VER3_PLAIN_128) |
 				BIT_ULL(PACKER_FMT_VER3_PLAIN_16_10BPP) |
 				BIT_ULL(PACKER_FMT_VER3_PLAIN_16_12BPP) |
