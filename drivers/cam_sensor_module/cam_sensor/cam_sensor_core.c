@@ -584,7 +584,8 @@ static int cam_sensor_handle_debug_event_info(
 	event_data->trigger_sensor_cmd_buf_info.debug_info.debug_id = debug_info->debug_id;
 	event_data->trigger_sensor_cmd_buf_info.debug_info.debug_string_size = debug_info->debug_string_size;
 	snprintf(event_data->trigger_sensor_cmd_buf_info.debug_info.debug_string,
-					debug_info->debug_string_size, "%s", debug_string);
+			sizeof(event_data->trigger_sensor_cmd_buf_info.debug_info.debug_string),
+			"%s", debug_string);
 	event_data->cmd_type = CAM_SENSOR_CMD_TYPE_DEBUG_CMD;
 	CAM_DBG(CAM_SENSOR,
 		"Sensor[%s] reqId: %llu debugid %d size %d debug string %s",
