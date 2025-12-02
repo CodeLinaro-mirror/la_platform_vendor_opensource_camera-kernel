@@ -10587,6 +10587,12 @@ static int cam_ife_mgr_stop_hw_in_overflow(void *stop_hw_args)
 		return -EINVAL;
 	}
 
+	/* Flush worker */
+	if (!stop_isp->is_recovery) {
+		worker_info = (struct cam_req_mgr_core_worker *)ctx->common.worker_info;
+		cam_req_mgr_worker_flush(worker_info);
+	}
+
 	if (ctx->flags.per_port_en && !ctx->flags.is_dual) {
 		rc = cam_ife_hw_mgr_res_stream_on_off_grp_cfg(ctx,
 				stop_isp, CAM_CSID_HALT_IMMEDIATELY, false,
@@ -10599,7 +10605,7 @@ static int cam_ife_mgr_stop_hw_in_overflow(void *stop_hw_args)
 	}
 
 	if (per_port_feature_enable)
-		goto flush_worker;
+		goto end;
 
 	/* get master base index first */
 	for (i = 0; i < ctx->num_base; i++) {
@@ -10645,13 +10651,7 @@ static int cam_ife_mgr_stop_hw_in_overflow(void *stop_hw_args)
 	for (i = 0; i < max_ife_out_res; i++)
 		cam_ife_hw_mgr_stop_hw_res(&ctx->res_list_ife_out[i], true);
 
-flush_worker:
-	/* Flush worker */
-	if (!stop_isp->is_recovery) {
-		worker_info = (struct cam_req_mgr_core_worker *)ctx->common.worker_info;
-		cam_req_mgr_worker_flush(worker_info);
-	}
-
+end:
 	CAM_DBG(CAM_ISP, "Exit...ctx id:%d rc :%d",
 		ctx->ctx_index, rc);
 
