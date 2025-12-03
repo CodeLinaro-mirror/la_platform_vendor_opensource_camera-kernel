@@ -1,16 +1,15 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
-#ifndef _CAM_REQ_MGR_WORKQ_H_
-#define _CAM_REQ_MGR_WORKQ_H_
+#ifndef _CAM_WORKQ_UTIL_H_
+#define _CAM_WORKQ_UTIL_H_
 
-#include<linux/kernel.h>
-#include<linux/module.h>
-#include<linux/init.h>
-#include<linux/sched.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/init.h>
+#include <linux/sched.h>
 #include <linux/workqueue.h>
 #include <linux/slab.h>
 #include <linux/timer.h>
@@ -32,20 +31,20 @@
 #define CAM_WORKQ_FLAG_SERIAL                    (1 << 1)
 
 /* Task priorities, lower the number higher the priority*/
-enum crm_task_priority {
-	CRM_TASK_PRIORITY_0,
-	CRM_TASK_PRIORITY_1,
-	CRM_TASK_PRIORITY_MAX,
+enum cam_workq_task_priority {
+	CAM_WORKQ_TASK_PRIORITY_0,
+	CAM_WORKQ_TASK_PRIORITY_1,
+	CAM_WORKQ_TASK_PRIORITY_MAX,
 };
 
 /* workqueue will be used from irq context or not */
-enum crm_workq_context {
-	CRM_WORKQ_USAGE_NON_IRQ,
-	CRM_WORKQ_USAGE_IRQ,
-	CRM_WORKQ_USAGE_INVALID,
+enum cam_workq_context {
+	CAM_WORKQ_USAGE_NON_IRQ,
+	CAM_WORKQ_USAGE_IRQ,
+	CAM_WORKQ_USAGE_MAX,
 };
 
-/** struct crm_workq_task
+/** struct cam_workq_task
  * @priority         : caller can assign priority to task based on type.
  * @payload          : depending of user of task this payload type will change
  * @process_cb       : registered callback called by workq when task enqueued is
@@ -59,7 +58,7 @@ enum crm_workq_context {
  * @ret              : return value in future to use for blocking calls
  * @task_scheduled_ts: enqueue time of task
  */
-struct crm_workq_task {
+struct cam_workq_task {
 	int32_t                    priority;
 	int32_t                    ret;
 	void                      *payload;
@@ -71,25 +70,24 @@ struct crm_workq_task {
 	ktime_t                    task_scheduled_ts;
 };
 
-/** struct cam_req_mgr_core_workq
- * @work        : work token used by workqueue
- * @job         : workqueue internal job struct
- * @lock_bh     : lock for task structs
- * @in_irq      : set true if workque can be used in irq context
- * @flush       : used to track if flush has been called on workqueue
- * @work_q_name : name of the workq
+/** struct cam_core_workq
+ * @work              : work token used by workqueue
+ * @job               : workqueue internal job struct
+ * @lock_bh           : lock for task structs
+ * @in_irq            : set true if workque can be used in irq context
+ * @flush             : used to track if flush has been called on workqueue
+ * @work_q_name       : name of the workq
  * @workq_scheduled_ts: enqueue time of workq
  * task -
- * @lock        : Current task's lock handle
- * @pending_cnt : # of tasks left in queue
- * @free_cnt    : # of free/available tasks
- * @process_head:
- * @empty_head  : list  head of available taska which can be used
- *                or acquired in order to enqueue a task to workq
- * @pool        : pool of tasks used for handling events in workq context
- * @num_task    : size of tasks pool
+ * @pending_cnt       : Number of tasks left in queue
+ * @free_cnt          : Number of free/available tasks
+ * @process_head      : List of tasks enqueued to be executed
+ * @empty_head        : list  head of available taska which can be used
+ *                      or acquired in order to enqueue a task to workq
+ * @pool              : pool of tasks used for handling events in workq context
+ * @num_task          : size of tasks pool
  */
-struct cam_req_mgr_core_workq {
+struct cam_core_workq {
 	struct work_struct         work;
 	struct workqueue_struct   *job;
 	spinlock_t                 lock_bh;
@@ -100,91 +98,85 @@ struct cam_req_mgr_core_workq {
 
 	/* tasks */
 	struct {
-		struct mutex           lock;
 		atomic_t               pending_cnt;
 		atomic_t               free_cnt;
 
-		struct list_head       process_head[CRM_TASK_PRIORITY_MAX];
+		struct list_head       process_head[CAM_WORKQ_TASK_PRIORITY_MAX];
 		struct list_head       empty_head;
-		struct crm_workq_task *pool;
+		struct cam_workq_task *pool;
 		uint32_t               num_task;
 	} task;
 };
 
 /**
- * struct cam_req_mgr_core_workq_mini_dump
- * @workq_scheduled_ts: scheduled ts
- * task -
- * @pending_cnt : # of tasks left in queue
- * @free_cnt    : # of free/available tasks
- * @num_task    : size of tasks pool
- */
-struct cam_req_mgr_core_workq_mini_dump {
-	ktime_t                    workq_scheduled_ts;
-	/* tasks */
-	struct {
-		uint32_t               pending_cnt;
-		uint32_t               free_cnt;
-		uint32_t               num_task;
-	} task;
-};
-/**
- * cam_req_mgr_process_workq() - main loop handling
+ * cam_workq_process() - main loop handling
  * @w: workqueue task pointer
  */
-void cam_req_mgr_process_workq(struct work_struct *w);
+void cam_workq_process(struct work_struct *w);
 
 /**
- * cam_req_mgr_workq_create()
- * @brief    : create a workqueue
- * @name     : Name of the workque to be allocated, it is combination
- *             of session handle and link handle
- * @num_task : Num_tasks to be allocated for workq
- * @workq    : Double pointer worker
- * @in_irq   : Set to one if workq might be used in irq context
- * @flags    : Bitwise OR of Flags for workq behavior.
- *             e.g. CAM_REQ_MGR_WORKQ_HIGH_PRIORITY | CAM_REQ_MGR_WORKQ_SERIAL
- * @func     : function pointer for cam_req_mgr_process_workq wrapper function
+ * cam_workq_create()
+ * @brief      : create a workqueue
+ * @name       : Name of the workque to be allocated, it is combination
+ *               of session handle and link handle
+ * @num_task   : Num_tasks to be allocated for workq
+ * @max_active : Number of maximum ative works
+ * @workq      : Double pointer worker
+ * @in_irq     : Set to one if workq might be used in irq context
+ * @flags      : Bitwise OR of Flags for workq behavior.
+ *               e.g. CAM_WORKQ_FLAG_HIGH_PRIORITY | CAM_WORKQ_FLAG_SERIAL
+ * @func       : function pointer for cam_workq_process wrapper function
  * This function will allocate and create workqueue and pass
  * the workq pointer to caller.
  */
-int cam_req_mgr_workq_create(char *name, int32_t num_tasks,
-	struct cam_req_mgr_core_workq **workq, enum crm_workq_context in_irq,
+int cam_workq_create(char *name, int32_t num_tasks, uint32_t max_active,
+	struct cam_core_workq **workq, enum cam_workq_context in_irq,
 	int flags, void (*func)(struct work_struct *w));
 
 /**
- * cam_req_mgr_workq_destroy()
+ * cam_workq_destroy()
  * @brief: destroy workqueue
  * @workq: pointer to worker data struct
  * this function will destroy workqueue and clean up resources
  * associated with worker such as tasks.
  */
-void cam_req_mgr_workq_destroy(struct cam_req_mgr_core_workq **workq);
+void cam_workq_destroy(struct cam_core_workq **workq);
 
 /**
- * cam_req_mgr_workq_enqueue_task()
+ * cam_workq_enqueue_task()
  * @brief: Enqueue task in worker queue
  * @task : task to be processed by worker
  * @priv : clients private data
  * @prio : task priority
  * process callback func
  */
-int cam_req_mgr_workq_enqueue_task(struct crm_workq_task *task,
+int cam_workq_enqueue_task(struct cam_workq_task *task,
 	void *priv, int32_t prio);
 
 /**
- * cam_req_mgr_workq_get_task()
+ * cam_workq_get_task()
  * @brief: Returns empty task pointer for use
  * @workq: workque used for processing
  */
-struct crm_workq_task *cam_req_mgr_workq_get_task(
-	struct cam_req_mgr_core_workq *workq);
+struct cam_workq_task *cam_workq_get_task(
+	struct cam_core_workq *workq);
 
 /**
- * cam_req_mgr_workq_flush()
+ * cam_workq_get_task_payload()
+ *
+ * @brief      : Get payload of the worker task
+ * @workq      : Pointer to workq struct
+ * @workq_task : Workq task used for processing
+ */
+void *cam_workq_get_task_payload(struct cam_core_workq *workq,
+	struct cam_workq_task *workq_task);
+
+/**
+ * cam_workq_flush()
+ *
  * @brief: Flushes the work queue. Function will sleep until any active task is complete.
  * @workq: pointer to worker data struct
  */
-void cam_req_mgr_workq_flush(struct cam_req_mgr_core_workq *workq);
+void cam_workq_flush(struct cam_core_workq *workq);
 
 #endif

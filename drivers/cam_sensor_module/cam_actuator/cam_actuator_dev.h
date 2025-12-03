@@ -99,7 +99,7 @@ struct actuator_intf_params {
  * @act_info              : Sensor query cap structure
  * @of_node               : Node ptr
  * @last_flush_req        : Last request to flush
- * @workq                 : work queue for actuator
+ * @worker_ctx            : worker ctx for actuator
  * @actuator_park_mutex   : Mutex for actuator park
  * @cam_act_park_state    : Actuator park state
  * @is_deferred_park_lens : Flag to specify deferred park lens
@@ -121,7 +121,7 @@ struct cam_actuator_ctrl_t {
 	struct cam_actuator_query_cap act_info;
 	struct actuator_intf_params bridge_intf;
 	uint32_t last_flush_req;
-	struct cam_req_mgr_core_workq *workq;
+	void *worker_ctx;
 	struct mutex actuator_park_mutex;
 	bool is_deferred_park_lens;
 	struct completion park_lens_complete;

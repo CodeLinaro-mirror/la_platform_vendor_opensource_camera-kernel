@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_CPAS_HW_INTF_H_
@@ -25,6 +25,24 @@
 
 /* Number of CPAS hw caps registers */
 #define CAM_CPAS_MAX_CAPS_REGS 2
+
+#define CPAS_IPE0_BIT           0x1000
+#define CPAS_IPE1_BIT           0x2000
+#define CPAS_BPS_BIT            0x400
+#define CPAS_ICP_BIT            0x1
+#define CPAS_ICP1_BIT           0x4
+#define CPAS_OFE_BIT            0x10
+
+/* Used for targets >= 480 and its variants */
+#define CPAS_TITAN_IPE0_CAP_BIT 0x800
+
+/* Used for mimas based target  */
+#define CPAS_MIMAS_ICP_CAP_BIT 0x4
+#define CPAS_MIMAS_BPS_CAP_BIT 0x8000
+#define CPAS_MIMAS_IPE_CAP_BIT 0x10000
+
+/* max caps mask is max value of all device caps mask index added by 1 */
+#define CAM_ICP_MAX_HW_CAPS_MASK 2
 
 /**
  * enum cam_cpas_hw_type - Enum for CPAS HW type
@@ -217,6 +235,22 @@ struct cam_cpas_hw_caps {
 	struct cam_cpas_fuse_info fuse_info;
 };
 
+/**
+ * struct cam_cpas_caps_map - Holds CPAS capability bits for ICP, IPE, BPS, OFE
+ *
+ * @icp_bit: ICP capability bit
+ * @ipe_bit: IPE capability bit
+ * @bps_bit: BPS capability bit
+ * @ofe_bit: OFE capability bit
+ *
+ */
+struct cam_cpas_caps_map {
+	uint32_t icp_bit;
+	uint32_t ipe_bit;
+	uint32_t bps_bit;
+	uint32_t ofe_bit;
+};
+
 int cam_cpas_hw_probe(struct platform_device *pdev,
 	struct cam_hw_intf **hw_intf);
 int cam_cpas_hw_remove(struct cam_hw_intf *cpas_hw_intf);
@@ -236,5 +270,11 @@ void cam_cpas_dev_exit_module(void);
  * @brief : API to select TPG mux select.
  */
 int cam_cpas_enable_tpg_mux_sel(uint32_t tpg_mux_sel);
+
+/**
+ * @brief : API to retrieve ICP capability bits based on CPAS version.
+ */
+int cam_cpas_get_icp_caps_map(struct cam_cpas_caps_map *caps_map,
+	uint32_t hw_mgr_id);
 
 #endif /* _CAM_CPAS_HW_INTF_H_ */

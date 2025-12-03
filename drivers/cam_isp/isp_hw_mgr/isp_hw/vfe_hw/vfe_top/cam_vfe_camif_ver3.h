@@ -66,11 +66,24 @@ struct cam_vfe_camif_ver3_reg_data {
 
 };
 
+struct cam_vfe_camif_ver3_module_desc {
+	uint32_t id;
+	uint8_t *desc;
+};
+
 struct cam_vfe_camif_ver3_hw_info {
 	struct cam_vfe_top_ver3_reg_offset_common   *common_reg;
 	struct cam_vfe_camif_ver3_pp_clc_reg        *camif_reg;
 	struct cam_vfe_camif_ver3_reg_data          *reg_data;
+	struct cam_vfe_camif_ver3_module_desc       *ipp_module_desc;
+	struct cam_vfe_top_err_irq_desc             *top_violation_err_desc;
+	struct cam_vfe_top_err_irq_desc             *top_overflow_err_desc;
+	struct cam_vfe_top_err_irq_desc             *bus_overflow_err_desc;
 	uint64_t                                     path_reg_base;
+	uint32_t                                     num_top_violation_errors;
+	uint32_t                                     num_top_overflow_errors;
+	uint32_t                                     num_bus_overflow_errors;
+	uint32_t                                     violation_mask;
 };
 
 int cam_vfe_camif_ver3_acquire_resource(

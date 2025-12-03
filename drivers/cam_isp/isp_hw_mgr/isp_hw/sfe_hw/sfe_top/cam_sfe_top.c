@@ -8,13 +8,13 @@
 #include "cam_io_util.h"
 #include "cam_cdm_util.h"
 #include "cam_sfe_hw_intf.h"
-#include "cam_tasklet_util.h"
 #include "cam_sfe_top.h"
 #include "cam_debug_util.h"
 #include "cam_sfe_soc.h"
 #include "cam_sfe_core.h"
 #include "cam_vmrm_interface.h"
 #include "cam_mem_mgr_api.h"
+#include "cam_worker_wrapper_api.h"
 
 struct cam_sfe_core_cfg {
 	uint32_t   mode_sel;
@@ -1550,7 +1550,7 @@ int cam_sfe_top_reserve(void *device_priv,
 			}
 
 			top_priv->in_rsrc[i].cdm_ops = acquire_args->cdm_ops;
-			top_priv->in_rsrc[i].tasklet_info = args->tasklet;
+			top_priv->in_rsrc[i].worker_ctx = args->worker_ctx;
 			top_priv->in_rsrc[i].res_state =
 				CAM_ISP_RESOURCE_STATE_RESERVED;
 			acquire_args->rsrc_node =
@@ -1596,7 +1596,7 @@ int cam_sfe_top_release(void *device_priv,
 
 	in_res->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 	in_res->cdm_ops = NULL;
-	in_res->tasklet_info = NULL;
+	in_res->worker_ctx = NULL;
 	if (top_priv->reserve_cnt)
 		top_priv->reserve_cnt--;
 
@@ -2080,8 +2080,7 @@ int cam_sfe_top_start(
 			top_priv,
 			cam_sfe_top_handle_err_irq_top_half,
 			cam_sfe_top_handle_err_irq_bottom_half,
-			sfe_res->tasklet_info,
-			&tasklet_bh_api,
+			sfe_res->worker_ctx,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (top_priv->error_irq_handle < 1) {
@@ -2107,8 +2106,7 @@ int cam_sfe_top_start(
 				sfe_res,
 				cam_sfe_top_handle_irq_top_half,
 				cam_sfe_top_handle_irq_bottom_half,
-				sfe_res->tasklet_info,
-				&tasklet_bh_api,
+				sfe_res->worker_ctx,
 				CAM_IRQ_EVT_GROUP_0);
 
 			if (path_data->sof_eof_handle < 1) {

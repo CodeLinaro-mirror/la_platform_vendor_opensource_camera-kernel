@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/platform_device.h>
@@ -17,12 +17,12 @@
 #include "cam_lrme_hw_core.h"
 #include "cam_lrme_hw_soc.h"
 #include "cam_lrme_hw_reg.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_lrme_hw_mgr.h"
 #include "cam_mem_mgr_api.h"
 #include "cam_smmu_api.h"
 #include "camera_main.h"
 #include "cam_req_mgr_dev.h"
+#include "cam_worker_wrapper_api.h"
 
 static int cam_lrme_hw_dev_util_cdm_acquire(struct cam_lrme_core *lrme_core,
 	struct cam_hw_info *lrme_hw)
@@ -80,11 +80,6 @@ error:
 	return rc;
 }
 
-static void cam_req_mgr_process_workq_cam_lrme_hw_worker(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
 static int cam_lrme_hw_dev_component_bind(struct device *dev,
 	struct device *master_dev, void *data)
 {
@@ -97,6 +92,7 @@ static int cam_lrme_hw_dev_component_bind(struct device *dev,
 	struct platform_device *pdev = to_platform_device(dev);
 	struct timespec64 ts_start, ts_end;
 	long microsec = 0;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	CAM_GET_TIMESTAMP(ts_start);
 	lrme_hw = CAM_MEM_ZALLOC(sizeof(struct cam_hw_info), GFP_KERNEL);
@@ -125,25 +121,30 @@ static int cam_lrme_hw_dev_component_bind(struct device *dev,
 	init_completion(&lrme_hw->hw_complete);
 	init_completion(&lrme_core->reset_complete);
 
-	rc = cam_req_mgr_workq_create("cam_lrme_hw_worker",
-		CAM_LRME_HW_WORKQ_NUM_TASK,
-		&lrme_core->work, CRM_WORKQ_USAGE_IRQ, 0,
-		cam_req_mgr_process_workq_cam_lrme_hw_worker);
+	worker_init_args.name = "cam_lrme_hw_worker";
+	worker_init_args.num_tasks = CAM_LRME_HW_WORKER_NUM_TASK;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &lrme_core->worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc) {
-		CAM_ERR(CAM_LRME, "Unable to create a workq, rc=%d", rc);
+		CAM_ERR(CAM_LRME, "Unable to create a worker, rc=%d", rc);
 		goto free_memory;
 	}
 
-	for (i = 0; i < CAM_LRME_HW_WORKQ_NUM_TASK; i++)
-		lrme_core->work->task.pool[i].payload =
-			&lrme_core->work_data[i];
+	for (i = 0; i < CAM_LRME_HW_WORKER_NUM_TASK; i++)
+		cam_worker_wrapper_payload_bind(
+			lrme_core->worker_ctx, &lrme_core->work_data[i], i);
 
 	match_dev = of_match_device(pdev->dev.driver->of_match_table,
 		&pdev->dev);
 	if (!match_dev || !match_dev->data) {
 		CAM_ERR(CAM_LRME, "No Of_match data, %pK", match_dev);
 		rc = -EINVAL;
-		goto destroy_workqueue;
+		goto destroy_worker;
 	}
 	hw_info = (struct cam_lrme_hw_info *)match_dev->data;
 	lrme_core->hw_info = hw_info;
@@ -152,7 +153,7 @@ static int cam_lrme_hw_dev_component_bind(struct device *dev,
 		cam_lrme_hw_irq, lrme_hw);
 	if (rc) {
 		CAM_ERR(CAM_LRME, "Failed to init soc, rc=%d", rc);
-		goto destroy_workqueue;
+		goto destroy_worker;
 	}
 
 	rc = cam_lrme_hw_dev_util_cdm_acquire(lrme_core, lrme_hw);
@@ -237,8 +238,9 @@ deinit_platform_res:
 	if (cam_lrme_soc_deinit_resources(&lrme_hw->soc_info))
 		CAM_ERR(CAM_LRME, "Failed in soc deinit");
 	mutex_destroy(&lrme_hw->hw_mutex);
-destroy_workqueue:
-	cam_req_mgr_workq_destroy(&lrme_core->work);
+destroy_worker:
+	cam_worker_wrapper_deinit(lrme_core->worker_ctx);
+
 free_memory:
 	mutex_destroy(&lrme_hw->hw_mutex);
 	CAM_MEM_FREE(lrme_hw);

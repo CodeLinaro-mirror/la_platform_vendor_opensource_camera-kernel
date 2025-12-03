@@ -35,6 +35,13 @@ project_configs = select({
     ":canoe": dependency_config + [
         "CONFIG_SPECTRA_POWER_DOMAIN_SET_HW_MODE=y",
      ],
+    ":chora": [
+        "CONFIG_SPECTRA_CRE=y",
+        "CONFIG_SPECTRA_SECURE_CAMERA_25=y",
+        "CONFIG_INTERCONNECT_QCOM=y",
+        "CONFIG_SPECTRA_USE_RPMH_DRV_API=n",
+        "CONFIG_SPECTRA_LLCC_STALING=n",
+    ],
 })
 
 """

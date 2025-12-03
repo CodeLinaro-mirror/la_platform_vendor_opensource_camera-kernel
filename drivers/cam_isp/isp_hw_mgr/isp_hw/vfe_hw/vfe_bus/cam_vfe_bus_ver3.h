@@ -280,6 +280,7 @@ struct cam_vfe_bus_ver3_reg_offset_bus_client {
 	uint8_t  *name;
 	bool      mc_based;
 	bool      cntxt_cfg_except;
+	bool      skip_stride_align;
 };
 
 /*

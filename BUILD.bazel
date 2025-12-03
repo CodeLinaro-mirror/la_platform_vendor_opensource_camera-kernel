@@ -59,7 +59,6 @@ driver_includes = [
     "drivers/cam_isp",
     "drivers/cam_isp/isp_hw_mgr",
     "drivers/cam_isp/isp_hw_mgr/hw_utils/include",
-    "drivers/cam_isp/isp_hw_mgr/hw_utils/irq_controller",
     "drivers/cam_isp/isp_hw_mgr/include",
     "drivers/cam_isp/isp_hw_mgr/isp_hw/ife_csid_hw",
     "drivers/cam_isp/isp_hw_mgr/isp_hw/include",
@@ -112,6 +111,12 @@ driver_includes = [
     "drivers/cam_smmu",
     "drivers/cam_sync",
     "drivers/cam_utils",
+    "drivers/cam_utils/irq_controller",
+    "drivers/cam_utils/cam_worker",
+    "drivers/cam_utils/cam_worker/cam_workq",
+    "drivers/cam_utils/cam_worker/cam_tasklet",
+    "drivers/cam_utils/cam_worker/cam_kthread",
+    "drivers/cam_utils/cam_worker/include",
     "drivers/cam_vmrm",
     "drivers/cam_vmrm/qrtr",
     "drivers/cam_dcvs",
@@ -176,4 +181,7 @@ config_setting(
     name = "canoe",
     flag_values = {":project_name": "canoe"},
 )
-
+config_setting(
+    name = "chora",
+    flag_values = {":project_name": "chora"},
+)

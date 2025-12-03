@@ -110,6 +110,30 @@ config SPECTRA_POWER_DOMAIN_SET_HW_MODE
 		of GDSC control between the software and the hardware
 		when power domains are used.
 
+config RT_MAP_WORKER_WORKQ
+	bool "enable workqueue bottom half to replace default tasklet"
+	help
+		This config enables the use of workqueue within worker wrapper
+		for realtime needs.
+		Which supports the replacement of the default tasklet option
+		with workqueue for bottom half.
+
+config RT_MAP_WORKER_KTHREAD
+	bool "enable kthread bottom half to replace default tasklet"
+	help
+		This config enables the use of kthread within worker wrapper
+		for realtime needs.
+		It supports the replacement of the default tasklet option
+		with kthread for bottom half
+
+config NRT_MAP_WORKER_KTHREAD
+	bool "enable kthread bottom half to replace default workqueue solution"
+	help
+		This config enables the use of kthread within worker wrapper
+		for non-realtime needs.
+		It supports the replacement of the default workqueue option
+		with kthread for bottom half
+
 config SPECTRA_SECURE_MINK_API
 	bool "enable MINK based APIs"
 	default y if SPECTRA_DOMAIN_ID_SECURE_CAMERA || SPECTRA_SECURE_CAMERA_25
@@ -183,3 +207,11 @@ config VIDEO_QCOM_CAMERA
 	  driver compilation.
 	  To compile this driver as a module named camera.ko
 	  choose m here.
+
+config SPECTRA_CRE
+	bool "enable camera CRE module"
+	help
+	  This option enables camera CRE module
+	  compilation. Camera CRE module will be functional.
+	  This enables CRE driver code files
+	  which interacts with CRE HW.

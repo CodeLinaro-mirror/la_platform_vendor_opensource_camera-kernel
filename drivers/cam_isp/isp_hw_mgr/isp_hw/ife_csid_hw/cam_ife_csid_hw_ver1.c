@@ -21,11 +21,11 @@
 #include "cam_debug_util.h"
 #include "cam_cpas_api.h"
 #include "cam_isp_hw_mgr_intf.h"
-#include "cam_tasklet_util.h"
 #include "cam_common_util.h"
 #include "cam_subdev.h"
 #include "cam_mem_mgr_api.h"
 #include "cam_cpas_hw_intf.h"
+#include "cam_worker_wrapper_api.h"
 
 #define IFE_CSID_TIMEOUT                               1000
 
@@ -1734,7 +1734,13 @@ int cam_ife_csid_ver1_reserve(void *hw_priv,
 				csid_hw->hw_intf->hw_idx, reserve->res_id);
 		return -EINVAL;
 	}
+
 	res = &csid_hw->path_res[reserve->res_id];
+	if (reserve->is_new_csid_acq && csid_hw->counters.csi2_reserve_cnt) {
+		CAM_DBG(CAM_ISP, "CSID %d already acquired csi2_reserve_cnt: %d",
+			csid_hw->hw_intf->hw_idx, csid_hw->counters.csi2_reserve_cnt);
+		return -EBUSY;
+	}
 
 	if (res->res_state != CAM_ISP_RESOURCE_STATE_AVAILABLE) {
 		CAM_DBG(CAM_ISP, "CSID %d Res_id %d state %d",
@@ -2562,7 +2568,7 @@ static int cam_ife_csid_ver1_init_config_pxl_path(
 		path_cfg->qcfa_bin)
 		val |=  1 << path_reg->bin_qcfa_en_shift_val;
 
-	if ((path_cfg->qcfa_bin || path_cfg->vertical_bin ||
+	if ((path_cfg->vertical_bin ||
 		path_cfg->horizontal_bin) && path_reg->binning_supported)
 		val |= 1 << path_reg->bin_en_shift_val;
 
@@ -3330,7 +3336,7 @@ static int cam_ife_csid_ver1_sof_irq_debug(
 	bool sof_irq_enable = false;
 	struct cam_hw_soc_info                  *soc_info;
 	struct cam_ife_csid_ver1_reg_info *csid_reg;
-	uint32_t data_idx;
+	int data_idx = 0;
 
 	if (*((uint32_t *)cmd_args) == 1)
 		sof_irq_enable = true;
@@ -3347,8 +3353,8 @@ static int cam_ife_csid_ver1_sof_irq_debug(
 	csid_reg = (struct cam_ife_csid_ver1_reg_info *)
 			csid_hw->core_info->csid_reg;
 
-	data_idx = csid_hw->rx_cfg.phy_sel -
-		csid_reg->csi2_reg->phy_tpg_base_id;
+	data_idx = (int)(csid_hw->rx_cfg.phy_sel -
+		csid_reg->csi2_reg->phy_tpg_base_id);
 
 	for (i = 0; i < csid_reg->cmn_reg->num_pix; i++) {
 
@@ -3407,12 +3413,17 @@ static int cam_ife_csid_ver1_sof_irq_debug(
 	CAM_INFO(CAM_ISP, "SOF freeze: CSID SOF irq %s",
 		(sof_irq_enable) ? "enabled" : "disabled");
 
-	CAM_INFO(CAM_ISP, "Notify CSIPHY: %d",
-			csid_hw->rx_cfg.phy_sel);
-
-	cam_subdev_notify_message(CAM_CSIPHY_DEVICE_TYPE,
-		CAM_SUBDEV_MESSAGE_REG_DUMP, (void *)&data_idx);
-
+	if (data_idx < 0)
+		CAM_WARN(CAM_ISP,
+			"CSID[%u]: Can't notify csiphy:%d incorrect phy selected=%d",
+			csid_hw->hw_intf->hw_idx, csid_hw->rx_cfg.phy_sel, data_idx);
+	else {
+		CAM_INFO(CAM_ISP,
+			"CSID[%u]: Notify csiphy: %d phy selected=%d",
+			csid_hw->hw_intf->hw_idx, csid_hw->rx_cfg.phy_sel, data_idx);
+		cam_subdev_notify_message(CAM_CSIPHY_DEVICE_TYPE,
+			CAM_SUBDEV_MESSAGE_REG_DUMP, (void *)&data_idx);
+	}
 	return 0;
 }
 
@@ -4114,7 +4125,7 @@ static int cam_ife_csid_ver1_rx_bottom_half_handler(
 	uint32_t                                    event_type = 0;
 	size_t                                      len = 0;
 	struct cam_hw_soc_info                     *soc_info;
-	uint32_t                                    data_idx;
+	int                                         data_idx = 0;
 
 	if (!csid_hw || !evt_payload) {
 		CAM_ERR(CAM_ISP,
@@ -4127,8 +4138,8 @@ static int cam_ife_csid_ver1_rx_bottom_half_handler(
 	csid_reg = (struct cam_ife_csid_ver1_reg_info *)
 			csid_hw->core_info->csid_reg;
 	csi2_reg = csid_reg->csi2_reg;
-	data_idx = csid_hw->rx_cfg.phy_sel -
-		csid_reg->csi2_reg->phy_tpg_base_id;
+	data_idx = (int)(csid_hw->rx_cfg.phy_sel -
+		csid_reg->csi2_reg->phy_tpg_base_id);
 
 	irq_status = evt_payload->irq_status[CAM_IFE_CSID_IRQ_REG_RX]
 			& csi2_reg->fatal_err_mask;
@@ -4256,9 +4267,18 @@ static int cam_ife_csid_ver1_rx_bottom_half_handler(
 		if (!event_type)
 			event_type |= CAM_ISP_HW_ERROR_CSID_FATAL;
 
-		cam_subdev_notify_message(CAM_CSIPHY_DEVICE_TYPE,
-			CAM_SUBDEV_MESSAGE_REG_DUMP,
-			(void *)&data_idx);
+		if (data_idx < 0)
+			CAM_WARN(CAM_ISP,
+				"CSID[%u]: Can't notify csiphy:%d incorrect phy selected=%d",
+				csid_hw->hw_intf->hw_idx, csid_hw->rx_cfg.phy_sel, data_idx);
+		else {
+			CAM_INFO(CAM_ISP,
+				"CSID[%u]: Notify csiphy: %d phy selected=%d",
+				csid_hw->hw_intf->hw_idx, csid_hw->rx_cfg.phy_sel, data_idx);
+			cam_subdev_notify_message(CAM_CSIPHY_DEVICE_TYPE,
+				CAM_SUBDEV_MESSAGE_REG_DUMP,
+				(void *)&data_idx);
+		}
 
 		cam_ife_csid_ver1_handle_event_err(csid_hw, evt_payload, event_type);
 		csid_hw->flags.reset_awaited = true;
@@ -4670,19 +4690,19 @@ static irqreturn_t cam_ife_csid_irq(int irq_num, void *data)
 		&csid_hw->free_payload_list);
 
 	if (!evt_payload) {
-		CAM_ERR_RATE_LIMIT(CAM_ISP, "CSID[%u], no free tasklet rc %d",
+		CAM_ERR_RATE_LIMIT(CAM_ISP, "CSID[%u], no free worker ctx rc %d",
 			csid_hw->hw_intf->hw_idx, rc);
 		return IRQ_HANDLED;
 	}
 
 
-	rc = tasklet_bh_api.get_bh_payload_func(csid_hw->tasklet, &bh_cmd);
+	rc = cam_worker_wrapper_get(csid_hw->worker_ctx, bh_cmd);
 
 	if (rc || !bh_cmd) {
 		cam_ife_csid_ver1_put_evt_payload(csid_hw, &evt_payload,
 			&csid_hw->free_payload_list);
 		CAM_ERR_RATE_LIMIT(CAM_ISP,
-			"CSID[%d] Can not get cmd for tasklet, status %x",
+			"CSID[%d] Can not get cmd for worker, status %x",
 			csid_hw->hw_intf->hw_idx,
 			status[CAM_IFE_CSID_IRQ_REG_TOP]);
 		return IRQ_HANDLED;
@@ -4694,7 +4714,7 @@ static irqreturn_t cam_ife_csid_irq(int irq_num, void *data)
 	for (i = 0; i < CAM_IFE_CSID_IRQ_REG_MAX; i++)
 		evt_payload->irq_status[i] = status[i];
 
-	tasklet_bh_api.bottom_half_enqueue_func(csid_hw->tasklet,
+	cam_worker_wrapper_enqueue(csid_hw->worker_ctx,
 		bh_cmd,
 		csid_hw,
 		evt_payload,
@@ -4855,10 +4875,11 @@ int cam_ife_csid_hw_ver1_init(struct cam_hw_intf  *hw_intf,
 	struct cam_ife_csid_core_info *csid_core_info,
 	bool is_custom)
 {
-	int                             rc = -EINVAL;
-	uint32_t                        i;
-	struct cam_hw_info             *hw_info;
-	struct cam_ife_csid_ver1_hw    *ife_csid_hw = NULL;
+	int                                 rc = -EINVAL;
+	uint32_t                            i;
+	struct cam_hw_info                 *hw_info;
+	struct cam_ife_csid_ver1_hw        *ife_csid_hw = NULL;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	if (!hw_intf || !csid_core_info) {
 		CAM_ERR(CAM_ISP, "Invalid parameters intf: %pK hw_info: %pK",
@@ -4909,8 +4930,7 @@ int cam_ife_csid_hw_ver1_init(struct cam_hw_intf  *hw_intf,
 		ife_csid_hw->flags.binning_enabled = true;
 #endif
 
-	ife_csid_hw->hw_intf->hw_ops.get_hw_caps =
-						cam_ife_csid_ver1_get_hw_caps;
+	ife_csid_hw->hw_intf->hw_ops.get_hw_caps = cam_ife_csid_ver1_get_hw_caps;
 	ife_csid_hw->hw_intf->hw_ops.init        = cam_ife_csid_ver1_init_hw;
 	ife_csid_hw->hw_intf->hw_ops.deinit      = cam_ife_csid_ver1_deinit_hw;
 	ife_csid_hw->hw_intf->hw_ops.reset       = cam_ife_csid_ver1_reset;
@@ -4920,8 +4940,7 @@ int cam_ife_csid_hw_ver1_init(struct cam_hw_intf  *hw_intf,
 	ife_csid_hw->hw_intf->hw_ops.stop        = cam_ife_csid_ver1_stop;
 	ife_csid_hw->hw_intf->hw_ops.read        = cam_ife_csid_ver1_read;
 	ife_csid_hw->hw_intf->hw_ops.write       = cam_ife_csid_ver1_write;
-	ife_csid_hw->hw_intf->hw_ops.process_cmd =
-						cam_ife_csid_ver1_process_cmd;
+	ife_csid_hw->hw_intf->hw_ops.process_cmd = cam_ife_csid_ver1_process_cmd;
 
 	rc = cam_ife_csid_ver1_hw_init_path_res(ife_csid_hw);
 	if (rc) {
@@ -4930,10 +4949,17 @@ int cam_ife_csid_hw_ver1_init(struct cam_hw_intf  *hw_intf,
 		return rc;
 	}
 
-	rc  = cam_tasklet_init(&ife_csid_hw->tasklet, ife_csid_hw,
-			hw_intf->hw_idx);
+	/* create worker wrapper for bottom half based on worker type */
+	worker_init_args.name = "cam_csid_worker";
+	worker_init_args.num_tasks = 256;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = ife_csid_hw;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = (void **)&ife_csid_hw->worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_RT);
 	if (rc) {
-		CAM_ERR(CAM_ISP, "CSID[%d] init tasklet failed",
+		CAM_ERR(CAM_ISP, "CSID[%d] init worker ctx failed",
 			hw_intf->hw_idx);
 		goto err;
 	}

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -22,6 +22,7 @@
 #include "cam_fd_hw_mgr_intf.h"
 #include "cam_fd_hw_mgr.h"
 #include "cam_trace.h"
+#include "cam_worker_wrapper_api.h"
 
 static struct cam_fd_hw_mgr g_fd_hw_mgr;
 
@@ -964,25 +965,33 @@ static int cam_fd_mgr_util_schedule_frame_worker_task(
 	struct cam_fd_hw_mgr *hw_mgr)
 {
 	int32_t rc = 0;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args task;
 	struct cam_fd_mgr_work_data *work_data;
 
-	task = cam_req_mgr_workq_get_task(hw_mgr->work);
-	if (!task) {
+	rc = cam_worker_wrapper_get(hw_mgr->worker_ctx, &task);
+	if (rc) {
 		CAM_ERR(CAM_FD, "no empty task available");
 		return -ENOMEM;
 	}
 
-	work_data = (struct cam_fd_mgr_work_data *)task->payload;
+	work_data = (struct cam_fd_mgr_work_data *)cam_worker_wrapper_get_task_payload(
+		hw_mgr->worker_ctx, &task);
+	if (!work_data) {
+		CAM_ERR(CAM_FD, "get task payload failed.");
+		return -EINVAL;
+	}
+
 	work_data->type = CAM_FD_WORK_FRAME;
 
-	task->process_cb = cam_fd_mgr_util_submit_frame;
-	rc = cam_req_mgr_workq_enqueue_task(task, hw_mgr, CRM_TASK_PRIORITY_0);
-
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(hw_mgr->worker_ctx, &task,
+		hw_mgr, work_data, cam_fd_mgr_util_submit_frame);
+	if (rc)
+		CAM_ERR(CAM_FD, "enqueue work process to worker failed.");
 	return rc;
 }
 
-static int32_t cam_fd_mgr_workq_irq_cb(void *priv, void *data)
+static int32_t cam_fd_mgr_worker_irq_cb(void *priv, void *data)
 {
 	struct cam_fd_device *hw_device = NULL;
 	struct cam_fd_hw_mgr *hw_mgr;
@@ -1122,23 +1131,31 @@ static int cam_fd_mgr_irq_cb(void *data, enum cam_fd_hw_irq_type irq_type)
 	struct cam_fd_hw_mgr *hw_mgr = &g_fd_hw_mgr;
 	int rc = 0;
 	unsigned long flags;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args task;
 	struct cam_fd_mgr_work_data *work_data;
 
 	spin_lock_irqsave(&hw_mgr->hw_mgr_slock, flags);
-	task = cam_req_mgr_workq_get_task(hw_mgr->work);
-	if (!task) {
+	rc = cam_worker_wrapper_get(hw_mgr->worker_ctx, &task);
+	if (rc) {
 		CAM_ERR(CAM_FD, "no empty task available");
 		spin_unlock_irqrestore(&hw_mgr->hw_mgr_slock, flags);
 		return -ENOMEM;
 	}
 
-	work_data = (struct cam_fd_mgr_work_data *)task->payload;
+	work_data = (struct cam_fd_mgr_work_data *)cam_worker_wrapper_get_task_payload(
+		hw_mgr->worker_ctx, &task);
+	if (!work_data) {
+		CAM_ERR(CAM_FD, "get task payload failed.");
+		spin_unlock_irqrestore(&hw_mgr->hw_mgr_slock, flags);
+		return -EINVAL;
+	}
+
 	work_data->type = CAM_FD_WORK_IRQ;
 	work_data->irq_type = irq_type;
 
-	task->process_cb = cam_fd_mgr_workq_irq_cb;
-	rc = cam_req_mgr_workq_enqueue_task(task, hw_mgr, CRM_TASK_PRIORITY_0);
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(hw_mgr->worker_ctx, &task,
+		hw_mgr, work_data, cam_fd_mgr_worker_irq_cb);
 	if (rc)
 		CAM_ERR(CAM_FD, "Failed in enqueue work task, rc=%d", rc);
 
@@ -1989,7 +2006,9 @@ int cam_fd_hw_mgr_deinit(struct device_node *of_node)
 {
 	CAM_DBG(CAM_FD, "HW Mgr Deinit");
 
-	cam_req_mgr_workq_destroy(&g_fd_hw_mgr.work);
+	cam_worker_wrapper_deinit(g_fd_hw_mgr.worker_ctx);
+	CAM_MEM_FREE(g_fd_hw_mgr.work_data);
+	g_fd_hw_mgr.work_data = NULL;
 
 	cam_smmu_destroy_handle(g_fd_hw_mgr.device_iommu.non_secure);
 	g_fd_hw_mgr.device_iommu.non_secure = -1;
@@ -2001,11 +2020,6 @@ int cam_fd_hw_mgr_deinit(struct device_node *of_node)
 	return 0;
 }
 
-static void cam_req_mgr_process_workq_cam_fd_worker(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
 int cam_fd_hw_mgr_init(struct device_node *of_node,
 	struct cam_hw_mgr_intf *hw_mgr_intf)
 {
@@ -2014,6 +2028,7 @@ int cam_fd_hw_mgr_init(struct device_node *of_node,
 	struct cam_fd_hw_mgr_ctx *hw_mgr_ctx;
 	struct cam_fd_device *hw_device;
 	struct cam_fd_mgr_frame_request *frame_req;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	if (!of_node || !hw_mgr_intf) {
 		CAM_ERR(CAM_FD, "Invalid args of_node %pK hw_mgr_intf %pK",
@@ -2150,20 +2165,31 @@ int cam_fd_hw_mgr_init(struct device_node *of_node,
 		list_add_tail(&frame_req->list, &g_fd_hw_mgr.frame_free_list);
 	}
 
-	rc = cam_req_mgr_workq_create("cam_fd_worker", CAM_FD_WORKQ_NUM_TASK,
-		&g_fd_hw_mgr.work, CRM_WORKQ_USAGE_IRQ, 0,
-		cam_req_mgr_process_workq_cam_fd_worker);
+	worker_init_args.name = "cam_fd_worker";
+	worker_init_args.num_tasks = CAM_FD_WORKER_NUM_TASK;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &g_fd_hw_mgr.worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc) {
 		CAM_ERR(CAM_FD, "Unable to create a worker, rc=%d", rc);
 		goto detach_smmu;
 	}
 
-	g_fd_hw_mgr.work_data = CAM_MEM_ZALLOC_ARRAY(CAM_FD_WORKQ_NUM_TASK,
+	g_fd_hw_mgr.work_data = CAM_MEM_ZALLOC_ARRAY(CAM_FD_WORKER_NUM_TASK,
 		sizeof(struct cam_fd_mgr_work_data), GFP_KERNEL);
+	if (!g_fd_hw_mgr.work_data) {
+		CAM_ERR(CAM_FD, "Failed at allocating memory for FD mgr work data");
+		rc = -ENOMEM;
+		goto worker_deinit;
+	}
 
-	for (i = 0; i < CAM_FD_WORKQ_NUM_TASK; i++)
-		g_fd_hw_mgr.work->task.pool[i].payload =
-			&g_fd_hw_mgr.work_data[i];
+	for (i = 0; i < CAM_FD_WORKER_NUM_TASK; i++)
+		cam_worker_wrapper_payload_bind(
+			g_fd_hw_mgr.worker_ctx, &g_fd_hw_mgr.work_data[i], i);
 
 	/* Setup hw cap so that we can just return the info when requested */
 	memset(&g_fd_hw_mgr.fd_caps, 0, sizeof(g_fd_hw_mgr.fd_caps));
@@ -2198,6 +2224,8 @@ int cam_fd_hw_mgr_init(struct device_node *of_node,
 
 	return rc;
 
+worker_deinit:
+	cam_worker_wrapper_deinit(g_fd_hw_mgr.worker_ctx);
 detach_smmu:
 	cam_smmu_destroy_handle(g_fd_hw_mgr.device_iommu.non_secure);
 	g_fd_hw_mgr.device_iommu.non_secure = -1;

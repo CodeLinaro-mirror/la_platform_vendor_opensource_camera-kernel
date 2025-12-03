@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/iopoll.h>
@@ -19,7 +19,6 @@
 #include "cam_cpas_api.h"
 #include "cam_isp_hw_mgr_intf.h"
 #include "cam_subdev.h"
-#include "cam_tasklet_util.h"
 #include "cam_common_util.h"
 #include "cam_tfe_csid_hw_intf.h"
 #include <dt-bindings/msm-camera.h>
@@ -3387,10 +3386,10 @@ static int cam_tfe_csid_handle_hw_err_irq(
 		return rc;
 	}
 
-	rc = tasklet_bh_api.get_bh_payload_func(csid_hw->tasklet, &bh_cmd);
+	rc = cam_worker_wrapper_get(csid_hw->worker_ctx, &bh_cmd);
 	if (rc || !bh_cmd) {
 		CAM_ERR_RATE_LIMIT(CAM_ISP,
-			"CSID[%d] Can not get cmd for tasklet, evt_type %d",
+			"CSID[%d] Can not get cmd for worker, evt_type %d",
 			csid_hw->hw_intf->hw_idx,
 			evt_type);
 		return rc;
@@ -3403,7 +3402,7 @@ static int cam_tfe_csid_handle_hw_err_irq(
 	for (i = 0; i < TFE_CSID_IRQ_REG_MAX; i++)
 		evt_payload->irq_status[i] = irq_status[i];
 
-	tasklet_bh_api.bottom_half_enqueue_func(csid_hw->tasklet,
+	cam_worker_wrapper_enqueue(csid_hw->worker_ctx,
 		bh_cmd,
 		csid_hw,
 		evt_payload,
@@ -3892,6 +3891,7 @@ int cam_tfe_csid_hw_probe_init(struct cam_hw_intf  *csid_hw_intf,
 	struct cam_hw_info                   *csid_hw_info;
 	struct cam_tfe_csid_hw               *tfe_csid_hw = NULL;
 	const struct cam_tfe_csid_reg_offset *csid_reg;
+	struct cam_worker_wrapper_init_args   worker_init_args = {0};
 
 	if (csid_idx >= CAM_TFE_CSID_HW_NUM_MAX) {
 		CAM_ERR(CAM_ISP, "Invalid csid index:%d", csid_idx);
@@ -4024,9 +4024,17 @@ int cam_tfe_csid_hw_probe_init(struct cam_hw_intf  *csid_hw_intf,
 		tfe_csid_hw->rdi_res[i].res_priv = path_data;
 	}
 
-	rc = cam_tasklet_init(&tfe_csid_hw->tasklet, tfe_csid_hw, csid_idx);
+	/* create worker wrapper for bottom half based on worker type */
+	worker_init_args.name = "cam_csid_worker";
+	worker_init_args.num_tasks = 256;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = tfe_csid_hw;
+	worker_init_args.index = csid_idx;
+	worker_init_args.worker_ctx_priv = (void **)&tfe_csid_hw->worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_RT);
 	if (rc) {
-		CAM_ERR(CAM_ISP, "Unable to create CSID tasklet rc %d", rc);
+		CAM_ERR(CAM_ISP, "Unable to create CSID worker rc %d", rc);
 		goto err;
 	}
 

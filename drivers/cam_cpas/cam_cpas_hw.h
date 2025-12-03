@@ -38,7 +38,7 @@
 #define CAM_CPAS_GET_CLIENT_IDX(handle) (handle)
 #define CAM_CPAS_GET_CLIENT_HANDLE(indx) (indx)
 
-#define CAM_CPAS_WORKQUEUE_NAME "cam-cpas"
+#define CAM_CPAS_WORKER_NAME "cam-cpas"
 
 #define CAM_CPAS_CLIENT_VALID(indx) \
 	((indx >= 0) && (indx < CAM_CPAS_MAX_CLIENTS))
@@ -444,7 +444,7 @@ struct cam_cpas_internal_ops {
  * @camnoc_axi_port: CAMNOC AXI port info for a specific camnoc axi index
  * @subpart_info_valid: Whether subpart info is valid or not
  * @internal_ops: CPAS HW internal ops
- * @work_queue: Work queue handle
+ * @worker_ctx: Worker context
  * @soc_access_count: atomic soc_access_count count
  * @soc_access_count_wq: wait variable to ensure CPAS is not stop,
  *						 while accessing hw through CPAS
@@ -486,7 +486,7 @@ struct cam_cpas {
 	struct cam_cpas_axi_port camnoc_axi_port[CAM_CPAS_MAX_AXI_PORTS];
 	bool subpart_info_valid;
 	struct cam_cpas_internal_ops internal_ops;
-	struct workqueue_struct *work_queue;
+	void *worker_ctx;
 	atomic_t soc_access_count;
 	wait_queue_head_t soc_access_count_wq;
 	struct dentry *dentry;

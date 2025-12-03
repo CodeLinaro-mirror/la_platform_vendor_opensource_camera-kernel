@@ -793,3 +793,33 @@ end:
 	return rc;
 }
 
+int cam_vfe_top_print_error_info(struct cam_vfe_top_err_irq_desc *err_desc,
+	uint32_t status, uint32_t num_errors, uint32_t index)
+{
+	uint32_t i;
+
+	if (!err_desc) {
+		CAM_ERR(CAM_ISP, "Invalid error description params, status:0x%x", status);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < num_errors; i++) {
+		if (status & err_desc[i].bitmask) {
+			if (err_desc[i].err_name)
+				CAM_ERR(CAM_ISP,
+					"VFE[%u] ERROR: %s status:0x%x",
+					index, err_desc[i].err_name, status);
+			else
+				CAM_ERR(CAM_ISP, "VFE[%u] status:0x%x",
+					index, status);
+
+			if (err_desc[i].desc)
+				CAM_ERR(CAM_ISP, "VFE[%u] DESC: %s", index, err_desc[i].desc);
+			if (err_desc[i].debug)
+				CAM_ERR(CAM_ISP, "VFE[%u] %s", index, err_desc[i].debug);
+		}
+	}
+
+	return 0;
+}
+

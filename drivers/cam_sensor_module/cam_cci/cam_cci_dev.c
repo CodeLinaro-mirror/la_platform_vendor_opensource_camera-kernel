@@ -12,6 +12,7 @@
 #include "uapi/linux/sched/types.h"
 #include "linux/sched/types.h"
 #include "linux/sched.h"
+#include <linux/pm_runtime.h>
 
 #define CCI_MAX_DELAY 1000000
 #define QUEUE_SIZE 100
@@ -834,6 +835,7 @@ static int cam_cci_platform_probe(struct platform_device *pdev)
 	CAM_DBG(CAM_CCI, "Adding CCI component");
 
 	cam_soc_util_initialize_power_domain(&pdev->dev);
+	pm_suspend_ignore_children(&pdev->dev, true);
 
 	rc = component_add(&pdev->dev, &cam_cci_component_ops);
 	if (rc)

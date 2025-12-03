@@ -13,7 +13,6 @@
 
 #include "cam_compat.h"
 #include "cam_smmu_api.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_isp_hw_mgr_intf.h"
 #include "cam_isp_hw.h"
 #include "cam_ife_csid_hw_intf.h"
@@ -30,6 +29,7 @@
 #include "cam_common_util.h"
 #include "cam_presil_hw_access.h"
 #include "cam_ife_csid_common.h"
+#include "cam_worker_wrapper_api.h"
 
 #define CAM_IFE_SAFE_DISABLE 0
 #define CAM_IFE_SAFE_ENABLE 1
@@ -2874,7 +2874,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 	vfe_in_res_id = ife_src_res->hw_res[0]->res_id;
 
 	vfe_acquire.rsrc_type = CAM_ISP_RESOURCE_VFE_OUT;
-	vfe_acquire.tasklet = ife_ctx->common.tasklet_info;
+	vfe_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 	for (i = 0; i < in_port->num_out_res; i++) {
 		out_port = &in_port->data[i];
 
@@ -2997,7 +2997,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_pixel(
 
 		ife_out_res->is_dual_isp = in_port->usage_type;
 		vfe_acquire.rsrc_type = CAM_ISP_RESOURCE_VFE_OUT;
-		vfe_acquire.tasklet = ife_ctx->common.tasklet_info;
+		vfe_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 		vfe_acquire.vfe_out.cdm_ops = ife_ctx->cdm_ops;
 		vfe_acquire.priv = ife_ctx;
 		vfe_acquire.vfe_out.out_port_info =  out_port;
@@ -3139,7 +3139,7 @@ static int cam_ife_hw_mgr_acquire_res_sfe_out_rdi(
 		sfe_in_res_id, sfe_out_res_id, ife_ctx->ctx_index);
 
 	sfe_acquire.rsrc_type = CAM_ISP_RESOURCE_SFE_OUT;
-	sfe_acquire.tasklet = ife_ctx->common.tasklet_info;
+	sfe_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 	ife_ctx->sfe_out_map[sfe_out_res_id & 0xFF] = ife_ctx->num_acq_sfe_out;
 	sfe_out_res = &ife_ctx->res_list_sfe_out[ife_ctx->num_acq_sfe_out];
 	for (i = 0; i < in_port->num_out_res; i++) {
@@ -3230,7 +3230,7 @@ static int cam_ife_hw_mgr_acquire_res_sfe_out_pix(
 		sfe_out_res = &ife_ctx->res_list_sfe_out[ife_ctx->num_acq_sfe_out];
 		sfe_out_res->is_dual_isp = in_port->usage_type;
 		sfe_acquire.rsrc_type = CAM_ISP_RESOURCE_SFE_OUT;
-		sfe_acquire.tasklet = ife_ctx->common.tasklet_info;
+		sfe_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 		sfe_acquire.sfe_out.cdm_ops = ife_ctx->cdm_ops;
 		sfe_acquire.priv = ife_ctx;
 		sfe_acquire.sfe_out.out_port_info =  out_port;
@@ -3615,7 +3615,7 @@ static int cam_ife_hw_mgr_acquire_res_sfe_src_util(
 	}
 
 	sfe_acquire->rsrc_type = CAM_ISP_RESOURCE_SFE_IN;
-	sfe_acquire->tasklet = ife_ctx->common.tasklet_info;
+	sfe_acquire->worker_ctx = ife_ctx->common.worker_ctx;
 	sfe_acquire->sfe_in.cdm_ops = ife_ctx->cdm_ops;
 	sfe_acquire->sfe_in.in_port = in_port;
 	sfe_acquire->sfe_in.is_offline = ife_ctx->flags.is_offline;
@@ -3836,7 +3836,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_bus_rd(
 	}
 
 	vfe_acquire.rsrc_type = CAM_ISP_RESOURCE_VFE_BUS_RD;
-	vfe_acquire.tasklet = ife_ctx->common.tasklet_info;
+	vfe_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 	vfe_acquire.priv = ife_ctx;
 	vfe_acquire.event_cb = cam_ife_hw_mgr_event_handler;
 
@@ -3967,7 +3967,7 @@ static int cam_ife_hw_mgr_acquire_sfe_bus_rd(
 			ife_ctx->ctx_index);
 
 	sfe_acquire.rsrc_type = CAM_ISP_RESOURCE_SFE_RD;
-	sfe_acquire.tasklet = ife_ctx->common.tasklet_info;
+	sfe_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 	sfe_acquire.priv = ife_ctx;
 	sfe_acquire.event_cb = cam_ife_hw_mgr_event_handler;
 	sfe_acquire.sfe_rd.cdm_ops = ife_ctx->cdm_ops;
@@ -4068,7 +4068,7 @@ static int cam_ife_hw_mgr_acquire_ife_src_for_sfe(
 	}
 
 	vfe_acquire.rsrc_type = CAM_ISP_RESOURCE_VFE_IN;
-	vfe_acquire.tasklet = ife_ctx->common.tasklet_info;
+	vfe_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 	vfe_acquire.vfe_in.cdm_ops = ife_ctx->cdm_ops;
 	vfe_acquire.vfe_in.in_port = in_port;
 	vfe_acquire.vfe_in.is_fe_enabled = ife_ctx->flags.is_fe_enabled;
@@ -4231,7 +4231,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_src(
 		}
 
 		vfe_acquire.rsrc_type = CAM_ISP_RESOURCE_VFE_IN;
-		vfe_acquire.tasklet = ife_ctx->common.tasklet_info;
+		vfe_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 		vfe_acquire.vfe_in.cdm_ops = ife_ctx->cdm_ops;
 		vfe_acquire.vfe_in.in_port = in_port;
 		vfe_acquire.vfe_in.is_fe_enabled = ife_ctx->flags.is_fe_enabled;
@@ -4661,7 +4661,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_csid_pxl(
 			csid_acquire.sync_mode = i == CAM_ISP_HW_SPLIT_LEFT ?
 				CAM_ISP_HW_SYNC_MASTER : CAM_ISP_HW_SYNC_SLAVE;
 
-		csid_acquire.tasklet = ife_ctx->common.tasklet_info;
+		csid_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 		csid_acquire.cdm_ops = ife_ctx->cdm_ops;
 
 		rc = cam_ife_hw_mgr_acquire_csid_hw(ife_ctx, &csid_acquire, in_port);
@@ -4796,7 +4796,7 @@ static int cam_ife_hw_mgr_acquire_csid_rdi_util(
 	csid_acquire.out_port = out_port;
 	csid_acquire.node_res = NULL;
 	csid_acquire.event_cb = cam_ife_hw_mgr_event_handler;
-	csid_acquire.tasklet = ife_ctx->common.tasklet_info;
+	csid_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 	csid_acquire.cb_priv = ife_ctx;
 	csid_acquire.cdm_ops = ife_ctx->cdm_ops;
 	csid_acquire.is_new_csid_acq = false;
@@ -5314,7 +5314,7 @@ static int cam_ife_hw_mgr_acquire_offline_res_ife_camif(
 	}
 
 	vfe_acquire.rsrc_type = CAM_ISP_RESOURCE_VFE_IN;
-	vfe_acquire.tasklet = ife_ctx->common.tasklet_info;
+	vfe_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 	vfe_acquire.priv = ife_ctx;
 	vfe_acquire.event_cb = cam_ife_hw_mgr_event_handler;
 
@@ -5453,7 +5453,7 @@ static int cam_ife_hw_mgr_acquire_offline_res_sfe(
 	}
 
 	sfe_acquire.rsrc_type = CAM_ISP_RESOURCE_SFE_IN;
-	sfe_acquire.tasklet = ife_ctx->common.tasklet_info;
+	sfe_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 	sfe_acquire.priv = ife_ctx;
 	sfe_acquire.event_cb = cam_ife_hw_mgr_event_handler;
 	sfe_acquire.sfe_in.cdm_ops = ife_ctx->cdm_ops;
@@ -5555,7 +5555,7 @@ static int cam_ife_hw_mgr_acquire_offline_res_csid(
 	csid_acquire.out_port = in_port->data;
 	csid_acquire.node_res = NULL;
 	csid_acquire.event_cb = cam_ife_hw_mgr_event_handler;
-	csid_acquire.tasklet = ife_ctx->common.tasklet_info;
+	csid_acquire.worker_ctx = ife_ctx->common.worker_ctx;
 	csid_acquire.cb_priv = ife_ctx;
 	csid_acquire.cdm_ops = ife_ctx->cdm_ops;
 	csid_acquire.sync_mode = CAM_ISP_HW_SYNC_NONE;
@@ -6116,6 +6116,8 @@ static inline void cam_ife_mgr_acquire_get_feature_flag_params_v3(
 	in_port->can_use_lite             = in->feature_mask & CAM_ISP_CAN_USE_LITE_MODE;
 	in_port->aeb_mode                 = in->feature_mask & CAM_ISP_AEB_MODE_EN;
 	in_port->dynamic_hdr_switch_en    = in->feature_mask & CAM_ISP_HDR_MODE_DYNAMIC_SWITCH_EN;
+	in_port->qcfa_bin                 = in->feature_mask & CAM_ISP_IFE_FLAG_QCFA_BIN;
+	in_port->horizontal_bin           = in->feature_mask & CAM_ISP_IFE_FLAG_HORIZONTAL_BIN;
 }
 
 static inline void cam_ife_mgr_acquire_get_feature_flag_params(
@@ -8288,7 +8290,7 @@ skip_bw_clk_update:
 						rc = -ETIMEDOUT;
 				} else {
 					CAM_DBG(CAM_ISP,
-						"Wq delayed but IRQ CDM done, ctx_index %u",
+						"Worker delayed but IRQ CDM done, ctx_index %u",
 						ctx->ctx_index);
 				}
 			} else {
@@ -8431,8 +8433,8 @@ static int cam_ife_mgr_stop_hw_in_overflow(void *stop_hw_args)
 		cam_ife_hw_mgr_stop_hw_res(&ctx->res_list_ife_out[i]);
 
 
-	/* Stop tasklet for context */
-	cam_tasklet_stop(ctx->common.tasklet_info);
+	/* Stop worker for context */
+	cam_worker_wrapper_flush(ctx->common.worker_ctx);
 	CAM_DBG(CAM_ISP, "Exit...ctx id:%u rc :%d", ctx->ctx_index, rc);
 
 	return rc;
@@ -8657,7 +8659,7 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 		cam_ife_hw_mgr_stop_hw_res(hw_mgr_res);
 	}
 
-	cam_tasklet_stop(ctx->common.tasklet_info);
+	cam_worker_wrapper_flush(ctx->common.worker_ctx);
 
 	/* reset scratch buffer/mup expect INIT again for UMD triggered stop/flush */
 	if (!stop_isp->is_internal_stop) {
@@ -8817,7 +8819,7 @@ static int cam_ife_mgr_restart_hw(void *start_hw_args)
 
 	CAM_DBG(CAM_ISP, "START IFE OUT ... in ctx id:%u", ctx->ctx_index);
 
-	cam_tasklet_start(ctx->common.tasklet_info);
+	cam_worker_wrapper_start(ctx->common.worker_ctx);
 
 	/* start the IFE out devices */
 	for (i = 0; i < ctx->num_acq_vfe_out; i++) {
@@ -9057,7 +9059,7 @@ static int cam_ife_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 
 	/* update Bandwidth should be done at the hw layer */
 
-	cam_tasklet_start(ctx->common.tasklet_info);
+	cam_worker_wrapper_start(ctx->common.worker_ctx);
 	ctx->err_stream_type = CAM_IFE_CTX_ERR_STREAM_NONE;
 
 	if (ctx->flags.init_done && start_isp->start_only) {
@@ -9090,7 +9092,7 @@ static int cam_ife_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 					rc = cam_ife_mgr_find_core_idx(i, ctx, CAM_ISP_HW_TYPE_SFE,
 						&csid_top_args.core_idx);
 					if (rc)
-						goto tasklet_stop;
+						goto worker_stop;
 				} else {
 					csid_top_args.input_core_type =
 						CAM_IFE_CSID_INPUT_CORE_IFE;
@@ -9112,7 +9114,7 @@ static int cam_ife_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 					CAM_ERR(CAM_ISP,
 						"CSID: %u top config cmd failed, rc:%d",
 						hw_intf->hw_idx, rc);
-					goto tasklet_stop;
+					goto worker_stop;
 				}
 				CAM_DBG(CAM_ISP,
 					"CSID: %u split_id: %d core_idx: %u core_type: %u is_sfe_offline: %d ctx_idx: %u",
@@ -9149,7 +9151,7 @@ static int cam_ife_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 	rc = cam_ife_hw_mgr_init_hw(ctx);
 	if (rc) {
 		CAM_ERR(CAM_ISP, "Init failed, ctx_idx: %u", ctx->ctx_index);
-		goto tasklet_stop;
+		goto worker_stop;
 	}
 
 	ctx->flags.init_done = true;
@@ -9319,8 +9321,8 @@ safe_disable:
 deinit_hw:
 	cam_ife_hw_mgr_deinit_hw(ctx);
 
-tasklet_stop:
-	cam_tasklet_stop(ctx->common.tasklet_info);
+worker_stop:
+	cam_worker_wrapper_flush(ctx->common.worker_ctx);
 
 	return rc;
 }
@@ -15713,7 +15715,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 				prepare->num_reg_dump_buf);
 			/*
 			 * save the address for error/flush cases to avoid
-			 * invoking mutex(cpu get/put buf) in tasklet/atomic context.
+			 * invoking mutex(cpu get/put buf) in worker/atomic context.
 			 */
 			for (i = 0; i < ctx->num_reg_dump_buf; i++) {
 				rc = cam_mem_get_cpu_buf(ctx->reg_dump_buf_desc[i].mem_handle,
@@ -17089,7 +17091,7 @@ static int cam_ife_hw_mgr_do_error_recovery(
 	struct cam_ife_hw_event_recovery_data  *ife_mgr_recovery_data)
 {
 	int32_t                                 rc, i;
-	struct crm_workq_task                  *task = NULL;
+	struct cam_worker_wrapper_taskdata_args task;
 	struct cam_ife_hw_event_recovery_data  *recovery_data = NULL;
 	struct cam_ife_hw_mgr_ctx *ctx;
 
@@ -17100,23 +17102,22 @@ static int cam_ife_hw_mgr_do_error_recovery(
 
 	CAM_DBG(CAM_ISP, "Enter: error_type (%d)", recovery_data->error_type);
 
-	task = cam_req_mgr_workq_get_task(g_ife_hw_mgr.workq);
-	if (!task) {
+	rc = cam_worker_wrapper_get(g_ife_hw_mgr.worker_ctx, &task);
+	if (rc) {
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "No empty task frame");
 		kfree(recovery_data);
 		return -ENOMEM;
 	}
 
-	task->process_cb = &cam_context_handle_hw_recovery;
-	task->payload = recovery_data;
 	for (i = 0; i < recovery_data->no_of_context; i++) {
 		ctx = recovery_data->affected_ctx[i];
 		recovery_data->id[i] = atomic_inc_return(&ctx->recovery_id);
 	}
 
-	rc = cam_req_mgr_workq_enqueue_task(task,
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(g_ife_hw_mgr.worker_ctx, &task,
 		recovery_data->affected_ctx[0]->common.cb_priv,
-		CRM_TASK_PRIORITY_0);
+		recovery_data, &cam_context_handle_hw_recovery);
 	return rc;
 }
 
@@ -19945,11 +19946,6 @@ end:
 	return rc;
 }
 
-static void cam_req_mgr_process_workq_cam_ife_worker(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
 static unsigned long cam_ife_hw_mgr_mini_dump_cb(void *dst, unsigned long len,
 	void *priv_data)
 {
@@ -20206,6 +20202,7 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl,
 	struct cam_ife_hw_mgr_ctx *ctx_pool = NULL;
 	struct cam_isp_hw_cap isp_cap = {0};
 	struct cam_isp_hw_path_port_map path_port_map;
+	struct cam_worker_wrapper_init_args worker_wrapper_init_para = {0};
 
 	memset(&g_ife_hw_mgr, 0, sizeof(g_ife_hw_mgr));
 	memset(&path_port_map, 0, sizeof(path_port_map));
@@ -20487,20 +20484,39 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl,
 		g_ife_hw_mgr.ctx_pool[i].ctx_index = CAM_IFE_CTX_MAX;
 		g_ife_hw_mgr.ctx_pool[i].hw_mgr = &g_ife_hw_mgr;
 
-		cam_tasklet_init(&g_ife_hw_mgr.mgr_common.tasklet_pool[i],
-			&g_ife_hw_mgr.ctx_pool[i], i);
-		g_ife_hw_mgr.ctx_pool[i].common.tasklet_info =
-			g_ife_hw_mgr.mgr_common.tasklet_pool[i];
+		/* create worker wrapper for bottom half based on worker type */
+		worker_wrapper_init_para.name = "cam_isp_worker";
+		worker_wrapper_init_para.num_tasks = 256;
+		worker_wrapper_init_para.max_active = 0;
+		worker_wrapper_init_para.in_irq = WORKER_USAGE_IRQ;
+		worker_wrapper_init_para.flag = 0;
+		worker_wrapper_init_para.priv_data = &g_ife_hw_mgr.ctx_pool[i];
+		worker_wrapper_init_para.index = i;
+		worker_wrapper_init_para.worker_ctx_priv =
+			&g_ife_hw_mgr.mgr_common.worker_pool[i];
+		rc = cam_worker_wrapper_init(&worker_wrapper_init_para, WORKER_CLASS_RT);
+		if (rc < 0) {
+			CAM_ERR(CAM_ISP, "Unable to create isp worker");
+			goto end;
+		}
 
+		g_ife_hw_mgr.ctx_pool[i].common.worker_ctx =
+			g_ife_hw_mgr.mgr_common.worker_pool[i];
 		init_completion(&g_ife_hw_mgr.ctx_pool[i].config_done_complete);
 		list_add_tail(&g_ife_hw_mgr.ctx_pool[i].list,
 			&g_ife_hw_mgr.free_ctx_list);
 	}
 
 	/* Create Worker for ife_hw_mgr with 10 tasks */
-	rc = cam_req_mgr_workq_create("cam_ife_worker", 10,
-			&g_ife_hw_mgr.workq, CRM_WORKQ_USAGE_NON_IRQ, 0,
-			cam_req_mgr_process_workq_cam_ife_worker);
+	worker_wrapper_init_para.name = "cam_ife_worker";
+	worker_wrapper_init_para.num_tasks = 10;
+	worker_wrapper_init_para.max_active = 0;
+	worker_wrapper_init_para.in_irq = WORKER_USAGE_NON_IRQ;
+	worker_wrapper_init_para.flag = 0;
+	worker_wrapper_init_para.priv_data = NULL;
+	worker_wrapper_init_para.index = 0;
+	worker_wrapper_init_para.worker_ctx_priv = &g_ife_hw_mgr.worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_wrapper_init_para, WORKER_CLASS_NRT);
 	if (rc < 0) {
 		CAM_ERR(CAM_ISP, "Unable to create worker, ctx_idx: %u", ctx_pool->ctx_index);
 		goto end;
@@ -20602,14 +20618,13 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl,
 end:
 	if (rc) {
 		for (i = 0; i < CAM_IFE_CTX_MAX; i++) {
-			cam_tasklet_deinit(
-				&g_ife_hw_mgr.mgr_common.tasklet_pool[i]);
+			cam_worker_wrapper_deinit(g_ife_hw_mgr.mgr_common.worker_pool[i]);
 			g_ife_hw_mgr.ctx_pool[i].cdm_cmd = NULL;
 			CAM_MEM_FREE(g_ife_hw_mgr.ctx_pool[i].vfe_out_map);
 			CAM_MEM_FREE(g_ife_hw_mgr.ctx_pool[i].sfe_out_map);
 			g_ife_hw_mgr.ctx_pool[i].vfe_out_map = NULL;
 			g_ife_hw_mgr.ctx_pool[i].sfe_out_map = NULL;
-			g_ife_hw_mgr.ctx_pool[i].common.tasklet_info = NULL;
+			g_ife_hw_mgr.ctx_pool[i].common.worker_ctx = NULL;
 		}
 	}
 
@@ -20626,7 +20641,7 @@ void cam_ife_hw_mgr_deinit(void)
 {
 	int i = 0;
 
-	cam_req_mgr_workq_destroy(&g_ife_hw_mgr.workq);
+	cam_worker_wrapper_deinit(g_ife_hw_mgr.worker_ctx);
 	g_ife_hw_mgr.debug_cfg.dentry = NULL;
 	CAM_MEM_FREE(g_ife_hw_mgr.debug_cfg.sfe_perf_counter_val);
 	CAM_MEM_FREE(g_ife_hw_mgr.debug_cfg.ife_perf_counter_val);
@@ -20636,13 +20651,13 @@ void cam_ife_hw_mgr_deinit(void)
 	CAM_MEM_FREE(g_ife_hw_mgr.debug_cfg.csid_perf_counter_val1);
 
 	for (i = 0; i < CAM_IFE_CTX_MAX; i++) {
-		cam_tasklet_deinit(&g_ife_hw_mgr.mgr_common.tasklet_pool[i]);
+		cam_worker_wrapper_deinit(g_ife_hw_mgr.mgr_common.worker_pool[i]);
 		g_ife_hw_mgr.ctx_pool[i].cdm_cmd = NULL;
 		CAM_MEM_FREE(g_ife_hw_mgr.ctx_pool[i].vfe_out_map);
 		CAM_MEM_FREE(g_ife_hw_mgr.ctx_pool[i].sfe_out_map);
 		g_ife_hw_mgr.ctx_pool[i].vfe_out_map = NULL;
 		g_ife_hw_mgr.ctx_pool[i].sfe_out_map = NULL;
-		g_ife_hw_mgr.ctx_pool[i].common.tasklet_info = NULL;
+		g_ife_hw_mgr.ctx_pool[i].common.worker_ctx = NULL;
 	}
 
 	cam_smmu_destroy_handle(g_ife_hw_mgr.mgr_common.img_iommu_hdl_secure);

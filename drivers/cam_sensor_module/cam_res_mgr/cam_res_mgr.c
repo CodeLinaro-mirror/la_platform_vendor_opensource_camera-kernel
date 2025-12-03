@@ -610,13 +610,14 @@ static void cam_res_mgr_gpio_free(struct device *dev, uint gpio)
 	if (gpio_found && cam_res
 		&& cam_res->shared_gpio_enabled) {
 		struct cam_dev_res *dev_res = NULL;
-
-		list_for_each_entry(dev_res,
-			&gpio_res->dev_list, list) {
-			if (dev_res->dev == dev) {
-				list_del_init(&dev_res->list);
-				CAM_MEM_FREE(dev_res);
-				break;
+		if (!list_empty(&gpio_res->dev_list)) {
+			list_for_each_entry(dev_res,
+				&gpio_res->dev_list, list) {
+				if (dev_res->dev == dev) {
+					list_del_init(&dev_res->list);
+					CAM_MEM_FREE(dev_res);
+					break;
+				}
 			}
 		}
 	}
@@ -673,10 +674,11 @@ int cam_res_mgr_gpio_set_value(unsigned int gpio, int value)
 	/*
 	 * Set the value directly for non-shared gpio, for shared
 	 * gpio need add ref count support.
-	 **/
+	 */
 	if (!found) {
 		CAM_ERR(CAM_RES, "gpio: %u not found", gpio);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto end;
 	} else if (!cam_res->shared_gpio_enabled) {
 		gpio_set_value_cansleep(gpio, value);
 		CAM_DBG(CAM_RES, "Set GPIO(%d) : %d", gpio, value);
@@ -698,6 +700,7 @@ int cam_res_mgr_gpio_set_value(unsigned int gpio, int value)
 		}
 	}
 
+end:
 	mutex_unlock(&cam_res->gpio_res_lock);
 	return rc;
 }

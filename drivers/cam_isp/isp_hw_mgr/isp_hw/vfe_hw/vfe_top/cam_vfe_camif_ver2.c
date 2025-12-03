@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -14,12 +14,12 @@
 #include "cam_vfe_top.h"
 #include "cam_vfe_top_ver2.h"
 #include "cam_irq_controller.h"
-#include "cam_tasklet_util.h"
 #include "cam_vfe_camif_ver2.h"
 #include "cam_debug_util.h"
 #include "cam_cdm_util.h"
 #include "cam_cpas_api.h"
 #include "cam_mem_mgr_api.h"
+#include "cam_worker_wrapper_api.h"
 
 #define CAM_VFE_CAMIF_IRQ_SOF_DEBUG_CNT_MAX 2
 
@@ -143,7 +143,7 @@ static int cam_vfe_camif_err_irq_top_half(
 	rc  = cam_vfe_camif_get_evt_payload(camif_priv, &evt_payload);
 	if (rc) {
 		CAM_ERR_RATE_LIMIT(CAM_ISP,
-			"No tasklet_cmd is free in queue");
+			"No worker is free in queue");
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "IRQ STATUS_0=0x%x STATUS_1=0x%x",
 			th_payload->evt_status_arr[0],
 			th_payload->evt_status_arr[1]);
@@ -488,8 +488,7 @@ static int cam_vfe_camif_resource_start(
 			camif_res,
 			camif_res->top_half_handler,
 			camif_res->bottom_half_handler,
-			camif_res->tasklet_info,
-			&tasklet_bh_api,
+			camif_res->worker_ctx,
 			CAM_IRQ_EVT_GROUP_0);
 		if (rsrc_data->irq_handle < 1) {
 			CAM_ERR(CAM_ISP, "IRQ handle subscribe failure");
@@ -506,8 +505,7 @@ subscribe_err:
 			camif_res,
 			cam_vfe_camif_err_irq_top_half,
 			camif_res->bottom_half_handler,
-			camif_res->tasklet_info,
-			&tasklet_bh_api,
+			camif_res->worker_ctx,
 			CAM_IRQ_EVT_GROUP_0);
 		if (rsrc_data->irq_err_handle < 1) {
 			CAM_ERR(CAM_ISP, "Error IRQ handle subscribe failure");
@@ -731,7 +729,7 @@ static int cam_vfe_camif_handle_irq_top_half(uint32_t evt_id,
 
 	rc  = cam_vfe_camif_get_evt_payload(camif_priv, &evt_payload);
 	if (rc) {
-		CAM_ERR_RATE_LIMIT(CAM_ISP, "No tasklet_cmd is free in queue");
+		CAM_ERR_RATE_LIMIT(CAM_ISP, "No worker is free in queue");
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "IRQ status0=0x%x status1=0x%x",
 			th_payload->evt_status_arr[0],
 			th_payload->evt_status_arr[1]);

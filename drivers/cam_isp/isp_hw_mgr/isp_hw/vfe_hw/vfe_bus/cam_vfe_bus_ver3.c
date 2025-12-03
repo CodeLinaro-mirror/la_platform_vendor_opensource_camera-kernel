@@ -16,7 +16,6 @@
 #include "cam_ife_hw_mgr.h"
 #include "cam_vfe_hw_intf.h"
 #include "cam_irq_controller.h"
-#include "cam_tasklet_util.h"
 #include "cam_vfe_bus_ver3.h"
 #include "cam_vfe_core.h"
 #include "cam_vfe_soc.h"
@@ -222,7 +221,7 @@ struct cam_vfe_bus_ver3_priv {
 	int                                    bus_irq_handle;
 	int                                    rup_irq_handle;
 	int                                    error_irq_handle;
-	void                                  *tasklet_info;
+	void                                  *worker_ctx;
 	uint32_t                               max_out_res;
 	uint32_t                               num_cons_err;
 	struct cam_vfe_constraint_error_info  *constraint_error_list;
@@ -592,8 +591,11 @@ static enum cam_vfe_bus_ver3_vfe_out_type
 }
 
 static enum cam_vfe_bus_ver3_packer_format
-	cam_vfe_bus_ver3_get_packer_fmt(uint32_t out_fmt, int wm_index)
+	cam_vfe_bus_ver3_get_packer_fmt(
+	struct cam_vfe_bus_ver3_reg_offset_common *common_reg,
+	uint32_t out_fmt, int wm_index)
 {
+
 	switch (out_fmt) {
 	case CAM_FORMAT_MIPI_RAW_6:
 	case CAM_FORMAT_MIPI_RAW_16:
@@ -635,9 +637,13 @@ static enum cam_vfe_bus_ver3_packer_format
 		return PACKER_FMT_VER3_PLAIN_32;
 	case CAM_FORMAT_PLAIN32_20:
 		return PACKER_FMT_VER3_PLAIN32_20BPP;
+	case CAM_FORMAT_PD10:
+		if (common_reg->capabilities & CAM_VFE_COMMON_CAP_PD10_PACKED_PLAIN128)
+			return PACKER_FMT_VER3_PLAIN_128;
+
+		return PACKER_FMT_VER3_PLAIN_64;
 	case CAM_FORMAT_PLAIN64:
 	case CAM_FORMAT_ARGB_16:
-	case CAM_FORMAT_PD10:
 		return PACKER_FMT_VER3_PLAIN_64;
 	case CAM_FORMAT_UBWC_TP10:
 	case CAM_FORMAT_GBR_UBWC_TP10:
@@ -959,7 +965,7 @@ static int cam_vfe_bus_ver3_config_rdi_wm(
 	case CAM_FORMAT_PLAIN16_10_LSB:
 		if (rsrc_data->use_wm_pack) {
 			rsrc_data->cfg.pack_fmt = cam_vfe_bus_ver3_get_packer_fmt(
-				rsrc_data->cfg.format, rsrc_data->index);
+				common_reg, rsrc_data->cfg.format, rsrc_data->index);
 			/* LSB aligned */
 			rsrc_data->cfg.pack_fmt |= (1 << rsrc_data->common_data->pack_align_shift);
 
@@ -1047,10 +1053,14 @@ static int cam_vfe_bus_ver3_config_ports_with_ubwc(
 		break;
 	case CAM_FORMAT_PD10:
 		/**
-		 * For PD10 format, on Lanai and older, width and height
-		 * halved for all planes
+		 * For PD10 format, height should be halved and
+		 * width halved if packed plain64 else width/4
+		 * if packed plain128.
 		 */
-		rsrc_data->cfg.width /= 2;
+		if (common_reg->capabilities & CAM_VFE_COMMON_CAP_PD10_PACKED_PLAIN128)
+			rsrc_data->cfg.width = DIV_ROUND_UP(rsrc_data->cfg.width, 4);
+		else
+			rsrc_data->cfg.width /= 2;
 		rsrc_data->cfg.height /= 2;
 		break;
 	default:
@@ -1208,7 +1218,7 @@ static int cam_vfe_bus_ver3_config_port(
 static int cam_vfe_bus_ver3_acquire_wm(
 	struct cam_vfe_bus_ver3_priv           *ver3_bus_priv,
 	struct cam_vfe_hw_vfe_out_acquire_args *out_acq_args,
-	void                                   *tasklet,
+	void                                   *worker_ctx,
 	enum cam_vfe_bus_ver3_vfe_out_type      vfe_out_res_id,
 	enum cam_vfe_bus_plane_type             plane,
 	struct cam_isp_resource_node           *wm_res,
@@ -1241,8 +1251,8 @@ static int cam_vfe_bus_ver3_acquire_wm(
 	rsrc_data->cfg.format = out_acq_args->out_port_info->format;
 	rsrc_data->use_wm_pack = (out_acq_args->use_wm_pack ||
 				out_acq_args->out_port_info->use_wm_pack);
-	rsrc_data->cfg.pack_fmt = cam_vfe_bus_ver3_get_packer_fmt(rsrc_data->cfg.format,
-		wm_idx);
+	rsrc_data->cfg.pack_fmt = cam_vfe_bus_ver3_get_packer_fmt(
+		rsrc_data->common_data->common_reg, rsrc_data->cfg.format, wm_idx);
 
 	rsrc_data->cfg.width = out_acq_args->out_port_info->width;
 	rsrc_data->cfg.height = out_acq_args->out_port_info->height;
@@ -1317,7 +1327,7 @@ static int cam_vfe_bus_ver3_acquire_wm(
 	}
 
 	wm_res->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
-	wm_res->tasklet_info = tasklet;
+	wm_res->worker_ctx = worker_ctx;
 
 	CAM_DBG(CAM_ISP,
 		"VFE:%u WM:%d %s processed width:%d height:%d stride:%d format:0x%X pack_fmt:%d ubwc_cap:%s %s",
@@ -1360,7 +1370,7 @@ static int cam_vfe_bus_ver3_release_wm(void   *bus_priv,
 		memset(rsrc_data->mc_data, 0, sizeof(struct cam_vfe_bus_ver3_wm_mc_data) *
 			CAM_ISP_MULTI_CTXT_MAX);
 
-	wm_res->tasklet_info = NULL;
+	wm_res->worker_ctx = NULL;
 	wm_res->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 
 	rc = cam_vmrm_soc_release_resources(CAM_HW_ID_IFE0 + rsrc_data->common_data->core_index);
@@ -1656,8 +1666,8 @@ static int cam_vfe_bus_ver3_deinit_wm_resource(
 }
 
 static int cam_vfe_bus_ver3_acquire_comp_grp(
-	struct cam_vfe_bus_ver3_priv         *ver3_bus_priv,
-	void                                *tasklet,
+	struct cam_vfe_bus_ver3_priv        *ver3_bus_priv,
+	void                                *worker_ctx,
 	uint32_t                             is_dual,
 	uint32_t                             is_master,
 	struct cam_isp_resource_node        *comp_grp,
@@ -1668,7 +1678,7 @@ static int cam_vfe_bus_ver3_acquire_comp_grp(
 
 	if (comp_grp->res_state == CAM_ISP_RESOURCE_STATE_AVAILABLE) {
 		rsrc_data->intra_client_mask = 0x1;
-		comp_grp->tasklet_info = tasklet;
+		comp_grp->worker_ctx = worker_ctx;
 		comp_grp->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
 
 		rsrc_data->is_master = is_master;
@@ -1735,7 +1745,7 @@ static int cam_vfe_bus_ver3_release_comp_grp(
 		in_rsrc_data->addr_sync_mode = 0;
 		in_rsrc_data->composite_mask = 0;
 
-		in_comp_grp->tasklet_info = NULL;
+		in_comp_grp->worker_ctx = NULL;
 		in_comp_grp->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 
 	}
@@ -2143,10 +2153,10 @@ static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
 	}
 	mutex_unlock(&rsrc_data->common_data->bus_mutex);
 
-	ver3_bus_priv->tasklet_info = acq_args->tasklet;
+	ver3_bus_priv->worker_ctx = acq_args->worker_ctx;
 	rsrc_node->is_rdi_primary_res = false;
 	rsrc_node->res_id = out_acquire_args->out_port_info->res_type;
-	rsrc_node->tasklet_info = acq_args->tasklet;
+	rsrc_node->worker_ctx = acq_args->worker_ctx;
 	rsrc_node->cdm_ops = out_acquire_args->cdm_ops;
 	rsrc_data->common_data->cdm_util_ops = out_acquire_args->cdm_ops;
 	rsrc_data->format = out_acquire_args->out_port_info->format;
@@ -2183,7 +2193,7 @@ static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
 	for (i = 0; i < rsrc_data->num_wm; i++) {
 		rc = cam_vfe_bus_ver3_acquire_wm(ver3_bus_priv,
 			out_acquire_args,
-			acq_args->tasklet,
+			acq_args->worker_ctx,
 			vfe_out_res_id,
 			i,
 			rsrc_data->wm_res[i],
@@ -2200,7 +2210,7 @@ static int cam_vfe_bus_ver3_acquire_vfe_out(void *bus_priv, void *acquire_args,
 
 	/* Acquire composite group using COMP GRP ID */
 	rc = cam_vfe_bus_ver3_acquire_comp_grp(ver3_bus_priv,
-		acq_args->tasklet,
+		acq_args->worker_ctx,
 		out_acquire_args->is_dual,
 		out_acquire_args->is_master,
 		rsrc_data->comp_grp,
@@ -2296,7 +2306,7 @@ static int cam_vfe_bus_ver3_release_vfe_out(void *bus_priv, void *release_args,
 			rsrc_data->comp_grp);
 
 
-	vfe_out->tasklet_info = NULL;
+	vfe_out->worker_ctx = NULL;
 	vfe_out->cdm_ops = NULL;
 	rsrc_data->dst_hw_ctxt_id_mask = 0;
 
@@ -2397,8 +2407,7 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 			vfe_out,
 			cam_vfe_bus_ver3_handle_mc_comp_done_top_half,
 			vfe_out->bottom_half_handler,
-			vfe_out->tasklet_info,
-			&tasklet_bh_api,
+			vfe_out->worker_ctx,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (rsrc_data->mc_comp_irq_handle < 1) {
@@ -2415,8 +2424,7 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 			vfe_out,
 			vfe_out->top_half_handler,
 			vfe_out->bottom_half_handler,
-			vfe_out->tasklet_info,
-			&tasklet_bh_api,
+			vfe_out->worker_ctx,
 			CAM_IRQ_EVT_GROUP_0);
 		if (vfe_out->irq_handle < 1) {
 			CAM_ERR(CAM_ISP, "Subscribe IRQ failed for VFE out_res %d, VFE:%u",
@@ -2443,8 +2451,7 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 			vfe_out,
 			vfe_out->top_half_handler,
 			vfe_out->bottom_half_handler,
-			rsrc_data->bus_priv->tasklet_info,
-			&tasklet_bh_api,
+			rsrc_data->bus_priv->worker_ctx,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (rsrc_data->early_done_irq_handle < 1) {
@@ -2479,8 +2486,7 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 				vfe_out,
 				cam_vfe_bus_ver3_handle_rup_top_half,
 				cam_vfe_bus_ver3_handle_rup_bottom_half,
-				vfe_out->tasklet_info,
-				&tasklet_bh_api,
+				vfe_out->worker_ctx,
 				CAM_IRQ_EVT_GROUP_1);
 
 		if (common_data->rup_irq_handle[source_group] < 1) {
@@ -3611,7 +3617,6 @@ static int cam_vfe_bus_ver3_subscribe_init_irq(
 		cam_vfe_bus_ver3_handle_bus_irq,
 		NULL,
 		NULL,
-		NULL,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (bus_priv->bus_irq_handle < 1) {
@@ -3626,7 +3631,7 @@ static int cam_vfe_bus_ver3_subscribe_init_irq(
 		bus_priv->common_data.bus_irq_controller,
 		top_irq_reg_mask);
 
-	if (bus_priv->tasklet_info != NULL) {
+	if (bus_priv->worker_ctx != NULL) {
 		bus_priv->error_irq_handle = cam_irq_controller_subscribe_irq(
 			bus_priv->common_data.bus_irq_controller,
 			CAM_IRQ_PRIORITY_0,
@@ -3634,8 +3639,7 @@ static int cam_vfe_bus_ver3_subscribe_init_irq(
 			bus_priv,
 			cam_vfe_bus_ver3_handle_err_irq_top_half,
 			cam_vfe_bus_ver3_handle_err_irq_bottom_half,
-			bus_priv->tasklet_info,
-			&tasklet_bh_api,
+			bus_priv->worker_ctx,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (bus_priv->error_irq_handle < 1) {
@@ -3653,7 +3657,6 @@ static int cam_vfe_bus_ver3_subscribe_init_irq(
 			top_irq_reg_mask,
 			bus_priv,
 			cam_vfe_bus_ver3_handle_rup_irq,
-			NULL,
 			NULL,
 			NULL,
 			CAM_IRQ_EVT_GROUP_0);
@@ -3949,7 +3952,7 @@ static int cam_vfe_bus_ver3_update_wm(void *priv, void *cmd_args, uint32_t arg_s
 	uint32_t num_regval_pairs = 0;
 	uint32_t i, j, size = 0;
 	int hw_cntxt_id = -1;
-	uint32_t frame_inc = 0, val;
+	uint32_t frame_inc = 0, val, skip_stride_align = 0;
 	uint32_t iova_addr, iova_offset, image_buf_offset = 0, stride, slice_h;
 	dma_addr_t iova;
 
@@ -4069,13 +4072,19 @@ static int cam_vfe_bus_ver3_update_wm(void *priv, void *cmd_args, uint32_t arg_s
 			slice_h = io_cfg->planes[i].slice_height;
 		}
 
+		skip_stride_align =
+			bus_priv->bus_hw_info->bus_client_reg[wm_data->index].skip_stride_align;
+
 		val = stride;
 		CAM_DBG(CAM_ISP, "VFE:%u io config stride val %u wm config stride: %u",
 			bus_priv->common_data.core_index, val, cfg->stride);
-		val = ALIGNUP(val, 16);
-		if (val != stride)
-			CAM_DBG(CAM_ISP, "VFE:%u Warning unaligned stride %u expected %u",
-				bus_priv->common_data.core_index, stride, val);
+
+		if (!skip_stride_align) {
+			val = ALIGNUP(val, 16);
+			if (val != stride)
+				CAM_DBG(CAM_ISP, "VFE:%u Warning unaligned stride %u expected %u",
+					bus_priv->common_data.core_index, stride, val);
+		}
 
 		if (cfg->stride != val || !wm_data->init_cfg_done ||
 			((wm_data->out_rsrc_data->mc_based ||
@@ -4755,8 +4764,8 @@ static int cam_vfe_bus_ver3_update_wm_config_v2(
 		wm_data->update_wm_format = false;
 		if (wm_config->packer_format && (cfg->format != wm_config->packer_format)) {
 			cfg->format = wm_config->packer_format;
-			packer_fmt = cam_vfe_bus_ver3_get_packer_fmt(wm_config->packer_format,
-				wm_data->index);
+			packer_fmt = cam_vfe_bus_ver3_get_packer_fmt(
+				common_reg, wm_config->packer_format, wm_data->index);
 			if (cam_vfe_bus_ver3_needs_lsb_alignment(wm_data->cfg.format))
 				packer_fmt |= (1 << bus_priv->common_data.pack_align_shift);
 
@@ -4764,9 +4773,14 @@ static int cam_vfe_bus_ver3_update_wm_config_v2(
 			wm_data->update_wm_format = true;
 		}
 
+		if ((common_reg->capabilities & CAM_VFE_COMMON_CAP_PD10_PACKED_PLAIN128) &&
+			cfg->format == CAM_FORMAT_PD10) {
+			cfg->width = DIV_ROUND_UP(cfg->width, 4);
+			cfg->height /= 2;
+		}
+
 		if ((vfe_out_data->out_type >= CAM_VFE_BUS_VER3_VFE_OUT_RDI0) &&
-			(vfe_out_data->out_type <= CAM_VFE_BUS_VER3_VFE_OUT_RDI4) &&
-			(wm_data->update_wm_format || update_wm_mode))
+			(vfe_out_data->out_type <= CAM_VFE_BUS_VER3_VFE_OUT_RDI4))
 			cam_vfe_bus_ver3_config_rdi_wm(wm_data);
 
 		CAM_DBG(CAM_ISP,
@@ -4848,7 +4862,7 @@ static int cam_vfe_bus_ver3_update_wm_config(
 			(wm_data->cfg.format != wm_config->packer_format)) {
 			wm_data->cfg.format = wm_config->packer_format;
 			packer_fmt = cam_vfe_bus_ver3_get_packer_fmt(
-				wm_config->packer_format, wm_data->index);
+				common_reg, wm_config->packer_format, wm_data->index);
 
 			/* Reconfigure only for valid packer fmt */
 			if (packer_fmt != PACKER_FMT_VER3_MAX) {
@@ -5018,7 +5032,7 @@ static int cam_vfe_bus_ver3_set_rd_ctxt_sel(
 		return 0;
 	}
 
-	reg_addr = common_reg->rd_ctxt_sel;
+	reg_addr = bus_priv->common_data.bus_wr_base + common_reg->rd_ctxt_sel;
 	reg_val = (rd_ctxt << common_reg->mc_read_sel_shift);
 
 	CAM_DBG(CAM_ISP,
@@ -5046,7 +5060,7 @@ static void cam_vfe_bus_ver3_get_rd_ctxt_sel(
 		return;
 	}
 
-	reg_addr = common_reg->rd_ctxt_sel;
+	reg_addr = bus_priv->common_data.bus_wr_base + common_reg->rd_ctxt_sel;
 	reg_val = cam_io_r_mb(bus_priv->common_data.mem_base + reg_addr);
 	*rd_ctxt = reg_val >> common_reg->mc_read_sel_shift;
 

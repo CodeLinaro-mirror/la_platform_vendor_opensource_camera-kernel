@@ -2894,6 +2894,11 @@ void cam_sensor_util_release_read_buf(struct list_head *read_buf_list)
 {
 	struct cam_sensor_read_buf_list *buf_list = NULL, *buf_next = NULL;
 
+	if (!read_buf_list) {
+		CAM_ERR(CAM_SENSOR_UTIL, "read_buf_list is NULL");
+		return;
+	}
+
 	list_for_each_entry_safe(buf_list, buf_next,
 		read_buf_list, list) {
 		if (buf_list->read_buf_handle) {

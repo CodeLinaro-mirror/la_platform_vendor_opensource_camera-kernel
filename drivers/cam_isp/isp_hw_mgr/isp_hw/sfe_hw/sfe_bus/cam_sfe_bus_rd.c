@@ -14,7 +14,6 @@
 #include "cam_hw_intf.h"
 #include "cam_ife_hw_mgr.h"
 #include "cam_sfe_hw_intf.h"
-#include "cam_tasklet_util.h"
 #include "cam_sfe_bus.h"
 #include "cam_sfe_bus_rd.h"
 #include "cam_sfe_core.h"
@@ -133,7 +132,7 @@ struct cam_sfe_bus_rd_priv {
 	struct cam_sfe_bus_rd_hw_info      *bus_rd_hw_info;
 	int                                 irq_handle;
 	int                                 error_irq_handle;
-	void                               *tasklet_info;
+	void                               *worker_ctx;
 	uint32_t                            top_irq_shift;
 	uint32_t                            latency_buf_allocation;
 	uint32_t                            sys_cache_default_cfg;
@@ -467,7 +466,7 @@ static void cam_sfe_bus_rd_get_constraint_error(struct cam_sfe_bus_rd_priv *bus_
 
 static int cam_sfe_bus_acquire_rm(
 	struct cam_sfe_bus_rd_priv             *bus_rd_priv,
-	void                                   *tasklet,
+	void                                   *worker_ctx,
 	void                                   *ctx,
 	enum cam_sfe_bus_rd_type                sfe_bus_rd_res_id,
 	enum cam_sfe_bus_plane_type             plane,
@@ -495,7 +494,7 @@ static int cam_sfe_bus_acquire_rm(
 		return -EALREADY;
 	}
 	rm_res_local->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
-	rm_res_local->tasklet_info = tasklet;
+	rm_res_local->worker_ctx = worker_ctx;
 
 	rsrc_data = rm_res_local->res_priv;
 	rsrc_data->ctx = ctx;
@@ -538,7 +537,7 @@ static int cam_sfe_bus_release_rm(void          *bus_priv,
 	rsrc_data->enable_caching =  false;
 	rsrc_data->offset = 0;
 
-	rm_res->tasklet_info = NULL;
+	rm_res->worker_ctx = NULL;
 	rm_res->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 
 	CAM_DBG(CAM_SFE, "SFE:%d RM:%d released",
@@ -918,7 +917,6 @@ static int cam_sfe_bus_subscribe_error_irq(
 		cam_sfe_bus_rd_handle_irq,
 		NULL,
 		NULL,
-		NULL,
 		CAM_IRQ_EVT_GROUP_0);
 
 	if (bus_priv->irq_handle < 1) {
@@ -931,7 +929,7 @@ static int cam_sfe_bus_subscribe_error_irq(
 	cam_irq_controller_register_dependent(bus_priv->common_data.sfe_irq_controller,
 		bus_priv->common_data.bus_irq_controller, sfe_top_irq_mask);
 
-	if (bus_priv->tasklet_info != NULL) {
+	if (bus_priv->worker_ctx != NULL) {
 		bus_rd_err_irq_mask[0] = bus_priv->common_data.irq_err_mask;
 
 		bus_priv->error_irq_handle = cam_irq_controller_subscribe_irq(
@@ -941,8 +939,7 @@ static int cam_sfe_bus_subscribe_error_irq(
 			bus_priv,
 			cam_sfe_bus_rd_handle_err_irq_top_half,
 			cam_sfe_bus_rd_handle_err_irq_bottom_half,
-			bus_priv->tasklet_info,
-			&tasklet_bh_api,
+			bus_priv->worker_ctx,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (bus_priv->error_irq_handle < 1) {
@@ -1018,8 +1015,8 @@ static int cam_sfe_bus_acquire_bus_rd(void *bus_priv, void *acquire_args,
 		rsrc_data->common_data->core_index, acq_args->rsrc_type, rsrc_node->res_id);
 
 	rsrc_data->num_rm = num_rm;
-	rsrc_node->tasklet_info = acq_args->tasklet;
-	bus_rd_priv->tasklet_info = acq_args->tasklet;
+	rsrc_node->worker_ctx = acq_args->worker_ctx;
+	bus_rd_priv->worker_ctx = acq_args->worker_ctx;
 	rsrc_node->cdm_ops = bus_rd_acquire_args->cdm_ops;
 	rsrc_data->cdm_util_ops = bus_rd_acquire_args->cdm_ops;
 	rsrc_data->common_data->event_cb = acq_args->event_cb;
@@ -1045,7 +1042,7 @@ static int cam_sfe_bus_acquire_bus_rd(void *bus_priv, void *acquire_args,
 
 	for (i = 0; i < num_rm; i++) {
 		rc = cam_sfe_bus_acquire_rm(bus_rd_priv,
-			acq_args->tasklet,
+			acq_args->worker_ctx,
 			acq_args->priv,
 			bus_rd_res_id,
 			i,
@@ -1100,7 +1097,7 @@ static int cam_sfe_bus_release_bus_rd(void *bus_priv, void *release_args,
 		cam_sfe_bus_release_rm(bus_priv, rsrc_data->rm_res[i]);
 	rsrc_data->num_rm = 0;
 
-	sfe_bus_rd->tasklet_info = NULL;
+	sfe_bus_rd->worker_ctx = NULL;
 	sfe_bus_rd->cdm_ops = NULL;
 	rsrc_data->cdm_util_ops = NULL;
 	rsrc_data->secure_mode = 0;
@@ -1185,8 +1182,7 @@ static int cam_sfe_bus_start_bus_rd(
 			sfe_bus_rd,
 			cam_sfe_bus_rd_out_done_top_half,
 			cam_sfe_bus_rd_out_done_bottom_half,
-			sfe_bus_rd->tasklet_info,
-			&tasklet_bh_api,
+			sfe_bus_rd->worker_ctx,
 			CAM_IRQ_EVT_GROUP_0);
 
 		if (sfe_bus_rd->irq_handle < 1) {

@@ -72,6 +72,13 @@ struct cam_vfe_top_dump_data {
 		lut_entry[CAM_VFE_TOP_MAX_LUT_DUMP_ENTRIES];
 };
 
+struct cam_vfe_top_err_irq_desc {
+	uint32_t  bitmask;
+	char     *err_name;
+	char     *desc;
+	char     *debug;
+};
+
 int cam_vfe_top_clock_update(struct cam_vfe_top_priv_common *top_common,
 	void *cmd_args, uint32_t arg_size);
 
@@ -94,5 +101,8 @@ int cam_vfe_top_apply_clk_bw_update(
 int cam_vfe_top_apply_clock_start_stop(struct cam_vfe_top_priv_common *top_common);
 
 int cam_vfe_top_apply_bw_start_stop(struct cam_vfe_top_priv_common *top_common);
+
+int cam_vfe_top_print_error_info(struct cam_vfe_top_err_irq_desc *err_desc,
+	uint32_t status, uint32_t num_errors, uint32_t index);
 
 #endif /* _CAM_VFE_TOP_COMMON_H_ */

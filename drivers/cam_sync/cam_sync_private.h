@@ -43,8 +43,8 @@
 #define CAM_SYNC_DEBUG_BUF_SIZE         32
 #define CAM_SYNC_PAYLOAD_WORDS          2
 #define CAM_SYNC_NAME                   "cam_sync"
-#define CAM_SYNC_WORKQ_NAME             "HIPRIO_SYNC_WORK_QUEUE"
-#define CAM_SYNC_WORKQ_NUM_TASK         100
+#define CAM_SYNC_WORKER_NAME            "HIPRIO_SYNC_WORKER"
+#define CAM_SYNC_WORKER_NUM_TASK        100
 
 
 #define CAM_SYNC_TYPE_INDV              0
@@ -132,21 +132,20 @@ struct sync_child_info {
  * struct sync_callback_info - Single node of information about a kernel
  * callback registered on a sync object
  *
- * @callback_func      : Callback function, registered by client driver
- * @cb_data            : Callback data, registered by client driver
- * @status             : Status with which callback will be invoked in client
- * @sync_obj           : Sync id of the object for which callback is registered
- * @workq_scheduled_ts : workqueue scheduled timestamp
- * @cb_dispatch_work   : Work representing the call dispatch
- * @list               : List member used to append this node to a linked list
+ * @callback_func       : Callback function, registered by client driver
+ * @cb_data             : Callback data, registered by client driver
+ * @status              : Status with which callback will be invoked in client
+ * @sync_obj            : Sync id of the object for which callback is registered
+ * @worker_scheduled_ts : Worker scheduled timestamp
+ * @cb_dispatch_work    : Work representing the call dispatch
+ * @list                : List member used to append this node to a linked list
  */
 struct sync_callback_info {
 	sync_callback callback_func;
 	void *cb_data;
 	int status;
 	int32_t sync_obj;
-	ktime_t workq_scheduled_ts;
-	struct work_struct cb_dispatch_work;
+	ktime_t worker_scheduled_ts;
 	struct list_head list;
 };
 
@@ -352,7 +351,7 @@ struct cam_signalable_info {
  * @table_lock      : Mutex used to lock the table
  * @open_cnt        : Count of file open calls made on the sync driver
  * @dentry          : Debugfs entry
- * @workq           : Work queue used for dispatching kernel callbacks
+ * @worker_ctx      : Worker used for dispatching kernel callbacks
  * @cam_sync_eventq : Event queue used to dispatch user payloads to user space
  * @bitmap          : Bitmap representation of all sync objects
  * @mon_data        : Objects monitor data
@@ -367,7 +366,7 @@ struct sync_device {
 	struct mutex table_lock;
 	int open_cnt;
 	struct dentry *dentry;
-	struct cam_req_mgr_core_workq *workq;
+	void *worker_ctx;
 	struct v4l2_fh *cam_sync_eventq;
 	spinlock_t cam_sync_eventq_lock;
 	DECLARE_BITMAP(bitmap, CAM_SYNC_MAX_OBJS);

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -11,7 +11,6 @@
 #include <media/cam_tfe.h>
 
 #include "cam_smmu_api.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_isp_hw_mgr_intf.h"
 #include "cam_isp_hw.h"
 #include "cam_tfe_csid_hw_intf.h"
@@ -29,6 +28,7 @@
 #include "cam_req_mgr_debug.h"
 #include "cam_trace.h"
 #include "cam_compat.h"
+#include "cam_worker_wrapper_api.h"
 
 #define CAM_TFE_HW_CONFIG_TIMEOUT 60
 #define CAM_TFE_HW_CONFIG_WAIT_MAX_TRY  3
@@ -887,7 +887,7 @@ static int cam_tfe_hw_mgr_acquire_res_tfe_out_rdi(
 		tfe_in_res_id, tfe_out_res_id);
 
 	tfe_acquire.rsrc_type = CAM_ISP_RESOURCE_TFE_OUT;
-	tfe_acquire.tasklet = tfe_ctx->common.tasklet_info;
+	tfe_acquire.worker_ctx = tfe_ctx->common.worker_ctx;
 
 	tfe_out_res = &tfe_ctx->res_list_tfe_out[tfe_out_res_id & 0xFF];
 	for (i = 0; i < in_port->num_out_res; i++) {
@@ -973,7 +973,7 @@ static int cam_tfe_hw_mgr_acquire_res_tfe_out_pixel(
 		tfe_out_res->is_dual_isp = in_port->usage_type;
 
 		tfe_acquire.rsrc_type = CAM_ISP_RESOURCE_TFE_OUT;
-		tfe_acquire.tasklet = tfe_ctx->common.tasklet_info;
+		tfe_acquire.worker_ctx = tfe_ctx->common.worker_ctx;
 		tfe_acquire.tfe_out.cdm_ops = tfe_ctx->cdm_ops;
 		tfe_acquire.priv = tfe_ctx;
 		tfe_acquire.tfe_out.out_port_info =  out_port;
@@ -1104,7 +1104,7 @@ static int cam_tfe_hw_mgr_acquire_res_tfe_in(
 		tfe_src_res->hw_res[1] = NULL;
 
 		tfe_acquire.rsrc_type = CAM_ISP_RESOURCE_TFE_IN;
-		tfe_acquire.tasklet = tfe_ctx->common.tasklet_info;
+		tfe_acquire.worker_ctx = tfe_ctx->common.worker_ctx;
 		tfe_acquire.tfe_in.cdm_ops = tfe_ctx->cdm_ops;
 		tfe_acquire.tfe_in.in_port = in_port;
 		tfe_acquire.tfe_in.camif_pd_enable = *pdaf_enable;
@@ -3099,8 +3099,8 @@ static int cam_tfe_mgr_stop_hw_in_overflow(void *stop_hw_args)
 	for (i = 0; i < CAM_TFE_HW_OUT_RES_MAX; i++)
 		cam_tfe_hw_mgr_stop_hw_res(&ctx->res_list_tfe_out[i]);
 
-	/* Stop tasklet for context */
-	cam_tasklet_stop(ctx->common.tasklet_info);
+	/* Stop worker for context */
+	cam_worker_wrapper_flush(ctx->common.worker_ctx);
 	CAM_DBG(CAM_ISP, "Exit...ctx id:%d rc :%d",
 		ctx->ctx_index, rc);
 
@@ -3239,7 +3239,7 @@ static int cam_tfe_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 		cam_tfe_hw_mgr_stop_hw_res(hw_mgr_res);
 	}
 
-	cam_tasklet_stop(ctx->common.tasklet_info);
+	cam_worker_wrapper_flush(ctx->common.worker_ctx);
 
 	cam_tfe_mgr_pause_hw(ctx);
 
@@ -3333,7 +3333,7 @@ static int cam_tfe_mgr_restart_hw(void *start_hw_args)
 
 	CAM_DBG(CAM_ISP, "START TFE OUT ... in ctx id:%d", ctx->ctx_index);
 
-	cam_tasklet_start(ctx->common.tasklet_info);
+	cam_worker_wrapper_start(ctx->common.worker_ctx);
 
 	/* start the TFE out devices */
 	for (i = 0; i < CAM_TFE_HW_OUT_RES_MAX; i++) {
@@ -3418,7 +3418,7 @@ static int cam_tfe_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 
 	/* update Bandwidth should be done at the hw layer */
 
-	cam_tasklet_start(ctx->common.tasklet_info);
+	cam_worker_wrapper_start(ctx->common.worker_ctx);
 
 	if (ctx->init_done && start_isp->start_only)
 		goto start_only;
@@ -3463,7 +3463,7 @@ static int cam_tfe_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 	rc = cam_tfe_hw_mgr_init_hw(ctx);
 	if (rc) {
 		CAM_ERR(CAM_ISP, "Init failed");
-		goto tasklet_stop;
+		goto worker_stop;
 	}
 
 	ctx->init_done = true;
@@ -3570,8 +3570,8 @@ cdm_streamoff:
 deinit_hw:
 	cam_tfe_hw_mgr_deinit_hw(ctx);
 
-tasklet_stop:
-	cam_tasklet_stop(ctx->common.tasklet_info);
+worker_stop:
+	cam_worker_wrapper_flush(ctx->common.worker_ctx);
 
 	return rc;
 }
@@ -5632,8 +5632,8 @@ static int cam_tfe_mgr_process_recovery_cb(void *priv, void *data)
 static int cam_tfe_hw_mgr_do_error_recovery(
 	struct cam_tfe_hw_event_recovery_data  *tfe_mgr_recovery_data)
 {
-	int32_t                             rc = 0;
-	struct crm_workq_task              *task = NULL;
+	int32_t                                 rc = 0;
+	struct cam_worker_wrapper_taskdata_args task;
 	struct cam_tfe_hw_event_recovery_data  *recovery_data = NULL;
 
 	recovery_data = kmemdup(tfe_mgr_recovery_data,
@@ -5644,18 +5644,17 @@ static int cam_tfe_hw_mgr_do_error_recovery(
 
 	CAM_DBG(CAM_ISP, "Enter: error_type (%d)", recovery_data->error_type);
 
-	task = cam_req_mgr_workq_get_task(g_tfe_hw_mgr.workq);
-	if (!task) {
+	rc = cam_worker_wrapper_get(g_tfe_hw_mgr.worker_ctx, &task);
+	if (rc) {
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "No empty task frame");
 		kfree(recovery_data);
 		return -ENOMEM;
 	}
 
-	task->process_cb = &cam_tfe_mgr_process_recovery_cb;
-	task->payload = recovery_data;
-	rc = cam_req_mgr_workq_enqueue_task(task,
-		recovery_data->affected_ctx[0]->hw_mgr,
-		CRM_TASK_PRIORITY_0);
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(g_tfe_hw_mgr.worker_ctx, &task,
+		recovery_data->affected_ctx[0]->hw_mgr, recovery_data,
+		&cam_tfe_mgr_process_recovery_cb);
 
 	return rc;
 }
@@ -6334,11 +6333,6 @@ end:
 	return rc;
 }
 
-static void cam_req_mgr_process_tfe_worker(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
 int cam_tfe_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 {
 	int rc = -EFAULT;
@@ -6347,6 +6341,7 @@ int cam_tfe_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 	struct cam_tfe_hw_mgr_ctx *ctx_pool;
 	struct cam_isp_hw_mgr_res *res_list_tfe_out;
 	bool support_consumed_addr = false;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	CAM_DBG(CAM_ISP, "Enter");
 
@@ -6481,10 +6476,23 @@ int cam_tfe_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 		g_tfe_hw_mgr.ctx_pool[i].ctx_index = i;
 		g_tfe_hw_mgr.ctx_pool[i].hw_mgr = &g_tfe_hw_mgr;
 
-		cam_tasklet_init(&g_tfe_hw_mgr.mgr_common.tasklet_pool[i],
-			&g_tfe_hw_mgr.ctx_pool[i], i);
-		g_tfe_hw_mgr.ctx_pool[i].common.tasklet_info =
-			g_tfe_hw_mgr.mgr_common.tasklet_pool[i];
+		/* create worker wrapper for bottom half based on worker type */
+		worker_init_args.name = "cam_isp_worker";
+		worker_init_args.num_tasks = 256;
+		worker_init_args.in_irq = WORKER_USAGE_IRQ;
+		worker_init_args.flag = 0;
+		worker_init_args.priv_data = &g_tfe_hw_mgr.ctx_pool[i];
+		worker_init_args.index = i;
+		worker_init_args.worker_ctx_priv =
+			(void **)&g_tfe_hw_mgr.mgr_common.worker_pool[i];
+		rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_RT);
+		if (rc < 0) {
+			CAM_ERR(CAM_ISP, "Unable to create isp worker");
+			goto end;
+		}
+
+		g_tfe_hw_mgr.ctx_pool[i].common.worker_ctx =
+			g_tfe_hw_mgr.mgr_common.worker_pool[i];
 
 
 		init_completion(&g_tfe_hw_mgr.ctx_pool[i].config_done_complete);
@@ -6493,10 +6501,16 @@ int cam_tfe_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 	}
 
 	/* Create Worker for tfe_hw_mgr with 10 tasks */
-	rc = cam_req_mgr_workq_create("cam_tfe_worker", 10,
-		&g_tfe_hw_mgr.workq, CRM_WORKQ_USAGE_NON_IRQ, 0,
-		cam_req_mgr_process_tfe_worker);
-	if (rc < 0) {
+	worker_init_args.name = "cam_tfe_worker";
+	worker_init_args.num_tasks = 10;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_NON_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &g_tfe_hw_mgr.worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
+	if (rc) {
 		CAM_ERR(CAM_ISP, "Unable to create worker");
 		goto end;
 	}
@@ -6526,11 +6540,10 @@ int cam_tfe_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 end:
 	if (rc) {
 		for (i = 0; i < CAM_TFE_CTX_MAX; i++) {
-			cam_tasklet_deinit(
-				&g_tfe_hw_mgr.mgr_common.tasklet_pool[i]);
+			cam_worker_wrapper_deinit(&g_tfe_hw_mgr.mgr_common.worker_pool[i]);
 			CAM_MEM_FREE(g_tfe_hw_mgr.ctx_pool[i].cdm_cmd);
 			g_tfe_hw_mgr.ctx_pool[i].cdm_cmd = NULL;
-			g_tfe_hw_mgr.ctx_pool[i].common.tasklet_info = NULL;
+			g_tfe_hw_mgr.ctx_pool[i].common.worker_ctx = NULL;
 		}
 	}
 	cam_smmu_destroy_handle(
@@ -6546,15 +6559,14 @@ void cam_tfe_hw_mgr_deinit(void)
 {
 	int i = 0;
 
-	cam_req_mgr_workq_destroy(&g_tfe_hw_mgr.workq);
+	cam_worker_wrapper_deinit(g_tfe_hw_mgr.worker_ctx);
 	g_tfe_hw_mgr.debug_cfg.dentry = NULL;
 
 	for (i = 0; i < CAM_TFE_CTX_MAX; i++) {
-		cam_tasklet_deinit(
-			&g_tfe_hw_mgr.mgr_common.tasklet_pool[i]);
+		cam_worker_wrapper_deinit(&g_tfe_hw_mgr.mgr_common.worker_pool[i]);
 		CAM_MEM_FREE(g_tfe_hw_mgr.ctx_pool[i].cdm_cmd);
 		g_tfe_hw_mgr.ctx_pool[i].cdm_cmd = NULL;
-		g_tfe_hw_mgr.ctx_pool[i].common.tasklet_info = NULL;
+		g_tfe_hw_mgr.ctx_pool[i].common.worker_ctx = NULL;
 	}
 
 	cam_smmu_destroy_handle(

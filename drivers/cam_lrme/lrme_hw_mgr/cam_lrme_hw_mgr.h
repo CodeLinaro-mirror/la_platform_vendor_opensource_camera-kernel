@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_LRME_HW_MGR_H_
@@ -16,12 +16,11 @@
 #include "cam_cpas_api.h"
 #include "cam_debug_util.h"
 #include "cam_hw_mgr_intf.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_lrme_hw_intf.h"
 #include "cam_context.h"
 
 #define CAM_LRME_HW_MAX 1
-#define CAM_LRME_WORKQ_NUM_TASK 10
+#define CAM_LRME_WORKER_NUM_TASK 10
 
 #define CAM_LRME_DECODE_DEVICE_INDEX(ctxt_to_hw_map) \
 	((uintptr_t)ctxt_to_hw_map & 0xF)
@@ -70,7 +69,7 @@ struct cam_lrme_debugfs_entry {
  * @hw_intf                   : HW device's interface information
  * @num_context               : Number of contexts using this device
  * @valid                     : Whether this device is valid
- * @work                      : HW device's work queue
+ * @worker_ctx                : HW device's worker
  * @work_data                 : HW device's work data
  * @frame_pending_list_high   : High priority request queue
  * @frame_pending_list_normal : Normal priority request queue
@@ -82,8 +81,8 @@ struct cam_lrme_device {
 	struct cam_hw_intf             hw_intf;
 	uint32_t                       num_context;
 	bool                           valid;
-	struct cam_req_mgr_core_workq *work;
-	struct cam_lrme_mgr_work_data  work_data[CAM_LRME_WORKQ_NUM_TASK];
+	void                          *worker_ctx;
+	struct cam_lrme_mgr_work_data  work_data[CAM_LRME_WORKER_NUM_TASK];
 	struct list_head               frame_pending_list_high;
 	struct list_head               frame_pending_list_normal;
 	struct mutex                   high_req_lock;

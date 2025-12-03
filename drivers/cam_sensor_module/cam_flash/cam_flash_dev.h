@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_FLASH_DEV_H_
@@ -37,7 +37,6 @@
 #include "cam_sensor_io.h"
 #include "cam_flash_core.h"
 #include "cam_context.h"
-#include "cam_req_mgr_workq.h"
 
 #define CAMX_FLASH_DEV_NAME "cam-flash-dev"
 
@@ -48,7 +47,7 @@
 #define CAM_FLASH_PACKET_OPCODE_INIT                 0
 #define CAM_FLASH_PACKET_OPCODE_SET_OPS              1
 #define CAM_FLASH_PACKET_OPCODE_NON_REALTIME_SET_OPS 2
-#define CAM_FLASH_WORKQ_NUM_TASK                     1
+#define CAM_FLASH_WORKER_NUM_TASK                    1
 
 #define CAM_FLASH_WQ_NAME_SIZE  32
 
@@ -174,7 +173,7 @@ struct cam_flash_private_soc {
  * @off_time_ms         : Flash OFF Time in ms
  * @enabled             : Precise Flash enable/disable flag
  * @timer_state         : HR Timer State: INIT/DEINIT
- * @timer_workq         : Start Timer WorkQ
+ * @timer_worker_ctx    : Start Timer worker
  */
 struct precise_flash_ctrl_t {
 	struct hrtimer                       on_timer;
@@ -183,7 +182,7 @@ struct precise_flash_ctrl_t {
 	u64                                  off_time_ms;
 	bool                                 enabled;
 	enum hrtimer_state                   timer_state;
-	struct cam_req_mgr_core_workq        *timer_workq;
+	void                                *timer_worker_ctx;
 };
 
 struct cam_flash_func_tbl {

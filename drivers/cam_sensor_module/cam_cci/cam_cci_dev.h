@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
- * Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_CCI_DEV_H_
@@ -33,7 +32,6 @@
 #include "cam_cci_hwreg.h"
 #include "cam_soc_util.h"
 #include "cam_debug_util.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_common_util.h"
 
 #define CCI_I2C_QUEUE_0_SIZE 128
@@ -64,7 +62,9 @@
 
 #define CAMX_CCI_DEV_NAME "cam-cci-driver"
 
-#define CAM_CCI_WORKQUEUE_NAME "cam_cci_wq"
+#define CAM_CCI_WORKER_NAME "cam_cci_wq"
+
+#define CAM_CCI_WORKER_NUM_TASK 100
 
 #define MAX_CCI 3
 
@@ -202,7 +202,7 @@ enum cam_cci_state_t {
  * @cci_reg_ptr:                CCI individual regulator structure
  * @regulator_count:            Regulator count
  * @support_seq_write:          Set this flag when sequential write is enabled
- * @write_wq:                   Work queue structure
+ * @write_worker_ctx:           Worker structure
  * @valid_sync:                 Is it a valid sync with CSID
  * @v4l2_dev_str:               V4L2 device structure
  * @cci_wait_sync_cfg:          CCI sync config
@@ -234,7 +234,7 @@ struct cci_device {
 	struct msm_pinctrl_info cci_pinctrl;
 	uint8_t cci_pinctrl_status;
 	uint8_t support_seq_write;
-	struct workqueue_struct *write_wq[MASTER_MAX];
+	void *write_worker_ctx[MASTER_MAX];
 	struct cam_cci_wait_sync_cfg cci_wait_sync_cfg;
 	uint8_t valid_sync;
 	struct cam_subdev v4l2_dev_str;
@@ -316,8 +316,7 @@ struct cci_write_async {
 	struct cci_device *cci_dev;
 	struct cam_cci_ctrl c_ctrl;
 	enum cci_i2c_queue_t queue;
-	struct work_struct work;
-	ktime_t workq_scheduled_ts;
+	ktime_t worker_scheduled_ts;
 	enum cci_i2c_sync sync_en;
 };
 

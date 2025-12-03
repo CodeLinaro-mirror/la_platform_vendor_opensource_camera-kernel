@@ -19,6 +19,5 @@ int cam_flash_led_prepare(struct led_trigger *trigger, int options,
 	int *max_current, bool is_wled);
 enum hrtimer_restart off_timer_function(struct hrtimer *timer);
 enum hrtimer_restart on_timer_function(struct hrtimer *timer);
-void cam_flash_work_queue_handler(struct work_struct *w);
 
 #endif /*_CAM_FLASH_CORE_H_*/

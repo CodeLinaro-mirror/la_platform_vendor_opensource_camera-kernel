@@ -25,6 +25,7 @@
 #include "cam_ife_hw_mgr.h"
 #include "cam_subdev.h"
 #include "cam_mem_mgr_api.h"
+#include "cam_worker_wrapper_api.h"
 
 static const char isp_dev_name[] = "cam-isp";
 
@@ -3495,16 +3496,17 @@ static int __cam_isp_ctx_schedule_apply_req(
 	struct cam_isp_context *ctx_isp)
 {
 	int rc = 0;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args task;
 
-	task = cam_req_mgr_workq_get_task(ctx_isp->workq);
-	if (!task) {
+	rc = cam_worker_wrapper_get(ctx_isp->worker_ctx, &task);
+	if (rc) {
 		CAM_ERR(CAM_ISP, "No task for worker");
 		return -ENOMEM;
 	}
 
-	task->process_cb = __cam_isp_ctx_apply_pending_req;
-	rc = cam_req_mgr_workq_enqueue_task(task, ctx_isp, CRM_TASK_PRIORITY_0);
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(ctx_isp->worker_ctx, &task,
+		ctx_isp, NULL, __cam_isp_ctx_apply_pending_req);
 	if (rc)
 		CAM_ERR(CAM_ISP, "Failed to schedule task rc:%d", rc);
 
@@ -3750,7 +3752,7 @@ static int __cam_isp_ctx_notify_sof_in_activated_state(
 		if (ctx_isp->last_sof_timestamp ==
 			ctx_isp->sof_timestamp_val) {
 			CAM_DBG(CAM_ISP,
-				"Tasklet delay detected! Bubble frame check skipped, sof_timestamp: %lld, ctx %u, link: 0x%x",
+				"Worker delay detected! Bubble frame check skipped, sof_timestamp: %lld, ctx %u, link: 0x%x",
 				ctx_isp->sof_timestamp_val, ctx->ctx_id, ctx->link_hdl);
 			goto notify_only;
 		}
@@ -7267,7 +7269,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_state(
 		if (ctx_isp->last_sof_timestamp ==
 			ctx_isp->sof_timestamp_val) {
 			CAM_DBG(CAM_ISP,
-				"Tasklet delay detected! Bubble frame: %lld check skipped, sof_timestamp: %lld, ctx_id: %u, link: 0x%x",
+				"Worker delay detected! Bubble frame: %lld check skipped, sof_timestamp: %lld, ctx_id: %u, link: 0x%x",
 				ctx_isp->frame_id,
 				ctx_isp->sof_timestamp_val,
 				ctx->ctx_id, ctx->link_hdl);
@@ -7831,7 +7833,8 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 	rc = __cam_isp_ctx_flush_req(ctx, &ctx->pending_req_list, &flush_req);
 	spin_unlock_bh(&ctx->lock);
 	__cam_isp_ctx_free_mem_hw_entries(ctx);
-	cam_req_mgr_workq_destroy(&ctx_isp->workq);
+	if (ctx_isp->worker_ctx)
+		cam_worker_wrapper_deinit(ctx_isp->worker_ctx);
 	ctx->state = CAM_CTX_ACQUIRED;
 
 	trace_cam_context_state("ISP", ctx);
@@ -8790,11 +8793,6 @@ end:
 	return rc;
 }
 
-static void cam_req_mgr_process_workq_apply_req_worker(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
 static inline void __cam_isp_ctx_convert_hw_id_to_string(
 	char *ife_hw_name, uint32_t hw_idx)
 {
@@ -8885,18 +8883,19 @@ static inline void __cam_isp_ctx_convert_hw_id_to_string(
 static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 	void *args)
 {
-	int rc = 0, i, j;
-	struct cam_acquire_hw_cmd_v2 *cmd =
-		(struct cam_acquire_hw_cmd_v2 *)args;
-	struct cam_hw_acquire_args       param;
-	struct cam_hw_release_args       release;
-	struct cam_isp_context          *ctx_isp =
+	int                                 rc = 0, i, j;
+	struct cam_acquire_hw_cmd_v2       *cmd =
+		(struct cam_acquire_hw_cmd_v2 *) args;
+	struct cam_hw_acquire_args          param;
+	struct cam_hw_release_args          release;
+	struct cam_isp_context             *ctx_isp =
 		(struct cam_isp_context *) ctx->ctx_priv;
-	struct cam_hw_cmd_args           hw_cmd_args;
-	struct cam_isp_hw_cmd_args       isp_hw_cmd_args;
-	struct cam_isp_acquire_hw_info  *acquire_hw_info = NULL;
-	struct cam_isp_comp_record_query query_cmd;
-	struct cam_req_mgr_notify_msg    msg = {0};
+	struct cam_hw_cmd_args              hw_cmd_args;
+	struct cam_isp_hw_cmd_args          isp_hw_cmd_args;
+	struct cam_isp_acquire_hw_info     *acquire_hw_info = NULL;
+	struct cam_isp_comp_record_query    query_cmd;
+	struct cam_req_mgr_notify_msg       msg = {0};
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	if (!ctx->hw_mgr_intf) {
 		CAM_ERR(CAM_ISP, "HW interface is not ready, ctx_id %u link: 0x%x",
@@ -9112,12 +9111,18 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 	}
 
 	if (ctx_isp->offline_context || ctx_isp->vfps_aux_context) {
-		rc = cam_req_mgr_workq_create("ife_apply_req", 20,
-			&ctx_isp->workq, CRM_WORKQ_USAGE_IRQ, 0,
-			cam_req_mgr_process_workq_apply_req_worker);
+		worker_init_args.name = "ife_apply_req";
+		worker_init_args.num_tasks = 20;
+		worker_init_args.max_active = 0;
+		worker_init_args.in_irq = WORKER_USAGE_IRQ;
+		worker_init_args.flag = 0;
+		worker_init_args.priv_data = NULL;
+		worker_init_args.index = 0;
+		worker_init_args.worker_ctx_priv = &ctx_isp->worker_ctx;
+		rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 		if (rc)
 			CAM_ERR(CAM_ISP,
-				"Failed to create workq for IFE rc:%d offline: %s vfps: %s ctx_id %u link: 0x%x",
+				"Failed to create worker for IFE rc:%d offline: %s vfps: %s ctx_id %u link: 0x%x",
 				rc, CAM_BOOL_TO_YESNO(ctx_isp->offline_context),
 				CAM_BOOL_TO_YESNO(ctx_isp->vfps_aux_context),
 				ctx->ctx_id, ctx->link_hdl);
@@ -9248,6 +9253,42 @@ static int __cam_isp_ctx_issue_resume_util(struct cam_context *ctx)
 
 	CAM_DBG(CAM_ISP, "next state %d sub_state:%d ctx_id %u link: 0x%x", ctx->state,
 		ctx_isp->substate_activated, ctx->ctx_id, ctx->link_hdl);
+
+	/*
+	 * When resuming CSID, there may be some EOF triggered requests pending at CRM,
+	 * which needs to be applied at EOF IRQ. When dynamic EOF feature is enabled,
+	 * needs to explicitly check and register EOF IRQ accordingly.
+	 */
+	if (ctx->ctx_crm_intf && ctx->ctx_crm_intf->notify_msg) {
+		struct cam_req_mgr_notify_msg msg = {0};
+
+		msg.link_hdl = ctx->link_hdl;
+		msg.dev_hdl = ctx->dev_hdl;
+		msg.msg_type = CAM_REQ_MGR_MSG_CHECK_DYN_EOF_UNDER_RESUME;
+		rc = ctx->ctx_crm_intf->notify_msg(&msg);
+		if (rc) {
+			CAM_ERR(CAM_ISP,
+				"Failed at notifying for checking dyn EOF during resume on ctx: %u link: 0x%x",
+				ctx->ctx_id, ctx->link_hdl);
+			return rc;
+		}
+
+		if (msg.u.pending_eof_event) {
+			hw_cmd_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
+			hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+			isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_REGISTER_EOF_IRQ;
+			isp_hw_cmd_args.u.eof_irq_enable = true;
+			hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+			rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
+				&hw_cmd_args);
+			if (rc) {
+				CAM_ERR(CAM_ISP,
+					"Failed to register EOF IRQ during resume, rc: %d, ctx_id %u link: 0x%x",
+					rc, ctx->ctx_id, ctx->link_hdl);
+				return rc;
+			}
+		}
+	}
 
 	return rc;
 }
@@ -9552,7 +9593,7 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 
 	/*
 	 * Only place to change state before calling the hw due to
-	 * hardware tasklet has higher priority that can cause the
+	 * hardware worker has higher priority that can cause the
 	 * irq handling comes early
 	 */
 	ctx->state = CAM_CTX_ACTIVATED;

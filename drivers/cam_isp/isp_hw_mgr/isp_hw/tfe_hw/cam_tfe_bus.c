@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/ratelimit.h>
@@ -15,7 +15,6 @@
 #include "cam_isp_hw_mgr_intf.h"
 #include "cam_tfe_hw_intf.h"
 #include "cam_irq_controller.h"
-#include "cam_tasklet_util.h"
 #include "cam_tfe_bus.h"
 #include "cam_tfe_irq.h"
 #include "cam_tfe_soc.h"
@@ -170,7 +169,7 @@ struct cam_tfe_bus_priv {
 	struct list_head                    free_comp_grp;
 	struct list_head                    used_comp_grp;
 
-	void                               *tasklet_info;
+	void                               *worker_ctx;
 	uint32_t                            comp_buf_done_mask;
 	uint32_t                            comp_rup_done_mask;
 	uint32_t           bus_irq_error_mask[CAM_TFE_BUS_IRQ_REGISTERS_MAX];
@@ -701,7 +700,7 @@ static int cam_tfe_bus_acquire_wm(
 	struct cam_tfe_bus_priv                  *bus_priv,
 	struct cam_isp_tfe_out_port_generic_info *out_port_info,
 	struct cam_isp_resource_node            **wm_res,
-	void                                     *tasklet,
+	void                                     *worker_ctx,
 	enum cam_tfe_bus_tfe_out_id               tfe_out_res_id,
 	enum cam_tfe_bus_plane_type               plane,
 	uint32_t                                 *client_done_mask,
@@ -730,7 +729,7 @@ static int cam_tfe_bus_acquire_wm(
 		return -EALREADY;
 	}
 	wm_res_local->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
-	wm_res_local->tasklet_info = tasklet;
+	wm_res_local->worker_ctx = worker_ctx;
 
 	rsrc_data = wm_res_local->res_priv;
 	rsrc_data->format = out_port_info->format;
@@ -861,7 +860,7 @@ static int cam_tfe_bus_release_wm(void   *bus_priv,
 	rsrc_data->is_dual = 0;
 	rsrc_data->limiter_blob_status = false;
 
-	wm_res->tasklet_info = NULL;
+	wm_res->worker_ctx = NULL;
 	wm_res->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 
 	CAM_DBG(CAM_ISP, "TFE:%dRelease WM:%d",
@@ -1037,7 +1036,7 @@ static bool cam_tfe_bus_match_comp_grp(
 static int cam_tfe_bus_acquire_comp_grp(
 	struct cam_tfe_bus_priv                  *bus_priv,
 	struct cam_isp_tfe_out_port_generic_info *out_port_info,
-	void                                     *tasklet,
+	void                                     *worker_ctx,
 	uint32_t                                  is_dual,
 	uint32_t                                  is_master,
 	struct cam_isp_resource_node            **comp_grp,
@@ -1069,7 +1068,7 @@ static int cam_tfe_bus_acquire_comp_grp(
 	}
 
 	if (!previously_acquired) {
-		comp_grp_local->tasklet_info = tasklet;
+		comp_grp_local->worker_ctx = worker_ctx;
 		comp_grp_local->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
 
 		rsrc_data->is_master = is_master;
@@ -1148,7 +1147,7 @@ static int cam_tfe_bus_release_comp_grp(
 		comp_rsrc_data->addr_sync_mode = 0;
 		comp_rsrc_data->composite_mask = 0;
 
-		comp_grp_local->tasklet_info = NULL;
+		comp_grp_local->worker_ctx = NULL;
 		comp_grp_local->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 
 		list_add_tail(&comp_grp_local->list, &bus_priv->free_comp_grp);
@@ -1411,7 +1410,7 @@ static int cam_tfe_bus_acquire_tfe_out(void *priv, void *acquire_args,
 	}
 	mutex_unlock(&rsrc_data->common_data->bus_mutex);
 
-	bus_priv->tasklet_info = acq_args->tasklet;
+	bus_priv->worker_ctx = acq_args->worker_ctx;
 	rsrc_data->num_wm = num_wm;
 	rsrc_node->is_rdi_primary_res = 0;
 	rsrc_node->res_id = out_acquire_args->out_port_info->res_id;
@@ -1423,7 +1422,7 @@ static int cam_tfe_bus_acquire_tfe_out(void *priv, void *acquire_args,
 		rc = cam_tfe_bus_acquire_wm(bus_priv,
 			out_acquire_args->out_port_info,
 			&rsrc_data->wm_res[i],
-			acq_args->tasklet,
+			acq_args->worker_ctx,
 			tfe_out_res_id,
 			i, &client_done_mask,
 			out_acquire_args->is_dual,
@@ -1440,7 +1439,7 @@ static int cam_tfe_bus_acquire_tfe_out(void *priv, void *acquire_args,
 	/* Acquire composite group using COMP GRP ID */
 	rc = cam_tfe_bus_acquire_comp_grp(bus_priv,
 		out_acquire_args->out_port_info,
-		acq_args->tasklet,
+		acq_args->worker_ctx,
 		out_acquire_args->is_dual,
 		out_acquire_args->is_master,
 		&rsrc_data->comp_grp,
@@ -1509,7 +1508,7 @@ static int cam_tfe_bus_release_tfe_out(void *priv, void *release_args,
 
 	rsrc_data->comp_grp = NULL;
 
-	tfe_out->tasklet_info = NULL;
+	tfe_out->worker_ctx = NULL;
 	tfe_out->cdm_ops = NULL;
 	rsrc_data->cdm_util_ops = NULL;
 

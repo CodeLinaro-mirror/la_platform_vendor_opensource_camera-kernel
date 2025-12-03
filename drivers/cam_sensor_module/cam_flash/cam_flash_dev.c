@@ -12,6 +12,7 @@
 #include "cam_common_util.h"
 #include "camera_main.h"
 #include "cam_mem_mgr_api.h"
+#include "cam_worker_wrapper_api.h"
 
 static void cam_flash_populate_query_current(struct cam_flash_ctrl *fctrl,
 	struct cam_flash_query_cap_info *flash_cap,
@@ -246,7 +247,8 @@ release_mutex:
 static inline int  precise_flash_timer_init(struct cam_flash_ctrl *flash_ctrl)
 {
 	int  rc = 0;
-	char wq_name[CAM_FLASH_WQ_NAME_SIZE];
+	char worker_name[CAM_FLASH_WQ_NAME_SIZE];
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	if (!flash_ctrl) {
 		CAM_ERR(CAM_FLASH, "Fctrl is NULL");
@@ -264,22 +266,27 @@ static inline int  precise_flash_timer_init(struct cam_flash_ctrl *flash_ctrl)
 	flash_ctrl->precise_flash.enabled = false;
 	flash_ctrl->precise_flash.timer_state = TIMER_STATE_INIT;
 
-	snprintf(wq_name, CAM_FLASH_WQ_NAME_SIZE, "%s%d%s", "camflash",
+	snprintf(worker_name, CAM_FLASH_WQ_NAME_SIZE, "%s%d%s", "camflash",
 			flash_ctrl->soc_info.index, "_wq");
 
-	rc = cam_req_mgr_workq_create(wq_name, CAM_FLASH_WORKQ_NUM_TASK,
-			&flash_ctrl->precise_flash.timer_workq, CRM_WORKQ_USAGE_IRQ, 0,
-			cam_flash_work_queue_handler);
+	worker_init_args.name = worker_name;
+	worker_init_args.num_tasks = CAM_FLASH_WORKER_NUM_TASK;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &flash_ctrl->precise_flash.timer_worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc) {
-		CAM_ERR(CAM_FLASH, "unable to create workq for %s",
-			wq_name);
+		CAM_ERR(CAM_FLASH, "unable to create worker for %s", worker_name);
 		return rc;
 	}
 
-	for (int i = 0; i < CAM_FLASH_WORKQ_NUM_TASK; i++) {
-		flash_ctrl->precise_flash.timer_workq->task.pool[i].payload =
-			flash_ctrl;
-	}
+	for (int i = 0; i < CAM_FLASH_WORKER_NUM_TASK; i++)
+		cam_worker_wrapper_payload_bind(
+			flash_ctrl->precise_flash.timer_worker_ctx, flash_ctrl, i);
+
 	CAM_DBG(CAM_FLASH,
 		"fctrl: %p on_timer: %p off_timer: %p ",
 		flash_ctrl, &flash_ctrl->precise_flash.on_timer,
@@ -299,7 +306,7 @@ static int precise_flash_timer_deinit(struct cam_flash_ctrl *flash_ctrl)
 
 	flash_ctrl->precise_flash.enabled = false;
 	flash_ctrl->precise_flash.timer_state = TIMER_STATE_INVALID;
-	cam_req_mgr_workq_destroy(&flash_ctrl->precise_flash.timer_workq);
+	cam_worker_wrapper_deinit(flash_ctrl->precise_flash.timer_worker_ctx);
 	rc = hrtimer_cancel(&flash_ctrl->precise_flash.on_timer);
 	if (rc)
 		CAM_ERR(CAM_FLASH,
