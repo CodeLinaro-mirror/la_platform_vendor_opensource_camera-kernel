@@ -8,6 +8,7 @@
 #include <linux/dma-buf.h>
 #include <linux/of_address.h>
 #include <linux/slab.h>
+#include <linux/of.h>
 
 #include <soc/qcom/rpmh.h>
 
@@ -113,17 +114,17 @@ int cam_cpas_drv_channel_switch_for_dev(const struct device *dev)
 
 unsigned long cam_update_dma_map_attributes(unsigned long attrs)
 {
-#ifdef CONFIG_SPECTRA_SECURE
+#ifdef CONFIG_SPECTRA_SECURE_CAMERA_25
 	attrs |= DMA_ATTR_QTI_SMMU_PROXY_MAP;
-#endif /* CONFIG_SPECTRA_SECURE */
+#endif /* CONFIG_SPECTRA_SECURE_CAMERA_25 */
 	return attrs;
 }
 
 size_t cam_align_dma_buf_size(size_t len)
 {
-#ifdef CONFIG_SPECTRA_SECURE
+#ifdef CONFIG_SPECTRA_SECURE_CAMERA_25
 	len = ALIGN(len, SMMU_PROXY_MEM_ALIGNMENT);
-#endif /* CONFIG_SPECTRA_SECURE */
+#endif /* CONFIG_SPECTRA_SECURE_CAMERA_25 */
 	return len;
 }
 
@@ -442,13 +443,6 @@ int cam_req_mgr_ordered_list_cmp(void *priv,
 		list_entry(head_2, struct cam_subdev, list));
 }
 
-int cam_get_ddr_type(void)
-{
-	/* We assume all chipsets running kernel version 5.15+
-	 * to be using only DDR5 based memory.
-	 */
-	return DDR_TYPE_LPDDR5;
-}
 #else
 int cam_i3c_driver_remove(struct i3c_device *client)
 {
@@ -467,10 +461,6 @@ int cam_req_mgr_ordered_list_cmp(void *priv,
 		list_entry(head_2, struct cam_subdev, list));
 }
 
-int cam_get_ddr_type(void)
-{
-	return of_fdt_get_ddrtype();
-}
 #endif
 
 long cam_dma_buf_set_name(struct dma_buf *dmabuf, const char *name)

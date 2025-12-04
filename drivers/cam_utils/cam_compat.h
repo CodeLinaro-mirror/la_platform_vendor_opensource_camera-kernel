@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_COMPAT_H_
@@ -12,6 +13,7 @@
 #include <linux/component.h>
 #include <linux/iommu.h>
 #include <linux/list_sort.h>
+#include <soc/qcom/of_common.h>
 #include <linux/spi/spi.h>
 #include <linux/firmware/qcom/qcom_scm.h>
 
@@ -55,6 +57,7 @@ int camera_component_match_add_drivers(struct device *master_dev,
 void cam_check_iommu_faults(struct iommu_domain *domain,
 	struct cam_smmu_pf_info *pf_info);
 void cam_free_clear(const void *);
+static inline int cam_get_ddr_type(void) { return of_fdt_get_ddrtype(); }
 int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr);
 void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr);
 struct sg_table *cam_compat_dmabuf_map_attach(
@@ -63,7 +66,6 @@ void cam_compat_dmabuf_unmap_attach(struct dma_buf_attachment *attach,
 	struct sg_table *table, enum dma_data_direction dma_dir);
 void cam_smmu_util_iommu_custom(struct device *dev,
 	dma_addr_t discard_start, size_t discard_length);
-int cam_get_ddr_type(void);
 
 int cam_req_mgr_ordered_list_cmp(void *priv,
 	const struct list_head *head_1, const struct list_head *head_2);
