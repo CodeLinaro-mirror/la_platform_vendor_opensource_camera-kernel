@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/dma-mapping.h>
 #include <linux/of_address.h>
 #include <linux/slab.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 
 #include "cam_compat.h"
 #include "cam_debug_util.h"
@@ -189,14 +192,38 @@ void cam_free_clear(const void * ptr)
 }
 #endif
 
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
-void cam_smmu_util_iommu_custom(struct device *dev,
-	dma_addr_t discard_start, size_t discard_length)
+#if (KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE)
+int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 {
-	return;
+	struct iosys_map mapping;
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	int error_code = dma_buf_vmap_unlocked(dmabuf, &mapping);
+#else
+	int error_code = dma_buf_vmap(dmabuf, &mapping);
+#endif
+	if (error_code) {
+		*vaddr = 0;
+	} else {
+		*vaddr = (mapping.is_iomem) ?
+			(uintptr_t)mapping.vaddr_iomem : (uintptr_t)mapping.vaddr;
+		CAM_DBG(CAM_MEM,
+			"dmabuf=%p, *vaddr=%p, is_iomem=%d, vaddr_iomem=%p, vaddr=%p",
+			dmabuf, *vaddr, mapping.is_iomem, mapping.vaddr_iomem, mapping.vaddr);
+	}
+
+	return error_code;
 }
 
+void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
+{
+	struct iosys_map mapping = IOSYS_MAP_INIT_VADDR(vaddr);
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	dma_buf_vunmap_unlocked(dmabuf, &mapping);
+#else
+	dma_buf_vunmap(dmabuf, &mapping);
+#endif
+}
+#elif (KERNEL_VERSION(5, 15, 0) <= LINUX_VERSION_CODE)
 int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 {
 	struct dma_buf_map mapping;
@@ -216,6 +243,55 @@ void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
 	struct dma_buf_map mapping = DMA_BUF_MAP_INIT_VADDR(vaddr);
 
 	dma_buf_vunmap(dmabuf, &mapping);
+}
+#else
+int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
+{
+	int error_code = 0;
+	void *addr = dma_buf_vmap(dmabuf);
+
+	if (!addr) {
+		*vaddr = 0;
+		error_code = -ENOSPC;
+	} else {
+		*vaddr = (uintptr_t)addr;
+	}
+
+	return error_code;
+}
+
+void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
+{
+	dma_buf_vunmap(dmabuf, vaddr);
+}
+#endif
+
+
+struct sg_table *cam_compat_dmabuf_map_attach(struct dma_buf_attachment *attach,
+	enum dma_data_direction dma_dir)
+{
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	return dma_buf_map_attachment_unlocked(attach, dma_dir);
+#else
+	return dma_buf_map_attachment(attach, dma_dir);
+#endif
+}
+
+void cam_compat_dmabuf_unmap_attach(struct dma_buf_attachment *attach,
+	struct sg_table *table, enum dma_data_direction dma_dir)
+{
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	dma_buf_unmap_attachment_unlocked(attach, table, dma_dir);
+#else
+	dma_buf_unmap_attachment(attach, table, dma_dir);
+#endif
+}
+
+#if (KERNEL_VERSION(5, 15, 0) <= LINUX_VERSION_CODE)
+void cam_smmu_util_iommu_custom(struct device *dev,
+	dma_addr_t discard_start, size_t discard_length)
+{
+
 }
 
 #else
@@ -251,3 +327,88 @@ void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
 }
 
 #endif
+
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+int cam_iommu_map(struct iommu_domain *domain,
+	size_t firmware_start, phys_addr_t fw_hdl,
+	size_t firmware_len, int prot)
+{
+	int rc = 0;
+
+	rc = iommu_map(domain, firmware_start,
+			fw_hdl,	firmware_len,
+			prot, GFP_ATOMIC);
+	return rc;
+}
+#else
+int cam_iommu_map(struct iommu_domain *domain,
+	size_t firmware_start, phys_addr_t fw_hdl,
+	size_t firmware_len, int prot)
+{
+	int rc = 0;
+
+	rc = iommu_map(domain, firmware_start,
+			fw_hdl,	firmware_len,
+			prot);
+	return rc;
+}
+#endif
+
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+size_t cam_iommu_map_sg(struct iommu_domain *domain,
+	dma_addr_t iova_start, struct scatterlist *sgl,
+	uint64_t orig_nents, int prot)
+{
+	size_t size = 0;
+
+	size = iommu_map_sg(domain,
+			iova_start,
+			sgl, orig_nents,
+			prot, GFP_ATOMIC);
+	return size;
+}
+#else
+size_t cam_iommu_map_sg(struct iommu_domain *domain,
+	dma_addr_t iova_start, struct scatterlist *sgl,
+	uint64_t orig_nents, int prot)
+{
+	size_t size = 0;
+
+	size = iommu_map_sg(domain, iova_start,
+			sgl, orig_nents,
+			prot);
+	return size;
+}
+#endif
+
+int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info)
+{
+	struct device_node *of_node = NULL;
+	int16_t gpio_array_size = 0;
+
+	of_node = soc_info->dev->of_node;
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+	gpio_array_size = of_count_phandle_with_args(
+		of_node, "gpios", "#gpio-cells");
+#else
+	gpio_array_size = of_gpio_count(of_node);
+#endif
+
+	return gpio_array_size;
+}
+
+uint16_t cam_get_named_gpio(struct cam_hw_soc_info *soc_info,
+	int index)
+{
+	struct device_node *of_node = NULL;
+	uint16_t gpio_pin = 0;
+
+	of_node = soc_info->dev->of_node;
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+	gpio_pin = of_get_named_gpio(of_node, "gpios", index);
+#else
+	gpio_pin = of_get_gpio(of_node, index);
+#endif
+
+	return gpio_pin;
+}

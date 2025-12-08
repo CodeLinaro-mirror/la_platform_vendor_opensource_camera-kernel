@@ -1144,7 +1144,7 @@ vdev_fail:
 	return rc;
 }
 
-static int cam_sync_remove(struct platform_device *pdev)
+static void cam_sync_remove(struct platform_device *pdev)
 {
 	v4l2_device_unregister(sync_dev->vdev->v4l2_dev);
 	cam_sync_media_controller_cleanup(sync_dev);
@@ -1153,8 +1153,6 @@ static int cam_sync_remove(struct platform_device *pdev)
 	sync_dev->dentry = NULL;
 	kfree(sync_dev);
 	sync_dev = NULL;
-
-	return 0;
 }
 
 static struct platform_device cam_sync_device = {

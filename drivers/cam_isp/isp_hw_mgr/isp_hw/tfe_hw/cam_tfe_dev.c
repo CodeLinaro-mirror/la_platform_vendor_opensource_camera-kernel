@@ -128,7 +128,7 @@ end:
 	return rc;
 }
 
-int cam_tfe_remove(struct platform_device *pdev)
+void cam_tfe_remove(struct platform_device *pdev)
 {
 	struct cam_hw_info                *tfe_hw = NULL;
 	struct cam_hw_intf                *tfe_hw_intf = NULL;
@@ -177,7 +177,6 @@ deinit_soc:
 free_tfe_hw_intf:
 	kfree(tfe_hw_intf);
 
-	return rc;
 }
 
 int cam_tfe_hw_init(struct cam_hw_intf **tfe_hw, uint32_t hw_idx)

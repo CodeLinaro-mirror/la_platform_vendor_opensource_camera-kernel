@@ -9,7 +9,15 @@
 
 #include <linux/version.h>
 #include <linux/dma-buf.h>
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+#include <linux/firmware/qcom/qcom_scm.h>
+#else
+#include <linux/qcom_scm.h>
+#endif
+
+#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
 #include <linux/dma-iommu.h>
+#endif
 
 #include "cam_csiphy_dev.h"
 #include "cam_cpastop_hw.h"
@@ -24,7 +32,6 @@
 
 #include <linux/msm_ion.h>
 #include <linux/ion.h>
-#include <linux/qcom_scm.h>
 
 #else
 
@@ -38,6 +45,10 @@
 #define CAM_SUBDEV_NAME_SIZE 32
 #else
 #define CAM_SUBDEV_NAME_SIZE V4L2_SUBDEV_NAME_SIZE
+#endif
+
+#if KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE
+MODULE_IMPORT_NS(DMA_BUF);
 #endif
 
 struct cam_fw_alloc_info {
@@ -55,7 +66,23 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 void cam_free_clear(const void *);
 int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr);
 void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr);
+struct sg_table *cam_compat_dmabuf_map_attach(
+	struct dma_buf_attachment *attach, enum dma_data_direction dma_dir);
+void cam_compat_dmabuf_unmap_attach(struct dma_buf_attachment *attach,
+	struct sg_table *table, enum dma_data_direction dma_dir);
 void cam_smmu_util_iommu_custom(struct device *dev,
 	dma_addr_t discard_start, size_t discard_length);
 
+int cam_iommu_map(struct iommu_domain *domain,
+	size_t firmware_start, phys_addr_t fw_hdl, size_t firmware_len,
+	int prot);
+
+size_t cam_iommu_map_sg(struct iommu_domain *domain,
+	dma_addr_t iova_start, struct scatterlist *sgl, uint64_t orig_nents,
+	int prot);
+
+int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info);
+
+uint16_t cam_get_named_gpio(struct cam_hw_soc_info *soc_info,
+	int index);
 #endif /* _CAM_COMPAT_H_ */

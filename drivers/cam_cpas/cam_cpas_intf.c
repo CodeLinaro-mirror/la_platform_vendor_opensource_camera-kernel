@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of.h>
@@ -748,11 +749,10 @@ error_destroy_mem:
 	return rc;
 }
 
-static int cam_cpas_dev_remove(struct platform_device *dev)
+static void cam_cpas_dev_remove(struct platform_device *dev)
 {
 	if (!CAM_CPAS_INTF_INITIALIZED()) {
 		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -ENODEV;
 	}
 
 	mutex_lock(&g_cpas_intf->intf_lock);
@@ -764,9 +764,7 @@ static int cam_cpas_dev_remove(struct platform_device *dev)
 	kfree(g_cpas_intf);
 	g_cpas_intf = NULL;
 
-	return 0;
 }
-
 static const struct of_device_id cam_cpas_dt_match[] = {
 	{.compatible = "qcom,cam-cpas"},
 	{}
