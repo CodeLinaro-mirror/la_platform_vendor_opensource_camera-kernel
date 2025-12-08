@@ -367,6 +367,19 @@ size_t cam_iommu_map_sg(struct iommu_domain *domain,
 			prot, GFP_ATOMIC);
 	return size;
 }
+
+int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
+{
+	int rc = 0;
+
+	soc_info->irq_num = platform_get_irq(soc_info->pdev, 0);
+	if (soc_info->irq_num < 0) {
+		rc = soc_info->irq_num;
+		return rc;
+	}
+
+	return rc;
+}
 #else
 size_t cam_iommu_map_sg(struct iommu_domain *domain,
 	dma_addr_t iova_start, struct scatterlist *sgl,
@@ -378,6 +391,24 @@ size_t cam_iommu_map_sg(struct iommu_domain *domain,
 			sgl, orig_nents,
 			prot);
 	return size;
+}
+
+int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
+{
+	int rc = 0;
+
+	soc_info->irq_line =
+		platform_get_resource_byname(soc_info->pdev,
+		IORESOURCE_IRQ, soc_info->irq_name);
+	if (!soc_info->irq_line) {
+        soc_info->irq_num = -1;
+        CAM_ERR(CAM_UTIL, "Failed to get IRQ resource");
+		rc = -ENODEV;
+		return rc;
+	}
+	soc_info->irq_num = soc_info->irq_line->start;
+
+	return rc;
 }
 #endif
 
@@ -412,3 +443,26 @@ uint16_t cam_get_named_gpio(struct cam_hw_soc_info *soc_info,
 
 	return gpio_pin;
 }
+
+inline struct icc_path *cam_icc_get_path(struct device *dev,
+		const int src_id, const int dst_id, const char *path_name, bool use_path_name)
+{
+	CAM_DBG(CAM_UTIL, "Get icc path name: %s src_id:%d dst_id:%d use_path_name:%s", path_name,
+		src_id, dst_id, CAM_BOOL_TO_YESNO(use_path_name));
+
+#if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
+	if (!use_path_name) {
+		CAM_ERR(CAM_UTIL, "Must use path names to get icc path handle");
+		return NULL;
+	}
+
+	return of_icc_get(dev, path_name);
+#else
+	if (use_path_name)
+		return of_icc_get(dev, path_name);
+	else
+		return icc_get(dev, src_id, dst_id);
+#endif
+}
+
+
