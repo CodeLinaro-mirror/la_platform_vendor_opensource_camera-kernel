@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -27,6 +27,7 @@
 #include "cam_mem_mgr.h"
 #include "cam_debug_util.h"
 #include "cam_common_util.h"
+#include "cam_compat.h"
 
 #define CAM_REQ_MGR_EVENT_MAX 30
 
@@ -48,7 +49,7 @@ static int cam_media_device_setup(struct device *dev)
 
 	media_device_init(g_dev.v4l2_dev->mdev);
 	g_dev.v4l2_dev->mdev->dev = dev;
-	strlcpy(g_dev.v4l2_dev->mdev->model, CAM_REQ_MGR_VNODE_NAME,
+	strscpy(g_dev.v4l2_dev->mdev->model, CAM_REQ_MGR_VNODE_NAME,
 		sizeof(g_dev.v4l2_dev->mdev->model));
 
 	rc = media_device_register(g_dev.v4l2_dev->mdev);
@@ -604,7 +605,7 @@ static int cam_video_device_setup(void)
 
 	g_dev.video->v4l2_dev = g_dev.v4l2_dev;
 
-	strlcpy(g_dev.video->name, "cam-req-mgr",
+	strscpy(g_dev.video->name, "cam-req-mgr",
 		sizeof(g_dev.video->name));
 	g_dev.video->release = video_device_release;
 	g_dev.video->fops = &g_cam_fops;
@@ -704,7 +705,7 @@ EXPORT_SYMBOL(cam_req_mgr_is_shutdown);
 int cam_register_subdev(struct cam_subdev *csd)
 {
 	struct v4l2_subdev *sd;
-	int rc;
+	int rc, ret;
 
 	if (g_dev.state != true) {
 		CAM_ERR(CAM_CRM, "camera root device not ready yet");
@@ -720,7 +721,11 @@ int cam_register_subdev(struct cam_subdev *csd)
 	sd = &csd->sd;
 	v4l2_subdev_init(sd, csd->ops);
 	sd->internal_ops = csd->internal_ops;
-	snprintf(sd->name, V4L2_SUBDEV_NAME_SIZE, "%s", csd->name);
+	ret = snprintf(sd->name, CAM_SUBDEV_NAME_SIZE, "%s", csd->name);
+	if (ret >= CAM_SUBDEV_NAME_SIZE) {
+		CAM_WARN(CAM_CRM, "Subdevice name truncated: %s (length: %d, max: %d)",
+		csd->name, ret, CAM_SUBDEV_NAME_SIZE - 1);
+		}
 	v4l2_set_subdevdata(sd, csd->token);
 
 	sd->flags = csd->sd_flags;

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/kernel.h>
+#include <linux/vmalloc.h>
 #include "cam_sensor_util.h"
 #include "cam_mem_mgr.h"
 #include "cam_res_mgr_api.h"
@@ -251,7 +252,7 @@ static int32_t cam_sensor_get_io_buffer(
 			&buf_addr, &buf_size);
 		if ((rc < 0) || (!buf_addr)) {
 			CAM_ERR(CAM_SENSOR,
-				"invalid buffer, rc: %d, buf_addr: %pK",
+				"invalid buffer, rc: %d, buf_addr: %lu",
 				rc, buf_addr);
 			return -EINVAL;
 		}
@@ -260,7 +261,7 @@ static int32_t cam_sensor_get_io_buffer(
 			(void *)buf_addr, buf_size, io_cfg->offsets[0]);
 		if (io_cfg->offsets[0] >= buf_size) {
 			CAM_ERR(CAM_SENSOR,
-				"invalid size:io_cfg->offsets[0]: %d, buf_size: %d",
+				"invalid size:io_cfg->offsets[0]: %x, buf_size: %lu",
 				io_cfg->offsets[0], buf_size);
 			cam_mem_put_cpu_buf(io_cfg->mem_handle[0]);
 			return -EINVAL;
@@ -655,7 +656,7 @@ int cam_sensor_i2c_command_parser(
 
 				if (tot_size > (remain_len - byte_cnt)) {
 					CAM_ERR(CAM_SENSOR,
-						"Not enough buffer provided %d, %d, %d",
+						"Not enough buffer provided %lu, %lu, %d",
 						tot_size, remain_len, byte_cnt);
 					rc = -EINVAL;
 					goto end;
@@ -696,7 +697,7 @@ int cam_sensor_i2c_command_parser(
 
 				if (tot_size > (remain_len - byte_cnt)) {
 					CAM_ERR(CAM_SENSOR,
-						"Not enough buffer provided %d, %d, %d",
+						"Not enough buffer provided %lu, %lu, %d",
 						tot_size, remain_len, byte_cnt);
 					rc = -EINVAL;
 					goto end;
@@ -1169,7 +1170,7 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 
 	if (!cmd_length || cmd_buf_len < (size_t)cmd_length ||
 		cam_sensor_validate(cmd_buf, cmd_buf_len)) {
-		CAM_ERR(CAM_SENSOR, "Invalid Args: cmd_length: %d cmd_buf_len %d",
+		CAM_ERR(CAM_SENSOR, "Invalid Args: cmd_length: %d cmd_buf_len %lu",
 			cmd_length, cmd_buf_len);
 		rc = -EINVAL;
 		goto free_power_command;

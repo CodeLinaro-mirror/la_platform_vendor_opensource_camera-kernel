@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/iopoll.h>
@@ -1719,7 +1719,7 @@ static int cam_tfe_csid_get_time_stamp(
 			U64_MAX - time_delta) {
 			CAM_WARN(CAM_ISP, "boottimestamp overflowed");
 			CAM_INFO(CAM_ISP,
-			"currQTimer %lx prevQTimer %lx prevBootTimer %lx torn %d",
+			"currQTimer %llu prevQTimer %llu prevBootTimer %llu torn %d",
 				time_stamp->time_stamp_val,
 				csid_hw->prev_qtimer_ts,
 				csid_hw->prev_boot_timestamp, torn);
@@ -2396,7 +2396,7 @@ static int cam_tfe_csid_get_regdump(struct cam_tfe_csid_hw *csid_hw,
 		path_data->start_line, path_data->end_line,
 		path_data->width, path_data->height);
 	CAM_INFO(CAM_ISP,
-		"clock:%d crop_enable:%d vc:%d dt:%d informat:%d outformat:%d",
+		"clock:%llu crop_enable:%d vc:%d dt:%d informat:%d outformat:%d",
 		path_data->clk_rate, path_data->crop_enable,
 		path_data->vc, path_data->dt,
 		path_data->in_format, path_data->out_format);
@@ -3096,7 +3096,7 @@ handle_fatal_error:
 
 	if (is_error_irq)
 		CAM_ERR_RATE_LIMIT(CAM_ISP,
-			"CSID %d irq status TOP: 0x%x RX: 0x%x IPP: 0x%x RDI0: 0x%x RDI1: 0x%x RDI2: 0x%x CSID clk:%d",
+			"CSID %d irq status TOP: 0x%x RX: 0x%x IPP: 0x%x RDI0: 0x%x RDI1: 0x%x RDI2: 0x%x CSID clk:%llu",
 			csid_hw->hw_intf->hw_idx,
 			irq_status[TFE_CSID_IRQ_REG_TOP],
 			irq_status[TFE_CSID_IRQ_REG_RX],

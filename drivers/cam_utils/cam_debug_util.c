@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundataion. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/io.h>
@@ -93,6 +94,7 @@ const char *cam_get_module_name(unsigned int module_id)
 		break;
 	case CAM_CUSTOM:
 		name = "CAM-CUSTOM";
+		break;
 	case CAM_OPE:
 		name = "CAM-OPE";
 		break;

@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of.h>
 #include <linux/debugfs.h>
+#include <linux/vmalloc.h>
 #include <linux/videodev2.h>
 #include <linux/uaccess.h>
 #include <linux/platform_device.h>
@@ -196,7 +198,7 @@ static uint32_t *cam_ope_bus_wr_update(struct ope_hw *ope_hw_info,
 
 
 	if (ctx_id < 0 || !prepare) {
-		CAM_ERR(CAM_OPE, "Invalid data: %d %x", ctx_id, prepare);
+		CAM_ERR(CAM_OPE, "Invalid data: %d %p", ctx_id, prepare);
 		return NULL;
 	}
 
@@ -377,7 +379,7 @@ static uint32_t *cam_ope_bus_wm_disable(struct ope_hw *ope_hw_info,
 
 
 	if (ctx_id < 0 || !prepare) {
-		CAM_ERR(CAM_OPE, "Invalid data: %d %x", ctx_id, prepare);
+		CAM_ERR(CAM_OPE, "Invalid data: %d %p", ctx_id, prepare);
 		return NULL;
 	}
 
@@ -463,7 +465,7 @@ static int cam_ope_bus_wr_prepare(struct ope_hw *ope_hw_info,
 	struct ope_bus_wr_ctx *bus_wr_ctx;
 
 	if (ctx_id < 0 || !data) {
-		CAM_ERR(CAM_OPE, "Invalid data: %d %x", ctx_id, data);
+		CAM_ERR(CAM_OPE, "Invalid data: %d %p", ctx_id, data);
 		return -EINVAL;
 	}
 	prepare = data;
@@ -537,7 +539,7 @@ static int cam_ope_bus_wr_acquire(struct ope_hw *ope_hw_info,
 	int out_port_idx;
 
 	if (ctx_id < 0 || !data || ctx_id >= OPE_CTX_MAX) {
-		CAM_ERR(CAM_OPE, "Invalid data: %d %x", ctx_id, data);
+		CAM_ERR(CAM_OPE, "Invalid data: %d %p", ctx_id, data);
 		return -EINVAL;
 	}
 

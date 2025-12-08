@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/uaccess.h>
@@ -124,7 +124,7 @@ static int cam_ope_mgr_process_cmd(void *priv, void *data)
 
 	if (task_data->req_id <= ctx_data->last_flush_req) {
 		CAM_WARN(CAM_OPE,
-			"request %lld has been flushed, reject packet",
+			"request %lld has been flushed (last_flush_req=%lld),reject packet",
 			task_data->req_id, ctx_data->last_flush_req);
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
 		return -EINVAL;
@@ -691,7 +691,7 @@ static void cam_ope_dump_req_data(struct cam_ope_request *ope_req)
 		ope_req->ope_debug_buf.len < sizeof(struct cam_ope_hang_dump) ||
 		(ope_req->ope_debug_buf.offset + ope_req->ope_debug_buf.len)
 			> ope_req->ope_debug_buf.size) {
-		CAM_ERR(CAM_OPE, "Invalid debug buf, size %d %d len %d off %d",
+		CAM_ERR(CAM_OPE, "Invalid debug buf, size %lu %d len %zu off %d",
 				sizeof(struct cam_ope_hang_dump),
 				ope_req->ope_debug_buf.size,
 				ope_req->ope_debug_buf.len,
@@ -1712,7 +1712,7 @@ static void cam_ope_ctx_cdm_callback(uint32_t handle, void *userdata,
 	mutex_lock(&ctx->ctx_mutex);
 
 	if (!test_bit(cookie, ctx->bitmap)) {
-		CAM_ERR(CAM_OPE, "Req not present reqIdx = %d for ctx_id = %d",
+		CAM_ERR(CAM_OPE, "Req not present reqIdx = %llu for ctx_id = %d",
 			cookie, ctx->ctx_id);
 		goto end;
 	}
@@ -1751,7 +1751,7 @@ static void cam_ope_ctx_cdm_callback(uint32_t handle, void *userdata,
 			goto end;
 	} else {
 		CAM_INFO(CAM_OPE,
-			"CDM hdl=%x, udata=%pK, status=%d, cookie=%d req_id = %llu ctx_id=%d",
+			"CDM hdl=%x, udata=%pK, status=%d, cookie=%llu req_id = %llu ctx_id=%x",
 			 handle, userdata, status, cookie,
 			 ope_req->request_id, ctx->ctx_id);
 		CAM_INFO(CAM_OPE, "Rst of CDM and OPE for error reqid = %lld",
@@ -1886,12 +1886,12 @@ static int cam_ope_mgr_process_io_cfg(struct cam_ope_hw_mgr *hw_mgr,
 						prep_arg->num_in_map_entries++;
 					} else {
 						CAM_ERR(CAM_OPE,
-						"reached max in_res %d %d",
+						"reached max in_res %d %llu",
 						io_buf->resource_type,
 						ope_request->request_id);
 					}
 				} else {
-					CAM_ERR(CAM_OPE, "Invalid fence %d %d",
+					CAM_ERR(CAM_OPE, "Invalid fence %d %llu",
 						io_buf->resource_type,
 						ope_request->request_id);
 				}
@@ -1905,7 +1905,7 @@ static int cam_ope_mgr_process_io_cfg(struct cam_ope_hw_mgr *hw_mgr,
 					if (io_buf->resource_type
 						!= OPE_OUT_RES_STATS_LTM) {
 						CAM_ERR(CAM_OPE,
-						"Invalid fence %d %d",
+						"Invalid fence %x %llu",
 						io_buf->resource_type,
 						ope_request->request_id);
 					}
@@ -2642,7 +2642,7 @@ static int cam_ope_mgr_get_hw_caps(void *hw_priv, void *hw_caps_args)
 	int rc = 0, i;
 
 	if (!hw_priv || !hw_caps_args) {
-		CAM_ERR(CAM_OPE, "Invalid args: %x %x", hw_priv, hw_caps_args);
+		CAM_ERR(CAM_OPE, "Invalid args: %p %p", hw_priv, hw_caps_args);
 		return -EINVAL;
 	}
 
@@ -2651,7 +2651,7 @@ static int cam_ope_mgr_get_hw_caps(void *hw_priv, void *hw_caps_args)
 	if (copy_from_user(&hw_mgr->ope_caps,
 		u64_to_user_ptr(query_cap->caps_handle),
 		sizeof(struct ope_query_cap_cmd))) {
-		CAM_ERR(CAM_OPE, "copy_from_user failed: size = %d",
+		CAM_ERR(CAM_OPE, "copy_from_user failed: size = %lu",
 			sizeof(struct ope_query_cap_cmd));
 		rc = -EFAULT;
 		goto end;
@@ -2681,7 +2681,7 @@ static int cam_ope_mgr_get_hw_caps(void *hw_priv, void *hw_caps_args)
 
 	if (copy_to_user(u64_to_user_ptr(query_cap->caps_handle),
 		&hw_mgr->ope_caps, sizeof(struct ope_query_cap_cmd))) {
-		CAM_ERR(CAM_OPE, "copy_to_user failed: size = %d",
+		CAM_ERR(CAM_OPE, "copy_to_user failed: size = %lu",
 			sizeof(struct ope_query_cap_cmd));
 		rc = -EFAULT;
 	}
@@ -2710,7 +2710,7 @@ static int cam_ope_mgr_acquire_hw(void *hw_priv, void *hw_acquire_args)
 	int32_t idx;
 
 	if ((!hw_priv) || (!hw_acquire_args)) {
-		CAM_ERR(CAM_OPE, "Invalid args: %x %x",
+		CAM_ERR(CAM_OPE, "Invalid args: %p %p",
 			hw_priv, hw_acquire_args);
 		return -EINVAL;
 	}
@@ -2737,7 +2737,7 @@ static int cam_ope_mgr_acquire_hw(void *hw_priv, void *hw_acquire_args)
 		CAM_ERR(CAM_ISP, "Out of memory");
 		goto end;
 	}
-	strlcpy(cdm_acquire->identifier, "ope", sizeof("ope"));
+	strscpy(cdm_acquire->identifier, "ope", sizeof("ope"));
 	if (ctx->ope_acquire.dev_type == OPE_DEV_TYPE_OPE_RT) {
 		cdm_acquire->priority = CAM_CDM_BL_FIFO_3;
 		ctx->req_timer_timeout = OPE_REQUEST_RT_TIMEOUT;
@@ -3296,7 +3296,7 @@ static int cam_ope_mgr_prepare_hw_update(void *hw_priv,
 	struct timespec64 ts;
 
 	if ((!prepare_args) || (!hw_mgr) || (!prepare_args->packet)) {
-		CAM_ERR(CAM_OPE, "Invalid args: %x %x",
+		CAM_ERR(CAM_OPE, "Invalid args: %p %p",
 			prepare_args, hw_mgr);
 		return -EINVAL;
 	}
@@ -3320,7 +3320,7 @@ static int cam_ope_mgr_prepare_hw_update(void *hw_priv,
 	if (rc) {
 		mutex_unlock(&ctx_data->ctx_mutex);
 		CAM_ERR(CAM_OPE,
-			"packet validation failed: %d req_id: %d ctx: %d",
+			"packet validation failed: %d req_id: %llu ctx: %d",
 			rc, packet->header.request_id, ctx_data->ctx_id);
 		return rc;
 	}
@@ -3329,7 +3329,7 @@ static int cam_ope_mgr_prepare_hw_update(void *hw_priv,
 	if (rc) {
 		mutex_unlock(&ctx_data->ctx_mutex);
 		CAM_ERR(CAM_OPE,
-			"ope packet validation failed: %d req_id: %d ctx: %d",
+			"ope packet validation failed: %d req_id: %llu ctx: %d",
 			rc, packet->header.request_id, ctx_data->ctx_id);
 		return -EINVAL;
 	}
@@ -3338,7 +3338,7 @@ static int cam_ope_mgr_prepare_hw_update(void *hw_priv,
 		hw_mgr->iommu_sec_cdm_hdl);
 	if (rc) {
 		mutex_unlock(&ctx_data->ctx_mutex);
-		CAM_ERR(CAM_OPE, "Patching failed: %d req_id: %d ctx: %d",
+		CAM_ERR(CAM_OPE, "Patching failed: %d req_id: %llu ctx: %d",
 			rc, packet->header.request_id, ctx_data->ctx_id);
 		return -EINVAL;
 	}
@@ -3375,7 +3375,7 @@ static int cam_ope_mgr_prepare_hw_update(void *hw_priv,
 		ctx_data, &ope_cmd_buf_addr, request_idx);
 	if (rc) {
 		CAM_ERR(CAM_OPE,
-			"cmd desc processing failed :%d ctx: %d req_id:%d",
+			"cmd desc processing failed :%d ctx: %d req_id:%llu",
 			rc, ctx_data->ctx_id, packet->header.request_id);
 		goto end;
 	}
@@ -3384,7 +3384,7 @@ static int cam_ope_mgr_prepare_hw_update(void *hw_priv,
 		ctx_data, request_idx);
 	if (rc) {
 		CAM_ERR(CAM_OPE,
-			"IO cfg processing failed: %d ctx: %d req_id:%d",
+			"IO cfg processing failed: %d ctx: %d req_id:%llu",
 			rc, ctx_data->ctx_id, packet->header.request_id);
 		goto free_buf;
 	}
@@ -3393,14 +3393,14 @@ static int cam_ope_mgr_prepare_hw_update(void *hw_priv,
 		ctx_data, request_idx, ope_cmd_buf_addr);
 	if (rc) {
 		CAM_ERR(CAM_OPE,
-			"create kmd buf failed: %d ctx: %d request_id:%d",
+			"create kmd buf failed: %d ctx: %d request_id:%llu",
 			rc, ctx_data->ctx_id, packet->header.request_id);
 		goto free_buf;
 	}
 	rc = cam_ope_process_generic_cmd_buffer(packet, ctx_data,
 		request_idx, NULL);
 	if (rc) {
-		CAM_ERR(CAM_OPE, "Failed: %d ctx: %d req_id: %d req_idx: %d",
+		CAM_ERR(CAM_OPE, "Failed: %d ctx: %x req_id: %llu req_idx: %d",
 			rc, ctx_data->ctx_id, packet->header.request_id,
 			request_idx);
 		goto free_buf;
@@ -3691,7 +3691,7 @@ static int cam_ope_mgr_hw_open_u(void *hw_priv, void *fw_download_args)
 	return rc;
 }
 
-static cam_ope_mgr_hw_close_u(void *hw_priv, void *hw_close_args)
+static int cam_ope_mgr_hw_close_u(void *hw_priv, void *hw_close_args)
 {
 	struct cam_ope_hw_mgr *hw_mgr;
 	int rc = 0;
@@ -3823,7 +3823,7 @@ static int cam_ope_mgr_hw_dump(void *hw_priv, void *hw_dump_args)
 	req_ts = ktime_to_timespec64(ctx_data->req_list[idx]->submit_timestamp);
 
 	if (diff < (ctx_data->req_timer_timeout * 1000)) {
-		CAM_INFO(CAM_OPE, "No Error req %llu %ld:%06ld %ld:%06ld",
+		CAM_INFO(CAM_OPE, "No Error req %llu %lld:%06ld %lld:%06ld",
 			dump_args->request_id,
 			req_ts.tv_sec,
 			req_ts.tv_nsec/NSEC_PER_USEC,
@@ -3834,7 +3834,7 @@ static int cam_ope_mgr_hw_dump(void *hw_priv, void *hw_dump_args)
 		return 0;
 	}
 
-	CAM_ERR(CAM_OPE, "Error req %llu %ld:%06ld %ld:%06ld",
+	CAM_ERR(CAM_OPE, "Error req %llu %lld:%06ld %lld:%06ld",
 		dump_args->request_id,
 		req_ts.tv_sec,
 		req_ts.tv_nsec/NSEC_PER_USEC,
@@ -4123,7 +4123,7 @@ int cam_ope_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 
 	ope_hw_mgr = kzalloc(sizeof(struct cam_ope_hw_mgr), GFP_KERNEL);
 	if (!ope_hw_mgr) {
-		CAM_ERR(CAM_OPE, "Unable to allocate mem for: size = %d",
+		CAM_ERR(CAM_OPE, "Unable to allocate mem for: size = %lu",
 			sizeof(struct cam_ope_hw_mgr));
 		return -ENOMEM;
 	}
@@ -4156,7 +4156,7 @@ int cam_ope_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 		ope_hw_mgr->ctx[i].bitmap = kzalloc(
 			ope_hw_mgr->ctx[i].bitmap_size, GFP_KERNEL);
 		if (!ope_hw_mgr->ctx[i].bitmap) {
-			CAM_ERR(CAM_OPE, "bitmap allocation failed: size = %d",
+			CAM_ERR(CAM_OPE, "bitmap allocation failed: size = %zu",
 				ope_hw_mgr->ctx[i].bitmap_size);
 			rc = -ENOMEM;
 			goto ope_ctx_bitmap_failed;
