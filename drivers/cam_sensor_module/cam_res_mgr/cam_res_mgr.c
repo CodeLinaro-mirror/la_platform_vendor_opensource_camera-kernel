@@ -704,6 +704,20 @@ int cam_res_mgr_gpio_set_value(unsigned int gpio, int value)
 EXPORT_SYMBOL(cam_res_mgr_gpio_set_value);
 
 #ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+int cam_res_mgr_icc_set_bw(struct icc_path *path, s32 avg, s32 peak)
+{
+	if (avg < 0)
+		avg = 0;
+
+	if (peak < 0)
+		peak = 0;
+
+	CAM_DBG(CAM_RES, "set avg: %d, peak: %d", avg, peak);
+
+	return icc_set_bw(path, avg, peak);
+}
+EXPORT_SYMBOL(cam_res_mgr_icc_set_bw);
+
 bool cam_res_mgr_is_icc_clock(const char *clk_name)
 {
 	struct cam_res_mgr_dt *dt;
@@ -783,6 +797,65 @@ static int cam_res_mgr_parse_dt_icc_clocks(struct device *dev)
 
 	return 0;
 }
+
+static int cam_res_mgr_alloc_icc_clocks(struct device *dev)
+{
+	struct cam_res_mgr_dt *dt;
+	int cnt;
+
+	if (!cam_res)
+		return -EINVAL;
+
+	dt = &cam_res->dt;
+	cnt = dt->num_icc_clocks;
+
+	if (!cnt)
+		return 0;
+
+	dt->iccpath = devm_kcalloc(dev, dt->num_icc_clocks, sizeof(*dt->iccpath), GFP_KERNEL);
+	if (!dt->iccpath) {
+		CAM_ERR(CAM_RES, "Memory not available: %d", dt->num_icc_clocks * sizeof(*dt->iccpath));
+		return -ENOMEM;
+	}
+
+	while (cnt--) {
+		dt->iccpath[cnt] = devm_of_icc_get(dev, dt->icc_clocks[cnt]);
+		if (IS_ERR_OR_NULL(dt->iccpath[cnt])) {
+			CAM_ERR(CAM_RES, "Failed getting icc clk: %s", dt->icc_clocks[cnt]);
+			return -EINVAL;
+		} else {
+			CAM_DBG(CAM_RES, "Added icc clk: %s", dt->icc_clocks[cnt]);
+		}
+	}
+
+	return 0;
+}
+
+struct icc_path *cam_res_mgr_clk_get_path(const char *clk_name)
+{
+	struct cam_res_mgr_dt *dt;
+	int cnt;
+
+	if (!cam_res) {
+		CAM_INFO(CAM_RES, "Camera res-mgr is not yet active");
+		return NULL;
+	}
+
+	if (!clk_name) {
+		CAM_ERR(CAM_RES, "No clock name provided");
+		return NULL;
+	}
+
+	dt = &cam_res->dt;
+	cnt = dt->num_icc_clocks;
+
+	while (cnt--)
+		if (!strcmp(clk_name, dt->icc_clocks[cnt]))
+			return dt->iccpath[cnt];
+
+	return NULL;
+}
+EXPORT_SYMBOL(cam_res_mgr_clk_get_path);
 #endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 static int cam_res_mgr_shared_pinctrl_init(
@@ -971,8 +1044,20 @@ static int cam_res_mgr_parse_dt(struct device *dev)
 
 #ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
 	rc = cam_res_mgr_parse_dt_icc_clocks(dev);
-	if (rc < 0)
-		CAM_WARN(CAM_RES, "ICC clocks parsing failed: rc: %d", rc);
+	if (rc) {
+		if (rc == -ENOENT) {
+			CAM_DBG(CAM_RES, "ICC clock resources not available");
+		} else {
+			CAM_ERR(CAM_RES, "ICC clocks parsing failed: rc: %d", rc);
+			return rc;
+		}
+	}
+
+	rc = cam_res_mgr_alloc_icc_clocks(dev);
+	if (rc) {
+		CAM_ERR(CAM_RES, "ICC clocks allocation failed: rc: %d", rc);
+		return rc;
+	}
 #endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 	return 0;
