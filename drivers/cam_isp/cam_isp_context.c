@@ -7388,6 +7388,13 @@ static int __cam_isp_ctx_rdi_only_epoch_in_applied(
 		goto end;
 	}
 
+	if (list_empty(&ctx->active_req_list) && list_empty(&ctx->wait_req_list)) {
+		CAM_ERR(CAM_ISP,
+			"Epoch received for res:%d with no active and waitlist req ctx:%d",
+			epoch_event_data->res_id, ctx->ctx_id);
+		return -EINVAL;
+	}
+
 	if (!list_empty(&ctx->active_req_list)) {
 		list_for_each_entry_safe(req, req_temp, &ctx->active_req_list, list) {
 			req_isp = (struct cam_isp_ctx_req *)req->req_priv;
@@ -7397,11 +7404,14 @@ static int __cam_isp_ctx_rdi_only_epoch_in_applied(
 					1 << epoch_event_data->res_id;
 
 				if (req_isp->intermediate_irq_mask.reg_up_irq_mask !=
-					req_isp->path_irq_mask)
+					req_isp->path_irq_mask) {
 					goto frame_drop_handling;
+				}
 			}
 		}
-	} else if (!list_empty(&ctx->wait_req_list)) {
+	}
+
+	if (!list_empty(&ctx->wait_req_list)) {
 		req = list_first_entry(&ctx->wait_req_list,
 				struct cam_ctx_request, list);
 		req_isp = (struct cam_isp_ctx_req *) req->req_priv;
@@ -7414,11 +7424,6 @@ static int __cam_isp_ctx_rdi_only_epoch_in_applied(
 				req_isp->path_irq_mask)
 				goto frame_drop_handling;
 		}
-	} else {
-		CAM_ERR(CAM_ISP,
-			"Epoch received for res:%d with no active and waitlist req ctx:%d",
-			epoch_event_data->res_id, ctx->ctx_id);
-		return -EINVAL;
 	}
 
 frame_drop_handling:
