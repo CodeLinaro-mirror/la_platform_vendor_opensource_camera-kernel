@@ -317,7 +317,7 @@ int cam_context_dump_pf_info(struct cam_context *ctx,
 }
 
 int cam_context_handle_message(struct cam_context *ctx,
-	uint32_t msg_type, uint32_t *data)
+	uint32_t msg_type, void *data)
 {
 	int rc = 0;
 

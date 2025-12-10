@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SMMU_API_H_
@@ -41,6 +41,22 @@ enum cam_smmu_region_id {
 	CAM_SMMU_REGION_IO,
 	CAM_SMMU_REGION_SECHEAP,
 	CAM_SMMU_REGION_QDSS
+};
+
+/**
+ * @brief          : Represents camera security framework version
+ *
+ * @param arch_ver : Captures the version of the high level secure
+ *                   camera architecture.
+ * @param max_ver  : Captures the version of the solution with in the
+ *                   high level architecture.
+ * @param min_ver  : Captures the version of the memory assignment
+ *                   mechanism with in the solution.
+ */
+struct cam_csf_version {
+	uint32_t              arch_ver;
+	uint32_t              max_ver;
+	uint32_t              min_ver;
 };
 
 /**
@@ -446,5 +462,9 @@ void cam_smmu_exit_module(void);
  */
 int cam_smmu_need_force_alloc_cached(bool *force_alloc_cached);
 
+/**
+ * @brief : API to get CSF version in use that's received from SMMU proxy driver
+ */
+void cam_smmu_get_csf_version(struct cam_csf_version *csf_ver);
 
 #endif /* _CAM_SMMU_API_H_ */

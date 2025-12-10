@@ -22,6 +22,12 @@ endif
 # List of board platforms for which MMRM driver API should be enabled
 MMRM_BOARDS := taro parrot kalama pineapple lahaina
 
+# List of board platforms for which SMCINVOKE_DLKM driver API should be enabled
+SMCINVOKE_DLKM_BOARDS := malabar
+
+# List of board platforms for which SMMU_PROXY_DLKM driver API should be enabled
+SMMU_PROXY_DLKM_BOARDS := malabar
+
 CAMERA_SRC_FILES := \
                     $(addprefix $(LOCAL_PATH)/, $(call all-named-files-under,*.h,drivers dt-bindings include))\
                     $(addprefix $(LOCAL_PATH)/, $(call all-named-files-under,*.mk,config))\
