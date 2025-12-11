@@ -2441,37 +2441,43 @@ static inline int cam_synx_update_hw_fence_queue_util(
 	struct cam_sync_hwfence_info *hwfence_info,
 	int32_t *wr_pnt_arr_idx)
 {
-	int rc = 0;
+	int rc = 0, sync_object;
 	int32_t client_entry_idx;
 	struct cam_sync_hw_fence_client_entries *client_entry;
 	struct synx_session *session_hdl;
 	struct sync_ext_fence_info *ext_fence_info, *ext_fence_tmp;
-	int32_t wr_ptr_idx;
+	int32_t wr_ptr_idx, client_core, signal_id;
+	uint32_t synx_obj;
+	void *txq_wr_ptr;
 
 	wr_ptr_idx = *wr_pnt_arr_idx;
 	client_entry_idx = row->hw_fence_client_idx;
 	spin_lock(hw_fence_info.hw_fence_locks[client_entry_idx]);
 	client_entry = &hw_fence_info.hw_fence_tbl[client_entry_idx];
 	session_hdl = client_entry->session_hdl;
+	client_core = client_entry->client_core;
+	signal_id = client_entry->signal_id;
+	txq_wr_ptr   = client_entry->txq_wr_ptr;
 	spin_unlock(hw_fence_info.hw_fence_locks[client_entry_idx]);
 
+	sync_object = (uint32_t)hwfence_info->sync_object & sync_uid_access.fenceIdMask;
 	list_for_each_entry_safe(ext_fence_info, ext_fence_tmp, &row->ext_fences,
 		list) {
 		if (ext_fence_info->synx_obj_info.is_valid) {
-			rc = cam_synx_update_hw_fence_queue(session_hdl,
-				ext_fence_info->synx_obj_info.synx_obj);
+			synx_obj = ext_fence_info->synx_obj_info.synx_obj;
+			spin_unlock(&sync_dev->row_spinlocks[sync_object]);
+			rc = cam_synx_update_hw_fence_queue(session_hdl, synx_obj);
 			if (rc) {
 				CAM_ERR(CAM_SYNC,
 					"Failed to update hw fence queue for synx: 0x%x",
-					ext_fence_info->synx_obj_info.synx_obj);
+					synx_obj);
+				spin_lock(&sync_dev->row_spinlocks[sync_object]);
 				goto end;
 			}
-			hwfence_info->wr_pntr_arr[wr_ptr_idx].client_core =
-				client_entry->client_core;
-			hwfence_info->wr_pntr_arr[wr_ptr_idx].signal_id =
-				client_entry->signal_id;
-			hwfence_info->wr_pntr_arr[wr_ptr_idx].wr_pntr =
-				*(int32_t *)client_entry->txq_wr_ptr;
+			spin_lock(&sync_dev->row_spinlocks[sync_object]);
+			hwfence_info->wr_pntr_arr[wr_ptr_idx].client_core = client_core;
+			hwfence_info->wr_pntr_arr[wr_ptr_idx].signal_id = signal_id;
+			hwfence_info->wr_pntr_arr[wr_ptr_idx].wr_pntr = *(int32_t *)txq_wr_ptr;
 			wr_ptr_idx++;
 		}
 	}
