@@ -4388,7 +4388,7 @@ static int cam_vfe_bus_ver3_get_hwfence_device_info(void *priv, void *cmd_args,
 	hw_fence_device_info = (struct cam_hw_fence_device_info *) cmd_args;
 	bus_priv = (struct cam_vfe_bus_ver3_priv  *) priv;
 
-	hw_idx = hw_fence_device_info->num_valid_hws;
+	hw_idx = bus_priv->common_data.hw_intf->hw_idx;
 	resource_idx = 0;
 
 	for (i = 0; i < bus_priv->num_out; i++) {

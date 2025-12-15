@@ -21774,7 +21774,7 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 
 	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
 		if (!g_ife_hw_mgr.ife_devices[i])
-			break;
+			continue;
 		rc = 0;
 		iova_queue = 0;
 
