@@ -600,6 +600,18 @@ static struct cam_tpg_mux_regs cam662_cpas100_cpas_tpg_mux_info = {
 	.tpg_mux_sel         = 0x1C,
 };
 
+static struct cam_cpas_subpart_info cam662_cpas_camera_subpart_info = {
+	.num_bits = 2,
+	/*
+	 * Below fuse indexing is based on software fuse definition which is in SMEM and provided
+	 * by XBL team.
+	 */
+	.hw_bitmap_mask = {
+		{CAM_CPAS_ISP_FUSE, BIT(0)},
+		{CAM_CPAS_ISP_FUSE, BIT(1)},
+	}
+};
+
 static struct cam_cpas_info cam662_cpas100_cpas_info = {
 	.hw_caps_info = {
 		.num_caps_registers = 1,
@@ -609,6 +621,7 @@ static struct cam_cpas_info cam662_cpas100_cpas_info = {
 	.num_qchannel = 1,
 	.tpg_mux_info = &cam662_cpas100_cpas_tpg_mux_info,
 	.camera_arch = CAM_CPAS_HW_MIMAS_ARCH,
+	.subpart_info = &cam662_cpas_camera_subpart_info,
 };
 
 static struct cam_cpas_hw_info cam662_cpas100_hw_info = {
