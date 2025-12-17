@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -900,7 +900,7 @@ int32_t cam_actuator_publish_dev_info(struct cam_req_mgr_device_info *info)
 	}
 
 	info->dev_id = CAM_REQ_MGR_DEVICE_ACTUATOR;
-	strlcpy(info->name, CAM_ACTUATOR_NAME, sizeof(info->name));
+	strscpy(info->name, CAM_ACTUATOR_NAME, sizeof(info->name));
 	info->p_delay = 1;
 	info->trigger = CAM_TRIGGER_POINT_SOF;
 
@@ -1087,7 +1087,7 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 
 	switch (csl_packet->header.op_code & 0xFFFFFF) {
 	case CAM_ACTUATOR_PACKET_OPCODE_INIT:
-		offset = (uint32_t *)&csl_packet->payload;
+		offset = (uint32_t *)&csl_packet->payload_flex;
 		offset += (csl_packet->cmd_buf_offset / sizeof(uint32_t));
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 		if (a_ctrl->is_trigger_mode && a_ctrl->cam_act_state == CAM_ACTUATOR_START) {
@@ -1299,7 +1299,7 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 			i2c_data->init_settings.request_id =
 				csl_packet->header.request_id;
 			i2c_reg_settings->is_settings_valid = 1;
-			offset = (uint32_t *)&csl_packet->payload;
+			offset = (uint32_t *)&csl_packet->payload_flex;
 			offset += csl_packet->cmd_buf_offset / sizeof(uint32_t);
 			cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 			rc = cam_sensor_i2c_command_parser(
@@ -1346,7 +1346,7 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 			 i2c_reg_settings->request_id =
 				csl_packet->header.request_id;
 			i2c_reg_settings->is_settings_valid = 1;
-			offset = (uint32_t *)&csl_packet->payload;
+			offset = (uint32_t *)&csl_packet->payload_flex;
 			offset += csl_packet->cmd_buf_offset / sizeof(uint32_t);
 			cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 			rc = cam_sensor_i2c_command_parser(
@@ -1405,7 +1405,7 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 		INIT_LIST_HEAD(&(i2c_read_settings.list_head));
 
 		io_cfg = (struct cam_buf_io_cfg *) ((uint8_t *)
-			&csl_packet->payload +
+			&csl_packet->payload_flex +
 			csl_packet->io_configs_offset);
 
 		if (io_cfg == NULL) {
@@ -1414,7 +1414,7 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 			goto end;
 		}
 
-		offset = (uint32_t *)&csl_packet->payload;
+		offset = (uint32_t *)&csl_packet->payload_flex;
 		offset += (csl_packet->cmd_buf_offset / sizeof(uint32_t));
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 		i2c_read_settings.is_settings_valid = 1;

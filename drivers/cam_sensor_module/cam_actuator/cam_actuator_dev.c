@@ -142,7 +142,7 @@ static int cam_actuator_init_subdev(struct cam_actuator_ctrl_t *a_ctrl)
 		&cam_actuator_internal_ops;
 	a_ctrl->v4l2_dev_str.ops =
 		&cam_actuator_subdev_ops;
-	strlcpy(a_ctrl->device_name, CAMX_ACTUATOR_DEV_NAME,
+	strscpy(a_ctrl->device_name, CAMX_ACTUATOR_DEV_NAME,
 		sizeof(a_ctrl->device_name));
 	a_ctrl->v4l2_dev_str.name =
 		a_ctrl->device_name;
@@ -328,6 +328,9 @@ static int cam_actuator_driver_i2c_probe(struct i2c_client *client)
 	}
 
 	CAM_DBG(CAM_ACTUATOR, "Adding sensor actuator component");
+
+	cam_soc_util_initialize_power_domain(&client->dev);
+
 	rc = component_add(&client->dev, &cam_actuator_i2c_component_ops);
 	if (rc)
 		CAM_ERR(CAM_ACTUATOR, "failed to add component rc: %d", rc);
@@ -353,6 +356,9 @@ static int32_t cam_actuator_driver_i2c_probe(struct i2c_client *client,
 	}
 
 	CAM_DBG(CAM_ACTUATOR, "Adding sensor actuator component");
+
+	cam_soc_util_initialize_power_domain(&client->dev);
+
 	rc = component_add(&client->dev, &cam_actuator_i2c_component_ops);
 	if (rc)
 		CAM_ERR(CAM_ACTUATOR, "failed to add component rc: %d", rc);
@@ -364,6 +370,8 @@ static int32_t cam_actuator_driver_i2c_probe(struct i2c_client *client,
 void cam_actuator_i2c_component_del_wrapper(struct i2c_client *client)
 {
 	component_del(&client->dev, &cam_actuator_i2c_component_ops);
+
+	cam_soc_util_uninitialize_power_domain(&client->dev);
 }
 
 static int cam_actuator_platform_component_bind(struct device *dev,
@@ -516,11 +524,21 @@ const static struct component_ops cam_actuator_platform_component_ops = {
 	.unbind = cam_actuator_platform_component_unbind,
 };
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int32_t cam_actuator_platform_remove(
 	struct platform_device *pdev)
+#else
+static void cam_actuator_platform_remove(
+	struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_actuator_platform_component_ops);
+
+	cam_soc_util_uninitialize_power_domain(&pdev->dev);
+
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_actuator_driver_dt_match[] = {
@@ -534,6 +552,9 @@ static int32_t cam_actuator_driver_platform_probe(
 	int rc = 0;
 
 	CAM_DBG(CAM_ACTUATOR, "Adding sensor actuator component");
+
+	cam_soc_util_initialize_power_domain(&pdev->dev);
+
 	rc = component_add(&pdev->dev, &cam_actuator_platform_component_ops);
 	if (rc)
 		CAM_ERR(CAM_ACTUATOR, "failed to add component rc: %d", rc);
