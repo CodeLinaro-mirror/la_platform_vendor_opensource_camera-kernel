@@ -209,7 +209,7 @@ int32_t cam_csiphy_enable_hw(struct csiphy_device *csiphy_dev, int32_t index)
 		csiphy_dev->rx_clk_src_idx, true, vote_level);
 	cam_subdev_notify_message(CAM_TFE_DEVICE_TYPE,
 		CAM_SUBDEV_MESSAGE_CLOCK_UPDATE,
-		clk_rate);
+		(void *)&clk_rate);
 
 	if (rc < 0) {
 		CAM_ERR(CAM_CSIPHY, "csiphy_clk_set_rate failed rc: %d", rc);

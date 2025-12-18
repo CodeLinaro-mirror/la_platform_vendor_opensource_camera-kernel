@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -967,7 +967,7 @@ void cam_csiphy_shutdown(struct csiphy_device *csiphy_dev)
 			if (csiphy_dev->csiphy_info[i].secure_mode)
 				cam_csiphy_notify_secure_mode(
 					csiphy_dev,
-					CAM_SECURE_MODE_NON_SECURE, i);
+					CAM_SECURE_MODE_NON_SECURE, i, true);
 
 			csiphy_dev->csiphy_info[i].secure_mode =
 				CAM_SECURE_MODE_NON_SECURE;
@@ -1291,8 +1291,8 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 				csiphy_dev->start_dev_count);
 			if (csiphy_dev->csiphy_info[offset].secure_mode)
 				cam_csiphy_notify_secure_mode(
-					csiphy_dev,
-					CAM_SECURE_MODE_NON_SECURE, offset);
+					csiphy_dev, CAM_SECURE_MODE_NON_SECURE,
+					offset, false);
 
 			csiphy_dev->csiphy_info[offset].secure_mode =
 				CAM_SECURE_MODE_NON_SECURE;
@@ -1306,7 +1306,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 		if (csiphy_dev->csiphy_info[offset].secure_mode)
 			cam_csiphy_notify_secure_mode(
 				csiphy_dev,
-				CAM_SECURE_MODE_NON_SECURE, offset);
+				CAM_SECURE_MODE_NON_SECURE, offset, false);
 
 		csiphy_dev->csiphy_info[offset].secure_mode =
 			CAM_SECURE_MODE_NON_SECURE;
@@ -1368,7 +1368,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 		if (csiphy_dev->csiphy_info[offset].secure_mode)
 			cam_csiphy_notify_secure_mode(
 				csiphy_dev,
-				CAM_SECURE_MODE_NON_SECURE, offset);
+				CAM_SECURE_MODE_NON_SECURE, offset, false);
 
 		csiphy_dev->csiphy_info[offset].secure_mode =
 			CAM_SECURE_MODE_NON_SECURE;
@@ -1471,7 +1471,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 				if(clk_rate > 0) {
 					cam_subdev_notify_message(CAM_TFE_DEVICE_TYPE,
 						CAM_SUBDEV_MESSAGE_CLOCK_UPDATE,
-						clk_rate);
+						(void *)&clk_rate);
 				}
 			}
 
@@ -1485,7 +1485,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 				}
 
 				rc = cam_csiphy_notify_secure_mode(csiphy_dev,
-					CAM_SECURE_MODE_SECURE, offset);
+					CAM_SECURE_MODE_SECURE, offset, false);
 				if (rc < 0) {
 					csiphy_dev->csiphy_info[offset]
 						.secure_mode =
@@ -1553,7 +1553,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 
 			rc = cam_csiphy_notify_secure_mode(
 				csiphy_dev,
-				CAM_SECURE_MODE_SECURE, offset);
+				CAM_SECURE_MODE_SECURE, offset, false);
 			if (rc < 0) {
 				csiphy_dev->csiphy_info[offset].secure_mode =
 					CAM_SECURE_MODE_NON_SECURE;

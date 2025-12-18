@@ -21,6 +21,15 @@
 #include "cam_cpastop_hw.h"
 #include "cam_smmu_api.h"
 
+#ifdef CONFIG_SPECTRA_SECURE_CAMERA_25
+#include <smmu-proxy/linux/qti-smmu-proxy.h>
+#include <linux/qcom-dma-mapping.h>
+#include <linux/smcinvoke.h>
+#include <linux/IClientEnv.h>
+#include <linux/ITrustedCameraDriver.h>
+#include <linux/CTrustedCameraDriver.h>
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
 
 #define VFL_TYPE_VIDEO VFL_TYPE_GRABBER
@@ -60,6 +69,8 @@ MODULE_IMPORT_NS(DMA_BUF);
 #define CAM_SUBDEV_NAME_SIZE V4L2_SUBDEV_NAME_SIZE
 #endif
 
+#define IS_CSF25(x, y) ((((x) == 2) && ((y) == 5)) ? 1 : 0)
+
 struct cam_fw_alloc_info {
 	struct device *fw_dev;
 	void          *fw_kva;
@@ -72,8 +83,15 @@ void cam_cpastop_scm_write(struct cam_cpas_hw_errata_wa *errata_wa);
 int cam_ife_notify_safe_lut_scm(bool safe_trigger);
 int camera_component_match_add_drivers(struct device *master_dev,
 	struct component_match **match_list);
+
+#ifdef CONFIG_SPECTRA_SECURE_CAMERA_25
 int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
-	bool protect, int32_t offset);
+	bool protect, int32_t offset, bool is_shutdown);
+#else
+int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
+	bool protect, int32_t offset, bool __always_unused is_shutdown);
+#endif
+
 void cam_check_iommu_faults(struct iommu_domain *domain,
 	struct cam_smmu_pf_info *pf_info);
 void cam_free_clear(const void *);
@@ -156,6 +174,12 @@ int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info);
 
 uint16_t cam_get_named_gpio(struct cam_hw_soc_info *soc_info,
 	int index);
+
+int cam_smmu_fetch_csf_version(struct cam_csf_version *csf_version);
+
+unsigned long cam_update_dma_map_attributes(unsigned long attr);
+
+size_t cam_align_dma_buf_size(size_t len);
 
 #if IS_REACHABLE(CONFIG_INTERCONNECT_QCOM)
 inline struct icc_path *cam_icc_get_path(struct device *dev,

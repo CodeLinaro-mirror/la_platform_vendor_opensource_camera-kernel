@@ -50,6 +50,14 @@ def _define_module(target, variant):
         cmd = "cat $(SRCS) > $@",
     )
 
+    if target == "malabar":
+        deps.extend([
+		"//vendor/qcom/opensource/securemsm-kernel:smcinvoke_kernel_headers",
+		"//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
+		"//vendor/qcom/opensource/securemsm-kernel:smmu_proxy_headers",
+		"//vendor/qcom/opensource/securemsm-kernel:{}_smmu_proxy_dlkm".format(tv),
+        ])
+
     ddk_module(
         name = "{}_camera".format(tv),
         out = "camera.ko",

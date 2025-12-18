@@ -36,7 +36,7 @@ static int cam_isp_context_dump_requests(void *data,
 	struct cam_smmu_pf_info *pf_info);
 
 static int cam_isp_context_handle_message(void *context,
-	uint32_t msg_type, uint32_t *data);
+	uint32_t msg_type, void *data);
 
 static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 	struct cam_start_stop_dev_cmd *cmd);
@@ -6320,7 +6320,7 @@ static int cam_isp_context_dump_requests(void *data,
 }
 
 static int cam_isp_context_handle_message(void *context,
-	uint32_t msg_type, uint32_t *data)
+	uint32_t msg_type, void *data)
 {
 	int                            rc = -EINVAL;
 	struct cam_hw_cmd_args         hw_cmd_args;
@@ -6334,7 +6334,7 @@ static int cam_isp_context_handle_message(void *context,
 	case CAM_SUBDEV_MESSAGE_CLOCK_UPDATE:
 		hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
 		isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_CMD_UPDATE_CLOCK;
-		isp_hw_cmd_args.cmd_data = (void *)data;
+		isp_hw_cmd_args.cmd_data = data;
 		hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
 		rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
 			&hw_cmd_args);

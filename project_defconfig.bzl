@@ -18,10 +18,10 @@ project_configs = select({
     ],
     ":lahaina": [],
     ":canoe": [],
-    ":malabar": [
+    ":malabar": dependency_config + [
 	"CONFIG_SPECTRA_TFE=y",
 	"CONFIG_SPECTRA_OPE=y",
-	"CONFIG_INTERCONNECT_QCOM=y",
+	"CONFIG_SPECTRA_SECURE_CAMERA_25=y",
     ],
 })
 

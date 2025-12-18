@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SUBDEV_H_
@@ -18,7 +19,8 @@
 
 enum cam_subdev_message_type_t {
 	CAM_SUBDEV_MESSAGE_IRQ_ERR = 0x1,
-	CAM_SUBDEV_MESSAGE_CLOCK_UPDATE
+	CAM_SUBDEV_MESSAGE_CLOCK_UPDATE,
+	CAM_SUBDEV_MESSAGE_DOMAIN_ID_SECURE_PARAMS
 };
 
 /* Enum for close sequence priority */
@@ -71,7 +73,7 @@ struct cam_subdev {
 	void                                  (*msg_cb)(
 					struct v4l2_subdev *sd,
 					enum cam_subdev_message_type_t msg_type,
-					uint32_t data);
+					void * data);
 	struct list_head                       list;
 	enum cam_subdev_close_seq_priority     close_seq_prior;
 };
@@ -88,7 +90,7 @@ struct cam_subdev {
  */
 void cam_subdev_notify_message(u32 subdev_type,
 		enum cam_subdev_message_type_t message_type,
-		uint32_t data);
+		void *data);
 
 /**
  * cam_subdev_probe()
