@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/string.h>
@@ -57,7 +57,7 @@ int cam_common_mem_kdup(void **dst,
 	gfp_t flag = GFP_KERNEL;
 
 	if (!src || !dst || !size) {
-		CAM_ERR(CAM_UTIL, "Invalid params src: %pK dst: %pK size: %u",
+		CAM_ERR(CAM_UTIL, "Invalid params src: %pK dst: %pK size: %zu",
 			src, dst, size);
 		return -EINVAL;
 	}
@@ -67,7 +67,7 @@ int cam_common_mem_kdup(void **dst,
 
 	*dst = kvzalloc(size, flag);
 	if (!*dst) {
-		CAM_ERR(CAM_UTIL, "Failed to allocate memory with size: %u", size);
+		CAM_ERR(CAM_UTIL, "Failed to allocate memory with size: %zu", size);
 		return -ENOMEM;
 	}
 

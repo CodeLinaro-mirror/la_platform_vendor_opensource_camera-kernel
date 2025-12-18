@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of.h>
@@ -150,7 +150,7 @@ static int cam_ope_top_acquire(struct ope_hw *ope_hw_info,
 	int rc = 0;
 
 	if (ctx_id < 0 || !data) {
-		CAM_ERR(CAM_OPE, "Invalid data: %d %x", ctx_id, data);
+		CAM_ERR(CAM_OPE, "Invalid data: %d %p", ctx_id, data);
 		return -EINVAL;
 	}
 

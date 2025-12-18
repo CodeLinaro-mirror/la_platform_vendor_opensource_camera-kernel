@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_req_mgr_workq.h"
@@ -282,10 +283,11 @@ void cam_req_mgr_thread_switch_delay_detect(ktime_t workq_scheduled)
 
 	if (diff > CAM_WORKQ_RESPONSE_TIME_THRESHOLD) {
 		CAM_ERR(CAM_CRM,
-			"Workq delay detected %ld:%06ld %ld:%06ld %ld:",
-			workq_scheduled_ts.tv_sec,
-			workq_scheduled_ts.tv_nsec/NSEC_PER_USEC,
-			cur_ts.tv_sec, cur_ts.tv_nsec/NSEC_PER_USEC,
-			diff);
+		"Workq delay detected %lld:%06ld %lld:%06ld %llu:",
+		(long long)workq_scheduled_ts.tv_sec,
+		workq_scheduled_ts.tv_nsec / NSEC_PER_USEC,
+		(long long)cur_ts.tv_sec,
+		cur_ts.tv_nsec / NSEC_PER_USEC,
+		(unsigned long long)diff);
 	}
 }

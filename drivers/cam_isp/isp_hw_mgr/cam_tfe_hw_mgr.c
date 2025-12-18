@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -1743,13 +1743,13 @@ void cam_tfe_cam_cdm_callback(uint32_t handle, void *userdata,
 		status == CAM_CDM_CB_STATUS_HW_ERROR) {
 		ctx = userdata;
 		CAM_INFO(CAM_ISP,
-			"req_id =%d ctx_id =%d Bl_cmd_count =%d status=%d",
+			"req_id =%llu ctx_id =%d Bl_cmd_count =%d status=%d",
 			ctx->applied_req_id, ctx->ctx_index,
 			ctx->last_submit_bl_cmd.bl_count, status);
 
 		for (i = 0; i < ctx->last_submit_bl_cmd.bl_count; i++) {
 			CAM_INFO(CAM_ISP,
-				"BL(%d) hdl=0x%x addr=0x%x len=%d input_len =%d offset=0x%x type=%d",
+				"BL(%d) hdl=0x%x addr=0x%llx len=%lu input_len =%d offset=0x%x type=%d",
 				i, ctx->last_submit_bl_cmd.cmd[i].mem_handle,
 				ctx->last_submit_bl_cmd.cmd[i].hw_addr,
 				ctx->last_submit_bl_cmd.cmd[i].len,
@@ -3844,7 +3844,7 @@ static int cam_isp_tfe_packet_generic_blob_handler(void *user_data,
 			(struct cam_isp_tfe_csid_clock_config *)blob_data;
 
 		if (blob_size < sizeof(struct cam_isp_tfe_csid_clock_config)) {
-			CAM_ERR(CAM_ISP, "Invalid blob size %u expected %u",
+			CAM_ERR(CAM_ISP, "Invalid blob size %u expected %lu",
 				blob_size,
 				sizeof(struct cam_isp_tfe_csid_clock_config));
 			return -EINVAL;

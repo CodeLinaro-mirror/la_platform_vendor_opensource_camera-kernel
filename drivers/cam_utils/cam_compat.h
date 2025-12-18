@@ -9,6 +9,11 @@
 
 #include <linux/version.h>
 #include <linux/dma-buf.h>
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+#include <linux/firmware/qcom/qcom_scm.h>
+#else
+#include <linux/qcom_scm.h>
+#endif
 #include <linux/dma-iommu.h>
 
 #include "cam_csiphy_dev.h"
@@ -58,4 +63,16 @@ void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr);
 void cam_smmu_util_iommu_custom(struct device *dev,
 	dma_addr_t discard_start, size_t discard_length);
 
+int cam_iommu_map(struct iommu_domain *domain,
+	size_t firmware_start, phys_addr_t fw_hdl, size_t firmware_len,
+	int prot);
+
+size_t cam_iommu_map_sg(struct iommu_domain *domain,
+	dma_addr_t iova_start, struct scatterlist *sgl, uint64_t orig_nents,
+	int prot);
+
+int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info);
+
+uint16_t cam_get_named_gpio(struct cam_hw_soc_info *soc_info,
+	int index);
 #endif /* _CAM_COMPAT_H_ */
