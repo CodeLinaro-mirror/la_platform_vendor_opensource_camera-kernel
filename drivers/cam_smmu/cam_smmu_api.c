@@ -16,7 +16,6 @@
 #include <linux/workqueue.h>
 #include <linux/genalloc.h>
 #include <linux/debugfs.h>
-#include <linux/dma-iommu.h>
 #include <soc/qcom/secure_buffer.h>
 
 #include <media/cam_req_mgr.h>
@@ -1994,7 +1993,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 	}
 
 	if (region_id == CAM_SMMU_REGION_SHARED) {
-		table = dma_buf_map_attachment(attach, dma_dir);
+		table = cam_compat_dmabuf_map_attach(attach, dma_dir);
 		if (IS_ERR_OR_NULL(table)) {
 			rc = PTR_ERR(table);
 			CAM_ERR(CAM_SMMU, "Error: dma map attachment failed");
@@ -2046,7 +2045,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 		if (!dis_delayed_unmap)
 			attach->dma_map_attrs |= DMA_ATTR_DELAYED_UNMAP;
 
-		table = dma_buf_map_attachment(attach, dma_dir);
+		table = cam_compat_dmabuf_map_attach(attach, dma_dir);
 		if (IS_ERR_OR_NULL(table)) {
 			rc = PTR_ERR(table);
 			CAM_ERR(CAM_SMMU,
@@ -2121,7 +2120,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 
 	/* Unmap the mapping in dma region as this is not used anyway */
 	if (region_id == CAM_SMMU_REGION_SHARED)
-		dma_buf_unmap_attachment(attach, table, dma_dir);
+		cam_compat_dmabuf_unmap_attach(attach, table, dma_dir);
 
 	return 0;
 
@@ -2136,7 +2135,7 @@ err_alloc:
 			*len_ptr);
 	}
 err_unmap_sg:
-	dma_buf_unmap_attachment(attach, table, dma_dir);
+	cam_compat_dmabuf_unmap_attach(attach, table, dma_dir);
 err_detach:
 	dma_buf_detach(buf, attach);
 err_out:
@@ -2266,7 +2265,7 @@ static int cam_smmu_unmap_buf_and_remove_from_list(
 			mapping_info->attach->dma_map_attrs |=
 				DMA_ATTR_SKIP_CPU_SYNC;
 
-		dma_buf_unmap_attachment(mapping_info->attach,
+		cam_compat_dmabuf_unmap_attach(mapping_info->attach,
 			mapping_info->table, mapping_info->dir);
 		iommu_cb_set.cb_info[idx].io_mapping_size -= mapping_info->len;
 	}
@@ -2778,7 +2777,7 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 
 	attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
 
-	table = dma_buf_map_attachment(attach, dma_dir);
+	table = cam_compat_dmabuf_map_attach(attach, dma_dir);
 	if (IS_ERR_OR_NULL(table)) {
 		CAM_ERR(CAM_SMMU, "Error: dma buf map attachment failed");
 		rc = PTR_ERR(table);
@@ -2816,7 +2815,7 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 	return 0;
 
 err_unmap_sg:
-	dma_buf_unmap_attachment(attach, table, dma_dir);
+	cam_compat_dmabuf_unmap_attach(attach, table, dma_dir);
 err_detach:
 	dma_buf_detach(dmabuf, attach);
 err_out:
@@ -2919,7 +2918,7 @@ static int cam_smmu_secure_unmap_buf_and_remove_from_list(
 	mapping_info->attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
 
 	/* iommu buffer clean up */
-	dma_buf_unmap_attachment(mapping_info->attach,
+	cam_compat_dmabuf_unmap_attach(mapping_info->attach,
 		mapping_info->table, mapping_info->dir);
 	dma_buf_detach(mapping_info->buf, mapping_info->attach);
 	mapping_info->buf = NULL;
@@ -4134,7 +4133,7 @@ static int cam_smmu_probe(struct platform_device *pdev)
 	return rc;
 }
 
-static int cam_smmu_remove(struct platform_device *pdev)
+static void cam_smmu_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 
@@ -4150,7 +4149,6 @@ static int cam_smmu_remove(struct platform_device *pdev)
 
 	debugfs_remove_recursive(iommu_cb_set.dentry);
 	iommu_cb_set.dentry = NULL;
-	return 0;
 }
 
 static struct platform_driver cam_smmu_driver = {

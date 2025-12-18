@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -102,7 +103,7 @@ err:
 	return rc;
 }
 
-int cam_top_tpg_remove(struct platform_device *pdev)
+void cam_top_tpg_remove(struct platform_device *pdev)
 {
 	struct cam_top_tpg_hw          *tpg_dev = NULL;
 	struct cam_hw_intf             *tpg_hw_intf;
@@ -121,7 +122,6 @@ int cam_top_tpg_remove(struct platform_device *pdev)
 	kfree(tpg_dev);
 	kfree(tpg_hw_info);
 	kfree(tpg_hw_intf);
-	return 0;
 }
 
 int cam_top_tpg_hw_init(struct cam_hw_intf **top_tpg_hw,

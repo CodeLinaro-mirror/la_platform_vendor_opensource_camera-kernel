@@ -349,7 +349,7 @@ static int cam_cci_irq_routine(struct v4l2_subdev *sd, u32 status,
 	struct cam_hw_soc_info *soc_info =
 		&cci_dev->soc_info;
 
-	ret = cam_cci_irq(soc_info->irq_line->start, cci_dev);
+	ret = cam_cci_irq(soc_info->irq_num, cci_dev);
 	*handled = true;
 	return 0;
 }
@@ -518,7 +518,7 @@ cci_no_resource:
 	return rc;
 }
 
-static int cam_cci_device_remove(struct platform_device *pdev)
+static void cam_cci_device_remove(struct platform_device *pdev)
 {
 	struct v4l2_subdev *subdev = platform_get_drvdata(pdev);
 	struct cci_device *cci_dev =
@@ -528,7 +528,6 @@ static int cam_cci_device_remove(struct platform_device *pdev)
 	debugfs_remove_recursive(debugfs_root);
 	cam_cci_soc_remove(pdev, cci_dev);
 	devm_kfree(&pdev->dev, cci_dev);
-	return 0;
 }
 
 static const struct of_device_id cam_cci_dt_match[] = {

@@ -7,6 +7,8 @@
 #include <linux/dma-mapping.h>
 #include <linux/of_address.h>
 #include <linux/slab.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 
 #include "cam_compat.h"
 #include "cam_debug_util.h"
@@ -190,14 +192,38 @@ void cam_free_clear(const void * ptr)
 }
 #endif
 
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
-void cam_smmu_util_iommu_custom(struct device *dev,
-	dma_addr_t discard_start, size_t discard_length)
+#if (KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE)
+int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 {
-	return;
+	struct iosys_map mapping;
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	int error_code = dma_buf_vmap_unlocked(dmabuf, &mapping);
+#else
+	int error_code = dma_buf_vmap(dmabuf, &mapping);
+#endif
+	if (error_code) {
+		*vaddr = 0;
+	} else {
+		*vaddr = (mapping.is_iomem) ?
+			(uintptr_t)mapping.vaddr_iomem : (uintptr_t)mapping.vaddr;
+		CAM_DBG(CAM_MEM,
+			"dmabuf=%p, *vaddr=%p, is_iomem=%d, vaddr_iomem=%p, vaddr=%p",
+			dmabuf, *vaddr, mapping.is_iomem, mapping.vaddr_iomem, mapping.vaddr);
+	}
+
+	return error_code;
 }
 
+void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
+{
+	struct iosys_map mapping = IOSYS_MAP_INIT_VADDR(vaddr);
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	dma_buf_vunmap_unlocked(dmabuf, &mapping);
+#else
+	dma_buf_vunmap(dmabuf, &mapping);
+#endif
+}
+#elif (KERNEL_VERSION(5, 15, 0) <= LINUX_VERSION_CODE)
 int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 {
 	struct dma_buf_map mapping;
@@ -217,6 +243,55 @@ void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
 	struct dma_buf_map mapping = DMA_BUF_MAP_INIT_VADDR(vaddr);
 
 	dma_buf_vunmap(dmabuf, &mapping);
+}
+#else
+int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
+{
+	int error_code = 0;
+	void *addr = dma_buf_vmap(dmabuf);
+
+	if (!addr) {
+		*vaddr = 0;
+		error_code = -ENOSPC;
+	} else {
+		*vaddr = (uintptr_t)addr;
+	}
+
+	return error_code;
+}
+
+void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
+{
+	dma_buf_vunmap(dmabuf, vaddr);
+}
+#endif
+
+
+struct sg_table *cam_compat_dmabuf_map_attach(struct dma_buf_attachment *attach,
+	enum dma_data_direction dma_dir)
+{
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	return dma_buf_map_attachment_unlocked(attach, dma_dir);
+#else
+	return dma_buf_map_attachment(attach, dma_dir);
+#endif
+}
+
+void cam_compat_dmabuf_unmap_attach(struct dma_buf_attachment *attach,
+	struct sg_table *table, enum dma_data_direction dma_dir)
+{
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	dma_buf_unmap_attachment_unlocked(attach, table, dma_dir);
+#else
+	dma_buf_unmap_attachment(attach, table, dma_dir);
+#endif
+}
+
+#if (KERNEL_VERSION(5, 15, 0) <= LINUX_VERSION_CODE)
+void cam_smmu_util_iommu_custom(struct device *dev,
+	dma_addr_t discard_start, size_t discard_length)
+{
+
 }
 
 #else
@@ -292,6 +367,19 @@ size_t cam_iommu_map_sg(struct iommu_domain *domain,
 			prot, GFP_ATOMIC);
 	return size;
 }
+
+int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
+{
+	int rc = 0;
+
+	soc_info->irq_num = platform_get_irq(soc_info->pdev, 0);
+	if (soc_info->irq_num < 0) {
+		rc = soc_info->irq_num;
+		return rc;
+	}
+
+	return rc;
+}
 #else
 size_t cam_iommu_map_sg(struct iommu_domain *domain,
 	dma_addr_t iova_start, struct scatterlist *sgl,
@@ -304,6 +392,24 @@ size_t cam_iommu_map_sg(struct iommu_domain *domain,
 			prot);
 	return size;
 }
+
+int cam_compat_util_get_irq(struct cam_hw_soc_info *soc_info)
+{
+	int rc = 0;
+
+	soc_info->irq_line =
+		platform_get_resource_byname(soc_info->pdev,
+		IORESOURCE_IRQ, soc_info->irq_name);
+	if (!soc_info->irq_line) {
+        soc_info->irq_num = -1;
+        CAM_ERR(CAM_UTIL, "Failed to get IRQ resource");
+		rc = -ENODEV;
+		return rc;
+	}
+	soc_info->irq_num = soc_info->irq_line->start;
+
+	return rc;
+}
 #endif
 
 int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info)
@@ -314,7 +420,7 @@ int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info)
 	of_node = soc_info->dev->of_node;
 #if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
 	gpio_array_size = of_count_phandle_with_args(
-		of_node, soc_info->compatible, NULL);
+		of_node, "gpios", "#gpio-cells");
 #else
 	gpio_array_size = of_gpio_count(of_node);
 #endif
@@ -330,10 +436,33 @@ uint16_t cam_get_named_gpio(struct cam_hw_soc_info *soc_info,
 
 	of_node = soc_info->dev->of_node;
 #if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
-	gpio_pin = of_get_named_gpio(of_node, soc_info->compatible, index);
+	gpio_pin = of_get_named_gpio(of_node, "gpios", index);
 #else
 	gpio_pin = of_get_gpio(of_node, index);
 #endif
 
 	return gpio_pin;
 }
+
+inline struct icc_path *cam_icc_get_path(struct device *dev,
+		const int src_id, const int dst_id, const char *path_name, bool use_path_name)
+{
+	CAM_DBG(CAM_UTIL, "Get icc path name: %s src_id:%d dst_id:%d use_path_name:%s", path_name,
+		src_id, dst_id, CAM_BOOL_TO_YESNO(use_path_name));
+
+#if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
+	if (!use_path_name) {
+		CAM_ERR(CAM_UTIL, "Must use path names to get icc path handle");
+		return NULL;
+	}
+
+	return of_icc_get(dev, path_name);
+#else
+	if (use_path_name)
+		return of_icc_get(dev, path_name);
+	else
+		return icc_get(dev, src_id, dst_id);
+#endif
+}
+
+

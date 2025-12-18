@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_DEBUG_UTIL_H_
@@ -50,6 +50,7 @@
 #define CAM_IO_ACCESS (1 << 29)
 
 #define STR_BUFFER_MAX_LENGTH  1024
+#define CAM_BOOL_TO_YESNO(val) ((val) ? "Y" : "N")
 
 /*
  *  cam_debug_log()

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_VFE_DEV_H_
@@ -27,9 +28,7 @@ int cam_vfe_probe(struct platform_device *pdev);
  *
  * @pdev:                    Platform Device pointer
  *
- * @Return:                  0: Success
- *                           Non-zero: Failure
  */
-int cam_vfe_remove(struct platform_device *pdev);
+void cam_vfe_remove(struct platform_device *pdev);
 
 #endif /* _CAM_VFE_DEV_H_ */
