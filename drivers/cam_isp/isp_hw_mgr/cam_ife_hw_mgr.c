@@ -573,12 +573,12 @@ static int cam_ife_mgr_csid_stop_hw(
 	struct cam_ife_hw_mgr_ctx *ctx, struct list_head  *stop_list,
 		uint32_t  base_idx, uint32_t stop_cmd)
 {
-	struct cam_ife_hw_mgr_res      *hw_mgr_res;
-	struct cam_isp_resource_node   *isp_res;
-	struct cam_isp_resource_node   *stop_res[CAM_IFE_PIX_PATH_RES_MAX - 1];
-	struct cam_csid_hw_stop_args    stop;
-	struct cam_hw_intf             *hw_intf;
-	uint32_t i, cnt;
+	struct cam_ife_hw_mgr_res      *hw_mgr_res = NULL;
+	struct cam_isp_resource_node   *isp_res = NULL;
+	struct cam_isp_resource_node   *stop_res[CAM_IFE_PIX_PATH_RES_MAX - 1] = {NULL};
+	struct cam_csid_hw_stop_args    stop = {0};
+	struct cam_hw_intf             *hw_intf = NULL;
+	uint32_t i = 0, cnt = 0;
 
 	cnt = 0;
 	list_for_each_entry(hw_mgr_res, stop_list, list) {
@@ -1680,6 +1680,7 @@ static enum cam_ife_pix_path_res_id
 	uint32_t                 out_port_type)
 {
 	enum cam_ife_pix_path_res_id path_id;
+
 	CAM_DBG(CAM_ISP, "out_port_type %x", out_port_type);
 
 	switch (out_port_type) {
