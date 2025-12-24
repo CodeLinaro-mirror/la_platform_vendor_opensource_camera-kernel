@@ -136,7 +136,7 @@ static void cam_sensor_release_per_frame_resource(
 	}
 }
 
-static int32_t cam_sensor_notify_actuator_context_info(
+static int32_t cam_sensor_notify_info_subdev(
 	struct cam_sensor_ctrl_t *s_ctrl,
 	struct cam_req_mgr_no_crm_get_csid_cid_info *cid_info)
 {
@@ -225,7 +225,13 @@ static int32_t cam_sensor_get_cci_contextid (
 		}
 		s_ctrl->cci_contextId = trigger_data.context_id;
 		CAM_DBG(CAM_SENSOR, "idx:%d csid %d cid %d", trigger_data.context_id, trigger_data.csid, trigger_data.cid);
-		rc = cam_sensor_notify_actuator_context_info(s_ctrl, &cid_info);
+		if (s_ctrl->sensordata->subdev_id[SUB_MODULE_ACTUATOR] >= 0) {
+			rc = cam_sensor_notify_info_subdev(s_ctrl, &cid_info);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR, "SENSOR[%d] Failed to notify actuator, rc: %d",
+					s_ctrl->soc_info.index, rc);
+			}
+		}
 		return rc;
 	} else {
 		CAM_DBG(CAM_SENSOR, "crm is enable");
