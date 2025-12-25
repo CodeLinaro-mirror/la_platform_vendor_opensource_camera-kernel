@@ -66,7 +66,7 @@ static const struct of_device_id cam_vfe_dt_match[] = {
 		.data = &cam_vfe580_hw_info,
 	},
 	{
-		.compatible = "qcom,tfe662",
+		.compatible = "qcom,mc_tfe662",
 		.data  = &cam_tfe662_hw_info,
 	},
 	{
