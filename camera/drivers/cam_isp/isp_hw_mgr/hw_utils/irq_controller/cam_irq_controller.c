@@ -183,7 +183,7 @@ static inline unsigned long cam_irq_controller_lock_irqsave(
 {
 	unsigned long flags = 0;
 
-	if (!in_irq())
+	if (!cam_in_hardirq())
 		spin_lock_irqsave(&controller->lock, flags);
 
 	return flags;
@@ -192,7 +192,7 @@ static inline unsigned long cam_irq_controller_lock_irqsave(
 static inline void cam_irq_controller_unlock_irqrestore(
 	struct cam_irq_controller *controller, unsigned long flags)
 {
-	if (!in_irq())
+	if (!cam_in_hardirq())
 		spin_unlock_irqrestore(&controller->lock, flags);
 }
 
@@ -299,7 +299,7 @@ static inline void cam_irq_controller_clear_irq(
 	/* Don't clear in IRQ context since global clear will be issued after
 	 * top half processing
 	 */
-	if (in_irq())
+	if (cam_in_hardirq())
 		return;
 
 	for (i = 0; i < controller->num_registers; i++) {

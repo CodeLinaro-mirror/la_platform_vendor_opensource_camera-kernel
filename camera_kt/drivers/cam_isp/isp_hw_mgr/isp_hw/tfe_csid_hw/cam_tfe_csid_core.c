@@ -2585,7 +2585,7 @@ static int cam_tfe_csid_sof_irq_debug(
 		csid_hw->sof_irq_triggered = false;
 	}
 
-	if (!in_irq())
+	if (!cam_in_hardirq())
 		CAM_INFO(CAM_ISP, "SOF freeze: CSID:%d SOF irq %s",
 			csid_hw->hw_intf->hw_idx,
 			sof_irq_enable ? "enabled" : "disabled");

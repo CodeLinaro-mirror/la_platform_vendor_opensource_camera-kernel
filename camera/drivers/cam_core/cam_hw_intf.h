@@ -127,7 +127,7 @@ static inline unsigned long cam_hw_util_hw_lock_irqsave(struct cam_hw_info *hw_i
 {
 	unsigned long flags = 0;
 
-	if (!in_irq())
+	if (!cam_in_hardirq())
 		spin_lock_irqsave(&hw_info->hw_lock, flags);
 
 	return flags;
@@ -136,7 +136,7 @@ static inline unsigned long cam_hw_util_hw_lock_irqsave(struct cam_hw_info *hw_i
 static inline void cam_hw_util_hw_unlock_irqrestore(struct cam_hw_info *hw_info,
 	unsigned long flags)
 {
-	if (!in_irq())
+	if (!cam_in_hardirq())
 		spin_unlock_irqrestore(&hw_info->hw_lock, flags);
 }
 
