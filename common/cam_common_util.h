@@ -10,6 +10,7 @@
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/vmalloc.h>
+#include <linux/version.h>
 
 #include "cam_hw_mgr_intf.h"
 
@@ -85,6 +86,28 @@
 	}                                                                                    \
 	rem_jiffies;                                                                         \
 })
+
+
+/*
+ * Linux ≥ 6.19 removed in_irq(); the intended replacement is in_hardirq().
+ * Linux ≤ 6.18 still has in_irq().
+ *
+ * cam_in_hardirq():
+ *  - returns true in hard IRQ context only (matching the old in_irq() semantics).
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
+  #include <linux/irq.h>        /* in_hardirq() */
+  static inline bool cam_in_hardirq(void)
+  {
+      return in_hardirq();
+  }
+#else
+  #include <linux/interrupt.h>  /* in_irq() */
+  static inline bool cam_in_hardirq(void)
+  {
+      return in_irq();
+  }
+#endif
 
 typedef unsigned long (*cam_common_mini_dump_cb) (void *dst,
 	unsigned long len, void *priv_data);

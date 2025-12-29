@@ -241,7 +241,7 @@ int cam_tfe_irq_config(void     *tfe_core_data,
 	soc_info = (struct cam_hw_soc_info  *)top_priv->common_data.soc_info;
 	mem_base = soc_info->reg_map[TFE_CORE_BASE_IDX].mem_base;
 
-	need_lock = !in_irq();
+	need_lock = !cam_in_hardirq();
 	if (need_lock)
 		spin_lock_irqsave(&core_info->spin_lock, flags);
 

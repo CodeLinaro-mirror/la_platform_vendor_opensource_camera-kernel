@@ -22,6 +22,7 @@
 #include "cam_cpas_api.h"
 #include "cam_subdev.h"
 #include "cam_tasklet_util.h"
+#include "cam_common_util.h"
 
 /* Timeout value in msec */
 #define IFE_CSID_TIMEOUT                               1000
@@ -4364,7 +4365,7 @@ static int cam_ife_csid_sof_irq_debug(
 		csid_hw->sof_irq_triggered = false;
 	}
 
-	if (!in_irq())
+	if (!cam_in_hardirq())
 		CAM_INFO(CAM_ISP, "SOF freeze: CSID SOF irq %s, CSID HW:%d",
 			(sof_irq_enable) ? "enabled" : "disabled",
 			csid_hw->hw_intf->hw_idx);
