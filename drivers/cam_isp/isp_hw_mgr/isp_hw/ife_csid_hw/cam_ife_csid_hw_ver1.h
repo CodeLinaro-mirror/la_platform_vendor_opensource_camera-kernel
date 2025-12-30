@@ -141,6 +141,7 @@ struct cam_ife_csid_ver1_common_reg_info {
 	uint32_t format_measure_height_shift_val;
 	uint32_t format_measure_width_mask_val;
 	uint32_t format_measure_width_shift_val;
+	uint32_t phy_sel_base_idx;
 };
 
 /*
