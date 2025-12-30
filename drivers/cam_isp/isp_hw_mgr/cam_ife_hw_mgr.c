@@ -9420,6 +9420,11 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 				rc, ctx->ctx_index);
 	}
 
+	if (!ctx->flags.skip_reg_dump_buf_put) {
+		for (i = 0; i < ctx->num_reg_dump_buf; i++)
+			cam_mem_put_cpu_buf(ctx->reg_dump_buf_desc[i].mem_handle);
+	}
+
 	/* reset base info */
 	ctx->num_base = 0;
 	memset(ctx->base, 0, sizeof(ctx->base));

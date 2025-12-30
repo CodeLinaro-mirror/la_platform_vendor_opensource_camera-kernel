@@ -941,7 +941,7 @@ static int32_t cam_mem_get_slot(void)
 	idx = find_first_zero_bit(tbl.bitmap, tbl.bits);
 	if (idx >= CAM_MEM_BUFQ_MAX || idx <= 0) {
 		mutex_unlock(&tbl.m_lock);
-		return -ENOMEM;
+		return -ENOENT;
 	}
 	set_bit(idx, tbl.bitmap);
 	mutex_unlock(&tbl.m_lock);
@@ -2231,7 +2231,7 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd_v2 *cmd)
 	idx = cam_mem_get_slot();
 	if (idx < 0) {
 		CAM_ERR(CAM_MEM, "Failed in getting mem slot, idx=%d", idx);
-		rc = -ENOMEM;
+		rc = -ENOENT;
 		cam_mem_mgr_print_tbl();
 		goto slot_fail;
 	}
@@ -2459,7 +2459,7 @@ int cam_mem_mgr_map(struct cam_mem_mgr_map_cmd_v2 *cmd)
 	if (idx < 0) {
 		CAM_ERR(CAM_MEM, "Failed in getting mem slot, idx=%d, fd=%d",
 			idx, cmd->fd);
-		rc = -ENOMEM;
+		rc = -ENOENT;
 		cam_mem_mgr_print_tbl();
 		goto slot_fail;
 	}
@@ -3188,7 +3188,7 @@ int cam_mem_mgr_request_mem(struct cam_mem_mgr_request_desc *inp,
 	idx = cam_mem_get_slot();
 	if (idx < 0) {
 		CAM_ERR(CAM_MEM, "Failed in getting mem slot, idx=%d", idx);
-		rc = -ENOMEM;
+		rc = -ENOENT;
 		cam_mem_mgr_print_tbl();
 		goto slot_fail;
 	}
@@ -3359,7 +3359,7 @@ int cam_mem_mgr_reserve_memory_region(struct cam_mem_mgr_request_desc *inp,
 	idx = cam_mem_get_slot();
 	if (idx < 0) {
 		CAM_ERR(CAM_MEM, "Failed in getting mem slot, idx=%d", idx);
-		rc = -ENOMEM;
+		rc = -ENOENT;
 		cam_mem_mgr_print_tbl();
 		goto slot_fail;
 	}

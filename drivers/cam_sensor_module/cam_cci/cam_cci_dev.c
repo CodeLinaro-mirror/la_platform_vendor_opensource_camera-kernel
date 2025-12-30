@@ -662,7 +662,8 @@ DEFINE_DEBUGFS_ATTRIBUTE(cam_cci_debug,
 
 static int cam_cci_create_debugfs_entry(struct cci_device *cci_dev)
 {
-	int rc = 0, idx;
+	int rc = 0;
+	uint32_t idx;
 	struct dentry *dbgfileptr = NULL;
 	static char * const filename[] = { "en_dump_cci0", "en_dump_cci1", "en_dump_cci2"};
 
