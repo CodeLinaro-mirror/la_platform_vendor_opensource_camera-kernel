@@ -26,6 +26,7 @@
 #include "cam_mem_mgr_api.h"
 #include "cam_cpas_hw_intf.h"
 #include "cam_worker_wrapper_api.h"
+#include "cam_compat.h"
 
 #define IFE_CSID_TIMEOUT                               1000
 
@@ -3009,6 +3010,46 @@ int cam_ife_csid_ver1_deinit_hw(void *hw_priv,
 	return rc;
 }
 
+static void cam_ife_csid_ver1_send_secure_info(
+	struct cam_csid_hw_start_args *start_args,
+	struct cam_ife_csid_ver1_hw    *csid_hw)
+{
+	struct cam_ife_csid_secure_info        secure_info;
+	struct cam_ife_csid_ver1_reg_info     *csid_reg;
+	int                                    phy_sel = 0;
+
+	if (!csid_hw || !csid_hw->core_info || !start_args) {
+		CAM_ERR(CAM_ISP, "Invalid parameters passed");
+		return;
+	}
+
+	csid_reg = (struct cam_ife_csid_ver1_reg_info *)
+			csid_hw->core_info->csid_reg;
+	secure_info.lane_cfg = csid_hw->rx_cfg.lane_cfg;
+	secure_info.cdm_hw_idx_mask = BIT(start_args->cdm_hw_idx);
+	secure_info.vc_mask = 0;
+	secure_info.csid_hw_idx_mask = BIT(csid_hw->hw_intf->hw_idx);
+
+	CAM_DBG(CAM_ISP,
+		"PHY secure info for CSID[%u], lane_cfg: 0x%x, ife: 0x%x, cdm: 0x%x, vc_mask: 0x%llx",
+		csid_hw->hw_intf->hw_idx,
+		secure_info.lane_cfg, secure_info.csid_hw_idx_mask,
+		secure_info.cdm_hw_idx_mask, secure_info.vc_mask);
+
+	/* Issue one call to PHY for dual IFE cases */
+	phy_sel = (int)(csid_hw->rx_cfg.phy_sel - csid_reg->cmn_reg->phy_sel_base_idx);
+	if (phy_sel < 0) {
+		CAM_WARN(CAM_ISP, "Can't notify csiphy, incorrect phy selected=%d",
+			phy_sel);
+	} else {
+		secure_info.phy_sel = (uint32_t)phy_sel;
+		CAM_DBG(CAM_ISP, "Notify CSIPHY: %d", phy_sel);
+		cam_subdev_notify_message(CAM_CSIPHY_DEVICE_TYPE,
+			CAM_SUBDEV_MESSAGE_DOMAIN_ID_SECURE_PARAMS, (void *)&secure_info);
+	}
+
+}
+
 int cam_ife_csid_ver1_start(void *hw_priv, void *args,
 			uint32_t arg_size)
 {
@@ -3026,8 +3067,8 @@ int cam_ife_csid_ver1_start(void *hw_priv, void *args,
 	csid_hw->flags.sof_irq_triggered = false;
 	csid_hw->counters.irq_debug_cnt = 0;
 
-	CAM_DBG(CAM_ISP, "CSID:%d num_res %u",
-		csid_hw->hw_intf->hw_idx, start_args->num_res);
+	CAM_DBG(CAM_ISP, "CSID:%d num_res %u is_secure:%d",
+		csid_hw->hw_intf->hw_idx, start_args->num_res, start_args->is_secure);
 
 	cam_ife_csid_ver1_enable_csi2(csid_hw);
 
@@ -3078,6 +3119,14 @@ int cam_ife_csid_ver1_start(void *hw_priv, void *args,
 			res->res_id);
 	if (!rc)
 		csid_hw->flags.reset_awaited = false;
+
+	/*
+	 * For targets with MINK based API support, hand over relevant parameters
+	 * to phy driver
+	 */
+	if (start_args->is_secure && cam_is_mink_api_available())
+		cam_ife_csid_ver1_send_secure_info(start_args, csid_hw);
+
 end:
 	return rc;
 }
