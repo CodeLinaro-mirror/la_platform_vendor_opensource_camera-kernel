@@ -31,7 +31,6 @@
  * PHY index at which CPAS_SEC_LANE_CP_CTRL register mask
  * changes depending on PHY HW version
  */
-#define CAM_MAX_PHYS_PER_CP_CTRL_REG 4
 
 #define CSIPHY_POLL_DELAY_US 500
 #define CSIPHY_POLL_TIMEOUT_US 10000
