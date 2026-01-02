@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef _CAM_IFE_CSID_170_H_
 #define _CAM_IFE_CSID_170_H_
@@ -391,6 +392,7 @@ static struct cam_ife_csid_ver1_common_reg_info
 	.format_measure_height_shift_val = 0x10,
 	.format_measure_width_mask_val   = 0xFFFF,
 	.format_measure_width_shift_val  = 0x0,
+	.rdi_epoch_config_not_supported  = 1,
 };
 
 static struct cam_ife_csid_ver1_reg_info cam_ife_csid_170_reg_info = {

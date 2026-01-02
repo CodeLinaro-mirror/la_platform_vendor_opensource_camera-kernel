@@ -15318,11 +15318,25 @@ static int cam_ife_mgr_int_cmd(void                        *hw_mgr_priv,
 			isp_hw_cmd_args->u.sof_irq_enable);
 		break;
 	case CAM_ISP_HW_MGR_CMD_CTX_TYPE:
+		CAM_DBG(CAM_ISP, "Is rdi_epoch_config_not_supported : %d",
+				hw_mgr->rdi_epoch_config_not_supported);
 		if (c_ctx->flags.is_fe_enabled && c_ctx->flags.is_offline)
 			isp_hw_cmd_args->u.ctx_info.type = CAM_ISP_CTX_OFFLINE;
 		else if (c_ctx->flags.is_fe_enabled && !c_ctx->flags.is_offline &&
 				c_ctx->ctx_type != CAM_IFE_CTX_TYPE_SFE)
 			isp_hw_cmd_args->u.ctx_info.type = CAM_ISP_CTX_FS2;
+		/*
+		 * For older tagets, RDI does not support EPOCH configuration,
+		 * so unified state machine is not applicable and use RDI-only
+		 * ISP context state machine for RDI use cases.
+		 *
+		 * On newer targets, RDI supports EPOCH configuration and can use
+		 * the unified ISP context state machine (PIX/RDI).
+		 */
+		else if ((c_ctx->flags.is_rdi_only_context ||
+				c_ctx->flags.is_lite_context) &&
+				(hw_mgr->rdi_epoch_config_not_supported))
+			isp_hw_cmd_args->u.ctx_info.type = CAM_ISP_CTX_RDI;
 		else
 			isp_hw_cmd_args->u.ctx_info.type = CAM_ISP_CTX_PIX;
 		if (hw_mgr->csid_aup_rup_en)
@@ -17293,6 +17307,8 @@ static int cam_ife_hw_mgr_sort_dev_with_caps(
 			ife_hw_mgr->csid_hw_caps[i].global_reset_en;
 		ife_hw_mgr->csid_aup_rup_en =
 			ife_hw_mgr->csid_hw_caps[i].aup_rup_en;
+		ife_hw_mgr->rdi_epoch_config_not_supported =
+			ife_hw_mgr->csid_hw_caps[i].rdi_epoch_config_not_supported;
 		ife_hw_mgr->csid_camif_irq_support =
 			ife_hw_mgr->csid_hw_caps[i].camif_irq_support;
 	}
