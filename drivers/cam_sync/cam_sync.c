@@ -2636,6 +2636,36 @@ end:
 	return rc;
 }
 
+int cam_sync_release_pending_fences(struct cam_sync_hw_fence_res_info *hwfence_info)
+{
+	int rc = -EINVAL;
+
+	rc = cam_sync_signal_batch_fences(hwfence_info);
+	if (rc)
+		goto end;
+
+	rc = cam_sync_release_batch_fences(hwfence_info);
+	if (rc)
+		goto end;
+end:
+	return rc;
+}
+
+int cam_sync_signal_batch_fences(struct cam_sync_hw_fence_res_info *hwfence_info)
+{
+	int rc = -EINVAL;
+
+	rc = cam_synx_obj_batch_signal(hwfence_info);
+	if (rc) {
+		CAM_ERR(CAM_SYNC, "Failed to release batch of fences, rc: %d", rc);
+		goto end;
+	}
+
+	CAM_DBG(CAM_SYNC, "Batch HW Fence signaled for res:%u", hwfence_info->res_type);
+end:
+	return rc;
+}
+
 int cam_sync_release_batch_fences(struct cam_sync_hw_fence_res_info  *hwfence_info)
 {
 	int rc = -EINVAL;
@@ -3246,6 +3276,10 @@ int cam_sync_batch_update_fence_queue(struct cam_sync_hw_fence_res_info  *hwfenc
 	return -EOPNOTSUPP;
 }
 int cam_sync_signal_hwfence(uint32_t synx_hdl, uint32_t status)
+{
+	return -EOPNOTSUPP;
+}
+int cam_sync_release_pending_fences(struct cam_sync_hw_fence_res_info *hwfence_info)
 {
 	return -EOPNOTSUPP;
 }

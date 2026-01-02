@@ -2047,6 +2047,7 @@ static int cam_isp_schedule_fence_release_for_req(struct cam_isp_context *ctx_is
 			memcpy(release_params->synx_hdls, res_data[j].fence_info.previous_synx_hdls,
 				MAX_FENCES_PER_BATCH * sizeof(uint32_t));
 			release_params->num_fences = res_data[j].buf_count;
+			release_params->res_type = res_data[j].resource_type;
 
 			task->process_cb = __cam_isp_ctx_release_batch_fence_util;
 			task->payload = release_params;
@@ -8264,8 +8265,9 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 	struct cam_req_mgr_flush_request flush_req;
 	struct cam_kmd_buf_info *kmd_buff_info = NULL;
 	unsigned long flags;
-	int i;
-	struct cam_isp_ul_resource_update_entry *res_data;
+	int i, j;
+	struct cam_isp_ul_resource_update_entry  *res_data;
+	struct cam_sync_hw_fence_res_info *release_params = NULL;
 
 	if (ctx_isp->hw_ctx) {
 		rel_arg.ctxt_to_hw_map = ctx_isp->hw_ctx;
@@ -8309,6 +8311,46 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 	 */
 	if (!list_empty(&ctx->active_req_list))
 		CAM_WARN(CAM_ISP, "Active list is not empty");
+
+	if (ctx_isp->ul_path_en) {
+		res_data = ctx_isp->ul_data.resource_data;
+		for (j = 0; j < MAX_IO_RESOURCES; j++) {
+			if (!res_data[j].is_hw_fence_en)
+				continue;
+
+			release_params = kzalloc(sizeof(struct cam_sync_hw_fence_res_info),
+				GFP_KERNEL);
+			if (!release_params) {
+				CAM_ERR(CAM_SYNX, "Failed to alloc mem");
+				return -ENOMEM;
+			}
+			release_params->res_type = res_data[j].resource_type;
+			release_params->num_fences = res_data[j].buf_count;
+			CAM_DBG(CAM_ISP, "res: 0x%x, num_fences: %d",
+				res_data[j].resource_type, res_data[j].buf_count);
+
+			memcpy(release_params->synx_hdls, res_data[j].fence_info.current_synx_hdls,
+				MAX_FENCES_PER_BATCH * sizeof(uint32_t));
+
+			/* Signal and release fences in current batch */
+			CAM_DBG(CAM_ISP, "Release current batch");
+			rc = cam_sync_release_pending_fences(release_params);
+			if (rc)
+				CAM_ERR(CAM_SYNC, "Failed to release current batch of fences,rc:%d",
+					rc);
+
+			memcpy(release_params->synx_hdls, res_data[j].fence_info.next_synx_hdls,
+				MAX_FENCES_PER_BATCH * sizeof(uint32_t));
+
+			/* Signal and Release fences in next batch */
+			CAM_DBG(CAM_ISP, "Release next batch");
+			rc = cam_sync_release_pending_fences(release_params);
+			if (rc)
+				CAM_ERR(CAM_SYNC, "Failed to release next batch of fences, rc: %d",
+					rc);
+		}
+		kfree(release_params);
+	}
 
 	/* Flush all the pending request list  */
 	flush_req.type = CAM_REQ_MGR_FLUSH_TYPE_ALL;
@@ -9675,7 +9717,7 @@ static void __cam_isp_ctx_ul_populate_fences(
 				per_res_fence_info->synx_hdls[k] =
 					res_data[j].fence_info.next_synx_hdls[k];
 				CAM_DBG(CAM_ISP,
-					"Sending batch of fences, per_res_fence_info->synx_hdls[k]: %u",
+					"Sending batch of fences, synx_hdl: %u",
 					per_res_fence_info->synx_hdls[k]);
 			}
 		}
@@ -12659,7 +12701,7 @@ int cam_isp_no_crm_setup_ul(int32_t dev_hdl, struct cam_packet *packet,
 				per_res_fence_info->synx_hdls[k] =
 					fence_res_info->synx_hdls[k];
 				CAM_DBG(CAM_ISP,
-					"Sending batch of fences, per_res_fence_info->synx_hdls[k]: %u",
+					"Sending batch of fences, synx_hdl: %u",
 					per_res_fence_info->synx_hdls[k]);
 				/* Store 1st batch in UL data */
 				res_data[i].fence_info.current_synx_hdls[k] =
