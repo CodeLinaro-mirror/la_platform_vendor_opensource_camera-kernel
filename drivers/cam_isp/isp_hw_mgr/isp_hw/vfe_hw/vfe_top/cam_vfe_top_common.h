@@ -22,6 +22,9 @@
 #define CAM_VFE_TOP_DEBUG_TIMESTAMP_IRQ_SEL_SHIFT    4
 #define CAM_VFE_TOP_DEBUG_TIMESTAMP_IRQ_CLEAR_SHIFT  6
 
+#define CAM_IFE_HW_CORE_NUM_MAX 0x8
+extern int g_cam_tfe_clk_lvl[CAM_IFE_HW_CORE_NUM_MAX];
+
 struct cam_vfe_top_priv_common {
 	struct cam_isp_resource_node    mux_rsrc[CAM_VFE_TOP_MUX_MAX];
 	uint32_t                        num_mux;
