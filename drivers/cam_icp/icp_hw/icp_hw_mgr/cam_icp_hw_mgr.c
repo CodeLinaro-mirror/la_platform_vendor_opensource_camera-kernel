@@ -3700,8 +3700,8 @@ static int cam_icp_mgr_process_io_cfg(struct cam_icp_hw_mgr *hw_mgr,
 {
 	int i, j, k, rc = 0;
 	struct cam_buf_io_cfg *io_cfg_ptr = NULL;
-	int32_t sync_in_obj[CAM_MAX_IN_RES];
-	int32_t merged_sync_in_obj;
+	int32_t sync_in_obj[CAM_MAX_IN_RES] = {0};
+	int32_t merged_sync_in_obj = 0;
 
 	io_cfg_ptr = (struct cam_buf_io_cfg *) ((uint32_t *) &packet->payload +
 				packet->io_configs_offset/4);
