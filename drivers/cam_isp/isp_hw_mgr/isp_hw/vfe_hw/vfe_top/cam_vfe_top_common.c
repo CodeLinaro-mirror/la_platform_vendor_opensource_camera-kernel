@@ -7,6 +7,8 @@
 #include "cam_vfe_top_common.h"
 #include "cam_debug_util.h"
 
+int g_cam_tfe_clk_lvl[CAM_IFE_HW_CORE_NUM_MAX] = {-1};
+
 static const char *cam_vfe_top_clk_bw_state_to_string(uint32_t state)
 {
 	switch (state) {
@@ -574,7 +576,8 @@ int cam_vfe_top_apply_clk_bw_update(struct cam_vfe_top_priv_common *top_common,
 	unsigned long                      final_clk_rate = 0;
 	uint64_t                           total_camnoc_bw_new_vote = 0, total_mnoc_bw_new_vote = 0;
 	uint64_t                           request_id;
-	int rc = 0;
+	int rc = 0, level = -1;
+	struct cam_hw_soc_info *soc_info;
 
 	if (arg_size != sizeof(struct cam_isp_apply_clk_bw_args)) {
 		CAM_ERR(CAM_ISP, "Invalid arg size: %u", arg_size);
@@ -589,6 +592,7 @@ int cam_vfe_top_apply_clk_bw_update(struct cam_vfe_top_priv_common *top_common,
 		return -EINVAL;
 	}
 
+	soc_info = top_common->soc_info;
 	hw_info = hw_intf->hw_priv;
 	if (hw_info->hw_state != CAM_HW_STATE_POWER_UP) {
 		CAM_DBG(CAM_PERF|CAM_ISP,
@@ -726,6 +730,14 @@ int cam_vfe_top_apply_clk_bw_update(struct cam_vfe_top_priv_common *top_common,
 		clk_bw_args->clock_updated = true;
 
 end:
+	rc = cam_soc_util_get_clk_level(soc_info, final_clk_rate, soc_info->src_clk_idx, &level);
+	if (rc) {
+		CAM_ERR(CAM_ISP, "Failed to get clock level for rate %llu", final_clk_rate);
+	}
+
+	g_cam_tfe_clk_lvl[top_common->hw_idx] = level;
+	CAM_DBG(CAM_ISP, "IFE:%d  mc_tfe_clk_lvl =%d", top_common->hw_idx, level);
+
 	top_common->clk_state = CAM_CLK_BW_STATE_INIT;
 	top_common->bw_state = CAM_CLK_BW_STATE_INIT;
 	return rc;
