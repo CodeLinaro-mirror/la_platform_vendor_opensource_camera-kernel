@@ -46,6 +46,9 @@ uint32_t cam_common_util_remove_duplicate_arr(int32_t *arr, uint32_t num)
 	}
 
 	for (i = 1; i < num; i++) {
+		if (arr[i] < 0) {
+			CAM_WARN(CAM_UTIL, "Unexpected uninitialized value at arr[%d]: %d", i, arr[i]);
+		}
 		for (j = 0; j < wr_idx ; j++) {
 			if (arr[i] == arr[j])
 				break;
