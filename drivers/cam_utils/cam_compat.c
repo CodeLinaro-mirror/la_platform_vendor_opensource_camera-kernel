@@ -7,6 +7,8 @@
 #include <linux/dma-mapping.h>
 #include <linux/of_address.h>
 #include <linux/slab.h>
+#include <linux/of.h>
+#include <linux/timer.h>
 
 #include "cam_compat.h"
 #include "cam_debug_util.h"
@@ -714,6 +716,15 @@ inline struct icc_path *cam_icc_get_path(struct device *dev,
 		return of_icc_get(dev, path_name);
 	else
 		return icc_get(dev, src_id, dst_id);
+#endif
+}
+
+void cam_compat_delete_timer_sync(struct timer_list *sys_timer)
+{
+#if KERNEL_VERSION(6, 15, 0) <= LINUX_VERSION_CODE
+	timer_delete_sync(sys_timer);
+#else
+	del_timer_sync(sys_timer);
 #endif
 }
 

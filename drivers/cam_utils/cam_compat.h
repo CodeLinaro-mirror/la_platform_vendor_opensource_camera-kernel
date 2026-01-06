@@ -114,6 +114,8 @@ int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info);
 uint16_t cam_get_named_gpio(struct cam_hw_soc_info *soc_info,
 	int index);
 
+void cam_compat_delete_timer_sync(struct timer_list *sync_timer);
+
 #if IS_REACHABLE(CONFIG_INTERCONNECT_QCOM)
 inline struct icc_path *cam_icc_get_path(struct device *dev,
 	const int src_id, const int dst_id, const char *path_name, bool use_path_name);
