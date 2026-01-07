@@ -547,6 +547,8 @@ struct cam_ife_csid_discard_frame_cfg_update {
 struct cam_ife_csid_ts_reg_addr {
 	void __iomem                     *curr0_ts_addr;
 	void __iomem                     *curr1_ts_addr;
+	void __iomem                     *prev0_ts_addr;
+	void __iomem                     *prev1_ts_addr;
 	uint32_t                          res_id;
 	bool                              get_addr;
 };

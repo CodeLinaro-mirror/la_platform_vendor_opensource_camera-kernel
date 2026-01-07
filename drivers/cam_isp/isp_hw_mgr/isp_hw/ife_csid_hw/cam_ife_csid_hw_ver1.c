@@ -3549,7 +3549,7 @@ static int cam_ife_csid_ver1_get_primary_sof_timer_reg_addr(
 {
 	struct cam_hw_soc_info                       *soc_info;
 	struct cam_ife_csid_ver1_reg_info            *csid_reg;
-	uint32_t curr_0_sof_addr, curr_1_sof_addr;
+	uint32_t curr_0_sof_addr, curr_1_sof_addr, prev_0_sof_addr, prev_1_sof_addr;
 
 	if (!csid_hw || !sof_addr) {
 		CAM_ERR(CAM_ISP, "Invalid params, csid_hw is null: %s, sof_addr is null: %s",
@@ -3571,10 +3571,14 @@ static int cam_ife_csid_ver1_get_primary_sof_timer_reg_addr(
 	case CAM_IFE_PIX_PATH_RES_IPP:
 		curr_0_sof_addr = csid_reg->ipp_reg->timestamp_curr0_sof_addr;
 		curr_1_sof_addr = csid_reg->ipp_reg->timestamp_curr1_sof_addr;
+		prev_0_sof_addr = csid_reg->ipp_reg->timestamp_prev0_sof_addr;
+		prev_1_sof_addr = csid_reg->ipp_reg->timestamp_prev1_sof_addr;
 		break;
 	case CAM_IFE_PIX_PATH_RES_PPP:
 		curr_0_sof_addr = csid_reg->ppp_reg->timestamp_curr0_sof_addr;
 		curr_1_sof_addr = csid_reg->ppp_reg->timestamp_curr1_sof_addr;
+		prev_0_sof_addr = csid_reg->ppp_reg->timestamp_prev0_sof_addr;
+		prev_1_sof_addr = csid_reg->ppp_reg->timestamp_prev1_sof_addr;
 		break;
 	case CAM_IFE_PIX_PATH_RES_RDI_0:
 	case CAM_IFE_PIX_PATH_RES_RDI_1:
@@ -3587,6 +3591,12 @@ static int cam_ife_csid_ver1_get_primary_sof_timer_reg_addr(
 		curr_1_sof_addr =
 			csid_reg->rdi_reg
 			[sof_addr->res_id]->timestamp_curr1_sof_addr;
+		prev_0_sof_addr =
+			csid_reg->rdi_reg
+			[sof_addr->res_id]->timestamp_prev0_sof_addr;
+		prev_1_sof_addr =
+			csid_reg->rdi_reg
+			[sof_addr->res_id]->timestamp_prev1_sof_addr;
 	break;
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d invalid res %d",
@@ -3594,11 +3604,10 @@ static int cam_ife_csid_ver1_get_primary_sof_timer_reg_addr(
 		return -EINVAL;
 	}
 
-	sof_addr->curr0_ts_addr = soc_info->reg_map[0].mem_base +
-		curr_0_sof_addr;
-
-	sof_addr->curr1_ts_addr = soc_info->reg_map[0].mem_base +
-		curr_1_sof_addr;
+	sof_addr->curr0_ts_addr = soc_info->reg_map[0].mem_base + curr_0_sof_addr;
+	sof_addr->curr1_ts_addr = soc_info->reg_map[0].mem_base + curr_1_sof_addr;
+	sof_addr->prev0_ts_addr = soc_info->reg_map[0].mem_base + prev_0_sof_addr;
+	sof_addr->prev1_ts_addr = soc_info->reg_map[0].mem_base + prev_1_sof_addr;
 
 	return 0;
 }
@@ -3644,8 +3653,17 @@ static int cam_ife_csid_ver1_get_time_stamp(
 	time_lo = cam_io_r_mb(sof_addr.curr0_ts_addr);
 	timestamp_args->time_stamp_val = (time_hi << 32) | time_lo;
 
+	time_hi = cam_io_r_mb(sof_addr.prev1_ts_addr);
+	time_lo = cam_io_r_mb(sof_addr.prev0_ts_addr);
+	timestamp_args->prev_time_stamp_val = (time_hi << 32) | time_lo;
+
 	timestamp_args->time_stamp_val = mul_u64_u32_div(
 		timestamp_args->time_stamp_val,
+		CAM_IFE_CSID_QTIMER_MUL_FACTOR,
+		CAM_IFE_CSID_QTIMER_DIV_FACTOR);
+
+	timestamp_args->prev_time_stamp_val = mul_u64_u32_div(
+		timestamp_args->prev_time_stamp_val,
 		CAM_IFE_CSID_QTIMER_MUL_FACTOR,
 		CAM_IFE_CSID_QTIMER_DIV_FACTOR);
 
@@ -3658,8 +3676,9 @@ static int cam_ife_csid_ver1_get_time_stamp(
 
 	timestamp_args->boot_timestamp = g_ref_time.btime + timestamp_args->time_stamp_val -
 		g_ref_time.qtime;
-	CAM_DBG(CAM_ISP, "timestamp:%lld",
-		timestamp_args->boot_timestamp);
+	CAM_DBG(CAM_ISP, "Boot_time:%lld prev_time:%lld curr_time:%lld",
+		timestamp_args->boot_timestamp, timestamp_args->prev_time_stamp_val,
+		timestamp_args->time_stamp_val);
 	csid_hw->timestamp.prev_sof_ts = timestamp_args->time_stamp_val;
 	csid_hw->timestamp.prev_boot_ts = timestamp_args->boot_timestamp;
 
