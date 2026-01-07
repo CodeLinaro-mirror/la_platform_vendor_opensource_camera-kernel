@@ -22,8 +22,8 @@ def _define_module(target, variant):
             "//soc-repo:{}/drivers/soc/qcom/socinfo".format(tv),
             "//soc-repo:{}/drivers/soc/qcom/llcc-qcom".format(tv),
             "//soc-repo:{}/drivers/soc/qcom/mdt_loader".format(tv),
-            "//soc-repo:{}/drivers/soc/qcom/qcom_va_minidump".format(tv),
             "//soc-repo:{}/drivers/leds/flash/leds-qcom-flash".format(tv),
+	    "//soc-repo:{}/drivers/video/backlight/qcom-spmi-wled".format(tv),
         ],
         "//build/kernel/kleaf:socrepo_false": [
             ":camera_headers",
@@ -31,6 +31,15 @@ def _define_module(target, variant):
             "//msm-kernel:all_headers",
         ],
     })
+
+    if target == "lahaina":
+        sun_deps += select({
+            "//build/kernel/kleaf:socrepo_true": [
+                "//soc-repo:{}/drivers/soc/qcom/qcom_va_minidump".format(tv),
+                "//soc-repo:{}/drivers/leds/leds-qti-flash".format(tv),
+            ],
+            "//build/kernel/kleaf:socrepo_false": [],
+        })
 
     kernel_build = select({
         "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_base_kernel".format(tv),
@@ -49,7 +58,7 @@ def _define_module(target, variant):
         outs = ["{}_defconfig.generated".format(tv)],
         cmd = "cat $(SRCS) > $@",
     )
-
+    if target == "lahaina": deps.extend([])
     ddk_module(
         name = "{}_camera".format(tv),
         out = "camera.ko",
@@ -67,6 +76,7 @@ def _define_module(target, variant):
             "drivers/cam_utils/cam_trace.c",
             "drivers/cam_utils/cam_common_util.c",
             "drivers/cam_utils/cam_compat.c",
+	    "drivers/cam_utils/cam_io_util.c",
             "drivers/cam_core/cam_context.c",
             "drivers/cam_core/cam_context_utils.c",
             "drivers/cam_core/cam_node.c",
