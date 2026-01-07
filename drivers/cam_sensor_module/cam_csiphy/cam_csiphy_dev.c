@@ -14,49 +14,6 @@
 
 static struct dentry *root_dentry;
 
-static int cam_csiphy_format_secure_phy_lane_info(
-	struct csiphy_device *csiphy_dev, int offset, uint64_t *mask)
-{
-	struct cam_csiphy_param *param;
-	uint64_t phy_lane_sel_mask = 0;
-
-	param = &csiphy_dev->csiphy_info[offset];
-
-	if (param->csiphy_3phase) {
-		if (param->lane_enable & CPHY_LANE_0)
-			phy_lane_sel_mask |= LANE_0_SEL;
-		if (param->lane_enable & CPHY_LANE_1)
-			phy_lane_sel_mask |= LANE_1_SEL;
-		if (param->lane_enable & CPHY_LANE_2)
-			phy_lane_sel_mask |= LANE_2_SEL;
-		phy_lane_sel_mask <<= CPHY_LANE_SELECTION_SHIFT;
-	} else {
-		if (param->lane_enable & DPHY_LANE_0)
-			phy_lane_sel_mask |= LANE_0_SEL;
-		if (param->lane_enable & DPHY_LANE_1)
-			phy_lane_sel_mask |= LANE_1_SEL;
-		if (param->lane_enable & DPHY_LANE_2)
-			phy_lane_sel_mask |= LANE_2_SEL;
-		if (param->lane_enable & DPHY_LANE_3)
-			phy_lane_sel_mask |= LANE_3_SEL;
-		phy_lane_sel_mask <<= DPHY_LANE_SELECTION_SHIFT;
-	}
-	if (csiphy_dev->soc_info.index > MAX_SUPPORTED_PHY_IDX) {
-		CAM_ERR(CAM_CSIPHY, "Invalid PHY index: %u",
-			csiphy_dev->soc_info.index);
-			return -EINVAL;
-	}
-
-	phy_lane_sel_mask |= BIT(csiphy_dev->soc_info.index);
-	*mask = phy_lane_sel_mask;
-
-	CAM_DBG(CAM_CSIPHY, "Formatted PHY[%u] phy_lane_sel_mask: 0x%llx",
-		csiphy_dev->soc_info.index, *mask);
-
-	return 0;
-
-}
-
 static void cam_csiphy_populate_secure_info(
 	struct csiphy_device *csiphy_dev, void *data)
 {
@@ -64,6 +21,12 @@ static void cam_csiphy_populate_secure_info(
 	struct cam_csiphy_secure_info *secure_info =
 		(struct cam_csiphy_secure_info *)data;
 	struct cam_csiphy_param *param;
+
+	if (csiphy_dev->soc_info.index > MAX_SUPPORTED_PHY_IDX) {
+		CAM_ERR(CAM_CSIPHY, "Invalid PHY index: %u",
+			csiphy_dev->soc_info.index);
+		return;
+	}
 
 	for (i = 0; i < CSIPHY_MAX_INSTANCES_PER_PHY; i++) {
 		param = &csiphy_dev->csiphy_info[i];
@@ -75,25 +38,16 @@ static void cam_csiphy_populate_secure_info(
 			param->secure_info.csid_hw_idx_mask = secure_info->csid_hw_idx_mask;
 			param->secure_info.vc_mask = secure_info->vc_mask;
 			param->secure_info.phy_lane_sel_mask = 0;
+			param->csiphy_phy_lane_sel_mask = param->csiphy_cpas_cp_reg_mask;
+			param->secure_info_updated = true;
 
-			if (!cam_csiphy_format_secure_phy_lane_info(csiphy_dev, i,
-				&param->csiphy_phy_lane_sel_mask)) {
-				param->secure_info_updated =  true;
-
-				CAM_DBG(CAM_CSIPHY,
-					"PHY[%d] secure info, phy_lane_mask: 0x%llx, ife: 0x%x, cdm: 0x%x, vc_mask: 0x%llx",
-					csiphy_dev->soc_info.index,
-					param->csiphy_phy_lane_sel_mask,
-					param->secure_info.csid_hw_idx_mask,
-					param->secure_info.cdm_hw_idx_mask,
-					param->secure_info.vc_mask);
-			} else
-				CAM_ERR(CAM_CSIPHY,
-					"Error in formatting PHY[%u] phy_lane_sel_mask: 0x%llx",
-					csiphy_dev->soc_info.index,
-					param->csiphy_phy_lane_sel_mask);
-
-			break;
+			CAM_DBG(CAM_CSIPHY,
+				"PHY[%d] secure info, phy_lane_mask: 0x%llx, ife: 0x%x, cdm: 0x%x, vc_mask: 0x%llx",
+				csiphy_dev->soc_info.index,
+				param->csiphy_phy_lane_sel_mask,
+				param->secure_info.csid_hw_idx_mask,
+				param->secure_info.cdm_hw_idx_mask,
+				param->secure_info.vc_mask);
 		}
 	}
 
