@@ -6919,9 +6919,8 @@ static int __cam_isp_send_pause_resume_cmd_to_sensor(void *priv, void *data)
 	ctx_isp = (struct cam_isp_context *)priv;
 	ctx = ctx_isp->base;
 	event_notify_payload = (struct cam_isp_ctx_pause_resume_event_info *)data;
-
-	if (ctx_isp->mcu_enable) {
-		CAM_DBG(CAM_ISP, "mcu is available, ctx:%d", ctx->ctx_id);
+	if (ctx_isp->mcu_enable || ctx_isp->is_tpg_enabled) {
+		CAM_DBG(CAM_ISP, "mcu is available (or) tpg dev is enabled, ctx:%d", ctx->ctx_id);
 		goto end;
 	}
 
@@ -10207,6 +10206,21 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 
 		__cam_isp_ctx_ul_fastpath_reset_result_queue(ctx_isp);
 	}
+
+	/* Check for TPG dev */
+	hw_cmd_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
+	hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+	isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_IS_TPG_ENABLED;
+	hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+	rc = ctx->hw_mgr_intf->hw_cmd(
+		ctx->hw_mgr_intf->hw_mgr_priv, &hw_cmd_args);
+	if (rc) {
+		CAM_ERR(CAM_ISP, "HW command %u failed rc: %d ctx_id: %u",
+			isp_hw_cmd_args.cmd_type, rc, ctx->ctx_id);
+		goto free_hw;
+	}
+	ctx_isp->is_tpg_enabled = isp_hw_cmd_args.u.is_tpg_en;
+	CAM_DBG(CAM_ISP, "TPG device enabled %d", ctx_isp->is_tpg_enabled);
 
 	trace_cam_context_state("ISP", ctx);
 	CAM_DBG(CAM_ISP,

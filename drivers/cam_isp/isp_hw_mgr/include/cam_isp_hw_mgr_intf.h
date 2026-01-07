@@ -547,6 +547,7 @@ enum cam_isp_hw_mgr_command {
 	CAM_ISP_HW_MGR_GET_SESSION_COOKIE,
 	CAM_ISP_HW_MGR_SET_HWFENCE_MODE,
 	CAM_ISP_HW_MGR_GET_SECURE_MODE,
+	CAM_ISP_HW_MGR_IS_TPG_ENABLED,
 	CAM_ISP_HW_MGR_CMD_MAX,
 };
 
@@ -590,6 +591,7 @@ enum cam_isp_ctx_type {
  * @scratch_buf_kva:       KMD VA of scratch buffer
  * @max_ife_out_res:       Maximum IFE OUT resources
  * @is_secure:             Flag to indicate if ctx is running in secure mode
+ * @is_tpg_en:             Flag to indicate if TPG device is enable
  */
 struct cam_isp_hw_cmd_args {
 	uint32_t                          cmd_type;
@@ -636,6 +638,7 @@ struct cam_isp_hw_cmd_args {
 		} setting_buf_info;
 		uint32_t                      max_ife_out_res;
 		uint32_t                      is_secure;
+		bool                          is_tpg_en;
 	} u;
 };
 

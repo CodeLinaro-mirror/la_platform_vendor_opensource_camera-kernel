@@ -7414,18 +7414,6 @@ static int cam_ife_mgr_get_phy_id(uint32_t res_id)
 	return phy_id;
 }
 
-inline int cam_ife_mgr_is_tpg(uint32_t res_id)
-{
-	int is_tpg = FALSE;
-	if (res_id == CAM_ISP_IFE_IN_RES_TPG ||
-		res_id == CAM_ISP_IFE_IN_RES_CPHY_TPG_0 ||
-		res_id == CAM_ISP_IFE_IN_RES_CPHY_TPG_1 ||
-		res_id == CAM_ISP_IFE_IN_RES_CPHY_TPG_2) {
-		is_tpg = TRUE;
-	}
-	return is_tpg;
-}
-
 static int cam_ife_hw_mgr_secure_phy_contexts(
 	struct cam_ife_hw_mgr_ctx           *ife_ctx)
 {
@@ -7451,6 +7439,19 @@ static int cam_ife_hw_mgr_secure_phy_contexts(
 	return rc;
 }
 #endif
+
+inline bool cam_ife_mgr_is_tpg(uint32_t res_id)
+{
+	bool is_tpg = FALSE;
+
+	if (res_id == CAM_ISP_IFE_IN_RES_TPG ||
+		res_id == CAM_ISP_IFE_IN_RES_CPHY_TPG_0 ||
+		res_id == CAM_ISP_IFE_IN_RES_CPHY_TPG_1 ||
+		res_id == CAM_ISP_IFE_IN_RES_CPHY_TPG_2) {
+		is_tpg = TRUE;
+	}
+	return is_tpg;
+}
 
 #ifdef CONFIG_SECURE_CAMERA_V3
 static int cam_ife_hw_mgr_set_secure_port_info(
@@ -19133,6 +19134,11 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			break;
 		case CAM_ISP_HW_MGR_GET_SECURE_MODE:
 			isp_hw_cmd_args->u.is_secure = cam_ife_hw_mgr_is_secure_context(ctx);
+			rc = 0;
+			break;
+		case CAM_ISP_HW_MGR_IS_TPG_ENABLED:
+			isp_hw_cmd_args->u.is_tpg_en =
+				cam_ife_mgr_is_tpg(ctx->res_list_ife_in.res_id);
 			rc = 0;
 			break;
 		default:
