@@ -481,6 +481,8 @@ struct cam_icp_hw_ctx_data {
  *           would be sizeof(_u32) * queue_size
  * @dbg_buf: Drain Buffer for debug data from firmware
  * @icp_complete: Completion info
+ * @icp_fw_download_complete: Completion for FW download at
+ *           the time of recovery.
  * @cmd_work_data: Pointer to command work queue task
  * @msg_work_data: Pointer to message work queue task
  * @timer_work_data: Pointer to timer work queue task
@@ -522,6 +524,8 @@ struct cam_icp_hw_ctx_data {
  * @enable_panic: debugfs bool to enable kernel panic upon FW fatal errors
  * @debug_llcc: this is to get the LLCC register status information
  * @enable_clock_dump: Flag to enable clock dumps upon FW response timeout
+ * @all_handle_invalid: Flag to indicate if FW handles are invalid due
+ *           to FW re-download.
  */
 struct cam_icp_hw_mgr {
 	struct mutex hw_mgr_mutex;
@@ -535,7 +539,6 @@ struct cam_icp_hw_mgr {
 	cam_icp_mini_dump_cb mini_dump_cb;
 	char hw_mgr_name[CAM_ICP_HW_MGR_NAME_SIZE];
 	uint32_t hw_mgr_id;
-
 	int32_t iommu_hdl;
 	int32_t iommu_sec_hdl;
 	int32_t hfi_handle;
@@ -547,6 +550,7 @@ struct cam_icp_hw_mgr {
 	uint32_t msg_buf[ICP_MSG_BUF_SIZE_IN_WORDS];
 	uint32_t dbg_buf[ICP_DBG_BUF_SIZE_IN_WORDS];
 	struct completion icp_complete;
+	struct completion icp_fw_download_complete;
 	struct hfi_cmd_work_data *cmd_work_data;
 	struct hfi_msg_work_data *msg_work_data;
 	struct hfi_msg_work_data *timer_work_data;
@@ -582,6 +586,7 @@ struct cam_icp_hw_mgr {
 	bool enable_panic;
 	bool debug_llcc;
 	bool enable_clock_dump;
+	bool all_handle_invalid;
 };
 
 /**
