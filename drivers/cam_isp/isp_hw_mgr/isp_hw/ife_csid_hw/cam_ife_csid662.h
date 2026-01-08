@@ -407,6 +407,7 @@ static struct cam_ife_csid_ver1_common_reg_info
 		.format_measure_height_shift_val         = 0x10,
 		.format_measure_width_mask_val           = 0xFFFF,
 		.format_measure_width_shift_val          = 0x0,
+		.phy_sel_base_idx                        = 1,
 };
 
 static struct cam_ife_csid_ver1_reg_info cam_ife_csid_662_reg_info = {
