@@ -3399,6 +3399,92 @@ static int cam_vfe_bus_ver3_handle_err_irq_top_half(uint32_t evt_id,
 	return rc;
 }
 
+static void cam_vfe_bus_ver3_handle_output_resource_violation(
+	struct cam_vfe_bus_ver3_priv *bus_priv, uint32_t vfe_out_type,
+	char *error_type, uint32_t status, uint64_t *out_port,
+	struct cam_vfe_bus_irq_violation_type *violation_type)
+{
+	struct cam_isp_resource_node *rsrc_node = NULL;
+	struct cam_vfe_bus_ver3_vfe_out_data *rsrc_data = NULL;
+	struct cam_vfe_bus_ver3_wm_resource_data *wm_data = NULL;
+	struct cam_vfe_bus_ver3_common_data *common_data = NULL;
+	uint8_t *wm_name = NULL;
+
+	rsrc_node = &bus_priv->vfe_out[vfe_out_type];
+	rsrc_data = rsrc_node->res_priv;
+	if (!rsrc_data) {
+		CAM_ERR(CAM_ISP, "VFE:%u out data is null, res_id: %u",
+			bus_priv->common_data.core_index, vfe_out_type);
+		return;
+	}
+
+	for (int j = 0; j < rsrc_data->num_wm; j++) {
+		wm_data = rsrc_data->wm_res[j]->res_priv;
+		common_data = rsrc_data->common_data;
+		wm_name = rsrc_data->wm_res[j]->res_name;
+
+		if (status & BIT_ULL(wm_data->index)) {
+			cam_vfe_bus_ver3_print_wm_info(wm_data,
+					common_data, bus_priv, wm_name);
+			*out_port |= BIT_ULL(rsrc_node->res_id & 0xFF);
+
+			/* check what type of violation it is*/
+			switch (rsrc_data->out_type) {
+			case CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_2PD:
+			case CAM_VFE_BUS_VER3_VFE_OUT_PDAF_PARSED:
+				if (!strcmp(error_type, "Image Size"))
+					violation_type->hwpd_violation = true;
+				break;
+			default:
+				break;
+			}
+		}
+	}
+
+}
+
+static void cam_vfe_check_violations_out_dyn(
+	char *error_type,
+	uint32_t status,
+	struct cam_vfe_bus_ver3_priv *bus_priv,
+	uint64_t *out_port,
+	struct cam_vfe_bus_irq_violation_type *violation_type)
+{
+	int index = 0;
+	int bus_client_index = 0;
+	uint32_t violation_status = status;
+
+	if (!bus_priv) {
+		CAM_ERR(CAM_ISP, "Invalid bus private data");
+		return;
+	}
+
+	if (violation_status & ~bus_priv->bus_hw_info->valid_wm_mask) {
+		CAM_ERR(CAM_ISP, "Invalid violation_status 0x%x or valid_wm_mask 0x%x",
+				violation_status, bus_priv->bus_hw_info->valid_wm_mask);
+	}
+
+	while (violation_status) {
+		bus_client_index = ffs(violation_status);
+		if (bus_client_index > CAM_VFE_BUS_VER3_MAX_CLIENTS) {
+			CAM_ERR(CAM_ISP, "Invalid bus client index %d", bus_client_index);
+			return;
+		}
+
+		index = bus_priv->bus_hw_info->bus_client_reg[bus_client_index - 1].out_type;
+		if (index > CAM_VFE_BUS_VER3_VFE_OUT_MAX) {
+			CAM_ERR(CAM_ISP, "Invalid VFE out index %d", index);
+			return;
+		}
+
+		cam_vfe_bus_ver3_handle_output_resource_violation(bus_priv,
+			bus_priv->vfe_out_map_outtype[index], error_type, status,
+			out_port, violation_type);
+
+		violation_status &= ~(1ULL << (bus_client_index - 1));
+	}
+}
+
 static void cam_vfe_check_violations(
 	char *error_type,
 	uint32_t status,
@@ -3406,49 +3492,14 @@ static void cam_vfe_check_violations(
 	uint64_t *out_port,
 	struct cam_vfe_bus_irq_violation_type *violation_type)
 {
-	int i, j;
-	struct cam_isp_resource_node       *rsrc_node = NULL;
-	struct cam_vfe_bus_ver3_vfe_out_data      *rsrc_data = NULL;
-	struct cam_vfe_bus_ver3_wm_resource_data  *wm_data   = NULL;
-	struct cam_vfe_bus_ver3_common_data  *common_data = NULL;
-	uint8_t                                *wm_name = NULL;
-
 	if (!bus_priv) {
 		CAM_ERR(CAM_ISP, "Invalid bus private data");
 		return;
 	}
 
-	for (i = 0; i < bus_priv->num_out; i++) {
-		rsrc_node = &bus_priv->vfe_out[i];
-		rsrc_data = rsrc_node->res_priv;
-		if (!rsrc_data) {
-			CAM_ERR(CAM_ISP, "VFE:%u out data is null, res_id: %d",
-				bus_priv->common_data.core_index, i);
-			return;
-		}
-
-		for (j = 0; j < rsrc_data->num_wm; j++) {
-			wm_data = rsrc_data->wm_res[j]->res_priv;
-			common_data = rsrc_data->common_data;
-			wm_name = rsrc_data->wm_res[j]->res_name;
-
-			if (status & BIT(wm_data->index)) {
-				cam_vfe_bus_ver3_print_wm_info(wm_data,
-					common_data, bus_priv, wm_name);
-				*out_port |= BIT_ULL(rsrc_node->res_id & 0xFF);
-
-				/* check what type of violation it is*/
-				switch (rsrc_data->out_type) {
-				case CAM_VFE_BUS_VER3_VFE_OUT_PREPROCESS_2PD:
-				case CAM_VFE_BUS_VER3_VFE_OUT_PDAF_PARSED:
-					if (!strcmp(error_type, "Image Size"))
-						violation_type->hwpd_violation = true;
-					break;
-				default:
-					break;
-				}
-			}
-		}
+	for (uint32_t i = 0; i < bus_priv->num_out; i++) {
+		cam_vfe_bus_ver3_handle_output_resource_violation(bus_priv, i,
+			error_type, status, out_port, violation_type);
 	}
 }
 
@@ -3498,8 +3549,13 @@ static int cam_vfe_bus_ver3_handle_err_irq_bottom_half(
 			CAM_ERR(CAM_ISP,
 				"Sensor: Programmed image size is different as actual image size from input");
 			CAM_ERR(CAM_ISP, "Debug: Check SW programming/sensor config");
-			cam_vfe_check_violations("Image Size", status, bus_priv,
-				&out_port_mask, &violation_type);
+			CAM_ERR(CAM_ISP, "Violation status: 0x%x", status);
+			if (bus_priv->bus_hw_info->support_dyn_offset)
+				cam_vfe_check_violations_out_dyn("Image Size", status, bus_priv,
+						&out_port_mask, &violation_type);
+			else
+				cam_vfe_check_violations("Image Size", status, bus_priv,
+						&out_port_mask, &violation_type);
 		}
 	}
 
@@ -3510,8 +3566,12 @@ static int cam_vfe_bus_ver3_handle_err_irq_bottom_half(
 			evt_payload->ts.mono_time.tv_sec,
 			evt_payload->ts.mono_time.tv_nsec);
 		CAM_ERR(CAM_ISP, "Violation status: 0x%x", status);
-		cam_vfe_check_violations("CCIF", status, bus_priv,
-			&out_port_mask, &violation_type);
+		if (bus_priv->bus_hw_info->support_dyn_offset)
+			cam_vfe_check_violations_out_dyn("CCIF", status, bus_priv,
+				&out_port_mask, &violation_type);
+		else
+			cam_vfe_check_violations("CCIF", status, bus_priv,
+				&out_port_mask, &violation_type);
 	}
 
 	if (image_size_violation && violation_type.hwpd_violation) {
