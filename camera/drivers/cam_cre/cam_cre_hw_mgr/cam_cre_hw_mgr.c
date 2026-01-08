@@ -1640,6 +1640,9 @@ static int cam_cre_get_acquire_info(struct cam_cre_hw_mgr *hw_mgr,
 		return -EFAULT;
 	}
 
+	if (cam_cre_validate_acquire_res_info(&ctx->cre_acquire))
+		return -EINVAL;
+
 	CAM_DBG(CAM_CRE, "top: %u %s %u %u %u",
 		ctx->cre_acquire.dev_type,
 		ctx->cre_acquire.dev_name,
