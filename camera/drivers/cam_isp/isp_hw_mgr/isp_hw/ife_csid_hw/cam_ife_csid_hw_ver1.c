@@ -3789,6 +3789,10 @@ static int cam_ife_csid_ver1_process_cmd(void *hw_priv,
 	case CAM_ISP_HW_CMD_CSID_CHANGE_HALT_MODE:
 		rc = cam_ife_csid_halt(csid_hw, cmd_args);
 		break;
+	case CAM_ISP_HW_CMD_GET_SET_PRIM_SOF_TS_ADDR:
+		/* Not supported for V1 */
+		rc = 0;
+		break;
 	case CAM_ISP_HW_CMD_CSID_DISCARD_INIT_FRAMES:
 		/* Not supported for V1 */
 		rc = 0;
