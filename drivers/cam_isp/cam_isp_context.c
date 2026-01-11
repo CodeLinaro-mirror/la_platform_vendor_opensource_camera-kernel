@@ -9775,113 +9775,55 @@ static bool __cam_isp_ctx_ul_fastpath_match_for_primary_port(
 	return false;
 }
 
-static int __cam_isp_ctx_ul_fastpath_retrieve_result_util(
+static bool __cam_isp_ctx_ul_fastpath_iterate_req_list(
 	int32_t *result_idx, uint32_t last_consumed_addr, uint64_t timestamp,
 	uint64_t boot_timestamp, struct cam_context *ctx,
 	struct response_buffer *response_buffers, uint32_t status,
-	struct cam_hwfence_info   *fence_info, uint32_t *is_fenceupdated)
+	struct cam_hwfence_info   *fence_info, uint32_t *is_fenceupdated,
+	struct list_head *req_list, bool is_active_list, bool skip_check_match)
 {
-	int rc = -EAGAIN;
-	bool found_match;
+	bool found_match = false;
+	bool found_flag = false;
 	struct cam_isp_context *isp_ctx = (struct cam_isp_context *)ctx->ctx_priv;
 	struct cam_ctx_request *req, *req_tmp;
 	struct cam_isp_ctx_req *req_isp;
 
-	if (is_fenceupdated)
-		*is_fenceupdated = 0;
+	if (!list_empty(req_list)) {
+		/* Iterate through the req list to find the match */
+		list_for_each_entry_safe(req, req_tmp, req_list, list) {
+			req_isp = (struct cam_isp_ctx_req *)req->req_priv;
 
-	if (list_empty(&ctx->active_req_list)) {
-		/* Check in wait list */
-		if (!list_empty(&ctx->wait_req_list)) {
-
-			/* Iterate through the wait list to find the match */
-			list_for_each_entry_safe(req, req_tmp, &ctx->wait_req_list, list) {
-				req_isp = (struct cam_isp_ctx_req *)req->req_priv;
-
-				if (req_isp->ul_fp_result_posted)
-					continue;
-
-				found_match = __cam_isp_ctx_ul_fastpath_match_for_primary_port(
-					isp_ctx->primary_port_info[0]->res_id,
-					last_consumed_addr, req);
-
-				if (found_match) {
-					req_isp->ul_fp_result_posted = true;
-					__cam_isp_ctx_ul_fastpath_populate_buf_hdls(result_idx,
-						timestamp, boot_timestamp, req->request_id, isp_ctx,
-						req_isp, response_buffers, status);
-					if (req_isp->fence_updated && fence_info)
-						cam_isp_schedule_fence_release_for_req(isp_ctx,
-							req_isp);
-					if (fence_info && isp_ctx->ul_data.new_batch_available) {
-						__cam_isp_ctx_ul_populate_fences(isp_ctx, req_isp,
-							fence_info);
-						*is_fenceupdated = 1;
-						isp_ctx->ul_data.new_batch_available = false;
-					}
-					CAM_WARN(CAM_ISP,
-						"Match for last_consumed: 0x%x found in request: %llu [wait list] in ctx: %u on link: 0x%x",
-						last_consumed_addr, req->request_id,
-						ctx->ctx_id, ctx->link_hdl);
-					rc = 0;
-					goto end;
-				}
-			}
-		}
-
-		/* Check in pending list */
-		if (!list_empty(&ctx->pending_req_list)) {
-
-			/* Iterate through the wait list to find the match */
-			list_for_each_entry_safe(req, req_tmp, &ctx->pending_req_list, list) {
-				req_isp = (struct cam_isp_ctx_req *)req->req_priv;
-
-				if (req_isp->ul_fp_result_posted)
-					continue;
-
-				found_match = __cam_isp_ctx_ul_fastpath_match_for_primary_port(
-					isp_ctx->primary_port_info[0]->res_id,
-					last_consumed_addr, req);
-				if (found_match) {
-					req_isp->ul_fp_result_posted = true;
-					__cam_isp_ctx_ul_fastpath_populate_buf_hdls(result_idx,
-						timestamp, boot_timestamp, req->request_id,
-						isp_ctx, req_isp, response_buffers, status);
-					if (req_isp->fence_updated && fence_info)
-						cam_isp_schedule_fence_release_for_req(isp_ctx,
-							req_isp);
-					if (fence_info && isp_ctx->ul_data.new_batch_available) {
-						__cam_isp_ctx_ul_populate_fences(isp_ctx, req_isp,
-							fence_info);
-						*is_fenceupdated = 1;
-						isp_ctx->ul_data.new_batch_available = false;
-					}
-					CAM_WARN(CAM_ISP,
-						"Match for last_consumed: 0x%x found in request: %llu [pending list] in ctx: %u on link: 0x%x",
-						last_consumed_addr, req->request_id,
-						ctx->ctx_id, ctx->link_hdl);
-					rc = 0;
-					goto end;
-				}
+			if (req_isp->ul_fp_result_posted)
+				continue;
+			found_match = __cam_isp_ctx_ul_fastpath_match_for_primary_port(
+				isp_ctx->primary_port_info[0]->res_id,
+				last_consumed_addr, req);
+			if (found_match) {
+				found_flag = true;
+				break;
 			}
 		}
 	}
 
-	/* Iterate through the active list to find the match */
-	list_for_each_entry_safe(req, req_tmp, &ctx->active_req_list, list) {
-		req_isp = (struct cam_isp_ctx_req *)req->req_priv;
+	if (!list_empty(req_list) && (found_flag || skip_check_match)) {
+		/* Iterate through the req list to find the match */
+		list_for_each_entry_safe(req, req_tmp, req_list, list) {
+			req_isp = (struct cam_isp_ctx_req *)req->req_priv;
 
-		if (req_isp->ul_fp_result_posted)
-			continue;
+			if (req_isp->ul_fp_result_posted)
+				continue;
 
-		found_match = __cam_isp_ctx_ul_fastpath_match_for_primary_port(
-			isp_ctx->primary_port_info[0]->res_id,
-			last_consumed_addr, req);
+			if (!skip_check_match)
+				found_match = __cam_isp_ctx_ul_fastpath_match_for_primary_port(
+					isp_ctx->primary_port_info[0]->res_id,
+					last_consumed_addr, req);
 
-		if (found_match) {
+			req_isp->ul_fp_result_posted = true;
+			found_flag = true;
 			__cam_isp_ctx_ul_fastpath_populate_buf_hdls(result_idx,
 				timestamp, boot_timestamp, req->request_id, isp_ctx,
 				req_isp, response_buffers, status);
+
 			if (req_isp->fence_updated && fence_info)
 				cam_isp_schedule_fence_release_for_req(isp_ctx, req_isp);
 			if (fence_info && isp_ctx->ul_data.new_batch_available) {
@@ -9890,17 +9832,85 @@ static int __cam_isp_ctx_ul_fastpath_retrieve_result_util(
 				*is_fenceupdated = 1;
 				isp_ctx->ul_data.new_batch_available = false;
 			}
-			isp_ctx->active_req_cnt--;
-			__cam_isp_ctx_handle_req_reset_util(isp_ctx, req);
-			rc = 0;
-			goto end;
+
+			if (is_active_list) {
+				isp_ctx->active_req_cnt--;
+				__cam_isp_ctx_handle_req_reset_util(isp_ctx, req);
+			} else {
+				CAM_DBG(CAM_ISP,
+					"Match for last_consumed: 0x%x found in request: %llu in ctx: %u on link: 0x%x",
+					last_consumed_addr, req->request_id,
+					ctx->ctx_id, ctx->link_hdl);
+			}
+			if (found_match)
+				return found_flag;
 		}
+	}
+
+	return found_flag;
+}
+
+static int __cam_isp_ctx_ul_fastpath_retrieve_result_util(
+	int32_t *result_idx, uint32_t last_consumed_addr, uint64_t timestamp,
+	uint64_t boot_timestamp, struct cam_context *ctx,
+	struct response_buffer *response_buffers, uint32_t status,
+	struct cam_hwfence_info   *fence_info, uint32_t *is_fenceupdated)
+{
+	int rc = -EAGAIN;
+	bool skip_check_match = false;
+	bool found = false;
+
+	if (is_fenceupdated)
+		*is_fenceupdated = 0;
+
+	/* Check in active list */
+	found = __cam_isp_ctx_ul_fastpath_iterate_req_list(
+		result_idx, last_consumed_addr, timestamp, boot_timestamp,
+		ctx, response_buffers, status, fence_info, is_fenceupdated,
+		&ctx->active_req_list, true, skip_check_match);
+	if (found) {
+		rc = 0;
+		goto end;
+	}
+
+	/* Check in wait list */
+	found = __cam_isp_ctx_ul_fastpath_iterate_req_list(
+		result_idx, last_consumed_addr, timestamp, boot_timestamp,
+		ctx, response_buffers, status, fence_info, is_fenceupdated,
+		&ctx->wait_req_list, false, skip_check_match);
+	if (found) {
+		CAM_WARN(CAM_ISP,
+			"Match for last_consumed: 0x%x found in wait list in ctx: %u on link: 0x%x",
+			last_consumed_addr, ctx->ctx_id, ctx->link_hdl);
+		skip_check_match = true;
+		rc = 0;
+		goto active_list;
+	}
+
+	/* Check in pending list */
+	found = __cam_isp_ctx_ul_fastpath_iterate_req_list(
+		result_idx, last_consumed_addr, timestamp, boot_timestamp,
+		ctx, response_buffers, status, fence_info, is_fenceupdated,
+		&ctx->pending_req_list, false, skip_check_match);
+	if (found) {
+		CAM_WARN(CAM_ISP,
+			"Match for last_consumed: 0x%x found in pending list in ctx: %u on link: 0x%x",
+			last_consumed_addr, ctx->ctx_id, ctx->link_hdl);
+		goto end;
 	}
 
 	CAM_ERR(CAM_ISP,
 		"Fatal last_consumed: 0x%x not found in any request in ctx: %u on link: 0x%x",
 		last_consumed_addr, ctx->ctx_id, ctx->link_hdl);
 
+	return rc;
+
+active_list:
+	/* Check in active list */
+	found = __cam_isp_ctx_ul_fastpath_iterate_req_list(
+		result_idx, last_consumed_addr, timestamp, boot_timestamp,
+		ctx, response_buffers, status, fence_info, is_fenceupdated,
+		&ctx->active_req_list, true, skip_check_match);
 end:
 	return rc;
 }
