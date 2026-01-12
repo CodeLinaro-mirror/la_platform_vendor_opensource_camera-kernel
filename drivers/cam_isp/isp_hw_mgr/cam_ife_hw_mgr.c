@@ -1774,7 +1774,7 @@ static void cam_ife_hw_mgr_deinit_hw(
 		cam_ife_hw_mgr_deinit_hw_res(&ctx->res_list_ife_out[i]);
 
 	/* Check if any cache needs to be de-activated */
-	for (i = CAM_LLCC_SMALL_1; i < CAM_LLCC_MAX; i++) {
+	for (i = CAM_LLCC_SMALL_1; i <= CAM_LLCC_SMALL_2; i++) {
 		if (ctx->flags.sys_cache_usage[i])
 			cam_cpas_deactivate_llcc(i);
 		ctx->flags.sys_cache_usage[i] = false;
@@ -1878,7 +1878,7 @@ static int cam_ife_hw_mgr_init_hw(
 	}
 
 	/* Check if any cache needs to be activated */
-	for (i = CAM_LLCC_SMALL_1; i < CAM_LLCC_MAX; i++) {
+	for (i = CAM_LLCC_SMALL_1; i <= CAM_LLCC_SMALL_2; i++) {
 		if (ctx->flags.sys_cache_usage[i]) {
 			rc = cam_cpas_activate_llcc(i);
 			if (rc) {
@@ -10587,6 +10587,12 @@ static int cam_ife_mgr_stop_hw_in_overflow(void *stop_hw_args)
 		return -EINVAL;
 	}
 
+	/* Flush worker */
+	if (!stop_isp->is_recovery) {
+		worker_info = (struct cam_req_mgr_core_worker *)ctx->common.worker_info;
+		cam_req_mgr_worker_flush(worker_info);
+	}
+
 	if (ctx->flags.per_port_en && !ctx->flags.is_dual) {
 		rc = cam_ife_hw_mgr_res_stream_on_off_grp_cfg(ctx,
 				stop_isp, CAM_CSID_HALT_IMMEDIATELY, false,
@@ -10599,7 +10605,7 @@ static int cam_ife_mgr_stop_hw_in_overflow(void *stop_hw_args)
 	}
 
 	if (per_port_feature_enable)
-		goto flush_worker;
+		goto end;
 
 	/* get master base index first */
 	for (i = 0; i < ctx->num_base; i++) {
@@ -10645,13 +10651,7 @@ static int cam_ife_mgr_stop_hw_in_overflow(void *stop_hw_args)
 	for (i = 0; i < max_ife_out_res; i++)
 		cam_ife_hw_mgr_stop_hw_res(&ctx->res_list_ife_out[i], true);
 
-flush_worker:
-	/* Flush worker */
-	if (!stop_isp->is_recovery) {
-		worker_info = (struct cam_req_mgr_core_worker *)ctx->common.worker_info;
-		cam_req_mgr_worker_flush(worker_info);
-	}
-
+end:
 	CAM_DBG(CAM_ISP, "Exit...ctx id:%d rc :%d",
 		ctx->ctx_index, rc);
 
@@ -10913,6 +10913,7 @@ end:
 	ctx->flags.skip_reg_dump_buf_put = false;
 	ctx->flags.dump_on_error = false;
 	ctx->flags.dump_on_flush = false;
+	ctx->flags.fast_crop_en = false;
 	return rc;
 }
 
@@ -21726,7 +21727,7 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 
 	/* Populate sys cache info */
 	g_ife_hw_mgr.num_caches_found = 0;
-	for (i = CAM_LLCC_SMALL_1; i < CAM_LLCC_MAX; i++) {
+	for (i = CAM_LLCC_SMALL_1; i <= CAM_LLCC_SMALL_2; i++) {
 		g_ife_hw_mgr.sys_cache_info[i].scid =
 			cam_cpas_get_scid(i);
 		g_ife_hw_mgr.sys_cache_info[i].type = i;
