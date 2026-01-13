@@ -17006,20 +17006,20 @@ static int cam_ife_hw_mgr_handle_hw_buf_done(
 	CAM_DBG(CAM_ISP,
 		"Buf done for %s: %d res_id: 0x%x last consumed addr: 0x%x ctx: %u",
 		((event_info->hw_type == CAM_ISP_HW_TYPE_SFE) ? "SFE" : "IFE"),
-		event_info->hw_idx, event_info->res_id,
+		event_info->hw_idx, bufdone_evt_info->res_id,
 		bufdone_evt_info->last_consumed_addr, c_ctx->ctx_index);
 
 	/* Check scratch for sHDR/FS use-cases */
 	if (c_ctx->flags.is_sfe_fs || c_ctx->flags.is_sfe_shdr) {
 		rc = cam_ife_hw_mgr_check_for_scratch_buf_done(ife_hw_mgr_ctx,
-			event_info->hw_type, event_info->res_id,
+			event_info->hw_type, bufdone_evt_info->res_id,
 			bufdone_evt_info->last_consumed_addr);
 		if (rc)
 			return 0;
 	}
 
 	buf_done_event_data.hw_type = event_info->hw_type;
-	buf_done_event_data.resource_handle = event_info->res_id;
+	buf_done_event_data.resource_handle = bufdone_evt_info->res_id;
 	buf_done_event_data.last_consumed_addr = bufdone_evt_info->last_consumed_addr;
 	buf_done_event_data.comp_group_id = bufdone_evt_info->comp_grp_id;
 
