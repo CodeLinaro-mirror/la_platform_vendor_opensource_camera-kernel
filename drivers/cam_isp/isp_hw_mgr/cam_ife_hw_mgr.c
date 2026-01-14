@@ -7317,6 +7317,7 @@ static bool cam_ife_hw_mgr_is_secure_context(
 {
 	bool is_secure = FALSE;
 	int i;
+
 	for (i = 0; i < max_ife_out_res; i++) {
 		if (ife_ctx->res_list_ife_out[i].res_id && ife_ctx->res_list_ife_out[i].is_secure) {
 			is_secure = TRUE;
