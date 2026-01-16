@@ -21,6 +21,9 @@
 #include "cam_common_util.h"
 #include "cam_rpmsg.h"
 #include "cam_mem_mgr_api.h"
+#include <linux/notifier.h>
+#include <linux/gunyah/gh_common.h>
+#include <linux/gunyah/gh_vm.h>
 
 static struct cam_req_mgr_core_device *g_crm_core_dev;
 static struct cam_req_mgr_core_link g_links[MAXIMUM_LINKS_PER_SESSION];
@@ -4717,6 +4720,19 @@ end:
 }
 
 /**
+ * cam_req_mgr_cb_get_qtvm_status()
+ *
+ * @brief   : Utility function to check qtvm status
+ *
+ * @return  : qtvm status
+ *
+ */
+static uint32_t cam_req_mgr_cb_get_qtvm_status(void)
+{
+	return g_crm_core_dev->qtvm_status;
+}
+
+/**
  * cam_req_mgr_cb_notify_trigger()
  *
  * @brief   : SOF received from device, sends trigger through workqueue
@@ -4861,6 +4877,7 @@ static struct cam_req_mgr_crm_cb cam_req_mgr_ops = {
 	.no_crm_notify_dev      = cam_req_mgr_no_crm_notify_devices,
 	.fast_crop_sync_utility = cam_req_mgr_cb_fast_crop_sync_utility,
 	.check_dual_trigger     = cam_req_mgr_no_crm_dual_trigger_check,
+	.get_qtvm_status        = cam_req_mgr_cb_get_qtvm_status,
 };
 
 /**
@@ -5605,6 +5622,7 @@ int cam_req_mgr_link_v3(struct cam_req_mgr_ver_info *link_info)
 	link->is_setting_period_valid = false;
 	link->curr_setting            = 0;
 	link->is_new_setting_available = false;
+	link->qtvm_wait_for_unlink = false;
 
 	mutex_unlock(&link->lock);
 	mutex_unlock(&g_crm_core_dev->crm_lock);
@@ -5654,6 +5672,11 @@ int cam_req_mgr_unlink(struct cam_req_mgr_unlink_info *unlink_info)
 			(!link) ? CAM_REQ_MGR_DEFAULT_HDL_VAL : link->link_hdl);
 		rc = -EINVAL;
 		goto done;
+	}
+	if (link->qtvm_wait_for_unlink) {
+		if (!(--g_crm_core_dev->qtvm_crash_secure_link_count))
+			complete(&g_crm_core_dev->qtvm_crash_complete);
+		link->qtvm_wait_for_unlink = false;
 	}
 	mutex_lock(&cam_session->lock);
 	rc = __cam_req_mgr_unlink(cam_session, link);
@@ -6361,6 +6384,9 @@ int cam_req_mgr_core_device_init(void)
 	}
 	cam_common_register_mini_dump_cb(cam_req_mgr_core_mini_dump_cb,
 		"CAM_CRM");
+	g_crm_core_dev->qtvm_crash_secure_link_count = 0;
+	g_crm_core_dev->qtvm_status = CRM_QTVM_STATUS_POWERUP;
+	init_completion(&g_crm_core_dev->qtvm_crash_complete);
 
 	return 0;
 }
@@ -6380,3 +6406,171 @@ int cam_req_mgr_core_device_deinit(void)
 
 	return 0;
 }
+
+
+/**
+ * crm_notify_qtvm_crash_event_on_link()
+ * @brief: sends v4l2 event to userspace to notify about GH_VM events.
+ *
+ * @return   : 0 on success, negative in case of failure
+ */
+int crm_notify_qtvm_crash_event_on_link(struct cam_req_mgr_core_link *link)
+{
+	int rc = 0;
+	struct cam_req_mgr_message  req_msg;
+	struct cam_req_mgr_core_session *session = NULL;
+
+
+	session = (struct cam_req_mgr_core_session *)link->parent;
+
+	/* send  v4l2 event to notify umd about qtvm crash */
+	req_msg.session_hdl = session->session_hdl;
+	req_msg.u.err_msg.error_type = CAM_REQ_MGR_ERROR_TYPE_QTVM_CRASH;
+	req_msg.u.err_msg.link_hdl = link->link_hdl;
+	req_msg.u.err_msg.request_id = 0;
+	req_msg.u.err_msg.resource_size = 0x0;
+	req_msg.u.err_msg.error_code = 0;
+
+	CAM_DBG(CAM_ISP, "Notifying qtvm crash v4l2 error event [type: %u code: %u] on link: 0x%x",
+		req_msg.u.err_msg.error_type, req_msg.u.err_msg.error_code, link->link_hdl);
+
+	rc = cam_req_mgr_notify_message(&req_msg,
+		V4L_EVENT_CAM_REQ_MGR_ERROR,
+		V4L_EVENT_CAM_REQ_MGR_EVENT);
+	if (rc)
+		CAM_ERR(CAM_ISP,
+			"Failed to notify qtvm crash v4l2 error [type: %u code: %u] on link: 0x%x",
+			req_msg.u.err_msg.error_type, req_msg.u.err_msg.error_code, link->link_hdl);
+	return rc;
+}
+
+
+int crm_check_secure_mode_link(struct cam_req_mgr_core_link *link)
+{
+	int i = 0;
+	int is_secure = -EINVAL;
+	struct cam_req_mgr_connected_device *dev = NULL;
+
+	for (i = 0; i < link->num_devs; i++) {
+		dev = &link->l_dev[i];
+		if (dev->dev_info.dev_id == CAM_REQ_MGR_DEVICE_IFE) {
+			if (!dev->no_crm_ops->is_secure_mode) {
+				CAM_ERR(CAM_ISP,
+					"is_secure_mode cb not available for dev 0x%x link 0x%x",
+					dev->dev_hdl, link->link_hdl);
+				return -EINVAL;
+			}
+			is_secure = dev->no_crm_ops->is_secure_mode(dev->dev_hdl);
+		}
+	}
+	if (is_secure < 0)
+		CAM_ERR(CAM_ISP, "Failed to get secure mode for link 0x%x", link->link_hdl);
+
+	return is_secure;
+}
+
+/**
+ * crm_handle_qtvm_crash_event()
+ * @brief: Handle QTVM crash by notifying QTVM crash to secure link and waiting for unlink.
+ */
+void crm_handle_qtvm_crash_event(void)
+{
+	int i = 0, rc = 0;
+	struct cam_req_mgr_core_session *session = NULL;
+	struct cam_req_mgr_core_link *link = NULL;
+	int is_secure = -EINVAL;
+
+	g_crm_core_dev->qtvm_crash_secure_link_count = 0;
+	reinit_completion(&g_crm_core_dev->qtvm_crash_complete);
+	mutex_lock(&g_crm_core_dev->crm_lock);
+	if (!list_empty(&g_crm_core_dev->session_head)) {
+		list_for_each_entry(session,
+			&g_crm_core_dev->session_head, entry) {
+			mutex_lock(&session->lock);
+			for (i = 0; i < session->num_links; i++) {
+				if (session->links[i]) {
+					link = session->links[i];
+					is_secure = crm_check_secure_mode_link(link);
+					if (is_secure < 0) {
+						CAM_ERR(CAM_ISP,
+							"Failed to get secure mode for link 0x%x",
+							link->link_hdl);
+						continue;
+					}
+					if (!is_secure)
+						continue;
+					rc = crm_notify_qtvm_crash_event_on_link(link);
+					if (rc)
+						continue;
+					link->qtvm_wait_for_unlink = true;
+					g_crm_core_dev->qtvm_crash_secure_link_count++;
+				}
+			}
+			mutex_unlock(&session->lock);
+		}
+	}
+	mutex_unlock(&g_crm_core_dev->crm_lock);
+	if (g_crm_core_dev->qtvm_crash_secure_link_count)
+		wait_for_completion(&g_crm_core_dev->qtvm_crash_complete);
+	CAM_INFO(CAM_CRM, "All secure links closed");
+}
+
+#if IS_ENABLED(CONFIG_GH_SECURE_VM_LOADER)
+/**
+ * crm_qtvm_event_cb()
+ * @brief: its callback from qtvm/hypervisor to notify the Gunyah GH_VM events.
+ * @nb: notifier_block used to register callback into hypervisor/qtvm.
+ * @action : event that qtvm/hypervisor is notifying about
+ * @data :  vmid of hypervisor/vm
+ *
+ * @return   : 0 on success, negative in case of failure
+ */
+int crm_qtvm_event_cb(struct notifier_block *nb, unsigned long action, void *data)
+{
+	int rc = 0;
+
+	switch (action) {
+	case  GH_VM_CRASH:
+		CAM_INFO(CAM_ISP, "QTVM crashed");
+		g_crm_core_dev->qtvm_status = CRM_QTVM_STATUS_CRASHED;
+		crm_handle_qtvm_crash_event();
+		break;
+	case GH_VM_BEFORE_POWERUP:
+		CAM_INFO(CAM_ISP, "QTVM power up");
+		g_crm_core_dev->qtvm_status = CRM_QTVM_STATUS_POWERUP;
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
+	return rc;
+}
+
+static struct notifier_block crm_qtvm_nb = {
+	.notifier_call = crm_qtvm_event_cb,
+	.priority = 0,
+};
+#endif
+
+int crm_register_qtvm_callback(void)
+{
+	int rc = 0;
+#if IS_ENABLED(CONFIG_GH_SECURE_VM_LOADER)
+	rc = gh_register_vm_notifier(&crm_qtvm_nb);
+	if (rc) {
+		CAM_ERR(CAM_CRM, "Failed to register qtvm callback");
+		return rc;
+	}
+#endif
+	return rc;
+}
+
+int crm_unregister_qtvm_callback(void)
+{
+	int rc = 0;
+#if IS_ENABLED(CONFIG_GH_SECURE_VM_LOADER)
+	gh_unregister_vm_notifier(&crm_qtvm_nb);
+#endif
+	return rc;
+}
+

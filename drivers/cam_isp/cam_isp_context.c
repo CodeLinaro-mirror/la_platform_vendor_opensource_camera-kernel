@@ -10184,6 +10184,21 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 	}
 	ctx_isp->skip_addr_check = false;
 
+	hw_cmd_args.ctxt_to_hw_map = ctx->ctxt_to_hw_map;
+	hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+	isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_GET_SECURE_MODE;
+	hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+
+	rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv, &hw_cmd_args);
+
+	if (isp_hw_cmd_args.u.is_secure &&
+		ctx->ctx_crm_intf->get_qtvm_status() == CRM_QTVM_STATUS_CRASHED) {
+		CAM_ERR(CAM_ISP, "QTVM is in crashed mode, acquire failed ctx_id %d",
+			ctx->ctx_id);
+		rc = -EINVAL;
+		goto free_hw;
+	}
+
 	/*
 	 * If Fastpath setup last consumed queue, allow request thread to process the
 	 * buf dones
@@ -12388,6 +12403,29 @@ int cam_isp_no_crm_frame_skip_notify(struct cam_req_mgr_no_crm_frame_skip_evt_da
 	return -EINVAL;
 }
 
+int cam_isp_no_crm_is_secure_mode(int32_t dev_hdl)
+{
+	struct cam_context *ctx =  (struct cam_context *) cam_get_device_priv(dev_hdl);
+	struct cam_isp_context *isp_ctx = NULL;
+	struct cam_hw_cmd_args hw_cmd_args;
+	struct cam_isp_hw_cmd_args isp_hw_cmd_args;
+
+	if (!ctx) {
+		CAM_ERR(CAM_ISP, "Invalid context handle 0x%x", dev_hdl);
+		return -EINVAL;
+	}
+	isp_ctx = (struct cam_isp_context *) ctx->ctx_priv;
+	hw_cmd_args.ctxt_to_hw_map = ctx->ctxt_to_hw_map;
+	hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+	isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_GET_SECURE_MODE;
+	hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+
+	ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv, &hw_cmd_args);
+
+	CAM_DBG(CAM_ISP, "ctx: %d secure_mode %d", ctx->ctx_id, isp_hw_cmd_args.u.is_secure);
+	return isp_hw_cmd_args.u.is_secure;
+}
+
 int cam_isp_no_crm_handshake_device(struct cam_req_mgr_no_crm_handshake_data *handshake_data)
 {
 	handshake_data->pipeline_delay = CAM_PIPELINE_DELAY_1;
@@ -12860,6 +12898,7 @@ static int cam_isp_no_crm_update_last_apply_reqid(int32_t dev_hdl,
 
 /* No other driver except ISP needs this, so define it in ISP itself. */
 struct cam_req_mgr_no_crm_kmd_ops no_crm_isp_intf = {
+	.is_secure_mode = cam_isp_no_crm_is_secure_mode,
 	.handshake = cam_isp_no_crm_handshake_device,
 	.apply_req = cam_isp_no_crm_apply_req_cb,
 	.pause_cb = NULL,
