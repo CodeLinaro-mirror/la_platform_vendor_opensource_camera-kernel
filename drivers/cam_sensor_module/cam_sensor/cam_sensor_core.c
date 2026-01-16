@@ -13,12 +13,18 @@
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
 #include "cam_req_mgr_dev.h"
+#include "cam_sensor_hotplug.h"
 
 #define CAM_SENSOR_PIPELINE_DELAY_MASK        0xFF
 #define CAM_SENSOR_MODESWITCH_DELAY_SHIFT     8
 #define CAM_SENSOR_MAX_PER_REQ_SETTINGS       4
 
 extern struct completion *cam_sensor_get_i3c_completion(uint32_t index);
+
+static int cam_sensor_is_hotplug(struct cam_sensor_ctrl_t *s_ctrl)
+{
+    return of_device_is_compatible(s_ctrl->of_node, "qcom,cam-hotplug-sensor");
+}
 
 static int cam_sensor_notify_v4l2_error_event(
 	struct cam_sensor_ctrl_t *s_ctrl,
@@ -1322,7 +1328,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 	mutex_lock(&(s_ctrl->cam_sensor_mutex));
 	switch (cmd->op_code) {
 	case CAM_SENSOR_PROBE_CMD: {
-		if (s_ctrl->is_probe_succeed == 1) {
+		if (s_ctrl->is_probe_succeed == 1 && !(cam_sensor_is_hotplug(s_ctrl))) {
 			CAM_WARN(CAM_SENSOR,
 				"Sensor %s already Probed in the slot",
 				s_ctrl->sensor_name);

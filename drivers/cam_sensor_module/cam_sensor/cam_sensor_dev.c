@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sensor_dev.h"
@@ -748,6 +748,7 @@ static int cam_sensor_platform_remove(struct platform_device *pdev)
 
 static const struct of_device_id cam_sensor_driver_dt_match[] = {
 	{.compatible = "qcom,cam-sensor"},
+	{.compatible = "qcom,cam-hotplug-sensor"},
 	{}
 };
 MODULE_DEVICE_TABLE(of, cam_sensor_driver_dt_match);
