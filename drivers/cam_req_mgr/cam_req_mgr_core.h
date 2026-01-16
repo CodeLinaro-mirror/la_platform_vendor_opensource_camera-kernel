@@ -39,6 +39,7 @@
 #define SYNC_LINK_SOF_CNT_MAX_LMT 1
 
 #define MAXIMUM_LINKS_PER_SESSION  64
+#define CAM_CRM_MAX_IFE_DEV 2
 
 #define MAXIMUM_RETRY_ATTEMPTS 3
 
@@ -435,6 +436,7 @@ struct cam_req_mgr_connected_device {
  * @new_setting_period_packet : New setting period and pattern received from UMD for UL path
  * @is_new_setting_available  : Flag to indicate if new setting is available from UMD
  * @qtvm_wait_for_unlink : Flag to indicate if QTVM crash handling is waiting for unlink
+ * @num_trigger_devices       : Number of trigger devices
  */
 struct cam_req_mgr_core_link {
 	int32_t                              link_hdl;
@@ -483,6 +485,7 @@ struct cam_req_mgr_core_link {
 	bool                                 is_setting_period_valid;
 	bool                                 is_setting_sticky;
 	bool                                 qtvm_wait_for_unlink;
+	uint32_t                             num_trigger_devices;
 };
 
 /**

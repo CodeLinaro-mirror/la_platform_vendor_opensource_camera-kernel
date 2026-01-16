@@ -4880,6 +4880,61 @@ static struct cam_req_mgr_crm_cb cam_req_mgr_ops = {
 	.get_qtvm_status        = cam_req_mgr_cb_get_qtvm_status,
 };
 
+static int __cam_req_mgr_link_setup(struct cam_req_mgr_core_link *link,
+	struct cam_req_mgr_connected_device *dev,
+	struct cam_req_mgr_core_dev_link_setup *link_data)
+{
+	int rc = 0;
+	struct cam_req_mgr_req_tbl *pd_tbl;
+
+	link_data->dev_hdl = dev->dev_hdl;
+
+	/* For unique pipeline delay table create request tracking table */
+	if (link->pd_mask & (1 << dev->dev_info.p_delay)) {
+		pd_tbl = __cam_req_mgr_find_pd_tbl(link->req.l_tbl, dev->dev_info.p_delay);
+		if (!pd_tbl) {
+			CAM_ERR(CAM_CRM, "pd %d tbl not found", dev->dev_info.p_delay);
+			rc = -ENXIO;
+			goto end;
+		}
+	} else {
+		pd_tbl = __cam_req_mgr_create_pd_tbl(dev->dev_info.p_delay);
+		if (pd_tbl == NULL) {
+			CAM_ERR(CAM_CRM, "create new pd tbl failed");
+			rc = -ENXIO;
+			goto end;
+		}
+		pd_tbl->pd = dev->dev_info.p_delay;
+		link->pd_mask |= (1 << pd_tbl->pd);
+		/* Add table to list and also sort list from max pd to lowest */
+		__cam_req_mgr_add_tbl_to_link(&link->req.l_tbl, pd_tbl);
+	}
+	link_data->trigger_id = -1;
+	if ((dev->dev_info.trigger_on) && (link->dual_trigger)) {
+		link_data->trigger_id = link->num_trigger_devices;
+		link->num_trigger_devices++;
+	}
+
+	/* Communicate with dev to establish the link */
+	rc = dev->ops->link_setup(link_data);
+	if (rc) {
+		CAM_ERR(CAM_CRM, "link_setup failed for dev %s, rc=%d", dev->dev_info.name, rc);
+		goto end;
+	}
+
+	dev->dev_bit = pd_tbl->dev_count++;
+	pd_tbl->dev_mask |= (1 << dev->dev_bit);
+	dev->pd_tbl = pd_tbl;
+	CAM_DBG(CAM_CRM, "dev_bit %u name %s pd %u mask %d", dev->dev_bit, dev->dev_info.name,
+		pd_tbl->pd, pd_tbl->dev_mask);
+	if (dev->dev_info.p_delay > link->max_delay)
+		link->max_delay = dev->dev_info.p_delay;
+	if (dev->dev_info.p_delay < link->min_delay)
+		link->min_delay = dev->dev_info.p_delay;
+end:
+	return rc;
+}
+
 /**
  * __cam_req_mgr_setup_link_info()
  *
@@ -4897,7 +4952,7 @@ static int __cam_req_mgr_setup_link_info(struct cam_req_mgr_core_link *link,
 	int                                      rc = 0, i = 0, num_devices = 0;
 	struct cam_req_mgr_core_dev_link_setup   link_data;
 	struct cam_req_mgr_connected_device     *dev = NULL;
-	struct cam_req_mgr_req_tbl              *pd_tbl;
+	struct cam_req_mgr_connected_device     *ife_devs[CAM_CRM_MAX_IFE_DEV] = {0};
 	enum cam_pipeline_delay                  max_delay;
 	int                                     *dev_hdls, session_hdl;
 	struct cam_req_mgr_no_crm_handshake_data handshake;
@@ -5006,62 +5061,50 @@ static int __cam_req_mgr_setup_link_info(struct cam_req_mgr_core_link *link,
 		link_data.dual_trigger = true;
 	} else
 		link_data.dual_trigger = false;
-
 	num_trigger_devices = 0;
+	link->num_trigger_devices = 0;
 	for (i = 0; i < num_devices; i++) {
 		dev = &link->l_dev[i];
 		if (!dev)
 			continue;
-		link_data.dev_hdl = dev->dev_hdl;
+
 		/*
-		 * For unique pipeline delay table create request
-		 * tracking table
+		 * Ensuring link_hdl is updated for sensor before ife by doing ife link setup
+		 * after sensor link setup.
 		 */
-		if (link->pd_mask & (1 << dev->dev_info.p_delay)) {
-			pd_tbl = __cam_req_mgr_find_pd_tbl(link->req.l_tbl,
-				dev->dev_info.p_delay);
-			if (!pd_tbl) {
-				CAM_ERR(CAM_CRM, "pd %d tbl not found",
-					dev->dev_info.p_delay);
-				rc = -ENXIO;
-				goto error;
-			}
-		} else {
-			pd_tbl = __cam_req_mgr_create_pd_tbl(
-				dev->dev_info.p_delay);
-			if (pd_tbl == NULL) {
-				CAM_ERR(CAM_CRM, "create new pd tbl failed");
-				rc = -ENXIO;
-				goto error;
-			}
-			pd_tbl->pd = dev->dev_info.p_delay;
-			link->pd_mask |= (1 << pd_tbl->pd);
-			/*
-			 * Add table to list and also sort list
-			 * from max pd to lowest
-			 */
-			__cam_req_mgr_add_tbl_to_link(&link->req.l_tbl, pd_tbl);
-		}
-		dev->dev_bit = pd_tbl->dev_count++;
-		dev->pd_tbl = pd_tbl;
-		pd_tbl->dev_mask |= (1 << dev->dev_bit);
-		CAM_DBG(CAM_CRM, "dev_bit %u name %s pd %u mask %d",
-			dev->dev_bit, dev->dev_info.name, pd_tbl->pd,
-			pd_tbl->dev_mask);
-		link_data.trigger_id = -1;
-		if ((dev->dev_info.trigger_on) && (link->dual_trigger)) {
-			link_data.trigger_id = num_trigger_devices;
-			num_trigger_devices++;
+		if (dev->dev_info.dev_id == CAM_REQ_MGR_DEVICE_IFE) {
+			if (num_trigger_devices < CAM_CRM_MAX_IFE_DEV)
+				ife_devs[num_trigger_devices++] = dev;
+			else
+				CAM_ERR(CAM_CRM, "More IFE devices than supported on link 0x%x",
+					link->link_hdl);
+			continue;
 		}
 
-		/* Communicate with dev to establish the link */
-		dev->ops->link_setup(&link_data);
-
-		if (dev->dev_info.p_delay > link->max_delay)
-			link->max_delay = dev->dev_info.p_delay;
-		if (dev->dev_info.p_delay < link->min_delay)
-			link->min_delay = dev->dev_info.p_delay;
+		rc = __cam_req_mgr_link_setup(link, dev, &link_data);
+		if (rc) {
+			CAM_ERR(CAM_CRM, "link setup failed for link 0x%x name %s dev_hdl %d",
+				link->link_hdl, dev->dev_info.name, dev->dev_hdl);
+			goto error;
+		}
 	}
+
+	/* link setup for ife */
+	if (!num_trigger_devices) {
+		CAM_ERR(CAM_CRM, "IFE device not found in link: 0x%x", link->link_hdl);
+		rc = -EINVAL;
+		goto error;
+	}
+
+	for (i = 0; i < num_trigger_devices; i++) {
+		rc = __cam_req_mgr_link_setup(link, ife_devs[i], &link_data);
+		if (rc) {
+			CAM_ERR(CAM_CRM, "IFE link setup failed for link 0x%x name %s dev_hdl %d",
+				link->link_hdl, ife_devs[i]->dev_info.name, ife_devs[i]->dev_hdl);
+			goto error;
+		}
+	}
+
 	link->num_devs = num_devices;
 
 	/* Assign id for pd tables */
