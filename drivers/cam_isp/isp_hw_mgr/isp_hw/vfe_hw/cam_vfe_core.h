@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_VFE_CORE_H_
@@ -57,7 +58,7 @@ struct cam_vfe_hw_core_info {
 	struct cam_vfe_top                 *vfe_top;
 	struct cam_vfe_bus                 *vfe_bus;
 	struct cam_vfe_bus                 *vfe_rd_bus;
-	void                               *tasklet_info;
+	void                               *worker_ctx;
 	spinlock_t                          spin_lock;
 	int                                 reset_irq_handle;
 };

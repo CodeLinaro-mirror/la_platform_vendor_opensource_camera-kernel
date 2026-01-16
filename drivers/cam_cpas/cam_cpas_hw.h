@@ -33,6 +33,8 @@
 #define CAM_CPAS_GET_CLIENT_IDX(handle) (handle)
 #define CAM_CPAS_GET_CLIENT_HANDLE(indx) (indx)
 
+#define CAM_CPAS_WORKER_NAME "cam-cpas"
+
 #define CAM_CPAS_CLIENT_VALID(indx) \
 	((indx >= 0) && (indx < CAM_CPAS_MAX_CLIENTS))
 #define CAM_CPAS_CLIENT_REGISTERED(cpas_core, indx)        \
@@ -273,7 +275,7 @@ struct cam_cpas_monitor {
  * @axi_port: AXI port info for a specific axi index
  * @camnoc_axi_port: CAMNOC AXI port info for a specific camnoc axi index
  * @internal_ops: CPAS HW internal ops
- * @work_queue: Work queue handle
+ * @worker_ctx: Worker context
  * @irq_count: atomic irq count
  * @irq_count_wq: wait variable to ensure all irq's are handled
  * @dentry: debugfs file entry
@@ -299,7 +301,7 @@ struct cam_cpas {
 	struct cam_cpas_axi_port axi_port[CAM_CPAS_MAX_AXI_PORTS];
 	struct cam_cpas_axi_port camnoc_axi_port[CAM_CPAS_MAX_AXI_PORTS];
 	struct cam_cpas_internal_ops internal_ops;
-	struct workqueue_struct *work_queue;
+	void *worker_ctx;
 	atomic_t irq_count;
 	wait_queue_head_t irq_count_wq;
 	struct dentry *dentry;

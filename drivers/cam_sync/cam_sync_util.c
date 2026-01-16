@@ -5,8 +5,8 @@
  */
 
 #include "cam_sync_util.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_common_util.h"
+#include "cam_worker_wrapper_api.h"
 
 int cam_sync_util_find_and_set_empty_row(struct sync_device *sync_dev,
 	long *idx)
@@ -289,20 +289,22 @@ int cam_sync_deinit_object(struct sync_table_row *table, uint32_t idx)
 	return 0;
 }
 
-void cam_sync_util_cb_dispatch(struct work_struct *cb_dispatch_work)
+int cam_sync_util_cb_dispatch(void *priv, void *data)
 {
-	struct sync_callback_info *cb_info = container_of(cb_dispatch_work,
-		struct sync_callback_info,
-		cb_dispatch_work);
+
+	struct sync_callback_info *cb_info = (struct sync_callback_info *)priv;
+
 	sync_callback sync_data = cb_info->callback_func;
 
 	cam_common_util_thread_switch_delay_detect(
-		"CAM-SYNC workq schedule",
-		cb_info->workq_scheduled_ts,
-		CAM_WORKQ_SCHEDULE_TIME_THRESHOLD);
+		"CAM-SYNC worker schedule",
+		cb_info->worker_scheduled_ts,
+		CAM_WORKER_SCHEDULE_TIME_THRESHOLD);
 	sync_data(cb_info->sync_obj, cb_info->status, cb_info->cb_data);
 
 	kfree(cb_info);
+
+	return 0;
 }
 
 void cam_sync_util_dispatch_signaled_cb(int32_t sync_obj,
@@ -313,6 +315,8 @@ void cam_sync_util_dispatch_signaled_cb(int32_t sync_obj,
 	struct sync_callback_info  *temp_sync_cb;
 	struct sync_table_row      *signalable_row;
 	struct sync_user_payload   *temp_payload_info;
+	struct cam_worker_wrapper_taskdata_args  task;
+	int rc = 0;
 
 	signalable_row = sync_dev->sync_table + sync_obj;
 	if (signalable_row->state == CAM_SYNC_STATE_INVALID) {
@@ -326,8 +330,19 @@ void cam_sync_util_dispatch_signaled_cb(int32_t sync_obj,
 		temp_sync_cb, &signalable_row->callback_list, list) {
 		sync_cb->status = status;
 		list_del_init(&sync_cb->list);
-		queue_work(sync_dev->work_queue,
-			&sync_cb->cb_dispatch_work);
+		rc = cam_worker_wrapper_get(sync_dev->worker_ctx, &task);
+		if (rc) {
+			CAM_ERR(CAM_SYNC,
+				"Failed to get worker task for sync object:%d", sync_obj);
+		} else {
+			task.task_priority = WORKER_TASK_PRIORITY_0;
+			rc = cam_worker_wrapper_enqueue(sync_dev->worker_ctx, &task,
+				sync_cb, NULL, cam_sync_util_cb_dispatch);
+			if (rc)
+				CAM_ERR(CAM_SYNC,
+					"Failed to enqueue task for sync object:%d",
+					sync_cb->sync_obj);
+		}
 	}
 
 	/* Dispatch user payloads if any were registered earlier */

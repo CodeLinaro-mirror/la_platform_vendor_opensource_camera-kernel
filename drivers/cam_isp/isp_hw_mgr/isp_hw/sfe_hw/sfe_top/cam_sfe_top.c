@@ -8,11 +8,11 @@
 #include "cam_io_util.h"
 #include "cam_cdm_util.h"
 #include "cam_sfe_hw_intf.h"
-#include "cam_tasklet_util.h"
 #include "cam_sfe_top.h"
 #include "cam_debug_util.h"
 #include "cam_sfe_soc.h"
 #include "cam_sfe_core.h"
+#include "cam_worker_wrapper_api.h"
 
 #define CAM_SFE_DELAY_BW_REDUCTION_NUM_FRAMES 18
 
@@ -654,7 +654,7 @@ int cam_sfe_top_reserve(void *device_priv,
 				acquire_args->res_id);
 
 			top_priv->in_rsrc[i].cdm_ops = acquire_args->cdm_ops;
-			top_priv->in_rsrc[i].tasklet_info = args->tasklet;
+			top_priv->in_rsrc[i].worker_ctx = args->worker_ctx;
 			top_priv->in_rsrc[i].res_state =
 				CAM_ISP_RESOURCE_STATE_RESERVED;
 			acquire_args->rsrc_node =
@@ -693,7 +693,7 @@ int cam_sfe_top_release(void *device_priv,
 
 	in_res->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 	in_res->cdm_ops = NULL;
-	in_res->tasklet_info = NULL;
+	in_res->worker_ctx = NULL;
 
 	return 0;
 }
@@ -999,8 +999,7 @@ int cam_sfe_top_start(
 			sfe_res,
 			cam_sfe_top_handle_err_irq_top_half,
 			cam_sfe_top_handle_irq_bottom_half,
-			sfe_res->tasklet_info,
-			&tasklet_bh_api);
+			sfe_res->worker_ctx);
 
 		if (path_data->error_irq_handle < 1) {
 			CAM_ERR(CAM_SFE, "Failed to subscribe Top IRQ");
@@ -1019,8 +1018,7 @@ int cam_sfe_top_start(
 			sfe_res,
 			cam_sfe_top_handle_irq_top_half,
 			cam_sfe_top_handle_irq_bottom_half,
-			sfe_res->tasklet_info,
-			&tasklet_bh_api);
+			sfe_res->worker_ctx);
 
 		if (path_data->sof_eof_handle < 1) {
 			CAM_ERR(CAM_SFE, "Failed to subscribe SOF/EOF IRQ");

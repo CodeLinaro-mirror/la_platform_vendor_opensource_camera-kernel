@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_ISP_HW_H_
@@ -157,7 +157,7 @@ enum cam_isp_hw_cmd_type {
  * @res_priv:                     Private data of the resource
  * @list:                         list_head node for this resource
  * @cdm_ops:                      CDM operation functions
- * @tasklet_info:                 Tasklet structure that will be used to
+ * @worker_ctx:                   worker structure that will be used to
  *                                schedule IRQ events related to this resource
  * @irq_handle:                   handle returned on subscribing for IRQ event
  * @rdi_only_ctx:                 resource belong to rdi only context or not
@@ -178,7 +178,7 @@ struct cam_isp_resource_node {
 	void                          *res_priv;
 	struct list_head               list;
 	void                          *cdm_ops;
-	void                          *tasklet_info;
+	void                          *worker_ctx;
 	int                            irq_handle;
 	int                            rdi_only_ctx;
 

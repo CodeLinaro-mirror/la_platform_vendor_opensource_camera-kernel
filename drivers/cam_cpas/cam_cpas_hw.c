@@ -18,6 +18,7 @@
 #include "cam_smmu_api.h"
 #include "cam_compat.h"
 #include "cam_cpastop_hw.h"
+#include "cam_worker_wrapper_api.h"
 
 #define CAM_CPAS_LOG_BUF_LEN      512
 
@@ -2617,6 +2618,7 @@ int cam_cpas_hw_probe(struct platform_device *pdev,
 	struct cam_cpas *cpas_core = NULL;
 	struct cam_cpas_private_soc *soc_private;
 	struct cam_cpas_internal_ops *internal_ops;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	cpas_hw_intf = kzalloc(sizeof(struct cam_hw_intf), GFP_KERNEL);
 	if (!cpas_hw_intf)
@@ -2667,9 +2669,16 @@ int cam_cpas_hw_probe(struct platform_device *pdev,
 	cpas_hw_intf->hw_ops.write = NULL;
 	cpas_hw_intf->hw_ops.process_cmd = cam_cpas_hw_process_cmd;
 
-	cpas_core->work_queue = alloc_workqueue("cam-cpas",
-		WQ_UNBOUND | WQ_MEM_RECLAIM, CAM_CPAS_INFLIGHT_WORKS);
-	if (!cpas_core->work_queue) {
+	worker_init_args.name = CAM_CPAS_WORKER_NAME;
+	worker_init_args.num_tasks = 100;
+	worker_init_args.max_active = CAM_CPAS_INFLIGHT_WORKS;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = CAM_WORKER_FLAG_MEM_RECLAIM | CAM_WORKER_FLAG_UNBOUND;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &cpas_core->worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
+	if (!cpas_core->worker_ctx) {
 		rc = -ENOMEM;
 		goto release_mem;
 	}
@@ -2788,8 +2797,8 @@ deinit_platform_res:
 sysfs_fail:
 	cam_cpas_soc_deinit_resources(&cpas_hw->soc_info);
 release_workq:
-	flush_workqueue(cpas_core->work_queue);
-	destroy_workqueue(cpas_core->work_queue);
+	cam_worker_wrapper_flush(cpas_core->worker_ctx);
+	cam_worker_wrapper_deinit(cpas_core->worker_ctx);
 release_mem:
 	mutex_destroy(&cpas_hw->hw_mutex);
 	kfree(cpas_core);
@@ -2825,8 +2834,8 @@ int cam_cpas_hw_remove(struct cam_hw_intf *cpas_hw_intf)
 	cam_cpas_soc_deinit_resources(&cpas_hw->soc_info);
 	debugfs_remove_recursive(cpas_core->dentry);
 	cpas_core->dentry = NULL;
-	flush_workqueue(cpas_core->work_queue);
-	destroy_workqueue(cpas_core->work_queue);
+	cam_worker_wrapper_flush(cpas_core->worker_ctx);
+	cam_worker_wrapper_deinit(cpas_core->worker_ctx);
 	mutex_destroy(&cpas_hw->hw_mutex);
 	kfree(cpas_core);
 	kfree(cpas_hw);

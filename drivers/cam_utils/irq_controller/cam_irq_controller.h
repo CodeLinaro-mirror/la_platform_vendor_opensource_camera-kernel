@@ -108,18 +108,6 @@ typedef void (*CAM_IRQ_BOTTOM_HALF_ENQUEUE_FUNC)(void *bottom_half,
 	void *bh_cmd, void *handler_priv, void *evt_payload_priv,
 	CAM_IRQ_HANDLER_BOTTOM_HALF);
 
-typedef int (*CAM_IRQ_GET_TASKLET_PAYLOAD_FUNC)(void *bottom_half,
-	void **bh_cmd);
-
-typedef void (*CAM_IRQ_PUT_TASKLET_PAYLOAD_FUNC)(void *bottom_half,
-	void **bh_cmd);
-
-struct cam_irq_bh_api {
-	CAM_IRQ_BOTTOM_HALF_ENQUEUE_FUNC bottom_half_enqueue_func;
-	CAM_IRQ_GET_TASKLET_PAYLOAD_FUNC get_bh_payload_func;
-	CAM_IRQ_PUT_TASKLET_PAYLOAD_FUNC put_bh_payload_func;
-};
-
 /*
  * cam_irq_controller_init()
  *
@@ -155,7 +143,6 @@ int cam_irq_controller_init(const char       *name,
  * @handler_priv:        Private data that will be passed to the Top/Bottom Half
  *                       handler function
  * @top_half_handler:    Top half Handler callback function
- * @bottom_half_handler: Bottom half Handler callback function
  * @bottom_half:         Pointer to bottom_half implementation on which to
  *                       enqueue the event for further handling
  * @bottom_half_enqueue_func:
@@ -171,8 +158,7 @@ int cam_irq_controller_subscribe_irq(void *irq_controller,
 	void                              *handler_priv,
 	CAM_IRQ_HANDLER_TOP_HALF           top_half_handler,
 	CAM_IRQ_HANDLER_BOTTOM_HALF        bottom_half_handler,
-	void                              *bottom_half,
-	struct cam_irq_bh_api             *irq_bh_api);
+	void                              *bottom_half);
 
 /*
  * cam_irq_controller_unsubscribe_irq()

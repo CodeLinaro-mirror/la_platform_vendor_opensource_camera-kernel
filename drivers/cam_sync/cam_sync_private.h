@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __CAM_SYNC_PRIVATE_H__
@@ -36,7 +37,8 @@
 #define CAM_SYNC_DEBUG_BUF_SIZE         32
 #define CAM_SYNC_PAYLOAD_WORDS          2
 #define CAM_SYNC_NAME                   "cam_sync"
-#define CAM_SYNC_WORKQUEUE_NAME         "HIPRIO_SYNC_WORK_QUEUE"
+#define CAM_SYNC_WORKER_NAME            "HIPRIO_SYNC_WORKER"
+#define CAM_SYNC_WORKER_NUM_TASK        100
 
 #define CAM_SYNC_TYPE_INDV              0
 #define CAM_SYNC_TYPE_GROUP             1
@@ -99,7 +101,6 @@ struct sync_child_info {
  * @status             : Status with which callback will be invoked in client
  * @sync_obj           : Sync id of the object for which callback is registered
  * @workq_scheduled_ts : workqueue scheduled timestamp
- * @cb_dispatch_work   : Work representing the call dispatch
  * @list               : List member used to append this node to a linked list
  */
 struct sync_callback_info {
@@ -107,8 +108,7 @@ struct sync_callback_info {
 	void *cb_data;
 	int status;
 	int32_t sync_obj;
-	ktime_t workq_scheduled_ts;
-	struct work_struct cb_dispatch_work;
+	ktime_t worker_scheduled_ts;
 	struct list_head list;
 };
 
@@ -195,7 +195,7 @@ struct sync_device {
 	struct mutex table_lock;
 	int open_cnt;
 	struct dentry *dentry;
-	struct workqueue_struct *work_queue;
+	void *worker_ctx;
 	struct v4l2_fh *cam_sync_eventq;
 	spinlock_t cam_sync_eventq_lock;
 	DECLARE_BITMAP(bitmap, CAM_SYNC_MAX_OBJS);

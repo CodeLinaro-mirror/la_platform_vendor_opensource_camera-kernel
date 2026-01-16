@@ -31,8 +31,6 @@
 #include "ope_hw.h"
 #include "cam_smmu_api.h"
 #include "cam_mem_mgr.h"
-#include "cam_req_mgr_workq.h"
-#include "cam_mem_mgr.h"
 #include "cam_debug_util.h"
 #include "cam_soc_util.h"
 #include "cam_trace.h"
@@ -44,6 +42,7 @@
 #include "ope_dev_intf.h"
 #include "cam_compat.h"
 #include "ope_core.h"
+#include "cam_worker_wrapper_api.h"
 
 static struct cam_ope_hw_mgr *ope_hw_mgr;
 
@@ -289,25 +288,34 @@ static int cam_ope_mgr_reapply_config(struct cam_ope_hw_mgr *hw_mgr,
 {
 	int rc = 0;
 	uint64_t request_id = 0;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args task;
 	struct ope_cmd_work_data *task_data;
 
 	request_id = ope_req->request_id;
 	CAM_DBG(CAM_OPE, "reapply req_id = %lld", request_id);
 
-	task = cam_req_mgr_workq_get_task(ope_hw_mgr->cmd_work);
-	if (!task) {
+	rc = cam_worker_wrapper_get(ope_hw_mgr->cmd_worker_ctx, &task);
+	if (rc) {
 		CAM_ERR(CAM_OPE, "no empty task");
 		return -ENOMEM;
 	}
 
-	task_data = (struct ope_cmd_work_data *)task->payload;
+	task_data = (struct ope_cmd_work_data *)cam_worker_wrapper_get_task_payload(
+		ope_hw_mgr->cmd_worker_ctx, &task);
+	if (!task_data) {
+		CAM_ERR(CAM_OPE, "get task payload failed.");
+		return -EINVAL;
+	}
+
 	task_data->data = (void *)ope_req->cdm_cmd;
 	task_data->req_id = request_id;
-	task_data->type = OPE_WORKQ_TASK_CMD_TYPE;
-	task->process_cb = cam_ope_mgr_process_cmd;
-	rc = cam_req_mgr_workq_enqueue_task(task, ctx_data,
-		CRM_TASK_PRIORITY_0);
+	task_data->type = OPE_WORKER_TASK_CMD_TYPE;
+
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(ope_hw_mgr->cmd_worker_ctx, &task,
+		ctx_data, task_data, cam_ope_mgr_process_cmd);
+	if (rc)
+		CAM_ERR(CAM_OPE, "Failed at enqueuing task to worker");
 
 	return rc;
 }
@@ -753,10 +761,10 @@ static int32_t cam_ope_process_request_timer(void *priv, void *data)
 	struct cam_hw_intf *dev_intf = NULL;
 	struct cam_ope_clk_info *clk_info;
 	struct cam_ope_dev_bw_update clk_update;
-	int i = 0;
+	int i = 0, rc = 0;
 	int device_share_ratio = 1;
 	int path_index;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args task;
 	struct ope_msg_work_data *task_data;
 
 	if (!ctx_data) {
@@ -815,19 +823,31 @@ static int32_t cam_ope_process_request_timer(void *priv, void *data)
 				OPE_HW_DUMP_DEBUG,
 				NULL, 0);
 
-		task = cam_req_mgr_workq_get_task(ope_hw_mgr->msg_work);
-		if (!task) {
+		rc = cam_worker_wrapper_get(ope_hw_mgr->msg_worker_ctx, &task);
+		if (rc) {
 			CAM_ERR(CAM_OPE, "no empty task");
 			mutex_unlock(&ctx_data->ctx_mutex);
 			return 0;
 		}
-		task_data = (struct ope_msg_work_data *)task->payload;
+
+		task_data = (struct ope_msg_work_data *)cam_worker_wrapper_get_task_payload(
+			ope_hw_mgr->msg_worker_ctx, &task);
+		if (!task_data) {
+			CAM_ERR(CAM_OPE, "get task payload failed.");
+			mutex_unlock(&ctx_data->ctx_mutex);
+			return -EINVAL;
+		}
+
 		task_data->data = hw_mgr;
 		task_data->irq_status = 1;
-		task_data->type = OPE_WORKQ_TASK_MSG_TYPE;
-		task->process_cb = cam_ope_mgr_process_msg;
-		cam_req_mgr_workq_enqueue_task(task, ope_hw_mgr,
-			CRM_TASK_PRIORITY_0);
+		task_data->type = OPE_WORKER_TASK_MSG_TYPE;
+
+		task.task_priority = WORKER_TASK_PRIORITY_0;
+		rc = cam_worker_wrapper_enqueue(ope_hw_mgr->msg_worker_ctx, &task,
+			ope_hw_mgr, task_data, cam_ope_mgr_process_msg);
+		if (rc)
+			CAM_ERR(CAM_OPE, "Failed at enqueuing task to worker");
+
 		cam_ope_req_timer_reset(ctx_data);
 		mutex_unlock(&ctx_data->ctx_mutex);
 		return 0;
@@ -930,25 +950,38 @@ static int32_t cam_ope_process_request_timer(void *priv, void *data)
 static void cam_ope_req_timer_cb(struct timer_list *timer_data)
 {
 	unsigned long flags;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args task;
 	struct ope_clk_work_data *task_data;
 	struct cam_req_mgr_timer *timer =
 	container_of(timer_data, struct cam_req_mgr_timer, sys_timer);
+	int rc = 0;
 
 	spin_lock_irqsave(&ope_hw_mgr->hw_mgr_lock, flags);
-	task = cam_req_mgr_workq_get_task(ope_hw_mgr->timer_work);
-	if (!task) {
+
+	rc = cam_worker_wrapper_get(ope_hw_mgr->timer_worker_ctx, &task);
+	if (rc) {
 		CAM_ERR(CAM_OPE, "no empty task");
 		spin_unlock_irqrestore(&ope_hw_mgr->hw_mgr_lock, flags);
 		return;
 	}
 
-	task_data = (struct ope_clk_work_data *)task->payload;
+	task_data = (struct ope_clk_work_data *)cam_worker_wrapper_get_task_payload(
+		ope_hw_mgr->timer_worker_ctx, &task);
+	if (!task_data) {
+		CAM_ERR(CAM_OPE, "get task payload failed.");
+		spin_unlock_irqrestore(&ope_hw_mgr->hw_mgr_lock, flags);
+		return;
+	}
+
 	task_data->data = timer->parent;
-	task_data->type = OPE_WORKQ_TASK_MSG_TYPE;
-	task->process_cb = cam_ope_process_request_timer;
-	cam_req_mgr_workq_enqueue_task(task, ope_hw_mgr,
-		CRM_TASK_PRIORITY_0);
+	task_data->type = OPE_WORKER_TASK_MSG_TYPE;
+
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(ope_hw_mgr->timer_worker_ctx, &task,
+		ope_hw_mgr, task_data, cam_ope_process_request_timer);
+	if (rc)
+		CAM_ERR(CAM_OPE, "Failed at enqueuing task to worker");
+
 	spin_unlock_irqrestore(&ope_hw_mgr->hw_mgr_lock, flags);
 }
 
@@ -1067,25 +1100,36 @@ done:
 static void cam_ope_device_timer_cb(struct timer_list *timer_data)
 {
 	unsigned long flags;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args task;
 	struct ope_clk_work_data *task_data;
 	struct cam_req_mgr_timer *timer =
 		container_of(timer_data, struct cam_req_mgr_timer, sys_timer);
+	int rc = 0;
 
 	spin_lock_irqsave(&ope_hw_mgr->hw_mgr_lock, flags);
-	task = cam_req_mgr_workq_get_task(ope_hw_mgr->timer_work);
-	if (!task) {
+
+	rc = cam_worker_wrapper_get(ope_hw_mgr->timer_worker_ctx, &task);
+	if (rc) {
 		CAM_ERR(CAM_OPE, "no empty task");
 		spin_unlock_irqrestore(&ope_hw_mgr->hw_mgr_lock, flags);
 		return;
 	}
 
-	task_data = (struct ope_clk_work_data *)task->payload;
+	task_data = (struct ope_clk_work_data *)cam_worker_wrapper_get_task_payload(
+		ope_hw_mgr->timer_worker_ctx, &task);
+	if (!task_data) {
+		CAM_ERR(CAM_OPE, "get task payload failed.");
+		spin_unlock_irqrestore(&ope_hw_mgr->hw_mgr_lock, flags);
+		return;
+	}
 	task_data->data = timer->parent;
-	task_data->type = OPE_WORKQ_TASK_MSG_TYPE;
-	task->process_cb = cam_ope_deinit_idle_clk;
-	cam_req_mgr_workq_enqueue_task(task, ope_hw_mgr,
-		CRM_TASK_PRIORITY_0);
+	task_data->type = OPE_WORKER_TASK_MSG_TYPE;
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(ope_hw_mgr->timer_worker_ctx, &task,
+		ope_hw_mgr, task_data, cam_ope_deinit_idle_clk);
+	if (rc)
+		CAM_ERR(CAM_OPE, "Failed at enqueuing task to worker");
+
 	spin_unlock_irqrestore(&ope_hw_mgr->hw_mgr_lock, flags);
 }
 
@@ -1824,7 +1868,7 @@ int32_t cam_ope_hw_mgr_cb(uint32_t irq_status, void *data)
 	int32_t rc = 0;
 	unsigned long flags;
 	struct cam_ope_hw_mgr *hw_mgr = data;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args task;
 	struct ope_msg_work_data *task_data;
 
 	if (!data) {
@@ -1833,20 +1877,31 @@ int32_t cam_ope_hw_mgr_cb(uint32_t irq_status, void *data)
 	}
 
 	spin_lock_irqsave(&hw_mgr->hw_mgr_lock, flags);
-	task = cam_req_mgr_workq_get_task(ope_hw_mgr->msg_work);
-	if (!task) {
+	rc = cam_worker_wrapper_get(ope_hw_mgr->msg_worker_ctx, &task);
+	if (rc) {
 		CAM_ERR(CAM_OPE, "no empty task");
 		spin_unlock_irqrestore(&hw_mgr->hw_mgr_lock, flags);
 		return -ENOMEM;
 	}
 
-	task_data = (struct ope_msg_work_data *)task->payload;
+	task_data = (struct ope_msg_work_data *)cam_worker_wrapper_get_task_payload(
+		ope_hw_mgr->msg_worker_ctx, &task);
+	if (!task_data) {
+		CAM_ERR(CAM_OPE, "get task payload failed.");
+		spin_unlock_irqrestore(&hw_mgr->hw_mgr_lock, flags);
+		return -EINVAL;
+	}
+
 	task_data->data = hw_mgr;
 	task_data->irq_status = irq_status;
-	task_data->type = OPE_WORKQ_TASK_MSG_TYPE;
-	task->process_cb = cam_ope_mgr_process_msg;
-	rc = cam_req_mgr_workq_enqueue_task(task, ope_hw_mgr,
-		CRM_TASK_PRIORITY_0);
+	task_data->type = OPE_WORKER_TASK_MSG_TYPE;
+
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(ope_hw_mgr->msg_worker_ctx, &task,
+		ope_hw_mgr, task_data, cam_ope_mgr_process_msg);
+	if (rc)
+		CAM_ERR(CAM_OPE, "Failed at enqueuing task to worker");
+
 	spin_unlock_irqrestore(&hw_mgr->hw_mgr_lock, flags);
 
 	return rc;
@@ -3519,7 +3574,7 @@ static int cam_ope_mgr_enqueue_config(struct cam_ope_hw_mgr *hw_mgr,
 {
 	int rc = 0;
 	uint64_t request_id = 0;
-	struct crm_workq_task *task;
+	struct cam_worker_wrapper_taskdata_args task;
 	struct ope_cmd_work_data *task_data;
 	struct cam_hw_update_entry *hw_update_entries;
 	struct cam_ope_request *ope_req = NULL;
@@ -3530,19 +3585,27 @@ static int cam_ope_mgr_enqueue_config(struct cam_ope_hw_mgr *hw_mgr,
 
 	CAM_DBG(CAM_OPE, "req_id = %lld %pK", request_id, config_args->priv);
 
-	task = cam_req_mgr_workq_get_task(ope_hw_mgr->cmd_work);
-	if (!task) {
+	rc = cam_worker_wrapper_get(ope_hw_mgr->cmd_worker_ctx, &task);
+	if (rc) {
 		CAM_ERR(CAM_OPE, "no empty task");
 		return -ENOMEM;
 	}
 
-	task_data = (struct ope_cmd_work_data *)task->payload;
+	task_data = (struct ope_cmd_work_data *)cam_worker_wrapper_get_task_payload(
+		ope_hw_mgr->cmd_worker_ctx, &task);
+	if (!task_data) {
+		CAM_ERR(CAM_OPE, "get task payload failed.");
+		return -EINVAL;
+	}
 	task_data->data = (void *)hw_update_entries->addr;
 	task_data->req_id = request_id;
-	task_data->type = OPE_WORKQ_TASK_CMD_TYPE;
-	task->process_cb = cam_ope_mgr_process_cmd;
-	rc = cam_req_mgr_workq_enqueue_task(task, ctx_data,
-		CRM_TASK_PRIORITY_0);
+	task_data->type = OPE_WORKER_TASK_CMD_TYPE;
+
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(ope_hw_mgr->cmd_worker_ctx, &task,
+		ctx_data, task_data, cam_ope_mgr_process_cmd);
+	if (rc)
+		CAM_ERR(CAM_OPE, "Failed at enqueuing task to worker");
 
 	return rc;
 }
@@ -3972,53 +4035,55 @@ compat_hw_name_failed:
 	return rc;
 }
 
-static void cam_req_mgr_process_ope_command_queue(struct work_struct *w)
+static int cam_ope_mgr_create_workers(void)
 {
-	cam_req_mgr_process_workq(w);
-}
+	int rc, i;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
-static void cam_req_mgr_process_ope_msg_queue(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
-static void cam_req_mgr_process_ope_timer_queue(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
-static int cam_ope_mgr_create_wq(void)
-{
-
-	int rc;
-	int i;
-
-	rc = cam_req_mgr_workq_create("ope_command_queue", OPE_WORKQ_NUM_TASK,
-		&ope_hw_mgr->cmd_work, CRM_WORKQ_USAGE_NON_IRQ,
-		0, cam_req_mgr_process_ope_command_queue);
+	worker_init_args.name = "ope_command_queue";
+	worker_init_args.num_tasks = OPE_WORKER_NUM_TASK;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_NON_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &ope_hw_mgr->cmd_worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc) {
 		CAM_ERR(CAM_OPE, "unable to create a command worker");
 		goto cmd_work_failed;
 	}
 
-	rc = cam_req_mgr_workq_create("ope_message_queue", OPE_WORKQ_NUM_TASK,
-		&ope_hw_mgr->msg_work, CRM_WORKQ_USAGE_IRQ, 0,
-		cam_req_mgr_process_ope_msg_queue);
+	worker_init_args.name = "ope_message_queue";
+	worker_init_args.num_tasks = OPE_WORKER_NUM_TASK;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &ope_hw_mgr->msg_worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc) {
 		CAM_ERR(CAM_OPE, "unable to create a message worker");
 		goto msg_work_failed;
 	}
 
-	rc = cam_req_mgr_workq_create("ope_timer_queue", OPE_WORKQ_NUM_TASK,
-		&ope_hw_mgr->timer_work, CRM_WORKQ_USAGE_IRQ, 0,
-		cam_req_mgr_process_ope_timer_queue);
+	worker_init_args.name = "ope_timer_queue";
+	worker_init_args.num_tasks = OPE_WORKER_NUM_TASK;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = 0;
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &ope_hw_mgr->timer_worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc) {
 		CAM_ERR(CAM_OPE, "unable to create a timer worker");
 		goto timer_work_failed;
 	}
 
 	ope_hw_mgr->cmd_work_data =
-		kzalloc(sizeof(struct ope_cmd_work_data) * OPE_WORKQ_NUM_TASK,
+		kzalloc(sizeof(struct ope_cmd_work_data) * OPE_WORKER_NUM_TASK,
 		GFP_KERNEL);
 	if (!ope_hw_mgr->cmd_work_data) {
 		rc = -ENOMEM;
@@ -4026,7 +4091,7 @@ static int cam_ope_mgr_create_wq(void)
 	}
 
 	ope_hw_mgr->msg_work_data =
-		kzalloc(sizeof(struct ope_msg_work_data) * OPE_WORKQ_NUM_TASK,
+		kzalloc(sizeof(struct ope_msg_work_data) * OPE_WORKER_NUM_TASK,
 		GFP_KERNEL);
 	if (!ope_hw_mgr->msg_work_data) {
 		rc = -ENOMEM;
@@ -4034,24 +4099,25 @@ static int cam_ope_mgr_create_wq(void)
 	}
 
 	ope_hw_mgr->timer_work_data =
-		kzalloc(sizeof(struct ope_clk_work_data) * OPE_WORKQ_NUM_TASK,
+		kzalloc(sizeof(struct ope_clk_work_data) * OPE_WORKER_NUM_TASK,
 		GFP_KERNEL);
 	if (!ope_hw_mgr->timer_work_data) {
 		rc = -ENOMEM;
 		goto timer_work_data_failed;
 	}
 
-	for (i = 0; i < OPE_WORKQ_NUM_TASK; i++)
-		ope_hw_mgr->msg_work->task.pool[i].payload =
-				&ope_hw_mgr->msg_work_data[i];
+	for (i = 0; i < OPE_WORKER_NUM_TASK; i++)
+		cam_worker_wrapper_payload_bind(
+			ope_hw_mgr->msg_worker_ctx, &ope_hw_mgr->msg_work_data[i], i);
 
-	for (i = 0; i < OPE_WORKQ_NUM_TASK; i++)
-		ope_hw_mgr->cmd_work->task.pool[i].payload =
-				&ope_hw_mgr->cmd_work_data[i];
+	for (i = 0; i < OPE_WORKER_NUM_TASK; i++)
+		cam_worker_wrapper_payload_bind(
+			ope_hw_mgr->cmd_worker_ctx, &ope_hw_mgr->cmd_work_data[i], i);
 
-	for (i = 0; i < OPE_WORKQ_NUM_TASK; i++)
-		ope_hw_mgr->timer_work->task.pool[i].payload =
-				&ope_hw_mgr->timer_work_data[i];
+	for (i = 0; i < OPE_WORKER_NUM_TASK; i++)
+		cam_worker_wrapper_payload_bind(
+			ope_hw_mgr->timer_worker_ctx, &ope_hw_mgr->timer_work_data[i], i);
+
 	return 0;
 
 
@@ -4060,11 +4126,11 @@ timer_work_data_failed:
 msg_work_data_failed:
 	kfree(ope_hw_mgr->cmd_work_data);
 cmd_work_data_failed:
-	cam_req_mgr_workq_destroy(&ope_hw_mgr->timer_work);
+	cam_worker_wrapper_deinit(ope_hw_mgr->timer_worker_ctx);
 timer_work_failed:
-	cam_req_mgr_workq_destroy(&ope_hw_mgr->msg_work);
+	cam_worker_wrapper_deinit(ope_hw_mgr->msg_worker_ctx);
 msg_work_failed:
-	cam_req_mgr_workq_destroy(&ope_hw_mgr->cmd_work);
+	cam_worker_wrapper_deinit(ope_hw_mgr->cmd_worker_ctx);
 cmd_work_failed:
 	return rc;
 }
@@ -4202,9 +4268,9 @@ int cam_ope_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 		ope_hw_mgr->iommu_cdm_hdl,
 		ope_hw_mgr->iommu_sec_cdm_hdl);
 
-	rc = cam_ope_mgr_create_wq();
+	rc = cam_ope_mgr_create_workers();
 	if (rc)
-		goto ope_wq_create_failed;
+		goto ope_workers_create_failed;
 
 	cam_ope_create_debug_fs();
 
@@ -4213,7 +4279,7 @@ int cam_ope_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 
 	return rc;
 
-ope_wq_create_failed:
+ope_workers_create_failed:
 	ope_hw_mgr->iommu_cdm_hdl = -1;
 	ope_hw_mgr->iommu_sec_cdm_hdl = -1;
 ope_cdm_hdl_failed:
