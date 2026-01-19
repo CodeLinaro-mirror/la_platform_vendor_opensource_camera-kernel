@@ -2330,6 +2330,8 @@ int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 			comp_grp = &c_ctx->vfe_bus_comp_grp[index];
 			comp_grp->res_id[comp_grp->num_res] = vfe_out_res_id;
 			comp_grp->num_res++;
+			CAM_DBG(CAM_ISP, "index %d comp_grp->num_res %d",
+					index, comp_grp->num_res);
 		}
 		break;
 	}
@@ -2527,6 +2529,11 @@ skip_get_ife_out_res:
 					comp_grp->res_id[comp_grp->num_res] =
 						ife_out_res->hw_res[j]->res_id;
 					comp_grp->num_res++;
+					CAM_DBG(CAM_ISP,
+							"index %d update_only %d num_res %d ctx:%u",
+							index, update_only, comp_grp->num_res,
+							c_ctx->ctx_index);
+
 				}
 			}
 
@@ -5844,6 +5851,8 @@ static int cam_ife_mgr_acquire_get_unified_structure_v0(
 		in_port->data[i].split_point  = in->data_flex[i].split_point;
 		in_port->data[i].secure_mode  = in->data_flex[i].secure_mode;
 		in_port->data[i].reserved     = in->data_flex[i].reserved;
+		CAM_DBG(CAM_ISP, "res_type 0x%x comp_grp_id %d", in_port->data[i].res_type,
+				in_port->data[i].comp_grp_id);
 	}
 
 	return 0;
@@ -5967,6 +5976,8 @@ static int cam_ife_mgr_acquire_get_unified_structure_v3(
 		in_port->data[i].secure_mode  = in->data_flex[i].secure_mode;
 		in_port->data[i].wm_mode      = in->data_flex[i].wm_mode;
 		in_port->data[i].hw_context_id   = in->data_flex[i].context_id;
+		CAM_DBG(CAM_ISP, "res_type 0x%x comp_grp_id %d", in_port->data[i].res_type,
+				in_port->data[i].comp_grp_id);
 	}
 
 	return 0;
@@ -6098,6 +6109,8 @@ static int cam_ife_mgr_acquire_get_unified_structure_v2(
 		in_port->data[i].comp_grp_id  = in->data_flex[i].comp_grp_id;
 		in_port->data[i].split_point  = in->data_flex[i].split_point;
 		in_port->data[i].secure_mode  = in->data_flex[i].secure_mode;
+		CAM_DBG(CAM_ISP, "res_type 0x%x comp_grp_id %d", in_port->data[i].res_type,
+				in_port->data[i].comp_grp_id);
 	}
 
 	return 0;
@@ -17042,8 +17055,9 @@ static int cam_ife_hw_mgr_handle_hw_buf_done(
 
 	if (buf_done_event_data.resource_handle > 0 && ife_hwr_irq_wm_done_cb) {
 		CAM_DBG(CAM_ISP,
-			"Notify ISP context for %u handles in ctx: %u",
-			buf_done_event_data.resource_handle, c_ctx->ctx_index);
+			"Notify ISP context for %u handles in ctx: %u comp_grp_id %d",
+			buf_done_event_data.resource_handle, c_ctx->ctx_index,
+			buf_done_event_data.comp_group_id);
 		ife_hwr_irq_wm_done_cb(ife_hw_mgr_ctx->cb_priv,
 			CAM_ISP_HW_EVENT_DONE, (void *)&buf_done_event_data);
 	}
