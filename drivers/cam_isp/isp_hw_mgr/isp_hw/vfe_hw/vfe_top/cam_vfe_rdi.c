@@ -67,7 +67,7 @@ static int cam_vfe_rdi_put_evt_payload(
 	struct cam_vfe_mux_rdi_data              *rdi_priv,
 	struct cam_vfe_top_irq_evt_payload      **evt_payload)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!rdi_priv) {
 		CAM_ERR(CAM_ISP, "Invalid param core_info NULL");

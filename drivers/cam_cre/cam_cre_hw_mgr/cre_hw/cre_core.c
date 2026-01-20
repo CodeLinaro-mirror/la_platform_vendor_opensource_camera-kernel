@@ -426,7 +426,7 @@ int cam_cre_process_cmd(void *device_priv, uint32_t cmd_type,
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_cre_device_core_info *core_info = NULL;
 	struct cam_cre_hw *cre_hw;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!device_priv) {
 		CAM_ERR(CAM_CRE, "Invalid args %x for cmd %u",

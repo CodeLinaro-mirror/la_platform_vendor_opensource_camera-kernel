@@ -603,7 +603,7 @@ err:
 static int cam_jpeg_hw_mgr_sched_bottom_half(uint32_t irq_status, int32_t irq_data, void *data)
 {
 	int32_t rc;
-	unsigned long flags;
+	unsigned long flags = 0;
 	struct cam_worker_wrapper_taskdata_args task;
 	struct cam_jpeg_process_irq_work_data_t *task_data;
 

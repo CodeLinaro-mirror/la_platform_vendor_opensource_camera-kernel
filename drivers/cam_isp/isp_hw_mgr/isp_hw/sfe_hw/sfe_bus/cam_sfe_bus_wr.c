@@ -1472,7 +1472,7 @@ static int cam_sfe_bus_wr_put_evt_payload(
 	struct cam_sfe_bus_wr_common_data      *common_data,
 	struct cam_sfe_bus_wr_irq_evt_payload **evt_payload)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!common_data) {
 		CAM_ERR(CAM_SFE, "Invalid param common_data NULL");

@@ -2120,7 +2120,7 @@ static int cam_vfe_top_put_evt_payload(
 	struct cam_vfe_mux_ver4_data           *vfe_priv,
 	struct cam_vfe_top_irq_evt_payload    **evt_payload)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!vfe_priv) {
 		CAM_ERR(CAM_ISP, "Invalid param core_info NULL");

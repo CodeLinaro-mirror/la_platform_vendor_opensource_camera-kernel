@@ -3788,7 +3788,7 @@ static void cam_cpas_dump_monitor_array(
 	int i = 0, k = 0;
 	int64_t state_head = 0;
 	uint32_t index, num_entries, oldest_entry, camnoc_type, j;
-	uint64_t ms, hrs, min, sec;
+	uint64_t ms = 0, hrs = 0, min = 0, sec = 0;
 	struct cam_cpas_monitor *entry;
 	struct timespec64 curr_timestamp;
 	char log_buf[CAM_CPAS_LOG_BUF_LEN];

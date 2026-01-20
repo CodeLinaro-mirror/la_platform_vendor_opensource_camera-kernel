@@ -1886,8 +1886,9 @@ size_t cam_context_parse_config_cmd(struct cam_context *ctx, struct cam_config_d
 
 	packet_len = len - (size_t)cmd->offset;
 	rc = cam_packet_util_copy_pkt_to_kmd(packet_u, packet, packet_len);
-	if (rc) {
-		CAM_ERR(CAM_CTXT, "Copying packet to KMD failed");
+	if (rc || (!(*packet))) {
+		CAM_ERR(CAM_CTXT, "Copying packet to KMD failed or packet is NULL");
+		rc = -EINVAL;
 		goto put_cpu_buf;
 	}
 

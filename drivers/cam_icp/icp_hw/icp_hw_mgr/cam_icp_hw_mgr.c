@@ -842,7 +842,7 @@ end:
 static void cam_icp_ctx_timer_cb(struct timer_list *timer_data)
 {
 	int rc;
-	unsigned long flags;
+	unsigned long flags = 0;
 	struct cam_worker_wrapper_taskdata_args task;
 	struct clk_work_data *task_data;
 	struct cam_req_mgr_timer *timer =
@@ -895,7 +895,7 @@ static void cam_icp_ctx_timer_cb(struct timer_list *timer_data)
 
 static void cam_icp_device_timer_cb(struct timer_list *timer_data)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 	struct cam_worker_wrapper_taskdata_args task;
 	struct clk_work_data *task_data;
 	struct cam_req_mgr_timer *timer =
@@ -3678,7 +3678,7 @@ static int32_t cam_icp_mgr_process_cb(void *priv, void *data)
 static int32_t cam_icp_hw_mgr_cb(void *data, bool recover)
 {
 	int rc = 0;
-	unsigned long flags;
+	unsigned long flags = 0;
 	struct cam_icp_hw_mgr *hw_mgr = data;
 	struct cam_worker_wrapper_taskdata_args task;
 	struct hfi_msg_work_data *task_data;
