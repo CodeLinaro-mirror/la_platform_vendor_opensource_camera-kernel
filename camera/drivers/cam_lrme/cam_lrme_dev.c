@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 
+#include "cam_lrme_dev.h"
 #include "cam_subdev.h"
 #include "cam_node.h"
 #include "cam_lrme_context.h"

@@ -249,6 +249,10 @@ static const struct of_device_id cam_jpeg_dma_dt_match[] = {
 		.data = &cam_jpeg_dma_165_hw_info,
 	},
 	{
+		.compatible = "qcom,cam_jpeg_dma_170",
+		.data = &cam_jpeg_dma_hw_info,
+	},
+	{
 		.compatible = "qcom,cam_jpeg_dma_580",
 		.data = &cam_jpeg_dma_580_hw_info,
 	},

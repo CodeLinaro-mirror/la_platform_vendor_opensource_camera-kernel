@@ -331,7 +331,9 @@ static void cam_main_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id camera_main_dt_match[] = {
+#if defined(CONFIG_QCM6490)
 	{.compatible = "qcom,camera_kt"},
+#endif
 	{}
 };
 
