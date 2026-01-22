@@ -3799,7 +3799,8 @@ static bool cam_ife_mgr_check_can_use_lite(
 		goto end;
 	}
 
-	if (ife_ctx->flags.is_fe_enabled || ife_ctx->flags.dsp_enabled)
+	if (ife_ctx->flags.is_fe_enabled || ife_ctx->flags.dsp_enabled
+		|| !ife_ctx->flags.is_lite_context)
 		can_use_lite = false;
 
 	CAM_DBG(CAM_ISP,
@@ -5238,8 +5239,6 @@ static int cam_ife_hw_mgr_preprocess_port(
 				out_port->res_type))
 			in_port->lcr_count++;
 		else {
-			CAM_DBG(CAM_ISP, "out_res_type 0x%x, ife_ctx_idx: %u",
-				out_port->res_type, ife_ctx->ctx_index);
 			if ((in_port->major_ver == 3) && (in_port->path_id &
 				(CAM_ISP_PXL_PATH | CAM_ISP_PXL1_PATH | CAM_ISP_PXL2_PATH)) &&
 				cam_ife_hw_mgr_is_multi_context_port(out_port->res_type,
@@ -5270,6 +5269,8 @@ static int cam_ife_hw_mgr_preprocess_port(
 		if ((out_port->res_type >=  CAM_ISP_SFE_OUT_RES_BASE) &&
 			(out_port->res_type < (CAM_ISP_SFE_OUT_RES_BASE + max_sfe_out_res)))
 			in_port->sfe_port_count++;
+		CAM_DBG(CAM_ISP, "out_res_type 0x%x, ife_ctx_idx: %u",
+				out_port->res_type, ife_ctx->ctx_index);
 	}
 
 	CAM_DBG(CAM_ISP, "ife_ctx_idx: %u rdi: %d ipp: %d ppp: %d ife_rd: %d lcr: %d",
