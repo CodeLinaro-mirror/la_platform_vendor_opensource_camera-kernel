@@ -706,7 +706,8 @@ static struct cam_vfe_bus_ver3_hw_info tfe662_bus_hw_info = {
 				.perf_cnt_val = 0xB0,
 			},
 		},
-		.capabilities = CAM_VFE_COMMON_CAP_PD10_PACKED_PLAIN128,
+		.capabilities = CAM_VFE_COMMON_CAP_PD10_PACKED_PLAIN128 |
+				CAM_VFE_COMMON_CAP_NV12_PACKED_PLAIN_8,
 	},
 	.bus_wr_base                          = 0x3000,
 	.support_dyn_offset                   = true,
