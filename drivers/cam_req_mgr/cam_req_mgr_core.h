@@ -526,18 +526,20 @@ struct cam_req_mgr_core_session {
 /**
  * struct cam_req_mgr_core_device
  * - Core camera request manager data struct
- * @session_head : list head holding sessions
- * @crm_lock     : mutex lock to protect session creation & destruction
- * @recovery_on_apply_fail : Recovery on apply failure using debugfs.
+ * @session_head                 : list head holding sessions
+ * @crm_lock                     : mutex lock to protect session creation & destruction
+ * @recovery_on_apply_fail       : Recovery on apply failure using debugfs.
  * @qtvm_crash_secure_link_count : Count of secure links at QTVM crash
- * @qtvm_status         : Status of qtvm
- * @qtvm_crash_complete : Conditional wait variable for qtvm crash complete
+ * @qtvm_link_cleanup_pending    : Flag used to defer secure link cleanup to QTVM power up event
+ * @qtvm_status                  : Status of qtvm
+ * @qtvm_crash_complete          : Conditional wait variable for qtvm crash complete
  */
 struct cam_req_mgr_core_device {
 	struct list_head             session_head;
 	struct mutex                 crm_lock;
 	bool                         recovery_on_apply_fail;
 	uint32_t                     qtvm_crash_secure_link_count;
+	bool                         qtvm_link_cleanup_pending;
 	uint32_t                     qtvm_status;
 	struct completion            qtvm_crash_complete;
 };

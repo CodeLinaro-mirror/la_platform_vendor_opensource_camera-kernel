@@ -6514,7 +6514,7 @@ int crm_check_secure_mode_link(struct cam_req_mgr_core_link *link)
 
 /**
  * crm_handle_qtvm_crash_event()
- * @brief: Handle QTVM crash by notifying QTVM crash to secure link and waiting for unlink.
+ * @brief: Handle QTVM crash by notifying QTVM crash to secure link.
  */
 void crm_handle_qtvm_crash_event(void)
 {
@@ -6547,15 +6547,27 @@ void crm_handle_qtvm_crash_event(void)
 						continue;
 					link->qtvm_wait_for_unlink = true;
 					g_crm_core_dev->qtvm_crash_secure_link_count++;
+					g_crm_core_dev->qtvm_link_cleanup_pending = true;
 				}
 			}
 			mutex_unlock(&session->lock);
 		}
 	}
 	mutex_unlock(&g_crm_core_dev->crm_lock);
-	if (g_crm_core_dev->qtvm_crash_secure_link_count)
+}
+
+/**
+ * crm_handle_qtvm_powerup_event()
+ * @brief: Handle QTVM powerup event, waits for secure link cleanup.
+ */
+void crm_handle_qtvm_powerup_event(void)
+{
+	if (g_crm_core_dev->qtvm_link_cleanup_pending)
 		wait_for_completion(&g_crm_core_dev->qtvm_crash_complete);
+
+	g_crm_core_dev->qtvm_link_cleanup_pending = false;
 	CAM_INFO(CAM_CRM, "All secure links closed");
+
 }
 
 #if IS_ENABLED(CONFIG_GH_SECURE_VM_LOADER)
@@ -6581,6 +6593,7 @@ int crm_qtvm_event_cb(struct notifier_block *nb, unsigned long action, void *dat
 	case GH_VM_BEFORE_POWERUP:
 		CAM_INFO(CAM_ISP, "QTVM power up");
 		g_crm_core_dev->qtvm_status = CRM_QTVM_STATUS_POWERUP;
+		crm_handle_qtvm_powerup_event();
 		break;
 	default:
 		rc = -EINVAL;
