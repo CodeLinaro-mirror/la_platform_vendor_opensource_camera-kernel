@@ -368,8 +368,10 @@ void cam_hw_cdm_dump_core_debug_registers(struct cam_hw_info *cdm_hw,
 		cdm_hw->soc_info.label_name, cdm_hw->soc_info.index);
 
 
-	if (pause_core)
+	if (pause_core) {
 		cam_hw_cdm_pause_core(cdm_hw, true);
+		usleep_range(1000, 1010);
+	}
 
 	cam_cdm_read_hw_reg(cdm_hw, core->offsets->cmn_reg->cdm_hw_version,
 		&cdm_version);
@@ -511,8 +513,10 @@ void cam_hw_cdm_dump_core_debug_registers(struct cam_hw_info *cdm_hw,
 		cam_cdm_read_hw_reg(cdm_hw,
 			core->offsets->cmn_reg->core_en, &dump_reg[0]);
 		is_core_paused_already = (bool)(dump_reg[0] & 0x20);
-		if (!is_core_paused_already)
+		if (!is_core_paused_already) {
 			cam_hw_cdm_pause_core(cdm_hw, true);
+			usleep_range(1000, 1010);
+	}
 
 		cam_hw_cdm_dump_bl_fifo_data(cdm_hw);
 
@@ -1511,6 +1515,7 @@ handle_cdm_pf:
 		mutex_lock(&cdm_hw->hw_mutex);
 		/* Pausing CDM HW from doing any further memory transactions */
 		cam_hw_cdm_pause_core(cdm_hw, true);
+		usleep_range(1000, 1010);
 
 		for (i = 0; i < core->offsets->reg_data->num_bl_fifo; i++)
 			mutex_lock(&core->bl_fifo[i].fifo_lock);
@@ -1712,6 +1717,7 @@ int cam_hw_cdm_reset_hw(struct cam_hw_info *cdm_hw, uint32_t handle)
 	reinit_completion(&cdm_core->reset_complete);
 
 	cam_hw_cdm_pause_core(cdm_hw, true);
+	usleep_range(1000, 1010);
 
 	if (cam_cdm_write_hw_reg(cdm_hw, cdm_core->offsets->cmn_reg->rst_cmd, reset_val)) {
 		CAM_ERR(CAM_CDM, "Failed to Write %s%u HW reset",
@@ -1789,6 +1795,7 @@ int cam_hw_cdm_handle_error_info(
 	}
 
 	cam_hw_cdm_pause_core(cdm_hw, true);
+	usleep_range(1000, 1010);
 
 	rc = cam_cdm_read_hw_reg(cdm_hw,
 			cdm_core->offsets->cmn_reg->current_bl_len,
@@ -2189,6 +2196,7 @@ int cam_hw_cdm_deinit(void *hw_priv,
 	reinit_completion(&cdm_core->reset_complete);
 
 	cam_hw_cdm_pause_core(cdm_hw, true);
+	usleep_range(1000, 1010);
 
 	for (i = 0; i < cdm_core->offsets->reg_data->num_bl_fifo; i++) {
 		if (!cdm_core->bl_fifo[i].bl_depth)
