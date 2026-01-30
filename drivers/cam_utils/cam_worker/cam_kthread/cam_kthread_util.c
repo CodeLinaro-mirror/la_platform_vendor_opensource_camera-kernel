@@ -551,7 +551,7 @@ void cam_kthread_destroy(struct cam_core_kthread **cam_kthread)
 	unsigned long            flags = 0;
 	struct cam_core_kthread *kthread;
 	struct cam_kthread_data *kthread_data, *tmp_kthread_data;
-	struct kthread_worker   *job;
+	struct kthread_worker   *job = NULL;
 	int                      i;
 
 	if (!cam_kthread || !*cam_kthread) {
@@ -584,17 +584,18 @@ void cam_kthread_destroy(struct cam_core_kthread **cam_kthread)
 	if (!kthread->in_irq)
 		mutex_destroy(&kthread->mutex_lock);
 
-	mutex_lock(&g_cam_kthread_info.kthread_list_mutex);
-	list_for_each_entry_safe(kthread_data, tmp_kthread_data,
-		&g_cam_kthread_info.kthread_list, list) {
-		if (kthread_data->kthread_worker == job) {
-			list_del_init(&kthread_data->list);
-			CAM_MEM_FREE(kthread_data);
-			break;
+	if (job) {
+		mutex_lock(&g_cam_kthread_info.kthread_list_mutex);
+		list_for_each_entry_safe(kthread_data, tmp_kthread_data,
+			&g_cam_kthread_info.kthread_list, list) {
+			if (kthread_data->kthread_worker == job) {
+				list_del_init(&kthread_data->list);
+				CAM_MEM_FREE(kthread_data);
+				break;
+			}
 		}
+		mutex_unlock(&g_cam_kthread_info.kthread_list_mutex);
 	}
-	mutex_unlock(&g_cam_kthread_info.kthread_list_mutex);
-
 	CAM_MEM_FREE(kthread);
 }
 

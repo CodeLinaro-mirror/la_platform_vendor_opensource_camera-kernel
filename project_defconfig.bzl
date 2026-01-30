@@ -41,6 +41,8 @@ project_configs = select({
         "CONFIG_INTERCONNECT_QCOM=y",
         "CONFIG_SPECTRA_USE_RPMH_DRV_API=n",
         "CONFIG_SPECTRA_LLCC_STALING=n",
+	"CONFIG_RT_MAP_WORKER_KTHREAD=y",
+	"CONFIG_NRT_MAP_WORKER_KTHREAD=y",
     ],
 })
 
