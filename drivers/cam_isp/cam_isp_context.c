@@ -3610,19 +3610,23 @@ static int __cam_isp_ctx_reg_upd_in_epoch_bubble_state(
 				CAM_REQ_MGR_SOF_EVENT_SUCCESS);
 		}
 	} else {
-		if (!atomic_read(&ctx_isp->last_applied_default))
+		if (!atomic_read(&ctx_isp->last_applied_default) ||
+			atomic_read(&ctx_isp->apply_in_progress))
 			atomic_set(&ctx_isp->unserved_rup, 1);
 		CAM_WARN_RATE_LIMIT(CAM_ISP,
 			"ctx:%u Unexpected regupdate in activated Substate[%s] for frame_id:%lld",
-			"last_applied_default:%d, unserved_rup:%d",
+			"last_applied_default:%d, apply_in_progress: %d, unserved_rup:%d",
 			ctx_isp->base->ctx_id,
 			__cam_isp_ctx_substate_val_to_type(
 			ctx_isp->substate_activated),
 			ctx_isp->frame_id,
 			atomic_read(&ctx_isp->last_applied_default),
+			atomic_read(&ctx_isp->apply_in_progress),
 			atomic_read(&ctx_isp->unserved_rup));
 
-		atomic_set(&ctx_isp->last_applied_default, 0);
+		/* Force to zero only when the last applied settings aren't default */
+		if (!atomic_read(&ctx_isp->apply_in_progress))
+			atomic_set(&ctx_isp->last_applied_default, 0);
 
 		__cam_isp_ctx_send_sof_timestamp(ctx_isp, 0,
 			CAM_REQ_MGR_SOF_EVENT_SUCCESS);
