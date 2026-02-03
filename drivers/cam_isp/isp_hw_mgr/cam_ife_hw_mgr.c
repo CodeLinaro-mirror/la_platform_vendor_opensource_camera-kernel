@@ -9452,7 +9452,9 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 	cam_cdm_release(ctx->cdm_handle);
 
 	/* clean context */
+	mutex_lock(&hw_mgr->ctx_mutex);
 	list_del_init(&ctx->list);
+	mutex_unlock(&hw_mgr->ctx_mutex);
 	ctx->cdm_handle = 0;
 	ctx->cdm_hw_idx = -1;
 	ctx->cdm_ops = NULL;
