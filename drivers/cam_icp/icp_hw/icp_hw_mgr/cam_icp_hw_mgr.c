@@ -493,7 +493,7 @@ static int32_t cam_icp_deinit_idle_clk(void *priv, void *data)
 		goto done;
 	}
 
-	if (i == CAM_ICP_CTX_MAX) {
+	if ((i == CAM_ICP_CTX_MAX) && !hw_mgr->ctxt_cnt) {
 		CAM_ERR(CAM_ICP, "[%s] No acquired ctx data found", hw_mgr->hw_mgr_name);
 		rc = -EFAULT;
 		goto done;
