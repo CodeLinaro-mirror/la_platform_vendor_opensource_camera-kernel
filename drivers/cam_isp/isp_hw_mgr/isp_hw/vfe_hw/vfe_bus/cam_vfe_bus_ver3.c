@@ -622,6 +622,8 @@ static enum cam_vfe_bus_ver3_packer_format
 	case CAM_FORMAT_UBWC_NV12:
 	case CAM_FORMAT_UBWC_NV12_4R:
 	case CAM_FORMAT_Y_ONLY:
+		if (common_reg->capabilities & CAM_VFE_COMMON_CAP_NV12_PACKED_PLAIN_8)
+			return PACKER_FMT_VER3_PLAIN_8;
 		return PACKER_FMT_VER3_PLAIN_8_LSB_MSB_10;
 	case CAM_FORMAT_PLAIN16_10:
 	case CAM_FORMAT_PLAIN16_10_LSB:
