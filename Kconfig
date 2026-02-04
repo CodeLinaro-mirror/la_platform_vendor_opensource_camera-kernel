@@ -1,28 +1,37 @@
 config SPECTRA_ISP
-	bool "enable camera ISP modele"
+	bool "enable camera ISP module"
 	help
 	  This is enabling camera ISP module.
 	  IFE camera driver file be included.
 	  This will enable camera ISP driver to handle IFE driver.
 	  Core camera driver to handle VFE HW.
 
-config SPECTRA_TFE
-	bool "enable camera tfe modele"
-	help
-	  This is enabling camera tfe module.
-	  tfe module files will be included to enable tfe based driver,
-	  files.
+config SPECTRA_ICP
+       bool "enable camera ICP module"
+        help
+         This is enabling camera ICP module.
+         Camera ICP driver file be included.
+         This will enable camera ICP driver to interact with,
+         ICP FW. Which can control IPE and BPS HW.
 
-config SPECTRA_OPE
-	bool "enable camera OPE modele"
-	help
-	  This is enabling camera OPE module.
-	  Camera OPE driver file be included.
-	  This will enable camera OPE driver to interact with,
-	  other modules.
+config SPECTRA_JPEG
+        bool "enable camera jpeg module"
+         help
+           This is enabling camera TFE module.
+           camera tfe module will be functional.
+           This module interact with tfe HW for
+           snapshot processing.
+
+config SPECTRA_LRME
+        bool "enable camera lrme module"
+         help
+           This is enabling camera LRME module.
+           camera lrme module will be functional.
+           This module interact with lrme HW for
+           snapshot processing.
 
 config SPECTRA_SENSOR
-	bool "enable camera sensor modele"
+	bool "enable camera sensor module"
 	help
 	  This is enabling camera sensor module.
 	  sensor module files will be included to enable the driver.
