@@ -7941,6 +7941,8 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 	uint32_t                         packet_opcode = 0;
 	struct cam_isp_ch_ctx_fcg_config_internal *sfe_ch_ctx_fcg, *ife_ch_ctx_fcg;
 	struct cam_kmd_buf_info *kmd_buff = NULL;
+	struct cam_ctx_request            *cleanup_req = NULL;
+	struct cam_ctx_request            *temp_req = NULL;
 
 	CAM_DBG(CAM_ISP, "get free request object......ctx_idx: %u, link: 0x%x",
 		ctx->ctx_id, ctx->link_hdl);
@@ -8006,6 +8008,17 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 	} else if ((packet_opcode == CAM_ISP_PACKET_INIT_DEV)
 		&& (packet->header.request_id <= ctx->last_flush_req)
 		&& ctx->last_flush_req && packet->header.request_id) {
+
+		/* Clean up any stale request at this point */
+		spin_lock_bh(&ctx->lock);
+		list_for_each_entry_safe(cleanup_req, temp_req, &ctx->pending_req_list, list) {
+			CAM_DBG(CAM_ISP, "Clearing request %llu, ctx_idx: %u, link: 0x%x",
+				cleanup_req->request_id, ctx->ctx_id, ctx->link_hdl);
+			list_del_init(&cleanup_req->list);
+			__cam_isp_ctx_move_req_to_free_list(ctx, cleanup_req);
+		}
+		spin_unlock_bh(&ctx->lock);
+
 		CAM_WARN(CAM_ISP,
 			"last flushed req is %lld, config dev(init) for req %lld, ctx_idx: %u, link: 0x%x",
 			ctx->last_flush_req, packet->header.request_id, ctx->ctx_id, ctx->link_hdl);
