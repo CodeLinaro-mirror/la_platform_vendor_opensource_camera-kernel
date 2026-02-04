@@ -544,9 +544,22 @@ static void cam_cci_component_unbind(struct device *dev,
 	int rc = 0;
 	struct platform_device *pdev = to_platform_device(dev);
 
-	struct v4l2_subdev *subdev = platform_get_drvdata(pdev);
-	struct cci_device *cci_dev =
-		v4l2_get_subdevdata(subdev);
+	struct v4l2_subdev *subdev = NULL;
+	struct cci_device *cci_dev = NULL;
+
+	subdev = platform_get_drvdata(pdev);
+
+	if (!subdev) {
+		CAM_ERR(CAM_CCI, "subdev NULL");
+		return;
+	}
+
+	cci_dev = v4l2_get_subdevdata(subdev);
+
+	if (!cci_dev) {
+		CAM_ERR(CAM_CCI, "cci_dev NULL");
+		return;
+	}
 
 	cam_cpas_unregister_client(cci_dev->cpas_handle);
 	debugfs_remove_recursive(debugfs_root);
