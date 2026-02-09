@@ -30,6 +30,7 @@
 #include "cam_presil_hw_access.h"
 #include "cam_ife_csid_common.h"
 #include "cam_worker_wrapper_api.h"
+#include "cam_worker_wrapper.h"
 
 #define CAM_IFE_SAFE_DISABLE 0
 #define CAM_IFE_SAFE_ENABLE 1
@@ -95,6 +96,21 @@ static uint32_t max_ife_out_res, max_sfe_out_res;
 static char  reg_str[64];
 static char *irq_inject_display_buf;
 
+static void cam_ife_hw_mgr_worker_lock(enum cam_worker_wrapper_type worker_type)
+{
+	if (worker_type == WORKER_TYPE_TASKLET)
+		spin_lock(&g_ife_hw_mgr.ctx_lock);
+	else
+		mutex_lock(&g_ife_hw_mgr.ctx_mutex);
+}
+
+static void cam_ife_hw_mgr_worker_unlock(enum cam_worker_wrapper_type worker_type)
+{
+	if (worker_type == WORKER_TYPE_TASKLET)
+		spin_unlock(&g_ife_hw_mgr.ctx_lock);
+	else
+		mutex_unlock(&g_ife_hw_mgr.ctx_mutex);
+}
 
 static int cam_ife_mgr_util_process_csid_path_res(
 	uint32_t path_id, enum cam_ife_pix_path_res_id        *path_res_id);
@@ -17396,6 +17412,7 @@ static int cam_ife_hw_mgr_handle_csid_error(
 	struct cam_ife_hw_event_recovery_data    recovery_data = {0};
 	struct cam_ife_hw_mgr                   *hw_mgr;
 	bool                                     is_bus_overflow = false, force_recover = false;
+	struct cam_worker_wrapper_ctx           *worker_ctx = NULL;
 
 	if (!event_info->event_data) {
 		CAM_ERR(CAM_ISP,
@@ -17410,7 +17427,8 @@ static int cam_ife_hw_mgr_handle_csid_error(
 	CAM_DBG(CAM_ISP, "Entry CSID[%u] error %d ctx_idx: %u",
 		event_info->hw_idx, err_type, ctx->ctx_index);
 
-	spin_lock(&g_ife_hw_mgr.ctx_lock);
+	worker_ctx = ctx->common.worker_ctx;
+	cam_ife_hw_mgr_worker_lock(worker_ctx->worker_type);
 
 	/* Secondary event handling */
 	if (event_info->is_secondary_evt) {
@@ -17419,7 +17437,7 @@ static int cam_ife_hw_mgr_handle_csid_error(
 			CAM_ERR(CAM_ISP,
 				"Failed to handle CSID[%u] sec event for res: %d err: 0x%x on ctx: %u",
 				event_info->hw_idx, event_info->res_id, err_type, ctx->ctx_index);
-		spin_unlock(&g_ife_hw_mgr.ctx_lock);
+		cam_ife_hw_mgr_worker_unlock(worker_ctx->worker_type);
 		return rc;
 	}
 
@@ -17500,7 +17518,7 @@ static int cam_ife_hw_mgr_handle_csid_error(
 		event_info->hw_idx, err_type, ctx->ctx_index);
 
 end:
-	spin_unlock(&g_ife_hw_mgr.ctx_lock);
+	cam_ife_hw_mgr_worker_unlock(worker_ctx->worker_type);
 	return rc;
 }
 
@@ -17911,6 +17929,7 @@ static int cam_ife_hw_mgr_handle_sfe_hw_err(
 	struct cam_isp_hw_error_event_info     *err_evt_info;
 	struct cam_isp_hw_error_event_data      error_event_data = {0};
 	struct cam_ife_hw_event_recovery_data   recovery_data = {0};
+	struct cam_worker_wrapper_ctx          *worker_ctx = NULL;
 
 	if (!event_info->event_data) {
 		CAM_ERR(CAM_ISP,
@@ -17925,7 +17944,9 @@ static int cam_ife_hw_mgr_handle_sfe_hw_err(
 		event_info->hw_idx, err_evt_info->err_type,
 		event_info->res_type, ctx->ctx_index);
 
-	spin_lock(&g_ife_hw_mgr.ctx_lock);
+	worker_ctx = ctx->common.worker_ctx;
+
+	cam_ife_hw_mgr_worker_lock(worker_ctx->worker_type);
 
 	cam_ife_hw_mgr_handle_sfe_hw_dump_info(ctx, event_info);
 
@@ -17936,7 +17957,7 @@ static int cam_ife_hw_mgr_handle_sfe_hw_err(
 		cam_ife_hw_mgr_find_affected_ctx(&error_event_data,
 			event_info, &recovery_data, false);
 	}
-	spin_unlock(&g_ife_hw_mgr.ctx_lock);
+	cam_ife_hw_mgr_worker_unlock(worker_ctx->worker_type);
 
 	return 0;
 }
@@ -17951,6 +17972,7 @@ static int cam_ife_hw_mgr_handle_hw_err(
 	struct cam_ife_hw_event_recovery_data    recovery_data = {0};
 	struct cam_hw_intf                      *hw_intf;
 	int                                      rc = -EINVAL;
+	struct cam_worker_wrapper_ctx           *worker_ctx = NULL;
 
 	if (!event_info->event_data) {
 		CAM_ERR(CAM_ISP,
@@ -17961,8 +17983,9 @@ static int cam_ife_hw_mgr_handle_hw_err(
 
 	err_evt_info = (struct cam_isp_hw_error_event_info *)event_info->event_data;
 	err_type =  err_evt_info->err_type;
+	worker_ctx = ife_hw_mgr_ctx->common.worker_ctx;
 
-	spin_lock(&g_ife_hw_mgr.ctx_lock);
+	cam_ife_hw_mgr_worker_lock(worker_ctx->worker_type);
 	if (event_info->res_type == CAM_ISP_RESOURCE_VFE_OUT) {
 		hw_intf = g_ife_hw_mgr.csid_devices[event_info->hw_idx];
 		cam_ife_hw_mgr_trigger_crop_reg_dump(hw_intf, event_info);
@@ -18005,7 +18028,7 @@ static int cam_ife_hw_mgr_handle_hw_err(
 
 	cam_ife_hw_mgr_do_error_recovery(&recovery_data);
 end:
-	spin_unlock(&g_ife_hw_mgr.ctx_lock);
+	cam_ife_hw_mgr_worker_unlock(worker_ctx->worker_type);
 	return rc;
 }
 
