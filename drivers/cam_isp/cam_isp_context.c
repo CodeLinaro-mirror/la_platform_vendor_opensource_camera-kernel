@@ -4486,6 +4486,12 @@ static int __cam_isp_ctx_handle_error(struct cam_isp_context *ctx_isp,
 
 	CAM_DBG(CAM_ISP, "Enter error_type = %d", error_type);
 
+	if (!ctx_isp->error_recovery_en || ((error_type != CAM_ISP_HW_ERROR_CSID_FRAME_SIZE) &&
+		(error_type != CAM_ISP_HW_ERROR_CSID_RX) &&
+		(error_type != CAM_ISP_HW_ERROR_CSID_CCIF_VIOLATION) &&
+		(error_type != CAM_ISP_HW_ERROR_RECOVERY_OVERFLOW)  &&
+		(error_type != CAM_ISP_HW_ERROR_VIOLATION)))
+		error = CRM_KMD_ERR_FATAL;
 
 	if (!ctx_isp->offline_context && !ctx_isp->independent_crm_en)
 		__cam_isp_ctx_pause_crm_timer(ctx);
@@ -4550,8 +4556,12 @@ static int __cam_isp_ctx_handle_error(struct cam_isp_context *ctx_isp,
 				primary_port_idx = req_isp->hw_update_data.primary_port_entry_index;
 				ctx_isp->ul_fp_results[wr_idx].last_consumed_addr =
 					req_isp->fence_map_out[primary_port_idx].image_buf_addr[0];
-				ctx_isp->ul_fp_results[wr_idx].status =
-					BATCH_PACKET_RESULT_DEVICE_ERROR;
+				if (error == CRM_KMD_ERR_FATAL)
+					ctx_isp->ul_fp_results[wr_idx].status =
+						BATCH_PACKET_RESULT_DEVICE_ERROR;
+				else
+					ctx_isp->ul_fp_results[wr_idx].status =
+						BATCH_PACKET_RESULT_BUFFER_ERROR;
 				atomic_set(&ctx_isp->ul_fp_params.write_idx,
 					INC_VAL(wr_idx, 1, MAX_IO_PACKETS));
 				complete(&ctx_isp->ul_fp_params.fast_path_buf_done);
@@ -4709,12 +4719,6 @@ end:
 	if (ctx_isp->offline_context)
 		goto exit;
 
-	if (!ctx_isp->error_recovery_en || ((error_type != CAM_ISP_HW_ERROR_CSID_FRAME_SIZE) &&
-		(error_type != CAM_ISP_HW_ERROR_CSID_RX) &&
-		(error_type != CAM_ISP_HW_ERROR_CSID_CCIF_VIOLATION) &&
-		(error_type != CAM_ISP_HW_ERROR_RECOVERY_OVERFLOW)  &&
-		(error_type != CAM_ISP_HW_ERROR_VIOLATION)))
-		error = CRM_KMD_ERR_FATAL;
 	if (req_isp_to_report && req_isp_to_report->bubble_report)
 		if (error_event_data->recovery_enabled)
 			error = CRM_KMD_ERR_BUBBLE;
