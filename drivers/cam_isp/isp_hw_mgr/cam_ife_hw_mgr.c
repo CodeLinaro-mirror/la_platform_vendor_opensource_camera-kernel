@@ -8566,11 +8566,13 @@ static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
 		}
 	}
 
-	rc = cam_cdm_reset_hw(ctx->cdm_handle);
-	if (rc) {
-		CAM_WARN(CAM_ISP, "CDM: %u reset failed rc: %d in ctx: %u",
-			ctx->cdm_id, rc, ctx->ctx_index);
-		rc = 0;
+	if (stop_isp->is_internal_stop) {
+		rc = cam_cdm_reset_hw(ctx->cdm_handle);
+		if (rc) {
+			CAM_WARN(CAM_ISP, "CDM: %u reset failed rc: %d in ctx: %u",
+				ctx->cdm_id, rc, ctx->ctx_index);
+			rc = 0;
+		}
 	}
 
 	/* In error case, do reg dump after cdm is reset */
