@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 
@@ -255,7 +256,7 @@ struct cam_tfe_hw_core_info {
 	struct cam_tfe_hw_info             *tfe_hw_info;
 	void                               *top_priv;
 	struct cam_tfe_bus                 *tfe_bus;
-	void                               *tasklet_info;
+	void                               *worker_ctx;
 	struct cam_tfe_irq_evt_payload  evt_payload[CAM_TFE_EVT_MAX];
 	struct list_head                    free_payload_list;
 	bool                                irq_err_config;

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef CAM_JPEG_HW_MGR_H
@@ -13,13 +14,12 @@
 #include "cam_jpeg_hw_intf.h"
 #include "cam_hw_mgr_intf.h"
 #include "cam_hw_intf.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_mem_mgr.h"
 
-#define CAM_JPEG_WORKQ_NUM_TASK      30
-#define CAM_JPEG_WORKQ_TASK_CMD_TYPE 1
-#define CAM_JPEG_WORKQ_TASK_MSG_TYPE 2
-#define CAM_JPEG_HW_CFG_Q_MAX        50
+#define CAM_JPEG_WORKER_NUM_TASK       30
+#define CAM_JPEG_WORKER_TASK_CMD_TYPE  1
+#define CAM_JPEG_WORKER_TASK_MSG_TYPE  2
+#define CAM_JPEG_HW_CFG_Q_MAX          50
 
 /*
  * Response time threshold in ms beyond which a request is not expected
@@ -117,8 +117,8 @@ struct cam_jpeg_hw_ctx_data {
  * @jpeg_caps: JPEG capabilities
  * @iommu_hdl: Non secure IOMMU handle
  * @iommu_sec_hdl: Secure IOMMU handle
- * @work_process_frame: Work queue for hw config requests
- * @work_process_irq_cb: Work queue for processing IRQs.
+ * @worker_process_frame: Worker for hw config requests
+ * @worker_process_irq_cb: Worker for processing IRQs.
  * @process_frame_work_data: Work data pool for hw config
  *     requests
  * @process_irq_cb_work_data: Work data pool for irq requests
@@ -144,8 +144,8 @@ struct cam_jpeg_hw_mgr {
 	struct cam_jpeg_query_cap_cmd jpeg_caps;
 	int32_t iommu_hdl;
 	int32_t iommu_sec_hdl;
-	struct cam_req_mgr_core_workq *work_process_frame;
-	struct cam_req_mgr_core_workq *work_process_irq_cb;
+	void  *worker_process_frame;
+	void  *worker_process_irq_cb;
 	struct cam_jpeg_process_frame_work_data_t *process_frame_work_data;
 	struct cam_jpeg_process_irq_work_data_t *process_irq_cb_work_data;
 	int cdm_iommu_hdl;

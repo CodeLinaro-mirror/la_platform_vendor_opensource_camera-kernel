@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_TFE_HW_MGR_H_
@@ -12,7 +13,6 @@
 #include "cam_tfe_hw_intf.h"
 #include "cam_tfe_csid_hw_intf.h"
 #include "cam_top_tpg_hw_intf.h"
-#include "cam_tasklet_util.h"
 #include "cam_cdm_intf_api.h"
 
 
@@ -164,7 +164,7 @@ struct cam_tfe_hw_mgr_ctx {
  * @ctx_pool:              context storage
  * @tfe_csid_dev_caps      csid device capability stored per core
  * @tfe_dev_caps           tfe device capability per core
- * @work q                 work queue for TFE hw manager
+ * @worker ctx             worker ctx for TFE hw manager
  * @debug_cfg              debug configuration
  * @support_consumed_addr  indicate whether hw supports last consumed address
  * @ctx_lock               Spinlock for HW manager
@@ -184,7 +184,7 @@ struct cam_tfe_hw_mgr {
 	struct cam_tfe_csid_hw_caps    tfe_csid_dev_caps[
 						CAM_TFE_CSID_HW_NUM_MAX];
 	struct cam_tfe_hw_get_hw_cap   tfe_dev_caps[CAM_TFE_HW_NUM_MAX];
-	struct cam_req_mgr_core_workq *workq;
+	void                          *worker_ctx;
 	struct cam_tfe_hw_mgr_debug    debug_cfg;
 	bool                           support_consumed_addr;
 	spinlock_t                     ctx_lock;

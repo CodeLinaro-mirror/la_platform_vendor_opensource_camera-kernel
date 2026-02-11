@@ -14,7 +14,6 @@
 #include "cam_vfe_top.h"
 #include "cam_vfe_top_ver3.h"
 #include "cam_irq_controller.h"
-#include "cam_tasklet_util.h"
 #include "cam_vfe_camif_ver3.h"
 #include "cam_debug_util.h"
 #include "cam_cdm_util.h"
@@ -557,8 +556,7 @@ static int cam_vfe_camif_ver3_resource_start(
 			camif_res,
 			camif_res->top_half_handler,
 			camif_res->bottom_half_handler,
-			camif_res->tasklet_info,
-			&tasklet_bh_api);
+			camif_res->worker_ctx);
 
 		if (rsrc_data->irq_handle < 1) {
 			CAM_ERR(CAM_ISP, "IRQ handle subscribe failure");
@@ -581,8 +579,7 @@ static int cam_vfe_camif_ver3_resource_start(
 			camif_res,
 			camif_res->top_half_handler,
 			camif_res->bottom_half_handler,
-			camif_res->tasklet_info,
-			&tasklet_bh_api);
+			camif_res->worker_ctx);
 
 		if (rsrc_data->sof_irq_handle < 1) {
 			CAM_ERR(CAM_ISP, "SOF IRQ handle subscribe failure");
@@ -600,8 +597,7 @@ subscribe_err:
 			camif_res,
 			cam_vfe_camif_ver3_err_irq_top_half,
 			camif_res->bottom_half_handler,
-			camif_res->tasklet_info,
-			&tasklet_bh_api);
+			camif_res->worker_ctx);
 
 		if (rsrc_data->irq_err_handle < 1) {
 			CAM_ERR(CAM_ISP, "Error IRQ handle subscribe failure");

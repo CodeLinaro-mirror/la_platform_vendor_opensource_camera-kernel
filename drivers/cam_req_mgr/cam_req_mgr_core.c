@@ -11,7 +11,6 @@
 #include "cam_req_mgr_interface.h"
 #include "cam_req_mgr_util.h"
 #include "cam_req_mgr_core.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_req_mgr_debug.h"
 #include "cam_trace.h"
 #include "cam_debug_util.h"
@@ -29,7 +28,7 @@ void cam_req_mgr_core_link_reset(struct cam_req_mgr_core_link *link)
 	link->link_hdl = 0;
 	link->num_devs = 0;
 	link->max_delay = CAM_PIPELINE_DELAY_0;
-	link->workq = NULL;
+	link->worker_ctx = NULL;
 	link->pd_mask = 0;
 	link->l_dev = NULL;
 	link->req.in_q = NULL;
@@ -56,7 +55,7 @@ void cam_req_mgr_core_link_reset(struct cam_req_mgr_core_link *link)
 	link->skip_init_frame = false;
 	link->num_sync_links = 0;
 	link->last_sof_trigger_jiffies = 0;
-	link->wq_congestion = false;
+	link->work_congestion = false;
 	atomic_set(&link->eof_event_cnt, 0);
 
 	for (pd = 0; pd < CAM_PIPELINE_DELAY_MAX; pd++) {
@@ -84,22 +83,39 @@ void cam_req_mgr_handle_core_shutdown(void)
 	}
 }
 
-static int __cam_req_mgr_setup_payload(struct cam_req_mgr_core_workq *workq)
+static int __cam_req_mgr_setup_payload(struct cam_req_mgr_core_link *link)
 {
 	int32_t                  i = 0;
 	int                      rc = 0;
 	struct crm_task_payload *task_data = NULL;
+	struct cam_worker_wrapper_mini_dump worker_dump_info = {0};
 
-	task_data = kcalloc(
-		workq->task.num_task, sizeof(*task_data),
-		GFP_KERNEL);
-	if (!task_data) {
-		rc = -ENOMEM;
-	} else {
-		for (i = 0; i < workq->task.num_task; i++)
-			workq->task.pool[i].payload = &task_data[i];
+
+	if (!link || !link->worker_ctx) {
+		CAM_ERR(CAM_CRM, "Setup payload failed since NULL worker.");
+		return -EINVAL;
 	}
 
+	cam_worker_wrapper_dump_info_cb(link->worker_ctx, &worker_dump_info);
+
+	task_data = kcalloc(
+		worker_dump_info.task.num_task, sizeof(*task_data), GFP_KERNEL);
+
+	if (!task_data) {
+		CAM_ERR(CAM_CRM, "No valid mem for task data.");
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < worker_dump_info.task.num_task; i++) {
+		rc = cam_worker_wrapper_payload_bind(link->worker_ctx, &task_data[i], i);
+		if (rc) {
+			CAM_ERR(CAM_CRM, "Failed to bind payload for task %d", i);
+			kfree(task_data);
+			return rc;
+		}
+	}
+
+	link->task_data = task_data;
 	return rc;
 }
 
@@ -225,9 +241,9 @@ static void __cam_req_mgr_find_dev_name(
 		if (dev->dev_info.p_delay == pd) {
 			if (masked_val & (1 << dev->dev_bit))
 				continue;
-			if (link->wq_congestion)
+			if (link->work_congestion)
 				CAM_INFO_RATE_LIMIT(CAM_CRM,
-					"WQ congestion, Skip Frame: req: %lld not ready on link: 0x%x for pd: %d dev: %s open_req count: %d",
+					"WOREKR congestion, Skip Frame: req: %lld not ready on link: 0x%x for pd: %d dev: %s open_req count: %d",
 					req_id, link->link_hdl, pd,
 					dev->dev_info.name, link->open_req_cnt);
 			else
@@ -1736,7 +1752,7 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 	mutex_lock(&session->lock);
 	/*
 	 * During session destroy/unlink the link state is updated and session
-	 * mutex is released when flushing the workq. In case the wq is scheduled
+	 * mutex is released when flushing the worker. In case the wq is scheduled
 	 * thereafter this API will then check the updated link state and exit
 	 */
 	spin_lock_bh(&link->link_state_spin_lock);
@@ -1789,13 +1805,13 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 		link->prev_sof_timestamp = link->sof_timestamp;
 		link->sof_timestamp = trigger_data->sof_timestamp_val;
 
-		/* Check for WQ congestion */
+		/* Check for WORKER congestion */
 		if (jiffies_to_msecs(jiffies -
 			link->last_sof_trigger_jiffies) <
 			MINIMUM_WORKQUEUE_SCHED_TIME_IN_MS)
-			link->wq_congestion = true;
+			link->work_congestion = true;
 		else
-			link->wq_congestion = false;
+			link->work_congestion = false;
 	}
 
 	if (slot->status != CRM_SLOT_STATUS_REQ_READY) {
@@ -1889,7 +1905,7 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 		if (link->max_delay == 1)
 			max_retry++;
 
-		if (!link->wq_congestion && dev) {
+		if (!link->work_congestion && dev) {
 			link->retry_cnt++;
 			if (link->retry_cnt == max_retry) {
 				CAM_DBG(CAM_CRM,
@@ -1910,7 +1926,7 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 			}
 		} else
 			CAM_WARN_RATE_LIMIT(CAM_CRM,
-				"workqueue congestion, last applied idx:%d rd idx:%d",
+				"worker congestion, last applied idx:%d rd idx:%d",
 				in_q->last_applied_idx,
 				in_q->rd_idx);
 	} else {
@@ -2248,9 +2264,10 @@ static void __cam_req_mgr_sof_freeze(struct timer_list *timer_data)
 {
 	struct cam_req_mgr_timer     *timer =
 		container_of(timer_data, struct cam_req_mgr_timer, sys_timer);
-	struct crm_workq_task               *task = NULL;
-	struct cam_req_mgr_core_link        *link = NULL;
-	struct crm_task_payload             *task_data;
+	struct cam_worker_wrapper_taskdata_args   task;
+	struct cam_req_mgr_core_link             *link;
+	struct crm_task_payload                  *task_data;
+	int                                       rc = 0;
 
 	if (!timer) {
 		CAM_ERR(CAM_CRM, "NULL timer");
@@ -2259,16 +2276,26 @@ static void __cam_req_mgr_sof_freeze(struct timer_list *timer_data)
 
 	link = (struct cam_req_mgr_core_link *)timer->parent;
 
-	task = cam_req_mgr_workq_get_task(link->workq);
-	if (!task) {
+	rc = cam_worker_wrapper_get(link->worker_ctx, &task);
+	if (rc) {
 		CAM_ERR(CAM_CRM, "No empty task");
 		return;
 	}
 
-	task_data = (struct crm_task_payload *)task->payload;
-	task_data->type = CRM_WORKQ_TASK_NOTIFY_FREEZE;
-	task->process_cb = &__cam_req_mgr_process_sof_freeze;
-	cam_req_mgr_workq_enqueue_task(task, link, CRM_TASK_PRIORITY_0);
+	task_data = (struct crm_task_payload *)cam_worker_wrapper_get_task_payload(
+		link->worker_ctx, &task);
+	if (!task_data) {
+		CAM_ERR(CAM_CRM, "get task payload failed.");
+		return;
+	}
+
+	task_data->type = CRM_WORKER_TASK_NOTIFY_FREEZE;
+
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(link->worker_ctx, &task,
+		link, task_data, &__cam_req_mgr_process_sof_freeze);
+	if (rc)
+		CAM_ERR(CAM_CRM, "Enqueue worker failed.");
 }
 
 /**
@@ -2529,7 +2556,7 @@ static void __cam_req_mgr_unreserve_link(
 /**
  * cam_req_mgr_process_flush_req()
  *
- * @brief: This runs in workque thread context. Call core funcs to check
+ * @brief: This runs in worker thread context. Call core funcs to check
  *         which requests need to be removed/cancelled.
  * @priv : link information.
  * @data : contains information about frame_id, link etc.
@@ -2611,7 +2638,7 @@ int cam_req_mgr_process_flush_req(void *priv, void *data)
 		link->req.prev_apply_data[pd].req_id = -1;
 	}
 
-	complete(&link->workq_comp);
+	complete(&link->worker_comp);
 	mutex_unlock(&link->req.lock);
 
 end:
@@ -3172,11 +3199,11 @@ static const char *__cam_req_mgr_dev_handle_to_name(
  */
 static int cam_req_mgr_cb_add_req(struct cam_req_mgr_add_request *add_req)
 {
-	int                             rc = 0, idx;
-	struct crm_workq_task          *task = NULL;
-	struct cam_req_mgr_core_link   *link = NULL;
-	struct cam_req_mgr_add_request *dev_req;
-	struct crm_task_payload        *task_data;
+	int                                      rc = 0, idx;
+	struct cam_worker_wrapper_taskdata_args  task;
+	struct cam_req_mgr_core_link            *link;
+	struct cam_req_mgr_add_request          *dev_req;
+	struct crm_task_payload                 *task_data;
 
 	if (!add_req) {
 		CAM_ERR(CAM_CRM, "sof_data is NULL");
@@ -3213,16 +3240,23 @@ static int cam_req_mgr_cb_add_req(struct cam_req_mgr_add_request *add_req)
 		goto end;
 	}
 
-	task = cam_req_mgr_workq_get_task(link->workq);
-	if (!task) {
+	rc = cam_worker_wrapper_get(link->worker_ctx, &task);
+	if (rc) {
 		CAM_ERR_RATE_LIMIT(CAM_CRM, "no empty task dev %x req %lld",
 			add_req->dev_hdl, add_req->req_id);
 		rc = -EBUSY;
 		goto end;
 	}
 
-	task_data = (struct crm_task_payload *)task->payload;
-	task_data->type = CRM_WORKQ_TASK_DEV_ADD_REQ;
+	task_data = (struct crm_task_payload *)cam_worker_wrapper_get_task_payload(
+		link->worker_ctx, &task);
+	if (!task_data) {
+		CAM_ERR(CAM_CRM, "get task payload failed.");
+		rc = -EINVAL;
+		goto end;
+	}
+
+	task_data->type = CRM_WORKER_TASK_DEV_ADD_REQ;
 	dev_req = (struct cam_req_mgr_add_request *)&task_data->u;
 	dev_req->req_id = add_req->req_id;
 	dev_req->link_hdl = add_req->link_hdl;
@@ -3236,8 +3270,14 @@ static int cam_req_mgr_cb_add_req(struct cam_req_mgr_add_request *add_req)
 			dev_req->req_id, link->eof_event_cnt);
 	}
 
-	task->process_cb = &cam_req_mgr_process_add_req;
-	rc = cam_req_mgr_workq_enqueue_task(task, link, CRM_TASK_PRIORITY_0);
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(link->worker_ctx, &task,
+		link, task_data, &cam_req_mgr_process_add_req);
+	if (rc) {
+		CAM_ERR(CAM_CRM, "Enqueue worker failed.");
+		goto end;
+	}
+
 	CAM_DBG(CAM_CRM, "X: dev %x dev req %lld",
 		add_req->dev_hdl, add_req->req_id);
 
@@ -3258,11 +3298,11 @@ end:
 static int cam_req_mgr_cb_notify_err(
 	struct cam_req_mgr_error_notify *err_info)
 {
-	int                              rc = 0;
-	struct crm_workq_task           *task = NULL;
-	struct cam_req_mgr_core_link    *link = NULL;
-	struct cam_req_mgr_error_notify *notify_err;
-	struct crm_task_payload         *task_data;
+	int                                      rc = 0;
+	struct cam_worker_wrapper_taskdata_args  task;
+	struct cam_req_mgr_core_link            *link;
+	struct cam_req_mgr_error_notify         *notify_err;
+	struct crm_task_payload                 *task_data;
 
 	if (!err_info) {
 		CAM_ERR(CAM_CRM, "err_info is NULL");
@@ -3287,23 +3327,35 @@ static int cam_req_mgr_cb_notify_err(
 	crm_timer_reset(link->watchdog);
 	spin_unlock_bh(&link->link_state_spin_lock);
 
-	task = cam_req_mgr_workq_get_task(link->workq);
-	if (!task) {
-		CAM_ERR(CAM_CRM, "no empty task req_id %lld", err_info->req_id);
+	rc = cam_worker_wrapper_get(link->worker_ctx, &task);
+	if (rc) {
+		CAM_ERR(CAM_CRM, "get worker failed.");
 		rc = -EBUSY;
 		goto end;
 	}
 
-	task_data = (struct crm_task_payload *)task->payload;
-	task_data->type = CRM_WORKQ_TASK_NOTIFY_ERR;
+	task_data = (struct crm_task_payload *)cam_worker_wrapper_get_task_payload(
+		link->worker_ctx, &task);
+	if (!task_data) {
+		CAM_ERR(CAM_CRM, "get task payload failed.");
+		rc = -EINVAL;
+		goto end;
+	}
+
+	task_data->type = CRM_WORKER_TASK_NOTIFY_ERR;
+	task_data->type = CRM_WORKER_TASK_NOTIFY_ERR;
 	notify_err = (struct cam_req_mgr_error_notify *)&task_data->u;
 	notify_err->req_id = err_info->req_id;
 	notify_err->link_hdl = err_info->link_hdl;
 	notify_err->dev_hdl = err_info->dev_hdl;
 	notify_err->error = err_info->error;
 	notify_err->trigger = err_info->trigger;
-	task->process_cb = &cam_req_mgr_process_error;
-	rc = cam_req_mgr_workq_enqueue_task(task, link, CRM_TASK_PRIORITY_0);
+
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(link->worker_ctx, &task,
+		link, task_data, &cam_req_mgr_process_error);
+	if (rc)
+		CAM_ERR(CAM_CRM, "Enqueue worker failed.");
 
 end:
 	return rc;
@@ -3409,11 +3461,11 @@ end:
 static int cam_req_mgr_cb_notify_stop(
 	struct cam_req_mgr_notify_stop *stop_info)
 {
-	int                              rc = 0;
-	struct crm_workq_task           *task = NULL;
-	struct cam_req_mgr_core_link    *link = NULL;
-	struct cam_req_mgr_notify_stop  *notify_stop;
-	struct crm_task_payload         *task_data;
+	int                                      rc = 0;
+	struct cam_worker_wrapper_taskdata_args  task;
+	struct cam_req_mgr_core_link            *link;
+	struct cam_req_mgr_notify_stop          *notify_stop;
+	struct crm_task_payload                 *task_data;
 
 	if (!stop_info) {
 		CAM_ERR(CAM_CRM, "stop_info is NULL");
@@ -3439,19 +3491,30 @@ static int cam_req_mgr_cb_notify_stop(
 	link->watchdog->pause_timer = true;
 	spin_unlock_bh(&link->link_state_spin_lock);
 
-	task = cam_req_mgr_workq_get_task(link->workq);
-	if (!task) {
+	rc = cam_worker_wrapper_get(link->worker_ctx, &task);
+	if (rc) {
 		CAM_ERR(CAM_CRM, "no empty task");
 		rc = -EBUSY;
 		goto end;
 	}
 
-	task_data = (struct crm_task_payload *)task->payload;
-	task_data->type = CRM_WORKQ_TASK_NOTIFY_ERR;
+	task_data = (struct crm_task_payload *)cam_worker_wrapper_get_task_payload(
+		link->worker_ctx, &task);
+	if (!task_data) {
+		CAM_ERR(CAM_CRM, "get task payload failed.");
+		rc = -EINVAL;
+		goto end;
+	}
+
+	task_data->type = CRM_WORKER_TASK_NOTIFY_ERR;
 	notify_stop = (struct cam_req_mgr_notify_stop *)&task_data->u;
 	notify_stop->link_hdl = stop_info->link_hdl;
-	task->process_cb = &cam_req_mgr_process_stop;
-	rc = cam_req_mgr_workq_enqueue_task(task, link, CRM_TASK_PRIORITY_0);
+
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(link->worker_ctx, &task,
+		link, task_data, &cam_req_mgr_process_stop);
+	if (rc)
+		CAM_ERR(CAM_CRM, "enqueue worker failed");
 
 end:
 	return rc;
@@ -3473,7 +3536,7 @@ static int cam_req_mgr_cb_notify_trigger(
 {
 	int32_t                          rc = 0, trigger_id = 0;
 	uint32_t                         trigger;
-	struct crm_workq_task           *task = NULL;
+	struct cam_worker_wrapper_taskdata_args  task;
 	struct cam_req_mgr_core_link    *link = NULL;
 	struct cam_req_mgr_trigger_notify   *notify_trigger;
 	struct crm_task_payload         *task_data;
@@ -3543,8 +3606,8 @@ static int cam_req_mgr_cb_notify_trigger(
 
 	spin_unlock_bh(&link->link_state_spin_lock);
 
-	task = cam_req_mgr_workq_get_task(link->workq);
-	if (!task) {
+	rc = cam_worker_wrapper_get(link->worker_ctx, &task);
+	if (rc) {
 		CAM_ERR_RATE_LIMIT(CAM_CRM, "no empty task frame %lld",
 			trigger_data->frame_id);
 		rc = -EBUSY;
@@ -3554,9 +3617,21 @@ static int cam_req_mgr_cb_notify_trigger(
 		spin_unlock_bh(&link->link_state_spin_lock);
 		goto end;
 	}
-	task_data = (struct crm_task_payload *)task->payload;
+
+	task_data = (struct crm_task_payload *)cam_worker_wrapper_get_task_payload(
+		link->worker_ctx, &task);
+	if (!task_data) {
+		CAM_ERR(CAM_CRM, "get task payload failed.");
+		rc = -EINVAL;
+		spin_lock_bh(&link->link_state_spin_lock);
+		if ((link->watchdog) && !(link->watchdog->pause_timer))
+			link->watchdog->pause_timer = true;
+		spin_unlock_bh(&link->link_state_spin_lock);
+		goto end;
+	}
+
 	task_data->type = (trigger_data->trigger == CAM_TRIGGER_POINT_SOF) ?
-		CRM_WORKQ_TASK_NOTIFY_SOF : CRM_WORKQ_TASK_NOTIFY_EOF;
+		CRM_WORKER_TASK_NOTIFY_SOF : CRM_WORKER_TASK_NOTIFY_EOF;
 	notify_trigger = (struct cam_req_mgr_trigger_notify *)&task_data->u;
 	notify_trigger->frame_id = trigger_data->frame_id;
 	notify_trigger->link_hdl = trigger_data->link_hdl;
@@ -3564,8 +3639,12 @@ static int cam_req_mgr_cb_notify_trigger(
 	notify_trigger->trigger = trigger_data->trigger;
 	notify_trigger->req_id = trigger_data->req_id;
 	notify_trigger->sof_timestamp_val = trigger_data->sof_timestamp_val;
-	task->process_cb = &cam_req_mgr_process_trigger;
-	rc = cam_req_mgr_workq_enqueue_task(task, link, CRM_TASK_PRIORITY_0);
+
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(link->worker_ctx, &task,
+		link, task_data, &cam_req_mgr_process_trigger);
+	if (rc)
+		CAM_ERR(CAM_CRM, "Enqueue worker failed.");
 
 end:
 	return rc;
@@ -3851,11 +3930,13 @@ static int __cam_req_mgr_unlink(
 	/* Destroy timer of link */
 	crm_timer_exit(&link->watchdog);
 	spin_unlock_bh(&link->link_state_spin_lock);
-	/* Release session mutex for workq processing */
+	/* Release session mutex for worker processing */
 	mutex_unlock(&session->lock);
-	/* Destroy workq of link */
-	cam_req_mgr_workq_destroy(&link->workq);
-	/* Acquire session mutex after workq flush */
+	/* Destroy worker of link */
+	cam_worker_wrapper_deinit(link->worker_ctx);
+	kfree(link->task_data);
+	link->task_data = NULL;
+	/* Acquire session mutex after worker flush */
 	mutex_lock(&session->lock);
 	/* Cleanup request tables and unlink devices */
 	__cam_req_mgr_destroy_link_info(link);
@@ -3935,19 +4016,14 @@ end:
 	return rc;
 }
 
-static void cam_req_mgr_process_workq_link_worker(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
 int cam_req_mgr_link(struct cam_req_mgr_ver_info *link_info)
 {
 	int                                     rc = 0;
-	int                                     wq_flag = 0;
 	char                                    buf[128];
 	struct cam_create_dev_hdl               root_dev;
 	struct cam_req_mgr_core_session        *cam_session;
 	struct cam_req_mgr_core_link           *link;
+	struct cam_worker_wrapper_init_args     worker_init_args = {0};
 
 	if (!link_info) {
 		CAM_DBG(CAM_CRM, "NULL pointer");
@@ -4017,21 +4093,27 @@ int cam_req_mgr_link(struct cam_req_mgr_ver_info *link_info)
 	/* Create worker for current link */
 	snprintf(buf, sizeof(buf), "%x-%x",
 		link_info->u.link_info_v1.session_hdl, link->link_hdl);
-	wq_flag = CAM_WORKQ_FLAG_HIGH_PRIORITY | CAM_WORKQ_FLAG_SERIAL;
-	rc = cam_req_mgr_workq_create(buf, CRM_WORKQ_NUM_TASKS,
-		&link->workq, CRM_WORKQ_USAGE_NON_IRQ, wq_flag,
-		cam_req_mgr_process_workq_link_worker);
+
+	worker_init_args.name = buf;
+	worker_init_args.num_tasks = CRM_WORKER_NUM_TASKS;
+	worker_init_args.max_active = 0;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = (CAM_WORKER_FLAG_HIGHPRI | CAM_WORKER_FLAG_SERIAL);
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &link->worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc < 0) {
 		CAM_ERR(CAM_CRM, "FATAL: unable to create worker");
 		__cam_req_mgr_destroy_link_info(link);
 		goto setup_failed;
 	}
 
-	/* Assign payload to workqueue tasks */
-	rc = __cam_req_mgr_setup_payload(link->workq);
+	/* Assign payload to worker tasks */
+	rc = __cam_req_mgr_setup_payload(link);
 	if (rc < 0) {
 		__cam_req_mgr_destroy_link_info(link);
-		cam_req_mgr_workq_destroy(&link->workq);
+		cam_worker_wrapper_deinit(&link->worker_ctx);
 		goto setup_failed;
 	}
 
@@ -4053,11 +4135,11 @@ link_hdl_fail:
 int cam_req_mgr_link_v2(struct cam_req_mgr_ver_info *link_info)
 {
 	int                                     rc = 0;
-	int                                     wq_flag = 0;
 	char                                    buf[128];
 	struct cam_create_dev_hdl               root_dev;
 	struct cam_req_mgr_core_session        *cam_session;
 	struct cam_req_mgr_core_link           *link;
+	struct cam_worker_wrapper_init_args     worker_init_args = {0};
 
 	if (!link_info) {
 		CAM_DBG(CAM_CRM, "NULL pointer");
@@ -4129,21 +4211,27 @@ int cam_req_mgr_link_v2(struct cam_req_mgr_ver_info *link_info)
 	/* Create worker for current link */
 	snprintf(buf, sizeof(buf), "%x-%x",
 		link_info->u.link_info_v2.session_hdl, link->link_hdl);
-	wq_flag = CAM_WORKQ_FLAG_HIGH_PRIORITY | CAM_WORKQ_FLAG_SERIAL;
-	rc = cam_req_mgr_workq_create(buf, CRM_WORKQ_NUM_TASKS,
-		&link->workq, CRM_WORKQ_USAGE_NON_IRQ, wq_flag,
-		cam_req_mgr_process_workq_link_worker);
+
+	worker_init_args.name = buf;
+	worker_init_args.num_tasks = CRM_WORKER_NUM_TASKS;
+	worker_init_args.max_active = 1;
+	worker_init_args.in_irq = WORKER_USAGE_IRQ;
+	worker_init_args.flag = (CAM_WORKER_FLAG_HIGHPRI | CAM_WORKER_FLAG_SERIAL);
+	worker_init_args.priv_data = NULL;
+	worker_init_args.index = 0;
+	worker_init_args.worker_ctx_priv = &link->worker_ctx;
+	rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
 	if (rc < 0) {
 		CAM_ERR(CAM_CRM, "FATAL: unable to create worker");
 		__cam_req_mgr_destroy_link_info(link);
 		goto setup_failed;
 	}
 
-	/* Assign payload to workqueue tasks */
-	rc = __cam_req_mgr_setup_payload(link->workq);
+	/* Assign payload to workqer tasks */
+	rc = __cam_req_mgr_setup_payload(link);
 	if (rc < 0) {
 		__cam_req_mgr_destroy_link_info(link);
-		cam_req_mgr_workq_destroy(&link->workq);
+		cam_worker_wrapper_deinit(link->worker_ctx);
 		goto setup_failed;
 	}
 
@@ -4258,7 +4346,7 @@ int cam_req_mgr_schedule_request(
 	CAM_DBG(CAM_CRM, "link 0x%x req %lld, sync_mode %d",
 		sched_req->link_hdl, sched_req->req_id, sched_req->sync_mode);
 
-	task_data.type = CRM_WORKQ_TASK_SCHED_REQ;
+	task_data.type = CRM_WORKER_TASK_SCHED_REQ;
 	sched = (struct cam_req_mgr_sched_request *)&task_data.u;
 	sched->req_id = sched_req->req_id;
 	sched->sync_mode = sched_req->sync_mode;
@@ -4393,7 +4481,7 @@ int cam_req_mgr_flush_requests(
 	struct cam_req_mgr_flush_info *flush_info)
 {
 	int                               rc = 0;
-	struct crm_workq_task            *task = NULL;
+	struct cam_worker_wrapper_taskdata_args  task;
 	struct cam_req_mgr_core_link     *link = NULL;
 	struct cam_req_mgr_flush_info    *flush;
 	struct crm_task_payload          *task_data;
@@ -4435,25 +4523,38 @@ int cam_req_mgr_flush_requests(
 		goto end;
 	}
 
-	task = cam_req_mgr_workq_get_task(link->workq);
-	if (!task) {
+	rc = cam_worker_wrapper_get(link->worker_ctx, &task);
+	if (rc) {
+		CAM_ERR(CAM_CRM, "no empty task");
 		rc = -ENOMEM;
 		goto end;
 	}
 
-	task_data = (struct crm_task_payload *)task->payload;
-	task_data->type = CRM_WORKQ_TASK_FLUSH_REQ;
+	task_data = (struct crm_task_payload *)cam_worker_wrapper_get_task_payload(
+		link->worker_ctx, &task);
+	if (!task_data) {
+		CAM_ERR(CAM_CRM, "get task payload failed.");
+		rc = -EINVAL;
+		goto end;
+	}
+	task_data->type = CRM_WORKER_TASK_FLUSH_REQ;
 	flush = (struct cam_req_mgr_flush_info *)&task_data->u;
 	flush->req_id = flush_info->req_id;
 	flush->link_hdl = flush_info->link_hdl;
 	flush->flush_type = flush_info->flush_type;
-	task->process_cb = &cam_req_mgr_process_flush_req;
-	init_completion(&link->workq_comp);
-	rc = cam_req_mgr_workq_enqueue_task(task, link, CRM_TASK_PRIORITY_0);
+	init_completion(&link->worker_comp);
+
+	task.task_priority = WORKER_TASK_PRIORITY_0;
+	rc = cam_worker_wrapper_enqueue(link->worker_ctx, &task,
+		link, task_data, &cam_req_mgr_process_flush_req);
+		if (rc) {
+		CAM_ERR(CAM_CRM, "Failed to queue flush task rc: %d", rc);
+		goto end;
+	}
 
 	/* Blocking call */
 	rc = wait_for_completion_timeout(
-		&link->workq_comp,
+		&link->worker_comp,
 		msecs_to_jiffies(CAM_REQ_MGR_SCHED_REQ_TIMEOUT));
 end:
 	mutex_unlock(&g_crm_core_dev->crm_lock);

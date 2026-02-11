@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -35,8 +35,8 @@
 #include "cpastop_v570_200.h"
 #include "cpastop_v680_100.h"
 #include "cpastop_v165_100.h"
-#include "cam_req_mgr_workq.h"
 #include "cam_common_util.h"
+#include "cam_worker_wrapper_api.h"
 
 struct cam_camnoc_info *camnoc_info;
 struct cam_cpas_camnoc_qchannel *qchannel_info;
@@ -598,7 +598,7 @@ static void cam_cpastop_notify_clients(struct cam_cpas *cpas_core,
 	}
 }
 
-static void cam_cpastop_work(struct work_struct *work)
+static int cam_cpastop_work(void *priv, void *data)
 {
 	struct cam_cpas_work_payload *payload;
 	struct cam_hw_info *cpas_hw;
@@ -608,16 +608,16 @@ static void cam_cpastop_work(struct work_struct *work)
 	enum cam_camnoc_hw_irq_type irq_type;
 	struct cam_cpas_irq_data irq_data;
 
-	payload = container_of(work, struct cam_cpas_work_payload, work);
+	payload = (struct cam_cpas_work_payload *)priv;
 	if (!payload) {
 		CAM_ERR(CAM_CPAS, "NULL payload");
-		return;
+		return -EINVAL;
 	}
 
 	cam_common_util_thread_switch_delay_detect(
-		"CPAS workq schedule",
-		payload->workq_scheduled_ts,
-		CAM_WORKQ_SCHEDULE_TIME_THRESHOLD);
+		"CPAS worker schedule",
+		payload->worker_scheduled_ts,
+		CAM_WORKER_SCHEDULE_TIME_THRESHOLD);
 
 	cpas_hw = payload->hw;
 	cpas_core = (struct cam_cpas *) cpas_hw->core_info;
@@ -625,7 +625,7 @@ static void cam_cpastop_work(struct work_struct *work)
 
 	if (!atomic_inc_not_zero(&cpas_core->irq_count)) {
 		CAM_ERR(CAM_CPAS, "CPAS off");
-		return;
+		return -EIO;
 	}
 
 	for (i = 0; i < camnoc_info->irq_err_size; i++) {
@@ -685,6 +685,8 @@ static void cam_cpastop_work(struct work_struct *work)
 			payload->irq_status);
 
 	kfree(payload);
+
+	return 0;
 }
 
 static irqreturn_t cam_cpastop_handle_irq(int irq_num, void *data)
@@ -694,6 +696,8 @@ static irqreturn_t cam_cpastop_handle_irq(int irq_num, void *data)
 	struct cam_hw_soc_info *soc_info = &cpas_hw->soc_info;
 	int camnoc_index = cpas_core->regbase_index[CAM_CPAS_REG_CAMNOC];
 	struct cam_cpas_work_payload *payload;
+	struct cam_worker_wrapper_taskdata_args task = {0};
+	int rc = 0;
 
 	if (!atomic_inc_not_zero(&cpas_core->irq_count)) {
 		CAM_ERR(CAM_CPAS, "CPAS off");
@@ -710,16 +714,28 @@ static irqreturn_t cam_cpastop_handle_irq(int irq_num, void *data)
 
 	CAM_DBG(CAM_CPAS, "IRQ callback, irq_status=0x%x", payload->irq_status);
 
+	rc = cam_worker_wrapper_get(cpas_core->worker_ctx, &task);
+	if (rc) {
+		CAM_ERR(CAM_CPAS, "Failed at getting a task from worker");
+		kfree(payload);
+		goto done;
+	}
+
 	payload->hw = cpas_hw;
-	INIT_WORK((struct work_struct *)&payload->work, cam_cpastop_work);
+	payload->worker_scheduled_ts = ktime_get();
+	rc = cam_worker_wrapper_enqueue(cpas_core->worker_ctx, &task,
+		payload, NULL, cam_cpastop_work);
+	if (rc) {
+		CAM_ERR(CAM_CPAS, "Failed at enqueuing a task to worker");
+		kfree(payload);
+		goto done;
+	}
 
 	if (TEST_IRQ_ENABLE)
 		cam_cpastop_disable_test_irq(cpas_hw);
 
 	cam_cpastop_reset_irq(cpas_hw);
 
-	payload->workq_scheduled_ts = ktime_get();
-	queue_work(cpas_core->work_queue, &payload->work);
 done:
 	atomic_dec(&cpas_core->irq_count);
 	wake_up(&cpas_core->irq_count_wq);

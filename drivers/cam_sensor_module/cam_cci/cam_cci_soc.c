@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries
  */
 
 #include "cam_cci_dev.h"
@@ -60,7 +61,7 @@ static int cam_cci_init_master(struct cci_device *cci_dev,
 			return rc;
 		}
 
-		flush_workqueue(cci_dev->write_wq[master]);
+		cam_worker_wrapper_flush(cci_dev->write_worker_ctx[master]);
 
 		/* Setting up the queue size for master */
 		cci_dev->cci_i2c_queue_info[master][QUEUE_0].max_queue_size
@@ -119,7 +120,7 @@ int cam_cci_init(struct v4l2_subdev *sd,
 		return -EINVAL;
 	}
 
-	if (!cci_dev->write_wq[master]) {
+	if (!cci_dev->write_worker_ctx[master]) {
 		CAM_ERR(CAM_CCI, "Null memory for write wq[:%d]", master);
 		rc = -ENOMEM;
 		return rc;
@@ -365,8 +366,8 @@ int cam_cci_parse_dt_info(struct platform_device *pdev,
 	struct cci_device *new_cci_dev)
 {
 	int rc = 0, i = 0;
-	struct cam_hw_soc_info *soc_info =
-		&new_cci_dev->soc_info;
+	struct cam_hw_soc_info *soc_info = &new_cci_dev->soc_info;
+	struct cam_worker_wrapper_init_args worker_init_args = {0};
 
 	rc = cam_soc_util_get_dt_properties(soc_info);
 	if (rc < 0) {
@@ -387,13 +388,21 @@ int cam_cci_parse_dt_info(struct platform_device *pdev,
 	cam_cci_init_clk_params(new_cci_dev);
 
 	for (i = 0; i < MASTER_MAX; i++) {
-		new_cci_dev->write_wq[i] = create_singlethread_workqueue(
-			"cam_cci_wq");
-		if (!new_cci_dev->write_wq[i])
-			CAM_ERR(CAM_CCI, "Failed to create write wq");
+		worker_init_args.name = CAM_CCI_WORKER_NAME;
+		worker_init_args.num_tasks = CAM_CCI_WORKER_NUM_TASK;
+		worker_init_args.max_active = 1;
+		worker_init_args.in_irq = WORKER_USAGE_NON_IRQ;
+		worker_init_args.flag = CAM_WORKER_FLAG_SERIAL | CAM_WORKER_FLAG_MEM_RECLAIM;
+		worker_init_args.priv_data = NULL;
+		worker_init_args.index = 0;
+		worker_init_args.worker_ctx_priv = (void **)&new_cci_dev->write_worker_ctx[i];
+		rc = cam_worker_wrapper_init(&worker_init_args, WORKER_CLASS_NRT);
+		if (rc)
+			CAM_ERR(CAM_CCI, "Failed to create write worker");
 	}
+
 	CAM_DBG(CAM_CCI, "Exit");
-	return 0;
+	return rc;
 }
 
 int cam_cci_soc_release(struct cci_device *cci_dev,
@@ -424,8 +433,8 @@ int cam_cci_soc_release(struct cci_device *cci_dev,
 	}
 
 	for (i = 0; i < MASTER_MAX; i++) {
-		if (cci_dev->write_wq[i])
-			flush_workqueue(cci_dev->write_wq[i]);
+		if (cci_dev->write_worker_ctx[i])
+			cam_worker_wrapper_flush(cci_dev->write_worker_ctx[i]);
 		cci_dev->i2c_freq_mode[i] = I2C_MAX_MODES;
 	}
 

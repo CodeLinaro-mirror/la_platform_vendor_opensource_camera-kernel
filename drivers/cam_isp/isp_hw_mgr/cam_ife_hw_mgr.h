@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_IFE_HW_MGR_H_
@@ -14,7 +14,6 @@
 #include "cam_sfe_hw_intf.h"
 #include "cam_ife_csid_hw_intf.h"
 #include "cam_top_tpg_hw_intf.h"
-#include "cam_tasklet_util.h"
 #include "cam_cdm_intf_api.h"
 
 /* IFE resource constants */
@@ -216,7 +215,7 @@ struct cam_ife_hw_mgr {
 	struct cam_ife_csid_hw_caps    ife_csid_dev_caps[
 						CAM_IFE_CSID_HW_NUM_MAX];
 	struct cam_vfe_hw_get_hw_cap   ife_dev_caps[CAM_IFE_HW_NUM_MAX];
-	struct cam_req_mgr_core_workq *workq;
+	void                          *worker_ctx;
 	struct cam_ife_hw_mgr_debug    debug_cfg;
 	spinlock_t                     ctx_lock;
 	bool                           support_consumed_addr;

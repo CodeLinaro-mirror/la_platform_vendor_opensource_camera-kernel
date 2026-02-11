@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -9,7 +9,6 @@
 #include <linux/list.h>
 #include <linux/timer.h>
 #include <linux/ratelimit.h>
-#include "cam_tasklet_util.h"
 #include "cam_isp_hw_mgr_intf.h"
 #include "cam_vfe_soc.h"
 #include "cam_vfe_core.h"
@@ -353,7 +352,7 @@ int cam_vfe_reset(void *hw_priv, void *reset_core_args, uint32_t arg_size)
 	core_info->reset_irq_handle = cam_irq_controller_subscribe_irq(
 		core_info->vfe_irq_controller, CAM_IRQ_PRIORITY_0,
 		top_reset_irq_reg_mask, vfe_hw,
-		cam_vfe_reset_irq_top_half, NULL, NULL, NULL);
+		cam_vfe_reset_irq_top_half, NULL, NULL);
 	if (core_info->reset_irq_handle < 1) {
 		CAM_ERR(CAM_ISP, "subscribe irq controller failed");
 		core_info->reset_irq_handle = 0;
@@ -488,7 +487,7 @@ int cam_vfe_start(void *hw_priv, void *start_args, uint32_t arg_size)
 	soc_info = &vfe_hw->soc_info;
 	core_info = (struct cam_vfe_hw_core_info *)vfe_hw->core_info;
 	isp_res = (struct cam_isp_resource_node  *)start_args;
-	core_info->tasklet_info = isp_res->tasklet_info;
+	core_info->worker_ctx = isp_res->worker_ctx;
 
 	mutex_lock(&vfe_hw->hw_mutex);
 	if (isp_res->res_type == CAM_ISP_RESOURCE_VFE_IN) {

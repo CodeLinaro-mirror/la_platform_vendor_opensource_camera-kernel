@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_CDM_H_
@@ -26,6 +26,7 @@
 #define CAM_SW_CDM_INDEX                  0
 #define CAM_CDM_INFLIGHT_WORKS            5
 #define CAM_CDM_HW_RESET_TIMEOUT          300
+#define CAM_CDM_WORKER_NUM_TASK           100
 
 /*
  * Macros to get prepare and get information
@@ -453,8 +454,7 @@ struct cam_cdm_work_payload {
 	uint32_t irq_status;
 	uint32_t irq_data;
 	int fifo_idx;
-	ktime_t workq_scheduled_ts;
-	struct work_struct work;
+	ktime_t worker_scheduled_ts;
 };
 
 /* struct cam_cdm_bl_cb_request_entry - callback entry for work to process.*/
@@ -484,7 +484,7 @@ struct cam_cdm_hw_mem {
 /* struct cam_cdm_bl_fifo - CDM hw memory struct */
 struct cam_cdm_bl_fifo {
 	struct completion bl_complete;
-	struct workqueue_struct *work_queue;
+	void *worker_ctx;
 	struct list_head bl_request_list;
 	struct mutex fifo_lock;
 	uint8_t bl_tag;
@@ -501,7 +501,7 @@ struct cam_cdm_bl_fifo {
  * @id:                  enum for possible CDM hardwares
  * @flags:               enum to tell if CDM is private of shared
  * @reset_complete:      completion event to make CDM wait for reset
- * @work_queue:          workqueue to schedule work for virtual CDM
+ * @worker_ctx:          Worker to schedule work for virtual CDM
  * @bl_request_list:     bl_request list for submitted commands in
  *                       virtual CDM
  * @version:             CDM version with major, minor, incr and reserved
@@ -525,7 +525,7 @@ struct cam_cdm {
 	enum cam_cdm_id id;
 	enum cam_cdm_flags flags;
 	struct completion reset_complete;
-	struct workqueue_struct *work_queue;
+	void *worker_ctx;
 	struct list_head bl_request_list;
 	struct cam_hw_version version;
 	uint32_t hw_version;

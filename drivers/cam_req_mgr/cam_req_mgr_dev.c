@@ -932,6 +932,13 @@ static int cam_req_mgr_component_master_bind(struct device *dev)
 		goto sysfs_fail;
 	}
 
+	/* Set up debugfs and worker for thread property update */
+	rc = cam_worker_wrapper_prop_update_init();
+	if (rc && rc != -EOPNOTSUPP) {
+		CAM_ERR(CAM_CRM, "Failed at setting up prop update debugfs, rc: %d", rc);
+		goto sysfs_fail;
+	}
+
 	return rc;
 
 sysfs_fail:
@@ -958,6 +965,7 @@ static void cam_req_mgr_component_master_unbind(struct device *dev)
 	component_unbind_all(dev, NULL);
 
 	/* Now proceed with unbinding master */
+	cam_worker_wrapper_prop_update_deinit();
 	sysfs_remove_file(&dev->kobj, &camera_debug_sysfs_attr.attr);
 	cam_req_mgr_core_device_deinit();
 	cam_req_mgr_util_deinit();
