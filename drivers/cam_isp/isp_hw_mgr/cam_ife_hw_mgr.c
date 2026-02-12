@@ -18512,111 +18512,78 @@ static int cam_ife_mgr_update_frame_drop_recovery_progress(
 	return 0;
 }
 
-static int cam_ife_mgr_update_path_mask_trigger(
+static int cam_ife_mgr_process_out_port(
 	struct cam_ife_hw_mgr_ctx *ctx,
-	struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
+	int out_port,
+	struct cam_ife_csid_get_all_path_vc_mask *vc_mask,
+	struct cam_isp_hw_cmd_args *isp_hw_cmd_args,
+	uint64_t *active_path_mask,
+	uint64_t request_id)
 {
-	struct cam_hw_prepare_update_args        *prepare;
-	struct cam_ife_hw_mgr                    *ife_hw_mgr;
-	struct cam_isp_prepare_hw_update_data    *prepare_hw_data;
-	struct cam_buf_io_cfg                    *io_cfg = NULL;
-	struct cam_hw_intf                       *hw_intf;
-	struct cam_ife_csid_get_all_path_vc_mask  vc_mask;
-	uint32_t out_port, i;
-	uint64_t active_path_mask = 0;
-	int rc = 0;
+	uint32_t out_port_orig = out_port;
 
-	prepare = (struct cam_hw_prepare_update_args *)isp_hw_cmd_args->cmd_data;
+	/* PDLIB Compatibility */
+	if (cam_ife_hw_mgr_check_path_port_compat(
+		CAM_ISP_HW_VFE_IN_PDLIB,
+		out_port)) {
+		*active_path_mask = 1 << CAM_IFE_PIX_PATH_RES_PPP;
+		isp_hw_cmd_args->u.path_mask.path_irq_mask |=
+			1 << CAM_IFE_PIX_PATH_RES_PPP;
+	}
 
-	io_cfg = (struct cam_buf_io_cfg *) ((uint8_t *)
-				&prepare->packet->payload_flex +
-				prepare->packet->io_configs_offset);
-	prepare_hw_data = (struct cam_isp_prepare_hw_update_data  *)prepare->priv;
-	ife_hw_mgr = ctx->hw_mgr;
-
-	for (i = 0; i < ctx->num_base; i++) {
-		if (ctx->base[i].hw_type != CAM_ISP_HW_TYPE_CSID)
-			continue;
-		hw_intf = ife_hw_mgr->csid_devices[ctx->base[i].idx];
-		if (hw_intf && hw_intf->hw_ops.process_cmd) {
-			rc = hw_intf->hw_ops.process_cmd(
-				hw_intf->hw_priv,
-				CAM_ISP_HW_CMD_GET_PATH_VC_INFO,
-				&vc_mask, sizeof(vc_mask));
-			if (rc)
-				CAM_ERR(CAM_ISP,
-					"ctx:%id CSID GETVC info failed rc :%d",
-					ctx->ctx_index, rc);
+	/* Handle Virtual RDI Mapping */
+	if (cam_ife_hw_mgr_is_virtual_rdi_res(out_port) && ctx->flags.per_port_en) {
+		out_port = cam_ife_hw_mgr_get_virtual_mapping_out_port(ctx, out_port, true);
+		if (out_port < 0) {
+			CAM_ERR(CAM_ISP, "ctx_idx:%d Failed vrdi mapping out_res:%d req:%lld",
+				ctx->ctx_index, out_port_orig, request_id);
+			return -EINVAL;
 		}
 	}
 
-	for (i = 0; i < prepare->packet->num_io_configs; i++) {
-		out_port = io_cfg[i].resource_type;
+	CAM_DBG(CAM_ISP, "ctx_idx:%d out_port :%d primary_rdi_out_res :%d",
+		ctx->ctx_index, out_port, ctx->primary_rdi_out_res);
 
-		CAM_DBG(CAM_ISP, "out_port:0x%x ctx :%d", out_port, ctx->ctx_index);
-		if (cam_ife_hw_mgr_check_path_port_compat(
-			CAM_ISP_HW_VFE_IN_PDLIB,
-			out_port)) {
-			active_path_mask = 1 << CAM_IFE_PIX_PATH_RES_PPP;
-			isp_hw_cmd_args->u.path_mask.path_irq_mask |=
-				1 << CAM_IFE_PIX_PATH_RES_PPP;
-			continue;
-		}
-
-		if (cam_ife_hw_mgr_is_virtual_rdi_res(out_port) &&
-				ctx->flags.per_port_en) {
-			out_port = cam_ife_hw_mgr_get_virtual_mapping_out_port(ctx, out_port, true);
-			if (out_port < 0) {
-				CAM_ERR(CAM_ISP,
-					"ctx_idx:%d Failed vrdi mapping out_res:%d req:%d",
-					ctx->ctx_index, io_cfg[i].resource_type,
-					prepare->packet->header.request_id);
-				return -EINVAL;
-			}
-		}
-
-		CAM_DBG(CAM_ISP, "ctx_idx:%d out_port :%d primary_rdi_out_res :%d",
-			ctx->ctx_index, out_port, ctx->primary_rdi_out_res);
-
-		switch (out_port) {
+	/* Map Output Resource to Path Bit */
+	switch (out_port) {
 		case CAM_ISP_IFE_OUT_RES_RDI_0:
-			active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_RDI_0);
-			if (vc_mask.enabled_path_vc &
+			*active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_RDI_0);
+			if (vc_mask->enabled_path_vc &
 				(1 << CAM_IFE_PIX_PATH_RES_RDI_0))
 				isp_hw_cmd_args->u.path_mask.path_irq_mask |=
 					(1 << CAM_IFE_PIX_PATH_RES_RDI_0);
 			break;
 		case CAM_ISP_IFE_OUT_RES_RDI_1:
-			active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_RDI_1);
-			if (vc_mask.enabled_path_vc &
+			*active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_RDI_1);
+			if (vc_mask->enabled_path_vc &
 				(1 << CAM_IFE_PIX_PATH_RES_RDI_1))
 				isp_hw_cmd_args->u.path_mask.path_irq_mask |=
 					(1 << CAM_IFE_PIX_PATH_RES_RDI_1);
 			break;
 		case CAM_ISP_IFE_OUT_RES_RDI_2:
-			active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_RDI_2);
-			if (vc_mask.enabled_path_vc &
+			*active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_RDI_2);
+			if (vc_mask->enabled_path_vc &
 				(1 << CAM_IFE_PIX_PATH_RES_RDI_2))
 				isp_hw_cmd_args->u.path_mask.path_irq_mask |=
 					(1 << CAM_IFE_PIX_PATH_RES_RDI_2);
 			break;
 		case CAM_ISP_IFE_OUT_RES_RDI_3:
-			active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_RDI_3);
-			if (vc_mask.enabled_path_vc &
+			*active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_RDI_3);
+			if (vc_mask->enabled_path_vc &
 				(1 << CAM_IFE_PIX_PATH_RES_RDI_3))
 				isp_hw_cmd_args->u.path_mask.path_irq_mask |=
 					(1 << CAM_IFE_PIX_PATH_RES_RDI_3);
 			break;
 		case CAM_ISP_IFE_OUT_RES_RDI_4:
-			active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_RDI_4);
-			if (vc_mask.enabled_path_vc &
+			*active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_RDI_4);
+			if (vc_mask->enabled_path_vc &
 				(1 << CAM_IFE_PIX_PATH_RES_RDI_4))
 				isp_hw_cmd_args->u.path_mask.path_irq_mask |=
 					(1 << CAM_IFE_PIX_PATH_RES_RDI_4);
 			break;
 		case CAM_ISP_IFE_OUT_RES_RDI_5:
-			active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_RDI_5);
-			if (vc_mask.enabled_path_vc &
+			*active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_RDI_5);
+			if (vc_mask->enabled_path_vc &
 				(1 << CAM_IFE_PIX_PATH_RES_RDI_5))
 				isp_hw_cmd_args->u.path_mask.path_irq_mask |=
 					(1 << CAM_IFE_PIX_PATH_RES_RDI_5);
@@ -18627,19 +18594,89 @@ static int cam_ife_mgr_update_path_mask_trigger(
 		case CAM_ISP_IFE_LITE_OUT_RES_STATS_BG:
 		case CAM_ISP_IFE_LITE_OUT_RES_STATS_BHIST:
 		case CAM_ISP_IFE_LITE_OUT_RES_GAMMA_DS:
-			active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_IPP);
+			*active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_IPP);
 			isp_hw_cmd_args->u.path_mask.path_irq_mask |=
 				(1 << CAM_IFE_PIX_PATH_RES_IPP);
 			break;
 		default:
-			active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_IPP);
+			*active_path_mask |= (1 << CAM_IFE_PIX_PATH_RES_IPP);
 			isp_hw_cmd_args->u.path_mask.path_irq_mask |=
 				(1 << CAM_IFE_PIX_PATH_RES_IPP);
 			break;
 		}
+
+	return 0;
+}
+
+static int cam_ife_mgr_update_path_mask_trigger(
+	struct cam_ife_hw_mgr_ctx *ctx,
+	struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
+{
+	struct cam_hw_prepare_update_args *prepare;
+	struct cam_ife_hw_mgr *ife_hw_mgr;
+	struct cam_isp_prepare_hw_update_data *prepare_hw_data;
+	struct cam_buf_io_cfg *io_cfg = NULL;
+	struct cam_hw_intf *hw_intf;
+	struct cam_ife_csid_get_all_path_vc_mask vc_mask;
+	uint32_t i;
+	uint64_t active_path_mask = 0;
+	int out_port, rc = 0;
+
+	prepare = (struct cam_hw_prepare_update_args *)isp_hw_cmd_args->cmd_data;
+	prepare_hw_data = (struct cam_isp_prepare_hw_update_data *)prepare->priv;
+	ife_hw_mgr = ctx->hw_mgr;
+
+	/* Get VC Mask from CSID Devices */
+	for (i = 0; i < ctx->num_base; i++) {
+		if (ctx->base[i].hw_type != CAM_ISP_HW_TYPE_CSID)
+			continue;
+
+		hw_intf = ife_hw_mgr->csid_devices[ctx->base[i].idx];
+		if (hw_intf && hw_intf->hw_ops.process_cmd) {
+			rc = hw_intf->hw_ops.process_cmd(
+				hw_intf->hw_priv,
+				CAM_ISP_HW_CMD_GET_PATH_VC_INFO,
+				&vc_mask, sizeof(vc_mask));
+			if (rc)
+				CAM_ERR(CAM_ISP, "ctx:%d CSID GETVC info failed rc :%d",
+					ctx->ctx_index, rc);
+		}
+	}
+
+	/* Loop through IO configs */
+	if (ctx->flags.is_ul_path) {
+		if (!prepare_hw_data->ul_data) {
+			CAM_ERR(CAM_ISP, "ctx:%d UL path enabled but ul_data is NULL",
+			ctx->ctx_index);
+			return -EINVAL;
+		}
+
+		for (i = 0; i < MAX_IO_RESOURCES; i++) {
+			out_port = prepare_hw_data->ul_data->pattern_period[i].resource_type;
+			if (out_port == 0)
+				continue;
+
+			rc = cam_ife_mgr_process_out_port(ctx, out_port, &vc_mask, isp_hw_cmd_args,
+				&active_path_mask, prepare->packet->header.request_id);
+			if (rc)
+				return rc;
+		}
+	} else {
+		io_cfg = (struct cam_buf_io_cfg *)((uint8_t *)&prepare->packet->payload_flex +
+						   prepare->packet->io_configs_offset);
+
+		for (i = 0; i < prepare->packet->num_io_configs; i++) {
+			out_port = io_cfg[i].resource_type;
+
+			rc = cam_ife_mgr_process_out_port(ctx, out_port, &vc_mask, isp_hw_cmd_args,
+				&active_path_mask, prepare->packet->header.request_id);
+			if (rc)
+				return rc;
+		}
 	}
 
 	isp_hw_cmd_args->u.path_mask.csid_rup_aup_mask = active_path_mask;
+
 	CAM_DBG(CAM_ISP,
 		"ctx_idx:%d num_io_configs:%d path_irq_mask:0x%x csid_rup_aup_mask:0x%x req:%lld ctx:%d",
 		ctx->ctx_index, prepare->packet->num_io_configs,
