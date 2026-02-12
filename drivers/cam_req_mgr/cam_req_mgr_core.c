@@ -4045,6 +4045,47 @@ err:
 
 }
 
+int cam_req_mgr_preempt_ul(struct cam_preempt_ul_cmd *cmd)
+{
+	int rc = -EINVAL, i;
+	struct cam_req_mgr_core_link *link;
+	struct cam_req_mgr_connected_device *dev;
+
+	if (!cmd->link_hdl) {
+		CAM_ERR(CAM_ISP, "link is NULL");
+		return -EINVAL;
+	}
+
+	link = cam_get_link_priv(cmd->link_hdl);
+	if (!link) {
+		CAM_ERR(CAM_CRM, "Link 0x%x not valid",
+			cmd->link_hdl);
+		return -EINVAL;
+	}
+	if (link->state != CAM_CRM_LINK_STATE_READY) {
+		CAM_ERR(CAM_CRM, "Link 0x%x is not in ready state",
+			cmd->link_hdl);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < link->num_devs; i++) {
+		dev = &link->l_dev[i];
+		if (!dev->no_crm_ops || !dev->no_crm_ops->preempt_ul) {
+			CAM_DBG(CAM_CRM, "No preempt for %s", dev->dev_info.name);
+			continue;
+		}
+		CAM_DBG(CAM_CRM, "%d preempt \"%s\" ", i, dev->dev_info.name);
+		rc = dev->no_crm_ops->preempt_ul(dev->dev_hdl);
+		if (rc) {
+			CAM_ERR(CAM_CRM,
+				"Failed no-crm preempt for \"%s\" link_hdl %x dev_hdl %x",
+				dev->dev_info.name, cmd->link_hdl, dev->dev_hdl);
+		}
+	}
+
+	return rc;
+}
+
 int cam_req_mgr_batch_request_v2(struct cam_batch_config_dev_cmd *cmd)
 {
 	int i, j, k;
