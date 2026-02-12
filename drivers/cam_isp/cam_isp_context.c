@@ -71,6 +71,9 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 	struct cam_context *ctx, uint32_t *num_results, struct response_buffer *response_buffers,
 	struct cam_hwfence_info *fence_info, uint32_t *is_fenceupdated);
 
+static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp,
+	int trigger_setting_id);
+
 static void cam_isp_update_fastpath_result_queue(void *data,
 	uint32_t value);
 
@@ -772,9 +775,14 @@ static int __cam_isp_ctx_no_crm_apply_trigger_util(void *priv, void *data)
 				sof_notify->ife_applied_req_id);
 
 			if (ctx_isp->ul_path_en) {
-				sensor_setting_id = cam_req_mgr_get_setting_id(ctx->link_hdl);
+				if (ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE)
+					sensor_setting_id = req_id;
+				else {
+					sensor_setting_id =
+						cam_req_mgr_get_setting_id(ctx->link_hdl);
+					cam_req_mgr_increase_setting_idx(ctx->link_hdl);
+				}
 				ctx_isp->ul_data.sensor_applied_setting_id = sensor_setting_id;
-				cam_req_mgr_increase_setting_idx(ctx->link_hdl);
 			}
 
 			if (!ctx_isp->mcu_enable)
@@ -8627,6 +8635,9 @@ static int cam_isp_ul_update_dev(int32_t dev_hdl, struct cam_packet *packet,
 	struct cam_isp_context             *ctx_isp;
 	struct cam_isp_context_ul_setting_data  *setting_data;
 	struct cam_kmd_buf_info *kmd_cmd_buff_info = NULL;
+	struct cam_ctx_request                   *req;
+	struct cam_req_mgr_no_crm_trigger_notify *sof_notify_payload;
+	struct crm_worker_task                   *task = NULL;
 
 	if (!ctx) {
 		CAM_ERR(CAM_ISP, "Invalid context handle 0x%x", dev_hdl);
@@ -8738,6 +8749,76 @@ static int cam_isp_ul_update_dev(int32_t dev_hdl, struct cam_packet *packet,
 		ctx->ctx_id, packet->header.request_id, req_isp->hw_update_data.packet_opcode_type,
 		req_isp->num_cfg,
 		req_isp->path_irq_mask);
+
+	/* In case of Trigger Type, add req to pending list and apply */
+	if (ctx_isp->ul_path_en && ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) {
+		rc = cam_context_prepare_ul_request(ctx_isp, packet->header.request_id);
+		if (rc < 0) {
+			CAM_ERR(CAM_ISP, "prepare_ul_request failed ctx:%u rc=%d",
+				ctx->ctx_id, rc);
+			return rc;
+		}
+	}
+
+	if (ctx_isp->independent_crm_en && ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE &&
+		(!rc)) {
+		if (ctx->state == CAM_CTX_ACTIVATED) {
+			CAM_DBG(CAM_ISP, "independent CRM apply from prepare_ul_request ctx:%u",
+				ctx->ctx_id);
+
+			sof_notify_payload =
+				kzalloc(sizeof(struct cam_req_mgr_no_crm_trigger_notify),
+				GFP_KERNEL);
+
+			if (!sof_notify_payload) {
+				CAM_ERR_RATE_LIMIT(CAM_ISP, "no memory for sof notify:%u",
+					ctx->ctx_id);
+				rc = -ENOMEM;
+				goto free_pending_req;
+			}
+
+			task = cam_req_mgr_worker_get_task(ctx_isp->hw_mgr_worker);
+			if (PTR_ERR(task) == -EIO) {
+				CAM_INFO_RATE_LIMIT(CAM_ISP,
+					"worker %s is paused, skip apply ctx:%u",
+					ctx_isp->hw_mgr_worker->worker_name, ctx->ctx_id);
+				rc = -EBUSY;
+				kfree(sof_notify_payload);
+				goto free_pending_req;
+			}
+			if (IS_ERR_OR_NULL(task)) {
+				CAM_ERR_RATE_LIMIT(CAM_ISP, "no empty task = %d ctx:%u",
+					PTR_ERR(task), ctx->ctx_id);
+				kfree(sof_notify_payload);
+				goto free_pending_req;
+			}
+
+			sof_notify_payload->link_hdl = ctx->link_hdl;
+			sof_notify_payload->frame_id = ctx_isp->frame_id;
+			sof_notify_payload->res_id   = CAM_IFE_PIX_PATH_RES_MAX;
+			sof_notify_payload->sof_irq_ts = 0;
+
+			task->process_cb = __cam_isp_ctx_no_crm_apply_trigger_util;
+			task->payload = sof_notify_payload;
+
+			rc = cam_req_mgr_worker_enqueue_task(task, ctx_isp, CRM_TASK_PRIORITY_0);
+			if (rc) {
+				CAM_ERR(CAM_REQ,
+					"Pending request processing failed rc:%d ctx:%u",
+					rc, ctx->ctx_id);
+				kfree(sof_notify_payload);
+				goto free_pending_req;
+			}
+		}
+
+		return rc;
+
+free_pending_req:
+			req = list_last_entry(&ctx->pending_req_list, struct cam_ctx_request, list);
+			mutex_lock(&ctx_isp->isp_mutex);
+			__cam_isp_ctx_move_req_to_free_list(ctx, req);
+			mutex_unlock(&ctx_isp->isp_mutex);
+	}
 
 end:
 	return rc;
@@ -10592,7 +10673,7 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 
 	rc = cam_common_wait_for_completion_timeout(
 		&isp_ctx->ul_fp_params.fast_path_buf_done, msecs_to_jiffies(500));
-	if (rc < 0) {
+	if (!rc) {
 		CAM_ERR(CAM_ISP,
 			"Timed out waiting for results in ctx: %u on link: 0x%x",
 			ctx->ctx_id, ctx->link_hdl);
@@ -11446,7 +11527,7 @@ static int __cam_isp_ctx_send_req_error(struct cam_isp_context *ctx_isp,
 	return rc;
 }
 
-static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
+static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp, int trigger_setting_id)
 {
 	struct cam_ctx_request           *req;
 	struct cam_isp_ctx_req           *req_isp, *setting_req_isp;
@@ -11469,10 +11550,14 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp)
 	}
 	req = list_first_entry(&cam_ctx->free_req_list, struct cam_ctx_request, list);
 
-	if (ctx_isp->sensor_pd == 1)
-		setting_id = cam_req_mgr_get_setting_id(cam_ctx->link_hdl);
-	else
-		setting_id = ctx_isp->ul_data.sensor_applied_setting_id;
+	if (ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) {
+		setting_id = trigger_setting_id;
+	} else {
+		if (ctx_isp->sensor_pd == 1)
+			setting_id = cam_req_mgr_get_setting_id(cam_ctx->link_hdl);
+		else
+			setting_id = ctx_isp->ul_data.sensor_applied_setting_id;
+	}
 
 	if(!ctx_isp->setting_data[setting_id % MAX_SETTING_PACKETS].is_setting_valid) {
 		CAM_ERR(CAM_ISP, "No valid settings available to apply, setting_id: %d",
@@ -11735,7 +11820,7 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 	struct cam_req_mgr_apply_request apply_req;
 	struct list_head                  temp_req_list;
 	uint64_t prev_ts, curr_ts = 0, boot_ts;
-	uint64_t sensor_setting_id = 0, isp_setting_id;
+	uint64_t sensor_setting_id = 0, isp_setting_id = 0;
 	uintptr_t sensor_setting_id_buf;
 	uint64_t max_settingid;
 	bool new_setting_found = false;
@@ -11753,8 +11838,14 @@ static int __cam_isp_ctx_no_crm_apply(struct cam_isp_context *ctx_isp,
 
 	INIT_LIST_HEAD(&temp_req_list);
 
-	if (ctx_isp->ul_path_en)
-		cam_context_prepare_ul_request(ctx_isp);
+	if (ctx_isp->ul_path_en && ctx_isp->stream_type != CAM_REQ_MGR_LINK_TRIGGER_TYPE) {
+		rc = cam_context_prepare_ul_request(ctx_isp, isp_setting_id);
+		if (rc < 0) {
+			CAM_ERR(CAM_ISP, "prepare_ul_request failed ctx:%u rc=%d",
+			cam_ctx->ctx_id, rc);
+			return rc;
+		}
+	}
 
 	mutex_lock(&ctx_isp->isp_mutex);
 	if (list_empty(&cam_ctx->pending_req_list)) {
