@@ -1,0 +1,157 @@
+config SPECTRA_KT
+	bool "enable camera KT variant"
+	help
+	  This is enabling camera KT variant for specific platforms.
+	  KT variant uses camera_kt directory structure.
+	  This is used for platforms like QCM6490.
+
+config SPECTRA_ISP
+	bool "enable camera ISP module"
+	help
+	  This is enabling camera ISP module.
+	  IFE camera driver file be included.
+	  This will enable camera ISP driver to handle IFE driver.
+	  Core camera driver to handle VFE HW.
+
+config SPECTRA_ICP
+	bool "enable camera ICP module"
+	help
+	  This is enabling camera ICP module.
+	  Camera ICP driver file be included.
+	  This will enable camera ICP driver to interact with,
+	  ICP FW. Which can control IPE and BPS HW.
+
+config SPECTRA_JPEG
+	bool "enable camera jpeg module"
+	help
+	  This is enabling camera JPEG module.
+	  camera jpeg module will be functional.
+	  This module interact with jpeg HW for
+	  snapshot processing.
+
+config SPECTRA_SENSOR
+	bool "enable camera sensor module"
+	help
+	  This is enabling camera sensor module.
+	  sensor module files will be included to enable the driver.
+	  eeprom, flash, csiphy all other module will be included
+	  to make the sensor functional.
+
+config SPECTRA_FD
+	bool "enable camera FD module"
+	help
+	  This is enabling camera Face Detection module.
+	  FD module files will be included to enable the driver.
+	  This module interacts with FD HW for face detection.
+
+config SPECTRA_LRME
+	bool "enable camera LRME module"
+	help
+	  This is enabling camera LRME module.
+	  LRME (Low Resolution Motion Estimation) module will be functional.
+	  This module is used for motion estimation processing.
+
+config SPECTRA_CRE
+	bool "enable camera CRE module"
+	help
+	  This option enables camera CRE module
+	  compilation. Camera CRE module will be functional.
+	  This enables CRE driver code files
+	  which interacts with CRE HW.
+
+config SPECTRA_OPE
+	bool "enable camera OPE module"
+	help
+	  This is enabling camera OPE module.
+	  OPE (Offline Processing Engine) module will be functional.
+	  This module is used for offline image processing.
+
+config SPECTRA_TFE
+	bool "enable camera TFE module"
+	help
+	  This is enabling camera TFE module.
+	  TFE (Thin Front End) module will be functional.
+	  This module handles TFE hardware operations.
+
+config SPECTRA_SFE
+	bool "enable camera SFE module"
+	help
+	  This is enabling camera SFE module.
+	  SFE (Slim Front End) module will be functional.
+	  This module handles SFE hardware operations.
+
+config SPECTRA_CUSTOM
+	bool "enable camera CUSTOM module"
+	help
+	  This is enabling camera CUSTOM module.
+	  Custom module for platform-specific customizations.
+	  This enables custom hardware manager and CSID.
+
+config SPECTRA_SECURE_CAMNOC_REG_UPDATE
+	bool "enable secure camnoc reg update feature"
+	help
+	  This config enables secure reg update
+	  feature that allows the HLOS to configure
+	  camnoc registers through HYP to avoid
+	  potential security issues.
+
+config ENABLE_US_API
+	bool "enable US API support"
+	help
+	  This config enables US (User Space) API support.
+	  Enables buffer manager and user space APIs.
+
+config USE_DOWNSTREAM_DMA_BUFF
+        bool "use downstream dma buffer"
+        help
+	  This config enable downstream dma buff usage
+
+config SPECTRA_SENSOR_SYSFS_UTIL
+	bool "enable sensor sysfs utility"
+	help
+	  This config enables sensor sysfs utility.
+	  Provides sysfs interface for sensor debugging.
+
+config QCOM_CX_IPEAK
+	bool "enable CX IPEAK support"
+	help
+	  This config enables CX IPEAK support.
+	  CX IPEAK is used for current peak management.
+
+config QCOM_BUS_SCALING
+	bool "enable bus scaling support"
+	help
+	  This config enables bus scaling support.
+	  Bus scaling is used for bandwidth management.
+
+config CAM_PRESIL
+	bool "enable camera presil support"
+	help
+	  This config enables camera presil support.
+	  Presil is used for pre-silicon validation.
+
+config TARGET_SYNX_ENABLE
+	bool "enable HW synx"
+	help
+	  This is enabling HW synx feature.
+	  synx hw signaling external to camera,
+	  like EVA and other.
+	  This is to avoid sw signaling latency.
+
+config QCOM_VA_MINIDUMP
+	bool "enable VA minidump support"
+	help
+	  This config enables VA minidump support.
+	  Minidump is used for crash debugging.
+
+config VIDEO_QCOM_CAMERA
+	tristate "enable camera module compilation"
+	depends on VIDEO_DEV && MEDIA_CONTROLLER && m
+	select VIDEO_V4L2_SUBDEV_API
+	select VIDEO_V4L2_I2C
+	default n
+	help
+	  This will enable the camera kernel
+	  driver compilation.
+	  To compile this driver as a module named camera.ko
+	  choose m here.

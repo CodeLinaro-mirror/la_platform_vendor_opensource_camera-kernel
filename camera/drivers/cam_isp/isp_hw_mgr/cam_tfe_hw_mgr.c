@@ -5243,7 +5243,7 @@ static int cam_tfe_update_dual_config(
 		CAM_ERR(CAM_ISP, "not enough buffer for all the dual configs");
 		cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 		rc = -EINVAL;
-		goto end
+		goto end;
 	}
 
 	CAM_DBG(CAM_ISP, "num_ports:%d", dual_config->num_ports);
@@ -6132,6 +6132,12 @@ static int cam_tfe_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 		case CAM_ISP_HW_MGR_GET_LAST_CONSUMED_ADDR:
 			rc = cam_tfe_mgr_cmd_get_last_consumed_addr(ctx,
 				(struct cam_isp_hw_done_event_data *)(isp_hw_cmd_args->cmd_data));
+			break;
+		case CAM_ISP_HW_MGR_GET_ACTIVE_HW_CTX_CNT:
+			 // No per-port support for TFE , dummy command handling.
+			 CAM_DBG(CAM_ISP, "ctx :%u hw_ctx_cnt %d grp_cfg_index :%d",
+			                 isp_hw_cmd_args->u.active_hw_ctx.hw_ctx_cnt,
+			                 isp_hw_cmd_args->u.active_hw_ctx.stream_grp_cfg_index);
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "Invalid HW mgr command:0x%x, ISP HW mgr cmd:0x%x",

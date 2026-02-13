@@ -593,6 +593,8 @@ struct cam_ahb_vote {
  * @camnoc_bw:               CAMNOC bw for this path
  * @mnoc_ab_bw:              MNOC AB bw for this path
  * @mnoc_ib_bw:              MNOC IB bw for this path
+ * @ddr_ib_bw:               DDR IB bw for this path
+ * @ddr_ab_bw:               DDR AB bw for this path
  */
 struct cam_cpas_axi_per_path_bw_vote {
 	uint32_t                      usage_data;
@@ -602,6 +604,8 @@ struct cam_cpas_axi_per_path_bw_vote {
 	uint64_t                      camnoc_bw;
 	uint64_t                      mnoc_ab_bw;
 	uint64_t                      mnoc_ib_bw;
+	uint64_t                      ddr_ib_bw;
+	uint64_t                      ddr_ab_bw;
 };
 
 /**

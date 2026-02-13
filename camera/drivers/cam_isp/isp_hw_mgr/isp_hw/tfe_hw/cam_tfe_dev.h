@@ -27,10 +27,9 @@ int cam_tfe_probe(struct platform_device *pdev);
  *
  * @pdev:                    Platform Device pointer
  *
- * @Return:                  0: Success
- *                           Non-zero: Failure
+ * @Return:                  void
  */
-int cam_tfe_remove(struct platform_device *pdev);
+void cam_tfe_remove(struct platform_device *pdev);
 
 int cam_tfe_init_module(void);
 void cam_tfe_exit_module(void);

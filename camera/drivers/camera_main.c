@@ -63,10 +63,9 @@
 #include "cam_csid_ppi100.h"
 #include "camera_main.h"
 
-#include "cam_generated_h"
+#include "cam_generated.h"
 
-const char camera_banner[] = "Camera-Banner: (" CAMERA_COMPILE_HOST
-	") (" CAMERA_COMPILE_TIME ") (" CAMERA_CC_VERSION ")";
+const char camera_banner[] = "Camera-Banner: (" CAMERA_COMPILE_TIME") (" CAMERA_COMPILE_BY ") (" CAMERA_COMPILE_HOST ")";
 
 #ifdef CONFIG_CAM_PRESIL
 extern int cam_presil_framework_dev_init_from_main(void);

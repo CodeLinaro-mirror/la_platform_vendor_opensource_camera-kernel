@@ -1,0 +1,181 @@
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+
+ddk_headers(
+    name = "camera_uapi_headers",
+    hdrs = glob([
+        "camera/include/uapi/camera/**/*.h",
+        "camera_kt/include/uapi/camera/**/*.h",
+    ]),
+    includes = [
+        "camera/include/uapi/camera",
+        "camera/include/uapi/camera/media",
+    ],
+)
+
+driver_header_globs = [
+    "camera/drivers/**/*.h",
+    "common/**/*.h",
+]
+
+# Generated list of driver includes for camera directory
+camera_driver_includes = [
+    "camera/drivers",
+    "camera/drivers/cam_core",
+    "camera/drivers/cam_cpas",
+    "camera/drivers/cam_cpas/include",
+    "camera/drivers/cam_cpas/cpas_top",
+    "camera/drivers/cam_cpas/camss_top",
+    "camera/drivers/cam_req_mgr",
+    "camera/drivers/cam_utils",
+    "camera/drivers/cam_sensor_module/cam_csiphy",
+    "camera/drivers/cam_sensor_module/cam_csiphy/include",
+    "camera/drivers/cam_sensor_module/cam_sensor_utils",
+    "camera/drivers/cam_sensor_module/cam_eeprom",
+    "camera/drivers/cam_sensor_module/cam_sensor_io",
+    "camera/drivers/cam_sensor_module/cam_cci",
+    "camera/drivers/cam_sensor_module/cam_actuator",
+    "camera/drivers/cam_sensor_module/cam_flash",
+    "camera/drivers/cam_sensor_module/cam_ois",
+    "camera/drivers/cam_sensor_module/cam_sensor",
+    "camera/drivers/cam_sensor_module/cam_res_mgr",
+    "camera/drivers/cam_sensor_module/cam_tpg",
+    "camera/drivers/cam_sensor_module/cam_tpg/tpg_hw",
+    "camera/drivers/cam_sensor_module/cam_tpg/tpg_hw/tpg_hw_v_1_0",
+    "camera/drivers/cam_sensor_module/cam_tpg/tpg_hw/tpg_hw_v_1_2",
+    "camera/drivers/cam_sensor_module/cam_tpg/tpg_hw/tpg_hw_v_1_3",
+    "camera/drivers/cam_sensor_module/cam_tpg/tpg_hw/tpg_hw_v_1_4",
+    "camera/drivers/cam_sensor_module/cam_hdmi_bdg",
+    "camera/drivers/cam_sensor_module/cam_ir_led",
+    "camera/drivers/cam_sensor_module/cam_dp_bdg",
+    "camera/drivers/cam_smmu",
+    "camera/drivers/cam_sync",
+    "camera/drivers/cam_fd",
+    "camera/drivers/cam_fd/fd_hw_mgr",
+    "camera/drivers/cam_fd/fd_hw_mgr/fd_hw",
+    "camera/drivers/cam_presil/inc",
+    "camera/drivers/cam_isp",
+    "camera/drivers/cam_isp/isp_hw_mgr",
+    "camera/drivers/cam_isp/isp_hw_mgr/include",
+    "camera/drivers/cam_isp/isp_hw_mgr/hw_utils/include",
+    "camera/drivers/cam_isp/isp_hw_mgr/hw_utils/irq_controller",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/include",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/ppi_hw",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/ife_csid_hw",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/sfe_hw",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/sfe_hw/sfe_bus/include",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/sfe_hw/sfe_top",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/sfe_hw/sfe_bus",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe_bus/include",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe_bus",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe_top",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe_top/include",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/vfe_hw/vfe17x",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/tfe_hw",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/tfe_csid_hw",
+    "camera/drivers/cam_isp/isp_hw_mgr/isp_hw/top_tpg",
+    "camera/drivers/cam_cust",
+    "camera/drivers/cam_cust/cam_custom_hw_mgr/include",
+    "camera/drivers/cam_cust/cam_custom_hw_mgr/cam_custom_csid",
+    "camera/drivers/cam_cust/cam_custom_hw_mgr",
+    "camera/drivers/cam_cust/cam_custom_hw_mgr/cam_custom_hw1",
+    "camera/drivers/cam_cdm",
+    "camera/drivers/cam_icp",
+    "camera/drivers/cam_icp/fw_inc",
+    "camera/drivers/cam_icp/icp_hw/include",
+    "camera/drivers/cam_icp/icp_hw/icp_hw_mgr/include",
+    "camera/drivers/cam_icp/icp_hw/icp_proc",
+    "camera/drivers/cam_icp/icp_hw/icp_proc/icp_common",
+    "camera/drivers/cam_icp/icp_hw/icp_proc/icp_v1_hw",
+    "camera/drivers/cam_icp/icp_hw/icp_proc/icp_v2_hw",
+    "camera/drivers/cam_icp/icp_hw/bps_hw",
+    "camera/drivers/cam_icp/icp_hw/ipe_hw",
+    "camera/drivers/cam_icp/icp_hw/ofe_hw",
+    "camera/drivers/cam_jpeg",
+    "camera/drivers/cam_jpeg/jpeg_hw",
+    "camera/drivers/cam_jpeg/jpeg_hw/include",
+    "camera/drivers/cam_jpeg/jpeg_hw/jpeg_enc_hw",
+    "camera/drivers/cam_jpeg/jpeg_hw/jpeg_dma_hw",
+    "camera/drivers/cam_lrme",
+    "camera/drivers/cam_lrme/lrme_hw_mgr",
+    "camera/drivers/cam_lrme/lrme_hw_mgr/lrme_hw",
+    "camera/drivers/cam_cre",
+    "camera/drivers/cam_cre/cam_cre_hw_mgr",
+    "camera/drivers/cam_cre/cam_cre_hw_mgr/cre_hw/include",
+    "camera/drivers/cam_cre/cam_cre_hw_mgr/cre_hw",
+    "camera/drivers/cam_cre/cam_cre_hw_mgr/cre_hw/top",
+    "camera/drivers/cam_ope",
+    "camera/drivers/cam_ope/ope_hw_mgr",
+    "camera/drivers/cam_ope/ope_hw_mgr/ope_hw",
+    "camera/drivers/cam_ope/ope_hw_mgr/ope_hw/bus_rd",
+    "camera/drivers/cam_ope/ope_hw_mgr/ope_hw/bus_wr",
+    "camera/drivers/cam_ope/ope_hw_mgr/ope_hw/top",
+]
+
+ddk_headers(
+    name = "camera_src_headers",
+    hdrs = glob(driver_header_globs),
+    includes = camera_driver_includes + [
+        "common",
+        ".",
+    ],
+)
+
+ddk_headers(
+    name = "camera_dt_bindings",
+    hdrs = ["camera/dt-bindings/msm-camera.h"],
+    includes = ["camera", "camera/dt-bindings"],
+)
+
+genrule(
+    name = "camera_banner_header",
+    srcs = [],
+    outs = ["camera/drivers/cam_generated.h"],
+    cmd = """
+      {
+        printf '#define CAMERA_COMPILE_TIME "%s"\n' "$$(date)"
+        printf '#define CAMERA_COMPILE_BY "%s"\n' "$$(whoami)"
+        printf '#define CAMERA_COMPILE_HOST "%s"\n' "$$(uname -n)"
+      } > "$@"
+    """
+)
+
+ddk_headers(
+    name = "camera_banner",
+    hdrs = [":camera_banner_header"],
+    includes = ["camera/drivers"],
+)
+
+ddk_headers(
+    name = "camera_headers",
+    hdrs = [
+        ":camera_src_headers",
+        ":camera_uapi_headers",
+        ":camera_dt_bindings",
+        ":camera_banner",
+    ],
+)
+
+load(":camera_modules.bzl", "define_camera_module")
+
+define_camera_module()
+
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+string_flag(
+    name = "project_name",
+    build_setting_default = "none",
+)
+config_setting(
+    name = "no_project",
+    flag_values = {":project_name": "none"},
+)
+config_setting(
+    name = "shikra",
+    flag_values = {":project_name": "shikra"},
+)
