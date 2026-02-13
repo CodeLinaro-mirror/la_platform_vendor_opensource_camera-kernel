@@ -5094,6 +5094,14 @@ static int __cam_req_mgr_unlink(
 	link->state = CAM_CRM_LINK_STATE_IDLE;
 	spin_unlock_bh(&link->link_state_spin_lock);
 
+	mutex_lock(&link->lock);
+	spin_lock_bh(&link->link_state_spin_lock);
+	/* Destroy timer of link */
+	crm_timer_exit(&link->watchdog);
+	spin_unlock_bh(&link->link_state_spin_lock);
+	/* Release session mutex for worker processing */
+	mutex_unlock(&session->lock);
+
 	if (!link->is_shutdown) {
 		/* Hold the request lock prior to disconnecting link */
 		mutex_lock(&link->req.lock);
@@ -5104,13 +5112,6 @@ static int __cam_req_mgr_unlink(
 		mutex_unlock(&link->req.lock);
 	}
 
-	mutex_lock(&link->lock);
-	spin_lock_bh(&link->link_state_spin_lock);
-	/* Destroy timer of link */
-	crm_timer_exit(&link->watchdog);
-	spin_unlock_bh(&link->link_state_spin_lock);
-	/* Release session mutex for worker processing */
-	mutex_unlock(&session->lock);
 	/* Destroy worker of link and corresponding task data */
 	cam_worker_wrapper_deinit(link->worker_ctx);
 	CAM_MEM_FREE(link->task_data);
