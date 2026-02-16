@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/debugfs.h>
@@ -209,15 +209,10 @@ int cam_context_buf_done_from_hw(struct cam_context *ctx,
 		CAM_DBG(CAM_CTXT, "[%s][%d] no output fence to signal",
 			ctx->dev_name, ctx->ctx_id);
 		list_del_init(&req->list);
-		cam_smmu_buffer_tracker_putref(&req->buf_tracker);
-		if (req->packet) {
-			cam_common_mem_free(req->packet);
-			req->packet = NULL;
-		}
-		req->ctx = NULL;
-		list_add_tail(&req->list, &ctx->free_req_list);
 		spin_unlock(&ctx->lock);
-		return -EIO;
+		cam_smmu_buffer_tracker_putref(&req->buf_tracker);
+		rc = -EIO;
+		goto clean_up;
 	}
 
 	/*
@@ -265,6 +260,7 @@ int cam_context_buf_done_from_hw(struct cam_context *ctx,
 
 	cam_cpas_notify_event(ctx->ctx_id_string, req->request_id);
 
+clean_up:
 	if (req->packet) {
 		cam_common_mem_free(req->packet);
 		req->packet = NULL;
@@ -279,7 +275,7 @@ int cam_context_buf_done_from_hw(struct cam_context *ctx,
 	list_add_tail(&req->list, &ctx->free_req_list);
 	spin_unlock(&ctx->lock);
 
-	return 0;
+	return rc;
 }
 
 static int cam_context_apply_req_to_hw(struct cam_ctx_request *req,
