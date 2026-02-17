@@ -261,6 +261,8 @@ int32_t cam_sensor_handle_poll(
 		cond_wait->reg_data;
 	i2c_list->i2c_settings.reg_setting->delay =
 		cond_wait->timeout;
+	i2c_list->i2c_settings.reg_setting->data_mask =
+		cond_wait->data_mask;
 
 	(*cmd_buf) += sizeof(struct cam_cmd_conditional_wait) /
 		sizeof(uint32_t);
@@ -552,36 +554,23 @@ int32_t cam_sensor_handle_continuous_read(
 }
 
 static int cam_sensor_handle_slave_info(
-	struct camera_io_master *io_master,
-	uint32_t *cmd_buf)
+	uint32_t *cmd_buf,
+	struct i2c_settings_array *i2c_reg_settings,
+	struct list_head **list_ptr)
 {
 	int rc = 0;
 	struct cam_cmd_i2c_info *i2c_info = (struct cam_cmd_i2c_info *)cmd_buf;
+	struct i2c_settings_list  *i2c_list;
 
-	if (io_master == NULL || cmd_buf == NULL) {
-		CAM_ERR(CAM_SENSOR_UTIL, "Invalid args");
-		return -EINVAL;
+	i2c_list =
+			cam_sensor_get_i2c_ptr(i2c_reg_settings, 1);
+	if (!i2c_list || !i2c_list->i2c_settings.reg_setting) {
+			CAM_ERR(CAM_SENSOR_UTIL, "Failed in allocating mem for list");
+			return -ENOMEM;
 	}
 
-	switch (io_master->master_type) {
-	case CCI_MASTER:
-		io_master->cci_client->sid = (i2c_info->slave_addr >> 1);
-		io_master->cci_client->i2c_freq_mode = i2c_info->i2c_freq_mode;
-		break;
-
-	case I2C_MASTER:
-		io_master->qup_client->i2c_client->addr = i2c_info->slave_addr;
-		break;
-
-	case SPI_MASTER:
-		break;
-
-	default:
-		CAM_ERR(CAM_SENSOR_UTIL, "Invalid master type: %d",
-			io_master->master_type);
-		rc = -EINVAL;
-		break;
-	}
+	i2c_list->op_code = CAM_SENSOR_I2C_SET_I2C_INFO;
+	i2c_list->slave_info = *i2c_info;
 
 	return rc;
 }
@@ -817,7 +806,7 @@ int cam_sensor_i2c_command_parser(
 					goto end;
 				}
 				rc = cam_sensor_handle_slave_info(
-					io_master, cmd_buf);
+					cmd_buf, i2c_reg_settings, &list);
 				if (rc) {
 					CAM_ERR(CAM_SENSOR_UTIL,
 					"Handle slave info failed with rc: %d",
@@ -1014,6 +1003,12 @@ int32_t cam_sensor_i2c_read_data(
 
 	list_for_each_entry(i2c_list,
 		&(i2c_settings->list_head), list) {
+		if (i2c_list->op_code == CAM_SENSOR_I2C_SET_I2C_INFO) {
+			CAM_DBG(CAM_SENSOR_UTIL,
+				"CAM_SENSOR_I2C_SET_I2C_INFO continue");
+			continue;
+		}
+
 		read_buff = i2c_list->i2c_settings.read_buff;
 		buff_length = i2c_list->i2c_settings.read_buff_len;
 		if ((read_buff == NULL) || (buff_length == 0)) {
@@ -1796,7 +1791,16 @@ int cam_sensor_util_init_gpio_pin_tbl(
 		return -EINVAL;
 	}
 
-	of_node = soc_info->dev->of_node;
+	if (soc_info->is_child_node) {
+		of_node = soc_info->parent_node;
+	} else {
+		of_node = soc_info->dev->of_node;
+	}
+
+	if (!of_node) {
+		CAM_ERR(CAM_SENSOR_UTIL, "of_node is NULL");
+		return -EINVAL;
+	}
 
 	gconf = soc_info->gpio_data;
 	if (!gconf) {
