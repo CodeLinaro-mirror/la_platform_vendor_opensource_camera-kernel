@@ -320,6 +320,9 @@ struct cam_hw_soc_info {
 
 	void                           *mmrm_handle;
 
+	bool                            opp_supported;
+	bool                            opp_required_opps_supported;
+
 	bool                            is_clk_drv_en;
 
 	struct cam_soc_gpio_data       *gpio_data;

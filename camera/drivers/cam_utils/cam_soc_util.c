@@ -1490,6 +1490,74 @@ static int cam_soc_util_set_clk_rate(struct cam_hw_soc_info *soc_info,
 	return rc;
 }
 
+static bool cam_soc_util_detect_required_opps(struct cam_hw_soc_info *soc_info)
+{
+	struct dev_pm_opp *opp;
+	unsigned long freq = 0;
+	bool has_required_opps = false;
+	int opp_count;
+
+	/* Count total OPPs */
+	opp_count = dev_pm_opp_get_opp_count(soc_info->dev);
+	if (opp_count <= 0) {
+		CAM_DBG(CAM_UTIL, "No OPPs found for %s", soc_info->dev_name);
+		return false;
+	}
+
+	/* Get first available OPP to check for voltage scaling */
+	opp = dev_pm_opp_find_freq_ceil(soc_info->dev, &freq);
+	if (IS_ERR(opp)) {
+		CAM_DBG(CAM_UTIL, "No valid OPP found for %s", soc_info->dev_name);
+		return false;
+	}
+
+	/* Check if this OPP has voltage information (indicates required-opps) */
+	if (dev_pm_opp_get_voltage(opp) > 0) {
+		has_required_opps = true;
+		CAM_DBG(CAM_UTIL, "Found voltage scaling support for %s", soc_info->dev_name);
+	} else {
+		CAM_DBG(CAM_UTIL, "Frequency-only scaling for %s", soc_info->dev_name);
+	}
+
+	dev_pm_opp_put(opp);
+	return has_required_opps;
+}
+
+static int cam_soc_util_set_opp_rate_safe(struct cam_hw_soc_info *soc_info,
+	unsigned long target_freq)
+{
+	int rc;
+
+	CAM_DBG(CAM_UTIL, "Setting OPP rate %lu for %s (voltage_scaling=%s)",
+		target_freq, soc_info->dev_name,
+		soc_info->opp_required_opps_supported ? "enabled" : "disabled");
+
+	rc = dev_pm_opp_set_rate(soc_info->dev, target_freq);
+	if (rc) {
+		/* If required-opps are expected but failed, it's a critical error */
+		if (soc_info->opp_required_opps_supported) {
+			CAM_ERR(CAM_UTIL,
+				"Critical: OPP set_rate failed for %s freq %lu rc %d (voltage scaling expected)",
+				soc_info->dev_name, target_freq, rc);
+			return rc;
+		}
+
+		/* For frequency-only OPP, log warning but continue */
+		CAM_WARN(CAM_UTIL,
+			"OPP set_rate failed for %s freq %lu rc %d (frequency-only scaling, continuing)",
+			soc_info->dev_name, target_freq, rc);
+
+		/* Disable OPP support and fall back to legacy for this session */
+		CAM_WARN(CAM_UTIL, "Disabling OPP support for %s, falling back to legacy",
+			soc_info->dev_name);
+		soc_info->opp_supported = false;
+		return -EAGAIN; /* Signal caller to use legacy method */
+	}
+
+	CAM_DBG(CAM_UTIL, "OPP rate set successfully for %s", soc_info->dev_name);
+	return 0;
+}
+
 int cam_soc_util_set_src_clk_rate(struct cam_hw_soc_info *soc_info, int cesta_client_idx,
 	unsigned long clk_rate_high, unsigned long clk_rate_low)
 {
@@ -1530,25 +1598,42 @@ int cam_soc_util_set_src_clk_rate(struct cam_hw_soc_info *soc_info, int cesta_cl
 	}
 
 	CAM_DBG(CAM_UTIL,
-		"set %s, cesta_client_idx: %d rate [%ld %ld] dev_name = %s apply level = %d",
+		"set %s, cesta_client_idx: %d rate [%ld %ld] dev_name = %s apply level = %d opp_supported = %d",
 		soc_info->clk_name[src_clk_idx], cesta_client_idx, clk_rate_high, clk_rate_low,
-		soc_info->dev_name, apply_level);
+		soc_info->dev_name, apply_level, soc_info->opp_supported);
 
 	if ((soc_info->cam_cx_ipeak_enable) && (clk_rate_high > 0)) {
 		cam_cx_ipeak_update_vote_cx_ipeak(soc_info,
 			apply_level);
 	}
 
-	rc = dev_pm_opp_set_rate(soc_info->dev,
-			  soc_info->clk_rate[apply_level][soc_info->src_clk_idx]);
-	if (rc) {
-		CAM_ERR(CAM_UTIL,
-			"Unable to set operating point for dev %s clk_name %s rc %d",
-			soc_info->dev_name, soc_info->clk_name[soc_info->src_clk_idx],
-			rc);
-		return rc;
+	/* Try OPP framework first if supported */
+	if (soc_info->opp_supported) {
+		CAM_DBG(CAM_UTIL, "Using OPP framework for %s", soc_info->dev_name);
+
+		rc = cam_soc_util_set_opp_rate_safe(soc_info,
+			soc_info->clk_rate[apply_level][soc_info->src_clk_idx]);
+
+		if (rc == -EAGAIN) {
+			/* OPP failed and was disabled, fall through to legacy */
+			CAM_INFO(CAM_UTIL, "OPP disabled for %s, using legacy clock management",
+				soc_info->dev_name);
+		} else if (rc) {
+			/* Critical OPP failure (voltage scaling platforms) */
+			CAM_ERR(CAM_UTIL, "OPP set_rate failed critically for %s", soc_info->dev_name);
+			return rc;
+		} else {
+			/* OPP success, continue with CESTA and scalable clocks */
+			goto handle_cesta_and_scalable_clks;
+		}
 	}
 
+	/* Legacy clock management (for non-OPP platforms or OPP fallback) */
+	if (!soc_info->opp_supported) {
+		CAM_DBG(CAM_UTIL, "Using legacy clock management for %s", soc_info->dev_name);
+	}
+
+handle_cesta_and_scalable_clks:
 	if (soc_info->is_clk_drv_en && CAM_IS_VALID_CESTA_IDX(cesta_client_idx)) {
 		rc = cam_soc_util_set_cesta_clk_rate(soc_info, cesta_client_idx, clk_rate_high,
 			clk_rate_low,
@@ -1563,21 +1648,23 @@ int cam_soc_util_set_src_clk_rate(struct cam_hw_soc_info *soc_info, int cesta_cl
 		goto end;
 	}
 
-	rc = cam_soc_util_set_clk_rate(soc_info, clk,
-		soc_info->clk_name[src_clk_idx], clk_rate_high,
-		CAM_IS_BIT_SET(soc_info->shared_clk_mask, src_clk_idx),
-		true, soc_info->clk_id[src_clk_idx],
-		&soc_info->applied_src_clk_rates.sw_client);
-	if (rc) {
-		CAM_ERR(CAM_UTIL,
-			"SET_RATE Failed: src clk: %s, rate %lld, dev_name = %s rc: %d",
+	/* Set source clock rate using legacy method if OPP not used */
+	if (!soc_info->opp_supported) {
+		rc = cam_soc_util_set_clk_rate(soc_info, clk,
 			soc_info->clk_name[src_clk_idx], clk_rate_high,
-			soc_info->dev_name, rc);
-		return rc;
+			CAM_IS_BIT_SET(soc_info->shared_clk_mask, src_clk_idx),
+			true, soc_info->clk_id[src_clk_idx],
+			&soc_info->applied_src_clk_rates.sw_client);
+		if (rc) {
+			CAM_ERR(CAM_UTIL,
+				"SET_RATE Failed: src clk: %s, rate %lld, dev_name = %s rc: %d",
+				soc_info->clk_name[src_clk_idx], clk_rate_high,
+				soc_info->dev_name, rc);
+			return rc;
+		}
 	}
 
 	/* set clk rate for scalable clk if available */
-
 	for (i = 0; i < soc_info->scl_clk_count; i++) {
 		scl_clk_idx = soc_info->scl_clk_idx[i];
 		if (scl_clk_idx < 0) {
@@ -1973,14 +2060,26 @@ int cam_soc_util_clk_enable_default(struct cam_hw_soc_info *soc_info,
 	if (soc_info->cam_cx_ipeak_enable)
 		cam_cx_ipeak_update_vote_cx_ipeak(soc_info, apply_level);
 
-	rc = dev_pm_opp_set_rate(soc_info->dev,
+	/* Try OPP framework first if supported */
+	if (soc_info->opp_supported && (soc_info->src_clk_idx >= 0)) {
+		CAM_DBG(CAM_UTIL, "Using OPP framework for %s", soc_info->dev_name);
+
+		rc = cam_soc_util_set_opp_rate_safe(soc_info,
 			soc_info->clk_rate[apply_level][soc_info->src_clk_idx]);
-	if (rc) {
-		CAM_ERR(CAM_UTIL,
-			"Unable to set operating point for dev %s clk_name %s rc %d",
-			soc_info->dev_name, soc_info->clk_name[soc_info->src_clk_idx],
-			rc);
-		return rc;
+
+		if (rc == -EAGAIN) {
+			/* OPP failed and was disabled, continue with legacy */
+			CAM_INFO(CAM_UTIL, "OPP disabled for %s, using legacy clock management",
+				soc_info->dev_name);
+		} else if (rc) {
+			/* Critical OPP failure */
+			CAM_ERR(CAM_UTIL, "OPP set_rate failed critically dev %s clk_name %s rc %d",
+				soc_info->dev_name, soc_info->clk_name[soc_info->src_clk_idx],
+				rc);
+			return rc;
+		}
+	} else {
+		CAM_DBG(CAM_UTIL, "Using legacy clock management for %s", soc_info->dev_name);
 	}
 
 	CAM_DBG(CAM_UTIL, "Dev[%s] : cesta client %d, request level %s, apply level %s",
@@ -2039,7 +2138,20 @@ void cam_soc_util_clk_disable_default(struct cam_hw_soc_info *soc_info,
 	if (soc_info->cam_cx_ipeak_enable)
 		cam_cx_ipeak_unvote_cx_ipeak(soc_info);
 
-	dev_pm_opp_set_rate(soc_info->dev, 0);
+	/* Use OPP framework to reset rate if supported */
+	if (soc_info->opp_supported) {
+		CAM_DBG(CAM_UTIL, "Resetting OPP rate to 0 for %s", soc_info->dev_name);
+
+		/* For OPP platforms, always try to reset rate to 0 */
+		int rc = dev_pm_opp_set_rate(soc_info->dev, 0);
+		if (rc) {
+			/* Log warning but don't fail disable operation */
+			CAM_WARN(CAM_UTIL, "OPP reset to 0 failed for %s rc %d",
+				soc_info->dev_name, rc);
+		}
+	} else {
+		CAM_DBG(CAM_UTIL, "Using legacy clock management for %s", soc_info->dev_name);
+	}
 
 	for (i = soc_info->num_clk - 1; i >= 0; i--)
 		cam_soc_util_clk_disable(soc_info, cesta_client_idx, false, i);
@@ -2344,14 +2456,25 @@ int cam_soc_util_set_clk_rate_level(struct cam_hw_soc_info *soc_info,
 	if (soc_info->cam_cx_ipeak_enable)
 		cam_cx_ipeak_update_vote_cx_ipeak(soc_info, apply_level_high);
 
-	rc = dev_pm_opp_set_rate(soc_info->dev,
-			  soc_info->clk_rate[apply_level_high][soc_info->src_clk_idx]);
-	if (rc) {
-		CAM_ERR(CAM_UTIL,
-			"Unable to set operating point for dev %s clk_name %s rc %d",
-			soc_info->dev_name, soc_info->clk_name[soc_info->src_clk_idx],
-			rc);
-		return rc;
+	/* Try OPP framework first if supported and not skipping src clock */
+	if (soc_info->opp_supported && (soc_info->src_clk_idx >= 0) && !do_not_set_src_clk) {
+		CAM_DBG(CAM_UTIL, "Using OPP framework for %s", soc_info->dev_name);
+
+		rc = cam_soc_util_set_opp_rate_safe(soc_info,
+			soc_info->clk_rate[apply_level_high][soc_info->src_clk_idx]);
+
+		if (rc == -EAGAIN) {
+			/* OPP failed and was disabled, continue with legacy */
+			CAM_INFO(CAM_UTIL, "OPP disabled for %s, using legacy clock management",
+				soc_info->dev_name);
+		} else if (rc) {
+			/* Critical OPP failure */
+			CAM_ERR(CAM_UTIL, "OPP set_rate failed critically for %s", soc_info->dev_name);
+			return rc;
+		}
+	} else {
+		CAM_DBG(CAM_UTIL, "Using legacy clock management for %s (opp_supported=%d do_not_set_src_clk=%d)",
+			soc_info->dev_name, soc_info->opp_supported, do_not_set_src_clk);
 	}
 
 	for (i = 0; i < soc_info->num_clk; i++) {
@@ -3476,22 +3599,58 @@ end:
 static int cam_soc_util_configure_opp(struct cam_hw_soc_info *soc_info)
 {
 	int rc = 0;
+	struct device_node *of_node = soc_info->dev->of_node;
 
+	/* Initialize OPP support flags */
+	soc_info->opp_supported = false;
+	soc_info->opp_required_opps_supported = false;
+
+	/* Check if src_clk_idx is valid */
+	if (soc_info->src_clk_idx < 0) {
+		CAM_DBG(CAM_UTIL, "No src clock defined for %s, skipping OPP configuration",
+			soc_info->dev_name);
+		return 0;
+	}
+
+	/* Check for operating-points-v2 property in device tree */
+	if (!of_find_property(of_node, "operating-points-v2", NULL)) {
+		CAM_INFO(CAM_UTIL,
+			"No operating-points-v2 property found for dev %s, using legacy clock management",
+			soc_info->dev_name);
+		return 0;
+	}
+
+	CAM_INFO(CAM_UTIL, "Found operating-points-v2 property for dev %s, configuring OPP",
+		soc_info->dev_name);
+
+	/* Set clock name for OPP framework */
 	rc = devm_pm_opp_set_clkname(soc_info->dev, soc_info->clk_name[soc_info->src_clk_idx]);
 	if (rc) {
-		CAM_ERR(CAM_UTIL,
-			"OPP set_clkname failed for dev %s clk_name %s rc %d",
+		CAM_WARN(CAM_UTIL,
+			"OPP set_clkname failed for dev %s clk_name %s rc %d, falling back to legacy",
 			soc_info->dev_name, soc_info->clk_name[soc_info->src_clk_idx], rc);
-		return rc;
+		return 0;
 	}
 
+	/* Add OPP table from device tree */
 	rc = devm_pm_opp_of_add_table(soc_info->dev);
 	if (rc) {
-		CAM_ERR(CAM_UTIL,
-			"OPP add_table failed for dev %s rc %d",
+		CAM_WARN(CAM_UTIL,
+			"OPP add_table failed for dev %s rc %d, falling back to legacy",
 			soc_info->dev_name, rc);
+		return 0;
 	}
-	return rc;
+
+	soc_info->opp_supported = true;
+
+	/* Detect if required-opps are present for voltage scaling */
+	soc_info->opp_required_opps_supported = cam_soc_util_detect_required_opps(soc_info);
+
+	CAM_INFO(CAM_UTIL, "OPP configured for %s: freq_scaling=true voltage_scaling=%s",
+		soc_info->dev_name,
+		soc_info->opp_required_opps_supported ? "true" : "false");
+
+	return 0;
 }
 
 int cam_soc_util_request_platform_resource(
