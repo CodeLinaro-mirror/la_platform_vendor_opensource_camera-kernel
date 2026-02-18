@@ -55,11 +55,6 @@ int cam_flash_led_prepare(struct led_trigger *trigger, int options,
 	return rc;
 }
 
-void cam_flash_work_queue_handler(struct work_struct *w)
-{
-	cam_req_mgr_process_workq(w);
-}
-
 static int cam_flash_pmic_flush_nrt(struct cam_flash_ctrl *fctrl)
 {
 	int j = 0;
@@ -462,24 +457,6 @@ enum hrtimer_restart on_timer_function(struct hrtimer *timer)
 	return HRTIMER_NORESTART;
 }
 
-static int cam_flash_task_handler(void *priv, void *data)
-{
-	struct cam_flash_ctrl *flash_ctrl = NULL;
-
-	if (!data || !priv) {
-		CAM_ERR(CAM_FLASH,
-			"Invalid params: data:%pK priv:%pK", data, priv);
-		return -EINVAL;
-	}
-
-	flash_ctrl = (struct cam_flash_ctrl *)priv;
-	hrtimer_start(&flash_ctrl->precise_flash.on_timer,
-		ms_to_ktime(flash_ctrl->precise_flash.on_time_ms),
-		HRTIMER_MODE_REL);
-
-	return 0;
-}
-
 static void cam_flash_set_brightness(struct cam_flash_ctrl *flash_ctrl,
 	struct cam_flash_frame_setting *flash_data)
 {
@@ -547,7 +524,6 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 	struct cam_flash_private_soc *soc_private = NULL;
 	int i = 0;
 	int rc = 0;
-	struct crm_workq_task *task = NULL;
 
 	if (!flash_ctrl || !flash_data) {
 		CAM_ERR(CAM_FLASH, "Fctrl or Data NULL");
@@ -560,8 +536,7 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 	CAM_DBG(CAM_FLASH, "op: %d (1:OFF 2:LOW 3:HIGH 4:DURATION)", op);
 	if (op == CAMERA_SENSOR_FLASH_OP_FIRELOW) {
 		cam_flash_set_brightness(flash_ctrl, flash_data);
-	} else if ((op == CAMERA_SENSOR_FLASH_OP_FIREHIGH) ||
-		(op == CAMERA_SENSOR_FLASH_OP_FIREDURATION)) {
+	} else if (op == CAMERA_SENSOR_FLASH_OP_FIREHIGH) {
 		for (i = 0; i < flash_ctrl->flash_num_sources; i++) {
 			if (flash_ctrl->flash_trigger[i]) {
 				max_current = soc_private->flash_max_current[i];
@@ -595,16 +570,6 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 						i, rc);
 					return rc;
 				}
-				/*Regular Flash Scenario*/
-				if (op != CAMERA_SENSOR_FLASH_OP_FIREDURATION) {
-					rc = led_set_flash_strobe(flash_ctrl->pmic_flcdev[i], true);
-					if (rc) {
-						CAM_ERR(CAM_FLASH,
-							"LED_Flash[%d]: set flash strobe failed, rc=%d",
-							i, rc);
-						return rc;
-					}
-				}
 
 			} else {
 
@@ -612,64 +577,6 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 					i, curr);
 				cam_res_mgr_led_trigger_event(
 					flash_ctrl->flash_trigger[i], curr);
-			}
-		}
-
-		if ((flash_ctrl->led_cldev_en == 1) &&
-			(op == CAMERA_SENSOR_FLASH_OP_FIREDURATION)) {
-			/*Precise Flash Scenario*/
-			if (flash_ctrl->precise_flash.enabled) {
-				CAM_DBG(CAM_FLASH, "LED_Flash[%d] is already enabled", i);
-				return rc;
-			}
-
-			if (flash_ctrl->precise_flash.timer_state != TIMER_STATE_INIT) {
-				hrtimer_init(&flash_ctrl->precise_flash.on_timer,
-					CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-				hrtimer_init(&flash_ctrl->precise_flash.off_timer,
-					CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-				flash_ctrl->precise_flash.on_timer.function =
-					on_timer_function;
-				flash_ctrl->precise_flash.off_timer.function =
-					off_timer_function;
-			}
-			flash_ctrl->precise_flash.off_time_ms =
-				flash_data->flash_active_time_ms;
-			flash_ctrl->precise_flash.on_time_ms =
-				flash_data->flash_on_wait_time_ms;
-
-			CAM_DBG(CAM_FLASH,
-				"fctrl: %p on_timer: %p off_timer: %p",
-				flash_ctrl, &flash_ctrl->precise_flash.on_timer,
-				&flash_ctrl->precise_flash.off_timer);
-			CAM_DBG(CAM_FLASH,
-				"Precise flash_on time: %u, Precise flash_off time: %u",
-				flash_ctrl->precise_flash.on_time_ms,
-				flash_ctrl->precise_flash.off_time_ms);
-			if (flash_ctrl->precise_flash.on_time_ms) {
-				CAM_DBG(CAM_FLASH,
-					"on_time delay %llu ms ktime: %llu on_timer: %p func: %p",
-					flash_ctrl->precise_flash.on_time_ms,
-					ms_to_ktime(flash_ctrl->precise_flash.on_time_ms),
-					&flash_ctrl->precise_flash.on_timer,
-					flash_ctrl->precise_flash.on_timer.function);
-
-				task = cam_req_mgr_workq_get_task(
-					flash_ctrl->precise_flash.timer_workq);
-				if (!task) {
-					CAM_ERR(CAM_FLASH, "cam_flash[%u] No empty task",
-						flash_ctrl->soc_info.index);
-					return -EINVAL;
-				}
-
-				task->process_cb = cam_flash_task_handler;
-				rc = cam_req_mgr_workq_enqueue_task(
-					task, flash_ctrl, CRM_TASK_PRIORITY_0);
-				if (rc) {
-					CAM_ERR(CAM_FLASH,
-						"cam_flash[%u] Failed to schedule task rc:%d",
-						flash_ctrl->soc_info.index, rc);
-				}
 			}
 		}
 
@@ -698,10 +605,8 @@ int cam_flash_off(struct cam_flash_ctrl *flash_ctrl)
 	if (flash_ctrl->switch_trigger)
 		cam_res_mgr_led_trigger_event(flash_ctrl->switch_trigger,
 			(enum led_brightness)LED_SWITCH_OFF);
-
-	flash_ctrl->flash_state = CAM_FLASH_STATE_START; //Check this
-
 	else if (flash_ctrl->led_cldev_en == 1) {
+		flash_ctrl->flash_state = CAM_FLASH_STATE_START;
 		for (i = 0; i < flash_ctrl->flash_num_sources; i++) {
 			if (flash_ctrl->pmic_lcdev[i] != NULL) {
 				CAM_DBG(CAM_FLASH,
@@ -709,7 +614,7 @@ int cam_flash_off(struct cam_flash_ctrl *flash_ctrl)
 				led_set_brightness_sync(flash_ctrl->pmic_lcdev[i], LED_OFF);
 			}
 		}
-		flash_ctrl->flash_state = CAM_FLASH_STATE_CONFIG; //Check this
+		flash_ctrl->flash_state = CAM_FLASH_STATE_CONFIG;
 	}
 
 	return 0;
