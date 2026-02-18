@@ -14,6 +14,8 @@
 #include <linux/leds.h>
 #include <linux/led-class-flash.h>
 
+#if __or(IS_ENABLED(CONFIG_LEDS_QPNP_FLASH_V2), \
+			IS_ENABLED(CONFIG_LEDS_QTI_FLASH))
 static int32_t cam_get_source_node_info(
 	struct device_node *of_node,
 	struct cam_flash_ctrl *fctrl,
@@ -236,6 +238,7 @@ static int32_t cam_get_source_node_info(
 
 	return rc;
 }
+#endif
 
 #if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
 static int32_t cam_get_led_source_node_info(
@@ -276,7 +279,7 @@ static int32_t cam_get_led_source_node_info(
 					devm_of_led_get(&fctrl->pdev->dev, i);
 				if (IS_ERR(fctrl->pmic_lcdev[i])) {
 					CAM_ERR(CAM_FLASH,
-						"failed to get led_classdev, rc=%d",
+						"failed to get led_classdev, rc=%ld",
 						PTR_ERR(fctrl->pmic_lcdev[i]));
 					return PTR_ERR(fctrl->pmic_lcdev[i]);
 				}
