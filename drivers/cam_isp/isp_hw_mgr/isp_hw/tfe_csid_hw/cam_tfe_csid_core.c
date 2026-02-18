@@ -3150,8 +3150,8 @@ static int cam_tfe_csid_handle_hw_err_irq(
 {
 	int      rc = 0;
 	int      i;
-	void    *bh_cmd = NULL;
 	struct cam_csid_evt_payload *evt_payload;
+	struct cam_worker_wrapper_taskdata_args  taskdata_args = {0};
 
 	CAM_DBG(CAM_ISP, "CSID[%d] error %d",
 		csid_hw->hw_intf->hw_idx, evt_type);
@@ -3164,8 +3164,9 @@ static int cam_tfe_csid_handle_hw_err_irq(
 		return rc;
 	}
 
-	rc = cam_worker_wrapper_get(csid_hw->worker_ctx, &bh_cmd);
-	if (rc || !bh_cmd) {
+	rc = cam_worker_wrapper_get(csid_hw->worker_ctx, &taskdata_args);
+	if (rc) {
+		cam_tfe_csid_put_evt_payload(csid_hw, &evt_payload);
 		CAM_ERR_RATE_LIMIT(CAM_ISP,
 			"CSID[%d] Can not get cmd for worker, evt_type %d",
 			csid_hw->hw_intf->hw_idx,
@@ -3181,7 +3182,7 @@ static int cam_tfe_csid_handle_hw_err_irq(
 		evt_payload->irq_status[i] = irq_status[i];
 
 	cam_worker_wrapper_enqueue(csid_hw->worker_ctx,
-		bh_cmd,
+		&taskdata_args,
 		csid_hw,
 		evt_payload,
 		cam_tfe_csid_evt_bottom_half_handler);

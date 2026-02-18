@@ -28,6 +28,7 @@
 #include "cam_trace.h"
 #include "cam_compat.h"
 #include "cam_worker_wrapper_api.h"
+#include "cam_worker_wrapper.h"
 
 #define CAM_TFE_HW_CONFIG_TIMEOUT 60
 #define CAM_TFE_HW_CONFIG_WAIT_MAX_TRY  3
@@ -41,6 +42,22 @@
 
 static struct cam_tfe_hw_mgr g_tfe_hw_mgr;
 static uint32_t g_num_tfe_available, g_num_tfe_functional;
+
+static void cam_tfe_hw_mgr_worker_lock(enum cam_worker_wrapper_type worker_type)
+{
+	if (worker_type == WORKER_TYPE_TASKLET)
+		spin_lock(&g_tfe_hw_mgr.ctx_lock);
+	else
+		mutex_lock(&g_tfe_hw_mgr.ctx_mutex);
+}
+
+static void cam_tfe_hw_mgr_worker_unlock(enum cam_worker_wrapper_type worker_type)
+{
+	if (worker_type == WORKER_TYPE_TASKLET)
+		spin_unlock(&g_tfe_hw_mgr.ctx_lock);
+	else
+		mutex_unlock(&g_tfe_hw_mgr.ctx_mutex);
+}
 
 static int cam_tfe_hw_mgr_event_handler(
 	void                                *priv,
@@ -5587,6 +5604,12 @@ static int cam_tfe_hw_mgr_handle_hw_err(
 	struct cam_tfe_hw_event_recovery_data    recovery_data = {0};
 	int    rc = -EINVAL;
 	uint32_t core_idx;
+	struct cam_worker_wrapper_ctx           *worker_ctx = NULL;
+
+	if (!ctx || !event_info) {
+		CAM_ERR(CAM_ISP, "Invalid input params: ctx %p event_info %p", ctx, event_info);
+		return -EINVAL;
+	}
 
 	if (event_info->err_type == CAM_TFE_IRQ_STATUS_VIOLATION)
 		error_event_data.error_type = CAM_ISP_HW_ERROR_VIOLATION;
@@ -5596,24 +5619,27 @@ static int cam_tfe_hw_mgr_handle_hw_err(
 	else if (event_info->res_type == CAM_ISP_RESOURCE_TFE_OUT)
 		error_event_data.error_type = CAM_ISP_HW_ERROR_BUSIF_OVERFLOW;
 
-	spin_lock(&g_tfe_hw_mgr.ctx_lock);
+	tfe_hw_mgr_ctx = (struct cam_tfe_hw_mgr_ctx *)ctx;
+	worker_ctx = tfe_hw_mgr_ctx->common.worker_ctx;
+	if (!worker_ctx) {
+		CAM_ERR(CAM_ISP, "Worker context is NULL");
+		return -EINVAL;
+	}
+
+	cam_tfe_hw_mgr_worker_lock(worker_ctx->worker_type);
 	if (event_info->err_type == CAM_ISP_HW_ERROR_CSID_FATAL) {
 		rc = cam_tfe_hw_mgr_handle_csid_event(event_info);
-		spin_unlock(&g_tfe_hw_mgr.ctx_lock);
+		cam_tfe_hw_mgr_worker_unlock(worker_ctx->worker_type);
 		return rc;
 	}
 
-	if (ctx) {
-		tfe_hw_mgr_ctx =
-			(struct cam_tfe_hw_mgr_ctx *)ctx;
-		if (event_info->res_type ==
-			CAM_ISP_RESOURCE_TFE_IN &&
-			!tfe_hw_mgr_ctx->is_rdi_only_context &&
-			event_info->res_id !=
-			CAM_ISP_HW_TFE_IN_CAMIF)
-			cam_tfe_hw_mgr_handle_hw_dump_info(
-				tfe_hw_mgr_ctx, event_info);
-	}
+	if (event_info->res_type ==
+		CAM_ISP_RESOURCE_TFE_IN &&
+		!tfe_hw_mgr_ctx->is_rdi_only_context &&
+		event_info->res_id !=
+		CAM_ISP_HW_TFE_IN_CAMIF)
+		cam_tfe_hw_mgr_handle_hw_dump_info(
+			tfe_hw_mgr_ctx, event_info);
 
 	core_idx = event_info->hw_idx;
 
@@ -5628,7 +5654,7 @@ static int cam_tfe_hw_mgr_handle_hw_err(
 		goto end;
 
 	if (event_info->res_type == CAM_ISP_RESOURCE_TFE_OUT) {
-		spin_unlock(&g_tfe_hw_mgr.ctx_lock);
+		cam_tfe_hw_mgr_worker_unlock(worker_ctx->worker_type);
 		return rc;
 	}
 
@@ -5644,7 +5670,7 @@ static int cam_tfe_hw_mgr_handle_hw_err(
 		rc = 0;
 	}
 end:
-	spin_unlock(&g_tfe_hw_mgr.ctx_lock);
+	cam_tfe_hw_mgr_worker_unlock(worker_ctx->worker_type);
 	return rc;
 }
 
@@ -6272,11 +6298,12 @@ void cam_tfe_hw_mgr_deinit(void)
 {
 	int i = 0;
 
+	cam_worker_wrapper_deinit(g_tfe_hw_mgr.worker_ctx);
 	debugfs_remove_recursive(g_tfe_hw_mgr.debug_cfg.dentry);
 	g_tfe_hw_mgr.debug_cfg.dentry = NULL;
 
 	for (i = 0; i < CAM_TFE_CTX_MAX; i++) {
-		cam_worker_wrapper_deinit(&g_tfe_hw_mgr.mgr_common.worker_pool[i]);
+		cam_worker_wrapper_deinit(g_tfe_hw_mgr.mgr_common.worker_pool[i]);
 		kfree(g_tfe_hw_mgr.ctx_pool[i].cdm_cmd);
 		g_tfe_hw_mgr.ctx_pool[i].cdm_cmd = NULL;
 		g_tfe_hw_mgr.ctx_pool[i].common.worker_ctx = NULL;
