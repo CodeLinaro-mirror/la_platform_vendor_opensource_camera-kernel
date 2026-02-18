@@ -10195,7 +10195,7 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 
 	rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv, &hw_cmd_args);
 
-	if (isp_hw_cmd_args.u.is_secure &&
+	if (isp_hw_cmd_args.u.is_secure && ctx->ctx_crm_intf &&
 		ctx->ctx_crm_intf->get_qtvm_status() == CRM_QTVM_STATUS_CRASHED) {
 		CAM_ERR(CAM_ISP, "QTVM is in crashed mode, acquire failed ctx_id %d",
 			ctx->ctx_id);
