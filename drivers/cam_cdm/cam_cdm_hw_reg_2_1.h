@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_cdm.h"
@@ -228,6 +228,7 @@ static struct cam_cdm_common_regs cdm_hw_2_1_cmn_reg_offset = {
 	.icl_reg = &cdm_2_1_icl,
 	.spare = 0x3fc,
 	.priority_group_bit_offset = 20,
+	.pause_core_enable_mask = 0x2,
 };
 
 static struct cam_cdm_common_reg_data cdm_hw_2_1_cmn_reg_data = {
