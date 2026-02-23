@@ -4691,7 +4691,6 @@ static irqreturn_t cam_ife_csid_irq(int irq_num, void *data)
 	struct cam_ife_csid_ver1_reg_info     *csid_reg;
 	struct cam_ife_csid_ver1_hw           *csid_hw;
 	struct cam_hw_soc_info                *soc_info;
-	void                                  *bh_cmd = NULL;
 	unsigned long                          flags;
 	uint32_t                               status[CAM_IFE_CSID_IRQ_REG_MAX];
 	uint32_t                               need_rx_bh = 0;
@@ -4699,6 +4698,7 @@ static irqreturn_t cam_ife_csid_irq(int irq_num, void *data)
 	uint32_t                               need_bh_sched = 0;
 	int                                    i;
 	int                                    rc = 0;
+	struct cam_worker_wrapper_taskdata_args  taskdata_args = {0};
 
 	csid_hw = (struct cam_ife_csid_ver1_hw *)data;
 	csid_reg = (struct cam_ife_csid_ver1_reg_info *)
@@ -4764,9 +4764,8 @@ static irqreturn_t cam_ife_csid_irq(int irq_num, void *data)
 	}
 
 
-	rc = cam_worker_wrapper_get(csid_hw->worker_ctx, bh_cmd);
-
-	if (rc || !bh_cmd) {
+	rc = cam_worker_wrapper_get(csid_hw->worker_ctx, &taskdata_args);
+	if (rc) {
 		cam_ife_csid_ver1_put_evt_payload(csid_hw, &evt_payload,
 			&csid_hw->free_payload_list);
 		CAM_ERR_RATE_LIMIT(CAM_ISP,
@@ -4783,7 +4782,7 @@ static irqreturn_t cam_ife_csid_irq(int irq_num, void *data)
 		evt_payload->irq_status[i] = status[i];
 
 	cam_worker_wrapper_enqueue(csid_hw->worker_ctx,
-		bh_cmd,
+		&taskdata_args,
 		csid_hw,
 		evt_payload,
 		cam_ife_csid_ver1_bottom_half_handler);
