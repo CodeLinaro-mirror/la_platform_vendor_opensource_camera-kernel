@@ -2368,6 +2368,9 @@ static int cam_icp_hw_mgr_create_debugfs_entry(struct cam_icp_hw_mgr *hw_mgr)
 	debugfs_create_bool("enable_kernel_panic", 0644,
 		hw_mgr->dentry, &hw_mgr->enable_panic);
 
+	debugfs_create_bool("enable_clock_dump", 0644,
+		hw_mgr->dentry, &hw_mgr->enable_clock_dump);
+
 	debugfs_create_bool("print_llcc_state", 0644,
 		hw_mgr->dentry, &hw_mgr->debug_llcc);
 end:
@@ -2665,6 +2668,46 @@ static int cam_icp_llcc_print_scid_state(
 	return rc;
 }
 
+static int cam_icp_mgr_dump_clk(struct cam_icp_hw_mgr *hw_mgr,
+	struct cam_icp_hw_ctx_data *ctx_data)
+{
+	uint32_t i;
+	int rc = 0;
+	struct cam_hw_intf *dev_intf = NULL;
+	struct cam_hw_intf *icp_dev_intf = NULL;
+
+	CAM_INFO(CAM_ICP, "[%s] Dumping clocks for ctx: [%s]", hw_mgr->hw_mgr_name,
+		ctx_data->ctx_id_string);
+	for (i = 0; i < ctx_data->device_info->hw_dev_cnt; i++) {
+		dev_intf = ctx_data->device_info->dev_intf[i];
+		if (!dev_intf) {
+			CAM_ERR(CAM_ICP, "Device intf for %s[%u] is NULL",
+				ctx_data->device_info->dev_name, i);
+			return -EINVAL;
+		}
+
+		rc = dev_intf->hw_ops.process_cmd(dev_intf->hw_priv, CAM_ICP_DEV_CMD_DUMP_CLK,
+			NULL, 0);
+		if (rc) {
+			CAM_ERR(CAM_ICP, "clk dump failed for %s[%u]",
+				ctx_data->device_info->dev_name, i);
+			goto end;
+		}
+	}
+
+	icp_dev_intf = hw_mgr->icp_dev_intf;
+	if (!icp_dev_intf) {
+		CAM_ERR(CAM_ICP, "icp Device intf is NULL");
+		return -EINVAL;
+	}
+
+	rc = icp_dev_intf->hw_ops.process_cmd(icp_dev_intf->hw_priv, CAM_ICP_CMD_DUMP_CLK, NULL, 0);
+	if (rc)
+		CAM_ERR(CAM_ICP, "clk dump failed for [%s]", hw_mgr->hw_mgr_name);
+end:
+	return rc;
+}
+
 static int cam_icp_mgr_handle_frame_process(
 	struct cam_icp_hw_mgr *hw_mgr,
 	uint32_t *msg_ptr, int flag)
@@ -2748,6 +2791,8 @@ static int cam_icp_mgr_handle_frame_process(
 				cam_icp_error_handle_id_to_type(ioconfig_ack->err_type),
 				request_id);
 			event_id = CAM_CTX_EVT_ID_ERROR;
+			if (hw_mgr->enable_clock_dump)
+				cam_icp_mgr_dump_clk(hw_mgr, ctx_data);
 		}
 		buf_data.evt_param = cam_icp_handle_err_type_to_evt_param(ioconfig_ack->err_type);
 	} else {
@@ -3668,7 +3713,8 @@ static int32_t cam_icp_mgr_process_cb(void *priv, void *data)
 	cam_icp_mgr_process_dbg_buf(hw_mgr);
 
 	if (task_data->recover) {
-		CAM_ERR_RATE_LIMIT(CAM_ICP, "issuing device recovery...");
+		CAM_ERR_RATE_LIMIT(CAM_ICP, "issuing device recovery for [%s]",
+			hw_mgr->hw_mgr_name);
 		rc = cam_icp_mgr_trigger_recovery(hw_mgr);
 	}
 
@@ -4460,6 +4506,9 @@ static int cam_icp_mgr_send_pc_prep(struct cam_icp_hw_mgr *hw_mgr)
 	if (!rem_jiffies) {
 		rc = -ETIMEDOUT;
 		cam_icp_dump_debug_info(hw_mgr, false);
+		if (hw_mgr->enable_clock_dump)
+			icp_dev_intf->hw_ops.process_cmd(icp_dev_intf->hw_priv,
+				CAM_ICP_CMD_DUMP_CLK, NULL, 0);
 		if (hw_mgr->enable_panic)
 			CAM_TRIGGER_PANIC("[%s] PC Prep Timeout......", hw_mgr->hw_mgr_name);
 	}
@@ -5112,6 +5161,8 @@ static int cam_icp_mgr_destroy_handle(
 			ctx_data->ctx_id_string);
 	if (!rem_jiffies) {
 		rc = -ETIMEDOUT;
+		if (hw_mgr->enable_clock_dump)
+			cam_icp_mgr_dump_clk(hw_mgr, ctx_data);
 		cam_icp_dump_debug_info(hw_mgr, ctx_data->abort_timed_out);
 		if (hw_mgr->enable_panic)
 			CAM_TRIGGER_PANIC("[%s] Destroy Timeout......",
@@ -5629,6 +5680,9 @@ static int cam_icp_mgr_send_fw_init(struct cam_icp_hw_mgr *hw_mgr)
 		hw_mgr->hw_mgr_name);
 	if (!rem_jiffies) {
 		rc = -ETIMEDOUT;
+		if (hw_mgr->enable_clock_dump)
+			icp_dev_intf->hw_ops.process_cmd(icp_dev_intf->hw_priv,
+				CAM_ICP_CMD_DUMP_CLK, NULL, 0);
 		cam_icp_dump_debug_info(hw_mgr, false);
 		if (hw_mgr->enable_panic)
 			CAM_TRIGGER_PANIC("[%s] FW INIT Timeout......", hw_mgr->hw_mgr_name);
@@ -5794,6 +5848,8 @@ static int cam_icp_mgr_icp_resume(
 	struct cam_hw_intf *icp_dev_intf = hw_mgr->icp_dev_intf;
 	bool send_freq_info;
 	struct cam_icp_mgr_hw_args *res_args = (struct cam_icp_mgr_hw_args *) resume_args;
+	int i;
+	struct cam_icp_hw_ctx_data *ctx_data;
 
 	CAM_DBG(CAM_ICP, "[%s] Enter", hw_mgr->hw_mgr_name);
 
@@ -5839,6 +5895,17 @@ static int cam_icp_mgr_icp_resume(
 		if (rc) {
 			CAM_ERR(CAM_ICP, "[%s] Failed to resume HFI rc: %d", hw_mgr->hw_mgr_name,
 				rc);
+			if (rc == -ETIMEDOUT) {
+				for (i = 0; i < CAM_ICP_CTX_MAX; i++) {
+					ctx_data = hw_mgr->ctx_data[i];
+					if (!ctx_data ||
+						(ctx_data->state != CAM_ICP_CTX_STATE_IN_USE))
+						continue;
+
+					if (hw_mgr->enable_clock_dump)
+						cam_icp_mgr_dump_clk(hw_mgr, ctx_data);
+				}
+			}
 			goto power_collapse;
 		}
 	}
@@ -6810,6 +6877,8 @@ static int cam_icp_process_stream_settings(
 		ctx_data->ctx_id_string);
 	if (!rem_jiffies) {
 		rc = -ETIMEDOUT;
+		if (hw_mgr->enable_clock_dump)
+			cam_icp_mgr_dump_clk(hw_mgr, ctx_data);
 		cam_icp_dump_debug_info(ctx_data->hw_mgr_priv, false);
 		if (hw_mgr->enable_panic)
 			CAM_TRIGGER_PANIC("[%s] Stream Process Timeout......", hw_mgr->hw_mgr_name);
@@ -7845,6 +7914,8 @@ static int cam_icp_mgr_enqueue_abort(
 		ctx_data->ctx_id_string);
 	if (!rem_jiffies) {
 		rc = -ETIMEDOUT;
+		if (hw_mgr->enable_clock_dump)
+			cam_icp_mgr_dump_clk(hw_mgr, ctx_data);
 		cam_icp_dump_debug_info(hw_mgr, false);
 		ctx_data->abort_timed_out = true;
 		if (hw_mgr->enable_panic)
@@ -9092,7 +9163,7 @@ static int cam_icp_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	/* Set clk info and resume ICP on first available context */
 	rc = cam_icp_mgr_try_icp_resume(hw_mgr, &hw_args);
 	if (rc) {
-		CAM_ERR(CAM_ICP, "Trigger resume failed, rc: %d", rc);
+		CAM_ERR(CAM_ICP, "Trigger resume failed for [%s], rc: %d", hw_mgr->hw_mgr_name, rc);
 		goto icp_resume_failed;
 	}
 
