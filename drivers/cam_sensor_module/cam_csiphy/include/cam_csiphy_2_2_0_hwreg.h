@@ -2488,6 +2488,20 @@ struct data_rate_settings_t data_rate_delta_table_2_2_0 = {
 	},
 };
 
+struct cam_cphy_lane_reg_offsets_t lane_reg_offsets = {
+	.lane_offsets[DPHY_DATA_LANE_POS_0] = 0x000,
+	.lane_offsets[DPHY_DATA_LANE_POS_1] = 0x400,
+	.lane_offsets[DPHY_DATA_LANE_POS_2] = 0x800,
+	.lane_offsets[DPHY_DATA_LANE_POS_3] = 0xC00,
+	.lane_offsets[DPHY_CLOCK_LANE_POS]  = 0xE00,
+	.lane_offsets[CPHY_LANE_POS_0]      = 0x200,
+	.lane_offsets[CPHY_LANE_POS_1]      = 0x600,
+	.lane_offsets[CPHY_LANE_POS_2]      = 0xA00,
+	.csiphy_settle_time_lower_offset_3ph = 0x0C,
+	.csiphy_settle_time_lower_offset_2ph = 0x08,
+	.csiphy_settle_time_higher_offset    = 0x08
+};
+
 struct csiphy_reg_parms_t csiphy_v2_2_0 = {
 	.mipi_csiphy_interrupt_status0_addr = 0x1138,
 	.mipi_csiphy_interrupt_clear0_addr = 0x1058,
@@ -2504,6 +2518,7 @@ struct csiphy_reg_parms_t csiphy_v2_2_0 = {
 	.csiphy_interrupt_status_size = ARRAY_SIZE(csiphy_irq_reg_2_2_0),
 	.csiphy_num_common_status_regs = 20,
 	.aon_sel_params = &aon_cam_select_params_2_2_0,
+	.lane_reg_offsets = &lane_reg_offsets,
 };
 
 #endif /* _CAM_CSIPHY_2_2_0_HWREG_H_ */
