@@ -74,6 +74,7 @@ static uint32_t blob_type_hw_cmd_map[CAM_ISP_GENERIC_BLOB_TYPE_MAX] = {
 static struct cam_ife_hw_mgr g_ife_hw_mgr;
 static uint32_t g_num_ife, g_num_ife_lite, g_num_sfe;
 static uint32_t max_ife_out_res, max_sfe_out_res;
+uint32_t g_ife_idx_to_hw_num_lut[CAM_IFE_HW_NUM_MAX];
 
 static int cam_ife_mgr_check_start_processing(void *hw_mgr_priv,
 												struct cam_ife_hw_mgr_ctx *hw_mgr_ctx);
@@ -2514,12 +2515,57 @@ static inline void cam_ife_mgr_count_ife(void)
 	g_num_ife_lite = 0;
 
 	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
+		g_ife_idx_to_hw_num_lut[i] = 0;
 		if (g_ife_hw_mgr.ife_devices[i]) {
-			if (g_ife_hw_mgr.ife_dev_caps[i].is_lite)
+			if (g_ife_hw_mgr.ife_dev_caps[i].is_lite) {
+				switch (g_num_ife_lite) {
+				case 0:
+					g_ife_idx_to_hw_num_lut[i] =
+						CAM_ISP_IFE0_LITE_HW;
+					break;
+				case 1:
+					g_ife_idx_to_hw_num_lut[i] =
+						CAM_ISP_IFE1_LITE_HW;
+					break;
+				case 2:
+					g_ife_idx_to_hw_num_lut[i] =
+						CAM_ISP_IFE2_LITE_HW;
+					break;
+				case 3:
+					g_ife_idx_to_hw_num_lut[i] =
+						CAM_ISP_IFE3_LITE_HW;
+					break;
+				case 4:
+					g_ife_idx_to_hw_num_lut[i] =
+						CAM_ISP_IFE4_LITE_HW;
+					break;
+				default:
+					CAM_ERR(CAM_ISP, "IFElite index out of bounds: %d", g_num_ife_lite);
+					break;
+				}
 				g_num_ife_lite++;
-			else
+			} else {
+				switch (g_num_ife) {
+				case 0:
+					g_ife_idx_to_hw_num_lut[i] =
+						CAM_ISP_IFE0_HW;
+					break;
+				case 1:
+					g_ife_idx_to_hw_num_lut[i] =
+						CAM_ISP_IFE1_HW;
+					break;
+				case 2:
+					g_ife_idx_to_hw_num_lut[i] =
+						CAM_ISP_IFE2_HW;
+					break;
+				default:
+					CAM_ERR(CAM_ISP, "IFE index out of bounds: %d", g_num_ife);
+					break;
+				}
 				g_num_ife++;
+			}
 		}
+
 	}
 	CAM_DBG(CAM_ISP, "counted %d IFE and %d IFE lite", g_num_ife, g_num_ife_lite);
 }
@@ -2541,24 +2587,13 @@ static int cam_convert_hw_idx_to_sfe_hw_num(int hw_idx)
 
 static int cam_convert_hw_idx_to_ife_hw_num(int hw_idx)
 {
-	if (hw_idx < g_num_ife) {
-		switch (hw_idx) {
-		case 0: return CAM_ISP_IFE0_HW;
-		case 1: return CAM_ISP_IFE1_HW;
-		case 2: return CAM_ISP_IFE2_HW;
-		}
-	} else if (hw_idx < g_num_ife + g_num_ife_lite) {
-		switch (hw_idx - g_num_ife) {
-		case 0: return CAM_ISP_IFE0_LITE_HW;
-		case 1: return CAM_ISP_IFE1_LITE_HW;
-		case 2: return CAM_ISP_IFE2_LITE_HW;
-		case 3: return CAM_ISP_IFE3_LITE_HW;
-		case 4: return CAM_ISP_IFE4_LITE_HW;
-		}
-	} else {
+	if ((hw_idx >= CAM_IFE_HW_NUM_MAX) ||
+	    (0 == g_ife_idx_to_hw_num_lut[hw_idx])) {
 		CAM_ERR(CAM_ISP, "hw idx %d out-of-bounds", hw_idx);
+		return 0;
 	}
-	return 0;
+
+	return g_ife_idx_to_hw_num_lut[hw_idx];
 }
 
 static int cam_convert_rdi_out_res_id_to_src(int res_id)

@@ -8,6 +8,9 @@
 
 #include <linux/list.h>
 #include <linux/leds.h>
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+#include <linux/interconnect.h>
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 #include "cam_soc_util.h"
 #include "cam_sensor_util.h"
 
@@ -91,6 +94,12 @@ struct cam_res_mgr_dt {
 	int                 num_shared_gpio;
 	int                 num_shared_pctrl_gpio;
 	const char         *pctrl_name[MAX_SHARED_PCTRL_GPIO_SIZE];
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+	bool		    icc_clocks_en; /* use icc fwk to handle clock en/dis/rate */
+	const char        **icc_clocks;
+	struct icc_path	  **iccpath;
+	int		    num_icc_clocks;
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 };
 
 /**

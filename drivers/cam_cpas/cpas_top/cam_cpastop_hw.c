@@ -929,6 +929,7 @@ static int cam_cpastop_poweroff(struct cam_hw_info *cpas_hw)
 	return rc;
 }
 
+#ifndef CONFIG_INTERCONNECT_QCOM_CAMSX
 static int cam_cpastop_qchannel_handshake(struct cam_hw_info *cpas_hw,
 	bool power_on, bool force_on)
 {
@@ -1017,6 +1018,7 @@ static int cam_cpastop_qchannel_handshake(struct cam_hw_info *cpas_hw,
 
 	return rc;
 }
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 static int cam_cpastop_init_hw_version(struct cam_hw_info *cpas_hw,
 	struct cam_cpas_hw_caps *hw_caps)
@@ -1194,7 +1196,11 @@ int cam_cpastop_get_internal_ops(struct cam_cpas_internal_ops *internal_ops)
 	internal_ops->setup_qos_settings = cam_cpastop_setup_qos_settings;
 	internal_ops->print_poweron_settings =
 		cam_cpastop_print_poweron_settings;
+#ifndef CONFIG_INTERCONNECT_QCOM_CAMSX
 	internal_ops->qchannel_handshake = cam_cpastop_qchannel_handshake;
+#else
+	/* q-channels handled by camsx if enabled */
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 
 	return 0;
 }

@@ -132,4 +132,25 @@ int cam_res_mgr_util_get_idx_from_shared_pctrl_gpio(uint gpio);
  */
 int cam_res_mgr_util_shared_gpio_check_hold(uint gpio);
 
+#ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
+/**
+ * @brief : Check if clock is handled by icc fwk
+ * @return true if so, false all other cases
+ */
+bool cam_res_mgr_is_icc_clock(const char *clk_name);
+
+/**
+ * @brief : convert clock to icc path
+ * @return struct icc_path* or NULL otherwise
+ */
+struct icc_path *cam_res_mgr_clk_get_path(const char *clk_name);
+
+/**
+ * @brief : single call where interconnect clock rates
+ *	could be handled before being passed to icc.
+ * @return 0 on success, error code otherwise
+ */
+int cam_res_mgr_icc_set_bw(struct icc_path *path, s32 avg, s32 peak);
+#endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
+
 #endif /* __CAM_RES_MGR_API_H__ */
