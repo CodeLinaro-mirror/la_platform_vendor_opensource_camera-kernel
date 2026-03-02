@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of.h>
@@ -168,6 +169,7 @@ static uint32_t *cam_ope_bus_rd_update(struct ope_hw *ope_hw_info,
 	struct ope_bus_rd_io_port_cdm_info *io_port_cdm;
 	struct cam_cdm_utils_ops *cdm_ops;
 	struct ope_bus_rd_io_port_info *io_port_info;
+	uint32_t write_len;
 
 
 	if (ctx_id < 0 || !prepare) {
@@ -305,6 +307,12 @@ static uint32_t *cam_ope_bus_rd_update(struct ope_hw *ope_hw_info,
 				prepare->kmd_buf_offset;
 			io_port_cdm->s_cdm_info[l][idx].addr = kmd_buf;
 			io_port_cdm->num_s_cmd_bufs[l]++;
+			write_len = (count + header_size) * sizeof(uint32_t);
+			if (cam_ope_validate_kmd_space(ope_request->ope_kmd_buf.size,
+						prepare->kmd_buf_offset, write_len)){
+				CAM_ERR(CAM_OPE, "KMD buffer validation failed");
+				return NULL;
+			}
 
 			kmd_buf = cdm_ops->cdm_write_regrandom(
 				kmd_buf, count/2, temp_reg);
@@ -397,7 +405,6 @@ static uint32_t *cam_ope_bus_rm_disable(struct ope_hw *ope_hw_info,
 			prepare->kmd_buf_offset;
 		io_port_cdm->s_cdm_info[l][idx].addr = kmd_buf;
 		io_port_cdm->num_s_cmd_bufs[l]++;
-
 		kmd_buf = cdm_ops->cdm_write_regrandom(
 			kmd_buf, count/2, temp_reg);
 		prepare->kmd_buf_offset += ((count + header_size) *
@@ -438,6 +445,7 @@ static int cam_ope_bus_rd_prepare(struct ope_hw *ope_hw_info,
 	struct ope_bus_rd_io_port_cdm_info *io_port_cdm = NULL;
 	struct cam_cdm_utils_ops *cdm_ops;
 	int32_t num_stripes = 0;
+	uint32_t write_len;
 
 	if (ctx_id < 0 || !data) {
 		CAM_ERR(CAM_OPE, "Invalid data: %d %p", ctx_id, data);
@@ -536,6 +544,14 @@ static int cam_ope_bus_rd_prepare(struct ope_hw *ope_hw_info,
 			sizeof(temp) * (count + header_size);
 		io_port_cdm->go_cmd_offset =
 			prepare->kmd_buf_offset;
+	}
+
+	write_len = (count + header_size) * sizeof(uint32_t);
+	rc = cam_ope_validate_kmd_space(ope_request->ope_kmd_buf.size,
+                                prepare->kmd_buf_offset, write_len);
+	if (rc){
+		CAM_ERR(CAM_OPE, "KMD buffer validation failed for go command: %d", rc);
+		goto end;
 	}
 	kmd_buf = cdm_ops->cdm_write_regrandom(
 		kmd_buf, count/2, temp_reg);

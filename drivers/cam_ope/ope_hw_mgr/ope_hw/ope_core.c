@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of.h>
@@ -494,6 +494,18 @@ static int dump_stripe_cmd(struct ope_frame_process *frm_proc,
 	CAM_DBG(CAM_OPE, "offset:%d",
 		frm_proc->cmd_buf[i][k].offset);
 	return 0;
+}
+
+int cam_ope_validate_kmd_space(size_t total_buf_size,
+                                      uint32_t current_offset,
+                                      size_t bytes_to_write)
+{
+    if (current_offset >= total_buf_size || (total_buf_size - current_offset) < bytes_to_write) {
+        CAM_ERR(CAM_OPE, "OOB: Offset %u | Size %zu | Write_bytes %zu",
+                current_offset, total_buf_size, bytes_to_write);
+        return -EINVAL;
+    }
+    return 0;
 }
 
 int ope_validate_buff_offset(size_t buf_len,
