@@ -165,7 +165,7 @@ static int cam_tfe_mgr_handle_reg_dump(struct cam_tfe_hw_mgr_ctx *ctx,
 		CAM_DBG(CAM_ISP, "Reg dump cmd meta data: %u req_type: %u",
 			reg_dump_buf_desc[i].meta_data, meta_type);
 		if (reg_dump_buf_desc[i].meta_data == meta_type) {
-			if (in_serving_softirq()) {
+			if (in_atomic()) {
 				cpu_addr = ctx->reg_dump_cmd_buf_addr_len[i].cpu_addr;
 				buf_size = ctx->reg_dump_cmd_buf_addr_len[i].buf_size;
 			} else {
@@ -181,7 +181,7 @@ static int cam_tfe_mgr_handle_reg_dump(struct cam_tfe_hw_mgr_ctx *ctx,
 			if (!cpu_addr || (buf_size == 0)) {
 				CAM_ERR(CAM_ISP, "Invalid cpu_addr=%pK mem_handle=%d",
 					(void *)cpu_addr, reg_dump_buf_desc[i].mem_handle);
-				if (!in_serving_softirq())
+				if (!in_atomic())
 					cam_mem_put_cpu_buf(reg_dump_buf_desc[i].mem_handle);
 				return rc;
 			}
@@ -195,11 +195,11 @@ static int cam_tfe_mgr_handle_reg_dump(struct cam_tfe_hw_mgr_ctx *ctx,
 				CAM_ERR(CAM_ISP,
 					"Reg dump failed at idx: %d, rc: %d req_id: %llu meta type: %u",
 					i, rc, ctx->applied_req_id, meta_type);
-				if (!in_serving_softirq())
+				if (!in_atomic())
 					cam_mem_put_cpu_buf(reg_dump_buf_desc[i].mem_handle);
 				return rc;
 			}
-			if (!in_serving_softirq())
+			if (!in_atomic())
 				cam_mem_put_cpu_buf(reg_dump_buf_desc[i].mem_handle);
 		}
 	}
