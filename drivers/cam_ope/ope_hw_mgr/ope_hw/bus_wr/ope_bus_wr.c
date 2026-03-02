@@ -193,6 +193,7 @@ static uint32_t *cam_ope_bus_wr_update(struct ope_hw *ope_hw_info,
 	struct ope_bus_wr_io_port_cdm_batch *io_port_cdm_batch;
 	struct ope_bus_wr_io_port_cdm_info *io_port_cdm;
 	struct cam_cdm_utils_ops *cdm_ops;
+	uint32_t write_len;
 
 
 	if (ctx_id < 0 || !prepare) {
@@ -327,6 +328,10 @@ static uint32_t *cam_ope_bus_wr_update(struct ope_hw *ope_hw_info,
 				prepare->kmd_buf_offset;
 			io_port_cdm->s_cdm_info[l][idx].addr = kmd_buf;
 			io_port_cdm->num_s_cmd_bufs[l]++;
+			write_len = (count + header_size) * sizeof(uint32_t);
+			if (cam_ope_validate_kmd_space(ope_request->ope_kmd_buf.size,
+						prepare->kmd_buf_offset, write_len))
+				return NULL;
 
 			kmd_buf = cdm_ops->cdm_write_regrandom(
 				kmd_buf, count/2, temp_reg);
