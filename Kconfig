@@ -138,6 +138,12 @@ config TARGET_SYNX_ENABLE
 	  like EVA and other.
 	  This is to avoid sw signaling latency.
 
+config SHIKRA
+	bool "enbale shikra DT probe sequence"
+	help
+	 This is to enbale platform probe sequence
+	 based on Shikra device tree.
+
 config QCOM_VA_MINIDUMP
 	bool "enable VA minidump support"
 	help
