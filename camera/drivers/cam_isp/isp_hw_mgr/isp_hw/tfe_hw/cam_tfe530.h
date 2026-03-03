@@ -7,6 +7,7 @@
 
 #ifndef _CAM_TFE530_H_
 #define _CAM_TFE530_H_
+#include <media/cam_isp_tfe.h>
 #include "cam_tfe_core.h"
 #include "cam_tfe_bus.h"
 
@@ -878,6 +879,7 @@ static struct cam_tfe_bus_hw_info  tfe530_bus_hw_info = {
 	.counter_limit_mask    = 0xF,
 	.mode_cfg_shift = 16,
 	.height_shift = 16,
+	.max_out_res = CAM_ISP_TFE_OUT_RES_MAX & 0xFF,
 };
 
 struct cam_tfe_hw_info cam_tfe530 = {
