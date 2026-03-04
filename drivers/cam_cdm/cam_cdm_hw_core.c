@@ -1551,6 +1551,8 @@ irqreturn_t cam_hw_cdm_irq(int irq_num, void *data)
 	int i, rc = 0;
 	struct completion *fast_complete;
 	struct cam_worker_wrapper_taskdata_args task;
+	struct cam_cdm_bl_cb_request_entry *tnode = NULL;
+	struct cam_cdm_bl_cb_request_entry *node  = NULL;
 
 	CAM_DBG(CAM_CDM, "Got irq hw_version 0x%x from %s%u",
 		cdm_core->hw_version, soc_info->label_name,
@@ -1622,12 +1624,19 @@ irqreturn_t cam_hw_cdm_irq(int irq_num, void *data)
 
 			if (inline_irq_data < CAM_CDM_BL_FIFO_LENGTH_MAX_DEFAULT) {
 				spin_lock(&cdm_core->bl_fifo[i].fast_complete_lock);
-				fast_complete = cdm_core->bl_fifo[i].fast_complete[inline_irq_data];
-				if (fast_complete) {
-					complete_all(fast_complete);
-					cdm_core->bl_fifo[i].fast_complete[inline_irq_data] = NULL;
-				}
+				list_for_each_entry_safe(node, tnode,
+					&cdm_core->bl_fifo[i].bl_request_list, entry) {
+					fast_complete =
+						cdm_core->bl_fifo[i].fast_complete[node->bl_tag];
+					if (fast_complete) {
+						complete_all(fast_complete);
+						cdm_core->bl_fifo[i].fast_complete[node->bl_tag] =
+							NULL;
+					}
 
+					if (node->bl_tag == inline_irq_data)
+						break;
+				}
 				spin_unlock(&cdm_core->bl_fifo[i].fast_complete_lock);
 			} else if (inline_irq_data != CAM_CDM_DBG_GEN_IRQ_USR_DATA)
 				CAM_WARN(CAM_CDM,
