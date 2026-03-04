@@ -2122,6 +2122,39 @@ static int cam_ife_csid_ver2_reset_irq_top_half(uint32_t    evt_id,
 	return 0;
 }
 
+static int cam_ife_csid_populate_init_reg_vals(
+	struct cam_ife_csid_ver2_reg_info *csid_reg,
+	struct cam_hw_soc_info *soc_info,
+	void __iomem *mem_base)
+{
+	int res_id;
+	const struct cam_ife_csid_ver2_path_reg_info *path_reg = NULL;
+
+	for (res_id = CAM_IFE_PIX_PATH_RES_RDI_0;
+		res_id <= CAM_IFE_PIX_PATH_RES_PPP; res_id++) {
+		path_reg = csid_reg->path_reg[res_id];
+		if (!path_reg) {
+			CAM_DBG(CAM_ISP, "No reg info for res_id %d, skipping", res_id);
+			continue;
+		}
+
+		/* set frame drop pattern to 0 and period to 1 */
+		cam_io_w_mb(0, mem_base + path_reg->frm_drop_pattern_addr);
+		cam_io_w_mb(1, mem_base + path_reg->frm_drop_period_addr);
+
+		/* set pxl drop pattern to 0 and period to 1 */
+		cam_io_w_mb(0, mem_base + path_reg->pix_drop_pattern_addr);
+		cam_io_w_mb(1, mem_base + path_reg->pix_drop_period_addr);
+
+		/* set line drop pattern to 0 and period to 1 */
+		cam_io_w_mb(0, mem_base + path_reg->line_drop_pattern_addr);
+		cam_io_w_mb(1, mem_base + path_reg->line_drop_period_addr);
+	}
+
+	return 0;
+
+}
+
 static int cam_ife_csid_ver2_internal_reset(
 	struct cam_ife_csid_ver2_hw *csid_hw,
 	uint32_t rst_cmd, uint32_t rst_location, uint32_t rst_mode)
@@ -2189,6 +2222,13 @@ wait_only:
 			"CSID[%u] Reset failed mode %d cmd %d loc %d",
 			csid_hw->hw_intf->hw_idx,
 			rst_mode, rst_cmd, rst_location);
+
+	if (rst_cmd == CAM_IFE_CSID_RESET_CMD_SW_RST) {
+		rc = cam_ife_csid_populate_init_reg_vals(csid_reg, soc_info, mem_base);
+		if (rc)
+			CAM_ERR(CAM_ISP, "CSID[%u] Populate reg failed",
+				csid_hw->hw_intf->hw_idx);
+	}
 	reinit_completion(&csid_hw->hw_info->hw_complete);
 	return rc;
 }
@@ -3414,19 +3454,6 @@ static int cam_ife_csid_ver2_init_config_rdi_path(
 
 	rc = cam_ife_csid_ver2_program_init_cfg1_rdi_path(csid_hw, res);
 
-	/* set frame drop pattern to 0 and period to 1 */
-	cam_io_w_mb(1, mem_base + path_reg->frm_drop_period_addr);
-	cam_io_w_mb(0, mem_base + path_reg->frm_drop_pattern_addr);
-
-	/*TODO Need to check for any hw errata like 480 and 580*/
-	/* set pxl drop pattern to 0 and period to 1 */
-	cam_io_w_mb(0, mem_base + path_reg->pix_drop_pattern_addr);
-	cam_io_w_mb(1, mem_base + path_reg->pix_drop_period_addr);
-
-	/* set line drop pattern to 0 and period to 1 */
-	cam_io_w_mb(0, mem_base + path_reg->line_drop_pattern_addr);
-	cam_io_w_mb(1, mem_base + path_reg->line_drop_period_addr);
-
 	/* Enable the RDI path */
 	val = cam_io_r_mb(mem_base + path_reg->cfg0_addr);
 	val |= (1 << cmn_reg->path_en_shift_val);
@@ -3542,16 +3569,6 @@ static int cam_ife_csid_ver2_init_config_pxl_path(
 	}
 
 	rc = cam_ife_csid_ver2_program_init_cfg1_pxl_path(csid_hw, res);
-
-	/* set frame drop pattern to 0 and period to 1 */
-	cam_io_w_mb(1, mem_base + path_reg->frm_drop_period_addr);
-	cam_io_w_mb(0, mem_base + path_reg->frm_drop_pattern_addr);
-	/* set pxl drop pattern to 0 and period to 1 */
-	cam_io_w_mb(0, mem_base + path_reg->pix_drop_pattern_addr);
-	cam_io_w_mb(1, mem_base + path_reg->pix_drop_period_addr);
-	/* set line drop pattern to 0 and period to 1 */
-	cam_io_w_mb(0, mem_base + path_reg->line_drop_pattern_addr);
-	cam_io_w_mb(1, mem_base + path_reg->line_drop_period_addr);
 
 	/* Enable the Pxl path */
 	val = cam_io_r_mb(mem_base + path_reg->cfg0_addr);
