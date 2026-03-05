@@ -117,7 +117,6 @@ static int cam_workq_process_task(struct cam_workq_task *task)
 		task->process_cb(task->priv, task->payload);
 	else
 		CAM_WARN(CAM_WORKER, "FATAL:no task handler registered for workq");
-	cam_workq_put_task(task);
 
 	return 0;
 }
@@ -159,6 +158,14 @@ void cam_workq_process(struct work_struct *w)
 			WORKQ_RELEASE_LOCK(workq, flags);
 			if (!unlikely(atomic_read(&workq->flush)))
 				cam_workq_process_task(task);
+			/**
+			 * When flush is set, we skip the client callback to avoid executing code
+			 * during shutdown, but the task was already removed from process_head,
+			 * so it must be returned to empty_head to keep the pool coherent.
+			 * This ensures pending_cnt/free_cnt stay balanced and avoids
+			 * transient leaks of tasks off any list.
+			 */
+			cam_workq_put_task(task);
 			cam_common_util_thread_switch_delay_detect(
 				workq->workq_name, "execution", cb,
 				sched_start_time,
@@ -305,32 +312,36 @@ int cam_workq_create(char *name, int32_t num_tasks, uint32_t max_active,
 void cam_workq_destroy(struct cam_core_workq **cam_workq)
 {
 	unsigned long             flags = 0;
-	struct workqueue_struct  *job;
-	struct cam_core_workq    *workq;
+	struct workqueue_struct  *job   = NULL;
+	struct cam_core_workq    *workq = NULL;
+	void                     *pool  = NULL;
 	int                       i;
 
-	if (cam_workq && *cam_workq) {
-		workq = *cam_workq;
-		CAM_DBG(CAM_WORKER, "destroy workque %s", workq->workq_name);
-		WORKQ_ACQUIRE_LOCK(workq, flags);
-		/* prevent any processing of callbacks */
-		atomic_set(&workq->flush, 1);
-		if (workq->job) {
-			job = workq->job;
-			workq->job = NULL;
-			WORKQ_RELEASE_LOCK(workq, flags);
-			destroy_workqueue(job);
-			WORKQ_ACQUIRE_LOCK(workq, flags);
-		}
+	if (!cam_workq || !*cam_workq)
+		return;
 
-		CAM_MEM_FREE(workq->task.pool);
-
-		/* Leave lists in stable state after freeing pool */
-		INIT_LIST_HEAD(&workq->task.empty_head);
-		for (i = 0; i < CAM_WORKQ_TASK_PRIORITY_MAX; i++)
-			INIT_LIST_HEAD(&workq->task.process_head[i]);
-		*cam_workq = NULL;
-		WORKQ_RELEASE_LOCK(workq, flags);
-		CAM_MEM_FREE(workq);
+	workq = *cam_workq;
+	CAM_DBG(CAM_WORKER, "destroy workque %s", workq->workq_name);
+	WORKQ_ACQUIRE_LOCK(workq, flags);
+	/* prevent any processing of callbacks */
+	atomic_set(&workq->flush, 1);
+	if (workq->job) {
+		job = workq->job;
+		workq->job = NULL;
 	}
+	pool = workq->task.pool;
+	workq->task.pool = NULL;
+
+	INIT_LIST_HEAD(&workq->task.empty_head);
+	for (i = 0; i < CAM_WORKQ_TASK_PRIORITY_MAX; i++)
+		INIT_LIST_HEAD(&workq->task.process_head[i]);
+	*cam_workq = NULL;
+	WORKQ_RELEASE_LOCK(workq, flags);
+
+	if (job)
+		destroy_workqueue(job);
+	if (pool)
+		CAM_MEM_FREE(pool);
+
+	CAM_MEM_FREE(workq);
 }

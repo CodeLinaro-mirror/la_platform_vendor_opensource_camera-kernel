@@ -7,7 +7,7 @@
 #include "cam_vfe_top_common.h"
 #include "cam_debug_util.h"
 
-int g_cam_tfe_clk_lvl[CAM_IFE_HW_CORE_NUM_MAX] = {-1};
+int g_cam_tfe_clk_lvl[CAM_IFE_HW_CORE_NUM_MAX] = {-1, -1, -1, -1, -1, -1, -1, -1};
 
 static const char *cam_vfe_top_clk_bw_state_to_string(uint32_t state)
 {
@@ -593,6 +593,10 @@ int cam_vfe_top_apply_clk_bw_update(struct cam_vfe_top_priv_common *top_common,
 	}
 
 	soc_info = top_common->soc_info;
+	if (!soc_info) {
+		CAM_ERR(CAM_ISP, "Invalid soc_info");
+		return -EINVAL;
+	}
 	hw_info = hw_intf->hw_priv;
 	if (hw_info->hw_state != CAM_HW_STATE_POWER_UP) {
 		CAM_DBG(CAM_PERF|CAM_ISP,
@@ -731,9 +735,8 @@ int cam_vfe_top_apply_clk_bw_update(struct cam_vfe_top_priv_common *top_common,
 
 end:
 	rc = cam_soc_util_get_clk_level(soc_info, final_clk_rate, soc_info->src_clk_idx, &level);
-	if (rc) {
+	if (rc)
 		CAM_ERR(CAM_ISP, "Failed to get clock level for rate %llu", final_clk_rate);
-	}
 
 	g_cam_tfe_clk_lvl[top_common->hw_idx] = level;
 	CAM_DBG(CAM_ISP, "IFE:%d  mc_tfe_clk_lvl =%d", top_common->hw_idx, level);

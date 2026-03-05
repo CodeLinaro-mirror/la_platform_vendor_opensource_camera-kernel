@@ -179,7 +179,7 @@ int cam_hw_cdm_pause_core(struct cam_hw_info *cdm_hw, bool pause)
 
 	pause_core_supported = (core->offsets->reg_data->capabilities & CAM_CDM_CAP_PAUSE_CORE);
 
-	if (pause_core_supported && pause)
+	if (pause)
 		val |= core->offsets->cmn_reg->pause_core_enable_mask;
 
 	if (pause_core_supported) {

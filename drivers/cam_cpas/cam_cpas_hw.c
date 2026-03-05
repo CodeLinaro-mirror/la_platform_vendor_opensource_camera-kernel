@@ -1418,19 +1418,23 @@ static int cam_cpas_get_max_of_tfe_and_camnoc(
 	struct cam_hw_soc_info *soc_info,
 	int64_t hlos_clk_rate, int64_t *max_hlos_clk_rate)
 {
-	int i = 0;
+	int i = 0, rc = 0;
 	int camnoc_clk_lvl = -1;
 	int max_tfe_clk_lvl = -1;
 	int clk_lvl_to_be_applied = -1;
 	int clock_idx = soc_info->src_clk_idx;
 
 	for (i = 0; i < CAM_IFE_HW_CORE_NUM_MAX; i++) {
-		CAM_DBG(CAM_CPAS,"IFE=%d, level=%d", i, g_cam_tfe_clk_lvl[i]);
 		if (max_tfe_clk_lvl < g_cam_tfe_clk_lvl[i])
 			max_tfe_clk_lvl = g_cam_tfe_clk_lvl[i];
 	}
 
-	cam_soc_util_get_clk_level(soc_info, hlos_clk_rate, soc_info->src_clk_idx, &camnoc_clk_lvl);
+	rc = cam_soc_util_get_clk_level(soc_info, hlos_clk_rate,
+		soc_info->src_clk_idx, &camnoc_clk_lvl);
+	if (rc) {
+		CAM_ERR(CAM_ISP, "Failed to get clock level for rate %llu", hlos_clk_rate);
+		return -EINVAL;
+	}
 
 	if (max_tfe_clk_lvl > camnoc_clk_lvl)
 		clk_lvl_to_be_applied = max_tfe_clk_lvl;
@@ -1447,7 +1451,7 @@ static int cam_cpas_get_max_of_tfe_and_camnoc(
 		soc_info->clk_name[clock_idx], max_tfe_clk_lvl, camnoc_clk_lvl, hlos_clk_rate,
 		*max_hlos_clk_rate);
 
-	return 0;
+	return rc;
 }
 
 static int cam_cpas_util_set_max_camnoc_axi_clk_rate(struct cam_cpas *cpas_core,
@@ -1509,11 +1513,15 @@ static int cam_cpas_util_set_max_camnoc_axi_clk_rate(struct cam_cpas *cpas_core,
 		}
 
 	} else {
-		// need to add more here
 		rc = cam_cpas_get_max_of_tfe_and_camnoc(soc_info, applied_full_tree_rate,
 				&max_hlos_clk_rate);
-		CAM_DBG(CAM_CPAS, "Highest valid lvl: %d, applying corresponding rate %lld max level %lld",
-			highest_full_tree_clk_lvl, applied_full_tree_rate, max_hlos_clk_rate);
+		if (rc) {
+			CAM_ERR(CAM_CPAS,
+				"Failed max camnoc rate as per clients, camnoc applied rate:[%lld] rc:%d",
+				applied_full_tree_rate, rc);
+			max_hlos_clk_rate = applied_full_tree_rate;
+		}
+
 		rc = cam_soc_util_set_src_clk_rate(soc_info, CAM_CLK_SW_CLIENT_IDX,
 				max_hlos_clk_rate, 0);
 		if (rc) {
@@ -1525,7 +1533,7 @@ static int cam_cpas_util_set_max_camnoc_axi_clk_rate(struct cam_cpas *cpas_core,
 	}
 
 	cpas_core->applied_camnoc_axi_rate.sw_client = max_hlos_clk_rate;
-	CAM_INFO(CAM_PERF, "Setting camnoc axi HLOS clk rate[Clk] : [%lld]",
+	CAM_DBG(CAM_PERF, "Setting camnoc axi HLOS clk rate[Clk] : [%lld]",
 		max_hlos_clk_rate);
 	return rc;
 }
