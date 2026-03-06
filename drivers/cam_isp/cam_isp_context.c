@@ -71,6 +71,9 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 	struct cam_context *ctx, uint32_t *num_results, struct response_buffer *response_buffers,
 	struct cam_hwfence_info *fence_info, uint32_t *is_fenceupdated);
 
+static void cam_isp_update_fastpath_result_queue(void *data,
+	uint32_t value);
+
 static const char *__cam_isp_evt_val_to_type(
 	uint32_t evt_id)
 {
@@ -8890,6 +8893,27 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 		CAM_ERR(CAM_ISP, "Prepare config packet failed in HW layer ctx:%u", ctx->ctx_id);
 		rc = -EFAULT;
 		goto free_req;
+	}
+
+	/* Set fastpath notifier if applicable */
+	if (ctx_isp->ul_path_en && (packet_opcode == CAM_ISP_PACKET_INIT_DEV)) {
+		struct cam_hw_cmd_args hw_cmd_args;
+		struct cam_isp_hw_cmd_args isp_hw_cmd_args;
+
+		hw_cmd_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
+		hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+		isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_FAST_RESULT_NOTIFIER_CFG;
+		isp_hw_cmd_args.cmd_data = ctx_isp;
+		isp_hw_cmd_args.u.fastpath_result_handler = cam_isp_update_fastpath_result_queue;
+		hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+		rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
+			&hw_cmd_args);
+		if (rc) {
+			CAM_ERR(CAM_ISP,
+				"Configuring fastpath result notifier failed rc: %d ctx: %u",
+				rc, ctx->ctx_id);
+			goto free_req;
+		}
 	}
 
 	req_isp->num_cfg = cfg.num_hw_update_entries;
