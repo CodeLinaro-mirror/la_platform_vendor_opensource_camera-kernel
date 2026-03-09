@@ -37,6 +37,8 @@ static const char drv_name[] = "vfe_bus";
 
 #define CAM_VFE_BUS_VER3_PAYLOAD_MAX             256
 
+#define CAM_VFE_MULTI_CONTEXT_BROADCAST_SET      BIT(10)
+
 #define CAM_VFE_RDI_BUS_DEFAULT_WIDTH               0xFFFF
 #define CAM_VFE_RDI_BUS_DEFAULT_STRIDE              0xFFFF
 
@@ -3992,7 +3994,7 @@ static int cam_vfe_bus_ver3_update_hfr(void *priv, void *cmd_args,
 	struct cam_cdm_utils_ops                 *cdm_util_ops;
 	uint32_t *reg_val_pair;
 	uint32_t num_regval_pairs = 0;
-	uint32_t  i, j, size = 0;
+	uint32_t  i, j =0, size = 0;
 
 	update_hfr =  (struct cam_isp_hw_get_cmd_update *) cmd_args;
 	bus_priv = (struct cam_vfe_bus_ver3_priv  *) priv;
@@ -4009,7 +4011,23 @@ static int cam_vfe_bus_ver3_update_hfr(void *priv, void *cmd_args,
 	reg_val_pair = &vfe_out_data->common_data->io_buf_update[0];
 	hfr_cfg = (struct cam_isp_port_hfr_config *)update_hfr->data;
 
-	for (i = 0, j = 0; i < vfe_out_data->num_wm; i++) {
+	int32_t restore_ctxt_sel_val = -1;
+
+	/* Update context select as broadcast before programming WM HFR registers for Multi Contexts*/
+	if ((vfe_out_data->dst_hw_ctxt_id_mask & BIT(CAM_ISP_MULTI_CTXT_0)) &&
+		(vfe_out_data->dst_hw_ctxt_id_mask > BIT(CAM_ISP_MULTI_CTXT_0)))
+	{
+		restore_ctxt_sel_val = cam_io_r_mb(bus_priv->common_data.mem_base +
+			bus_priv->common_data.common_reg->ctxt_sel);
+
+		CAM_ISP_ADD_REG_VAL_PAIR(reg_val_pair, MAX_REG_VAL_PAIR_SIZE, j,
+			bus_priv->common_data.common_reg->ctxt_sel, CAM_VFE_MULTI_CONTEXT_BROADCAST_SET);
+		CAM_DBG(CAM_ISP,
+			"VFE:%u broadcast HFR configuration to multi contexts, defaut contexts selector: %u",
+			bus_priv->common_data.core_index, restore_ctxt_sel_val);
+	}
+
+	for (i = 0; i < vfe_out_data->num_wm; i++) {
 		if (j >= (MAX_REG_VAL_PAIR_SIZE - MAX_BUF_UPDATE_REG_NUM * 2)) {
 			CAM_ERR(CAM_ISP,
 				"VFE:%u reg_val_pair %d exceeds the array limit %zu",
@@ -4076,6 +4094,14 @@ static int cam_vfe_bus_ver3_update_hfr(void *priv, void *cmd_args,
 		/* set initial configuration done */
 		if (!wm_data->hfr_cfg_done)
 			wm_data->hfr_cfg_done = true;
+	}
+
+	if (-1 != restore_ctxt_sel_val)
+	{
+		CAM_ISP_ADD_REG_VAL_PAIR(reg_val_pair, MAX_REG_VAL_PAIR_SIZE, j,
+			bus_priv->common_data.common_reg->ctxt_sel, restore_ctxt_sel_val);
+		CAM_DBG(CAM_ISP, "VFE:%u restore the contexts selector to: %u",
+			bus_priv->common_data.core_index, restore_ctxt_sel_val);
 	}
 
 	num_regval_pairs = j / 2;
