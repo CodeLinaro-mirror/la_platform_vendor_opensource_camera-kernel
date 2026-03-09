@@ -6246,6 +6246,32 @@ static int cam_ife_csid_get_format_measure_error(struct cam_ife_csid_ver2_hw *cs
 	return 0;
 }
 
+static int cam_ife_csid_skip_discard_frame_cfg(struct cam_ife_csid_ver2_hw *csid_hw)
+{
+	struct   cam_ife_csid_ver2_path_cfg    *path_cfg;
+	struct   cam_isp_resource_node         *res;
+	int i;
+
+	for (i = CAM_IFE_PIX_PATH_RES_RDI_0; i < CAM_IFE_PIX_PATH_RES_MAX; i++) {
+		res = &csid_hw->path_res[i];
+		path_cfg = (struct cam_ife_csid_ver2_path_cfg *)res->res_priv;
+		if (!path_cfg)
+			continue;
+		if (path_cfg->discard_init_frames) {
+			path_cfg->discard_init_frames = false;
+			path_cfg->num_frames_discard = 0;
+			if (atomic_read(&csid_hw->discard_frame_per_path) > 0)
+				atomic_dec(&csid_hw->discard_frame_per_path);
+			CAM_DBG(CAM_ISP,
+				"CSID[%u] skip discard path: %s discard_ref_cnt: %u",
+				csid_hw->hw_intf->hw_idx, res->res_name,
+				atomic_read(&csid_hw->discard_frame_per_path));
+		}
+	}
+
+	return 0;
+}
+
 static int cam_ife_csid_ver2_update_aup(struct cam_ife_csid_ver2_hw *csid_hw,
 	void *cmd_args)
 {
@@ -6484,6 +6510,9 @@ static int cam_ife_csid_ver2_process_cmd(void *hw_priv,
 		break;
 	case CAM_ISP_HW_CMD_CSID_CHECK_CSID_FORMAT_ERROR:
 		rc = cam_ife_csid_get_format_measure_error(csid_hw);
+		break;
+	case CAM_ISP_HW_CMD_SKIP_CSID_DISCARD_FRAME_CFG:
+		rc = cam_ife_csid_skip_discard_frame_cfg(csid_hw);
 		break;
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d unsupported cmd:%d",
