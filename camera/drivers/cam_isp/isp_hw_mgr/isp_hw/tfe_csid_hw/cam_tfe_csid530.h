@@ -222,6 +222,7 @@ static struct cam_tfe_csid_common_reg_offset
 	.top_tfe2_pix_pipe_fuse_reg                   = 0xFE4,
 	.top_tfe2_fuse_reg                            = 0xFE8,
 	.format_measure_support                       = false,
+	.sync_clk                                     = true,
 };
 
 static struct cam_tfe_csid_reg_offset cam_tfe_csid_530_reg_offset = {
