@@ -9210,6 +9210,17 @@ start_only:
 		goto cdm_streamoff;
 	}
 
+	if (cam_isp_is_ctx_primary_rdi(ctx) && (ctx->pri_rdi_out_res <
+		g_ife_hw_mgr.isp_caps.max_vfe_out_res_type)) {
+		hw_mgr_res =
+			&ctx->res_list_ife_out[ctx->vfe_out_map[ctx->pri_rdi_out_res & 0xff]];
+		hw_mgr_res->hw_res[0]->is_rdi_primary_res =  true;
+		primary_rdi_src_res =
+			cam_convert_rdi_out_res_id_to_src(ctx->pri_rdi_out_res);
+		primary_rdi_csid_res =
+			cam_ife_hw_mgr_get_ife_csid_rdi_res_type(ctx->pri_rdi_out_res);
+	}
+
 	CAM_DBG(CAM_ISP, "START IFE OUT ... in ctx id:%u",
 		ctx->ctx_index);
 	/* start the IFE out devices */
@@ -9221,17 +9232,6 @@ start_only:
 				 i, ctx->ctx_index);
 			goto err;
 		}
-	}
-
-	if (cam_isp_is_ctx_primary_rdi(ctx) && (ctx->pri_rdi_out_res <
-		g_ife_hw_mgr.isp_caps.max_vfe_out_res_type)) {
-		hw_mgr_res =
-			&ctx->res_list_ife_out[ctx->vfe_out_map[ctx->pri_rdi_out_res & 0xff]];
-		hw_mgr_res->hw_res[0]->is_rdi_primary_res =  true;
-		primary_rdi_src_res =
-			cam_convert_rdi_out_res_id_to_src(ctx->pri_rdi_out_res);
-		primary_rdi_csid_res =
-			cam_ife_hw_mgr_get_ife_csid_rdi_res_type(ctx->pri_rdi_out_res);
 	}
 
 	CAM_DBG(CAM_ISP, "START IFE SRC ... in ctx id:%u",
