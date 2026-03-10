@@ -372,6 +372,20 @@ static int ais_vfe_config_rdi_wm(struct ais_vfe_rdi_output *rdi_path,
 					ALIGNUP(rdi_cfg->out_cfg.width, 16) / 16;
 			}
 			break;
+		case CAM_FORMAT_MIPI_RAW_8:
+			if (rdi_cfg->out_cfg.mode == 1) {
+				/*frame base mode*/
+				rdi_path->en_cfg = (0x1 << 16) | 0x1;
+				rdi_path->width = AIS_VFE_RDI_BUS_DEFAULT_WIDTH;
+				rdi_path->height = 0;
+				rdi_path->stride = AIS_VFE_RDI_BUS_DEFAULT_STRIDE;
+			} else {
+				/*line base mode*/
+				rdi_path->en_cfg =  0x1;
+				rdi_path->width =
+					ALIGNUP(rdi_cfg->out_cfg.width, 16) / 16;
+			}
+			break;
 		default:
 			CAM_ERR(CAM_ISP, "do not support format = 0x%x", rdi_cfg->out_cfg.format);
 			break;
