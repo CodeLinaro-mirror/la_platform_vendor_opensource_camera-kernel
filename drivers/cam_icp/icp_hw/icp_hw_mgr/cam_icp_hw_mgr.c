@@ -5224,6 +5224,14 @@ static int cam_icp_mgr_config_hw(void *hw_mgr_priv, void *config_hw_args)
 			hw_mgr->iommu_hdl);
 	}
 
+	if (((ctx_data->icp_dev_acquire_info->dev_type == CAM_ICP_RES_TYPE_BPS) &&
+		(!hw_mgr->bps_clk_state)) ||
+		((ctx_data->icp_dev_acquire_info->dev_type == CAM_ICP_RES_TYPE_IPE) &&
+		(!hw_mgr->ipe_clk_state))) {
+		CAM_ERR(CAM_ICP, "ctx id :%u not yet start", ctx_data->ctx_id);
+		goto config_err;
+	}
+
 	rc = cam_icp_mgr_ipe_bps_clk_update(hw_mgr, ctx_data, idx);
 	if (rc) {
 		mutex_unlock(&ctx_data->ctx_mutex);
