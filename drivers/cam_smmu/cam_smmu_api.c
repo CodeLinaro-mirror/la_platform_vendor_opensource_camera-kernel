@@ -843,8 +843,7 @@ static int cam_smmu_iommu_fault_handler(struct iommu_domain *domain,
 	mutex_unlock(&iommu_cb_set.payload_list_lock);
 
 	cam_smmu_page_fault_work(&iommu_cb_set.smmu_work);
-
-	return -EINVAL;
+	return -ENOSYS;
 }
 
 void cam_smmu_reset_cb_page_fault_cnt(void)
