@@ -2665,6 +2665,12 @@ int cam_sensor_process_evt(struct cam_req_mgr_link_evt_data *evt_data)
 		struct timespec64 ts;
 		uint64_t ms, sec, min, hrs;
 
+		if (s_ctrl->sensor_state != CAM_SENSOR_CONFIG) {
+			CAM_DBG(CAM_SENSOR, "Skipping resume HW of %s, Not in CONFIG state: %d",
+				s_ctrl->sensor_name, s_ctrl->sensor_state);
+			break;
+		}
+
 		if (s_ctrl->i2c_data.streamon_settings.is_settings_valid &&
 			(s_ctrl->i2c_data.streamon_settings.request_id == 0)) {
 			rc = cam_sensor_apply_settings(s_ctrl, 0,
