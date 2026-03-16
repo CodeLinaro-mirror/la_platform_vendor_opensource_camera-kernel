@@ -9,6 +9,8 @@
 #include "cam_common_util.h"
 #include "cam_mem_mgr_api.h"
 
+static struct dentry           *dbgfileptr;
+
 /* Global struct to bookkeep all alive kthreads */
 static struct cam_kthread_info  g_cam_kthread_info;
 
@@ -750,6 +752,17 @@ int cam_kthread_property_update_init(void)
 		return rc;
 	}
 
+	dbgfileptr = debugfs_create_dir("kthread_worker", NULL);
+	if (!dbgfileptr) {
+		CAM_ERR(CAM_ISP,"DebugFS could not create directory!");
+		cam_kthread_destroy(&g_prop_update_worker);
+		g_prop_update_worker = NULL;
+		return -ENOENT;
+	}
+
+	debugfs_create_file("cam_kthread_debug_thread_property", 0644, dbgfileptr,
+		NULL, &cam_kthread_debug_thread_property);
+
 	return rc;
 }
 
@@ -758,4 +771,8 @@ void cam_kthread_property_update_deinit(void)
 	cam_kthread_destroy(&g_prop_update_worker);
 	g_prop_update_worker = NULL;
 
+	if (dbgfileptr) {
+		debugfs_remove_recursive(dbgfileptr);
+		dbgfileptr = NULL;
+	}
 }
