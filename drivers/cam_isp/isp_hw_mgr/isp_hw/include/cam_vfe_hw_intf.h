@@ -27,6 +27,8 @@
 #define CAM_VFE_PERF_CNT_MAX          8
 #define CAM_VFE_LEN_LOG_BUF           1024
 
+#define CAM_VFE_GET_PAYLOAD_ERR_MAX   50
+
 /* Common capabilities for VFE */
 #define CAM_VFE_COMMON_CAP_SKIP_CORE_CFG        BIT(0)
 #define CAM_VFE_COMMON_CAP_CORE_MUX_CFG         BIT(1)
