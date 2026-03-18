@@ -479,6 +479,10 @@ int cam_kthread_create(char *name, int32_t num_tasks,
 	list_add_tail(&kthread_data->list, &g_cam_kthread_info.kthread_list);
 	mutex_unlock(&g_cam_kthread_info.kthread_list_mutex);
 
+	g_cam_kthread_info.is_prop_valid = true;
+	g_cam_kthread_info.priority = CAM_KTHREAD_DEFAULT_PRIORITY;
+	g_cam_kthread_info.policy = SCHED_FIFO;
+
 	/*
 	 * is_prop_valid needs to be set from userspace or debugfs or
 	 * pre-set from source code. Make sure after manually setting
