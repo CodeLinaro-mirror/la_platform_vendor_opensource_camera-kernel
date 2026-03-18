@@ -3200,31 +3200,36 @@ static int __cam_isp_ctx_apply_req_offline(
 	}
 	ctx = ctx_isp->base;
 
+	mutex_lock(&ctx_isp->isp_mutex);
 	if (atomic_read(&ctx_isp->pause_apply_req)) {
 		CAM_INFO_RATE_LIMIT(CAM_ISP,
 			"Pause apply request for ctx_id:%d",
 			ctx->ctx_id);
-		return 0;
+		mutex_unlock(&ctx_isp->isp_mutex);
+		goto end;
 	}
 
 	if (list_empty(&ctx->pending_req_list)) {
 		CAM_DBG(CAM_ISP, "No pending requests to apply");
 		rc = -EFAULT;
+		mutex_unlock(&ctx_isp->isp_mutex);
 		goto end;
 	}
 
 	if ((ctx->state != CAM_CTX_ACTIVATED) ||
 		(!atomic_read(&ctx_isp->rxd_epoch)) ||
-		(ctx_isp->substate_activated == CAM_ISP_CTX_ACTIVATED_APPLIED))
+		(ctx_isp->substate_activated == CAM_ISP_CTX_ACTIVATED_APPLIED)) {
+		mutex_unlock(&ctx_isp->isp_mutex);
 		goto end;
+	}
 
-	if (ctx_isp->active_req_cnt >= 2)
+	if (ctx_isp->active_req_cnt >= 2) {
+		mutex_unlock(&ctx_isp->isp_mutex);
 		goto end;
+	}
 
-	mutex_lock(&ctx_isp->isp_mutex);
 	req = list_first_entry(&ctx->pending_req_list, struct cam_ctx_request,
 		list);
-	mutex_unlock(&ctx_isp->isp_mutex);
 
 	CAM_DBG(CAM_REQ, "Apply request %lld in substate %d ctx %u",
 		req->request_id, ctx_isp->substate_activated, ctx->ctx_id);
@@ -3247,8 +3252,6 @@ static int __cam_isp_ctx_apply_req_offline(
 	 * CDM processing return back, so we set the substate before
 	 * apply setting.
 	 */
-	mutex_lock(&ctx_isp->isp_mutex);
-
 	atomic_set(&ctx_isp->rxd_epoch, 0);
 	ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_APPLIED;
 	prev_applied_req = ctx_isp->last_applied_req_id;
@@ -3271,9 +3274,8 @@ static int __cam_isp_ctx_apply_req_offline(
 
 		list_del_init(&req->list);
 		list_add(&req->list, &ctx->pending_req_list);
-		 ctx_isp->waitlist_req_cnt--;
-		mutex_lock(&ctx_isp->isp_mutex);
-
+		ctx_isp->waitlist_req_cnt--;
+		mutex_unlock(&ctx_isp->isp_mutex);
 	} else {
 		atomic_set(&ctx_isp->apply_in_progress, 0);
 		req_isp->applied_crop_req_id = cfg.applied_crop_req_id;

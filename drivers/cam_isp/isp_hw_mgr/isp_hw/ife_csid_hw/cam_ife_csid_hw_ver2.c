@@ -1148,7 +1148,13 @@ static int cam_ife_csid_ver2_rx_err_bottom_half(
 	payload = evt_payload_priv;
 	csid_hw = handler_priv;
 	soc_info = &csid_hw->hw_info->soc_info;
-	data_idx = csid_hw->rx_cfg.phy_sel -1;
+
+	if (csid_hw->rx_cfg.phy_sel > 0) {
+		data_idx = csid_hw->rx_cfg.phy_sel - 1;
+	} else {
+		data_idx = 0;
+		CAM_ERR(CAM_ISP, "Invalid param phy_sel %d", csid_hw->rx_cfg.phy_sel);
+	}
 
 	log_buf = csid_hw->log_buf;
 	memset(log_buf, 0, sizeof(csid_hw->log_buf));

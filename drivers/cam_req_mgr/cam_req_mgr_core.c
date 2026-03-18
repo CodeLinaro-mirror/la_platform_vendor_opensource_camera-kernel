@@ -2958,7 +2958,7 @@ int cam_req_mgr_process_add_req(void *priv, void *data)
 	struct cam_req_mgr_slot             *last_applied_slot = NULL;
 	struct crm_task_payload             *task_data = NULL;
 	struct cam_req_mgr_req_queue        *in_q;
-	struct cam_req_mgr_trigger_notify   notify_trigger;
+	struct cam_req_mgr_trigger_notify   notify_trigger = {0};
 
 	if (!data || !priv) {
 		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
