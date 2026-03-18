@@ -171,6 +171,7 @@ int cam_context_buf_done_from_hw(struct cam_context *ctx,
 	void *done_event_data, uint32_t evt_id)
 {
 	int j, result, rc;
+	bool found = false;
 	struct cam_ctx_request *req;
 	struct cam_hw_done_event_data *done =
 		(struct cam_hw_done_event_data *)done_event_data;
@@ -191,19 +192,44 @@ int cam_context_buf_done_from_hw(struct cam_context *ctx,
 		spin_unlock(&ctx->lock);
 		return -EIO;
 	}
-	req = list_first_entry(&ctx->active_req_list,
-		struct cam_ctx_request, list);
+
+	/*
+	 * In flush usecase, the pending req will be returned directly and
+	 * the FW pending req will be returned earlier than processing req,
+	 * then the out of order buf done event will be received in driver,
+	 * but driver can't drop this buf done event since userland needs
+	 * this cancelled buf done event to clean the pending req.
+	 */
+	if (evt_id == CAM_CTX_EVT_ID_CANCEL) {
+		list_for_each_entry(req, &ctx->active_req_list, list) {
+			if (done->request_id == req->request_id) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found) {
+			CAM_ERR(CAM_CTXT,
+				"[%s][%d] cancel req[%lld] not found in active list",
+				ctx->dev_name, ctx->ctx_id, done->request_id);
+				spin_unlock(&ctx->lock);
+				return -EINVAL;
+		}
+	} else {
+		req = list_first_entry(&ctx->active_req_list,
+			struct cam_ctx_request, list);
+
+		if (done->request_id != req->request_id) {
+			CAM_ERR(CAM_CTXT,
+				"[%s][%d] mismatch: done req[%lld], active req[%lld]",
+				ctx->dev_name, ctx->ctx_id,
+				done->request_id, req->request_id);
+			spin_unlock(&ctx->lock);
+			return -EIO;
+		}
+	}
 
 	trace_cam_buf_done("UTILS", ctx, req);
-
-	if (done->request_id != req->request_id) {
-		CAM_ERR(CAM_CTXT,
-			"[%s][%d] mismatch: done req[%lld], active req[%lld]",
-			ctx->dev_name, ctx->ctx_id,
-			done->request_id, req->request_id);
-		spin_unlock(&ctx->lock);
-		return -EIO;
-	}
 
 	if (!req->num_out_map_entries) {
 		CAM_DBG(CAM_CTXT, "[%s][%d] no output fence to signal",

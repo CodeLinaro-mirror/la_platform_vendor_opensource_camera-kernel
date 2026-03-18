@@ -3330,6 +3330,21 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 	slot->skip_idx = 0;
 	slot->recover = sched_req->bubble_enable;
 
+	if (sched_req->additional_timeout < 0) {
+		CAM_WARN(CAM_CRM,
+			"Requested timeout is invalid [%dms]",
+			sched_req->additional_timeout);
+		slot->additional_timeout = 0;
+	} else if (sched_req->additional_timeout >
+		CAM_REQ_MGR_WATCHDOG_TIMEOUT_MAX) {
+		CAM_WARN(CAM_CRM,
+			"Requested timeout [%dms] max supported timeout [%dms] resetting to new max",
+			sched_req->additional_timeout,
+			CAM_REQ_MGR_WATCHDOG_TIMEOUT_MAX);
+		slot->additional_timeout = sched_req->additional_timeout;
+	} else {
+		slot->additional_timeout = sched_req->additional_timeout;
+	}
 	if ((sched_req->num_valid_params > 0) &&
 		(sched_req->param_mask & CAM_CRM_MISMATCHED_FRAME_MODE_MASK))
 		slot->mismatched_frame_mode = sched_req->params[0];
