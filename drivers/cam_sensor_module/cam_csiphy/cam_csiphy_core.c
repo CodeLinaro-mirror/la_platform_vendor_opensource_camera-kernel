@@ -584,7 +584,7 @@ int cam_csiphy_release_from_reset_state(struct csiphy_device *csiphy_dev,
 					csiphy_reset_release_reg->delay + 5);
 			}
 
-			break;
+			config_found = false;
 		}
 
 	}
