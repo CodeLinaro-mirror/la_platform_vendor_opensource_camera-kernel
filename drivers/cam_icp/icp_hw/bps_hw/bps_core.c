@@ -150,8 +150,8 @@ static int cam_bps_handle_pc(struct cam_hw_info *bps_dev)
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_bps_device_core_info *core_info = NULL;
 	struct cam_bps_device_hw_info *hw_info = NULL;
-	int pwr_ctrl;
-	int pwr_status;
+	int pwr_ctrl = 0;
+	int pwr_status = 0;
 
 	soc_info = &bps_dev->soc_info;
 	core_info = (struct cam_bps_device_core_info *)bps_dev->core_info;
