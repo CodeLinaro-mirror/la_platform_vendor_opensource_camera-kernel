@@ -780,6 +780,7 @@ static int cam_vfe_camif_lite_process_cmd(
 		camif_lite_priv = (struct cam_vfe_mux_camif_lite_data *)
 			rsrc_node->res_priv;
 		camif_lite_priv->camif_debug = *((uint32_t *)cmd_args);
+		rc = 0;
 		break;
 	case CAM_ISP_HW_CMD_BLANKING_UPDATE:
 		rc = 0;
