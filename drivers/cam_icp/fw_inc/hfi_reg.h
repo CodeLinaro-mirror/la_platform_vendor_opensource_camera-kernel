@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_HFI_REG_H_
@@ -36,11 +37,13 @@
 #define ICP_QHDR_RX_TYPE_MASK                   0x00FF0000
 #define ICP_QHDR_PRI_TYPE_MASK                  0x0000FF00
 #define ICP_QHDR_Q_ID_MASK                      0x000000FF
+#define ICP_QTBL_SIZE_IN_BYTES                  sizeof(struct hfi_qtbl)
 
 #define ICP_CMD_Q_SIZE_IN_BYTES                 4096
 #define ICP_MSG_Q_SIZE_IN_BYTES                 4096
 #define ICP_DBG_Q_SIZE_IN_BYTES                 102400
 #define ICP_MSG_SFR_SIZE_IN_BYTES               4096
+#define ICP_SEC_HEAP_SIZE_IN_BYTES              1048576
 
 #define ICP_SHARED_MEM_IN_BYTES                 (1024 * 1024)
 #define ICP_UNCACHED_HEAP_SIZE_IN_BYTES         (2 * 1024 * 1024)
