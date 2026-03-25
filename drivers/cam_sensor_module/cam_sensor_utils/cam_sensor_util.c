@@ -1006,7 +1006,7 @@ int32_t cam_sensor_i2c_read_data(
 	struct camera_io_master *io_master_info)
 {
 	int32_t                   rc = 0;
-	struct i2c_settings_list  *i2c_list;
+	struct i2c_settings_list  *i2c_list = NULL;
 	uint32_t                  cnt = 0;
 	uint8_t                   *read_buff = NULL;
 	uint32_t                  buff_length = 0;
