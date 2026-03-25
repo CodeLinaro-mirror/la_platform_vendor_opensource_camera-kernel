@@ -4778,6 +4778,7 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 		(struct cam_isp_context *) ctx->ctx_priv;
 	struct cam_hw_cmd_args           hw_cmd_args;
 	struct cam_isp_hw_cmd_args       isp_hw_cmd_args;
+	struct cam_kmd_buf_info         *kmd_buff = NULL;
 	uint32_t                         packet_opcode = 0;
 
 	CAM_DBG(CAM_ISP, "get free request object......");
@@ -4881,7 +4882,7 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 	if (rc != 0) {
 		CAM_ERR(CAM_ISP, "Prepare config packet failed in HW layer");
 		rc = -EFAULT;
-		goto free_req;
+		goto free_req_and_buf;
 	}
 
 	req_isp->num_cfg = cfg.num_hw_update_entries;
@@ -4970,11 +4971,13 @@ put_ref:
 			CAM_ERR(CAM_CTXT, "Failed to put ref of fence %d",
 				req_isp->fence_map_out[i].sync_id);
 	}
+free_req_and_buf:
+	kmd_buff = &(req_isp->hw_update_data.kmd_cmd_buff_info);
+	cam_mem_put_kref(kmd_buff->handle);
 free_req:
 	spin_lock_bh(&ctx->lock);
-	__cam_isp_ctx_move_req_to_free_list(ctx, req);
+	list_add_tail(&req->list, &ctx->free_req_list);
 	spin_unlock_bh(&ctx->lock);
-
 	cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
 	return rc;
 }

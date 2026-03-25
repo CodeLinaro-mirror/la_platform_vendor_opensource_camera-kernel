@@ -300,6 +300,7 @@ EXPORT_SYMBOL(cam_mem_get_io_buf);
 int cam_mem_get_cpu_buf(int32_t buf_handle, uintptr_t *vaddr_ptr, size_t *len)
 {
 	int idx, rc = 0;
+	uint32_t urefcount = 0;
 
 	/* Check to avoid kernel panic - cannot call mutex in softirq/atomic context */
 	if (!in_task()) {
@@ -348,8 +349,9 @@ int cam_mem_get_cpu_buf(int32_t buf_handle, uintptr_t *vaddr_ptr, size_t *len)
 		*vaddr_ptr = tbl.bufq[idx].kmdvaddr;
 		*len = tbl.bufq[idx].len;
 	} else {
-		CAM_ERR(CAM_MEM, "No KMD access requested, kmdvddr= %lu, idx= %d, buf_handle= %d",
-			tbl.bufq[idx].kmdvaddr, idx, buf_handle);
+		urefcount = kref_read(&tbl.bufq[idx].urefcount);
+		CAM_ERR(CAM_MEM, "No KMD access requested, kmdvddr= %lu, idx= %d, buf_handle= %d uref: %d",
+			tbl.bufq[idx].kmdvaddr, idx, buf_handle, urefcount);
 		rc = -EINVAL;
 	}
 	_SPIN_UNLOCK_PROCESS_TO_BH(&tbl.bufq[idx].idx_lock);
@@ -1514,8 +1516,8 @@ void cam_mem_put_cpu_buf(int32_t buf_handle)
 			hrs, min, sec, ms, buf_handle, idx);
 	} else if (krefcount == 0) {
 		CAM_ERR(CAM_MEM,
-			"Unbalanced release Called buf_handle: %u, idx: %d kref: %d",
-			tbl.bufq[idx].buf_handle, idx, krefcount);
+			"Unbalanced release Called buf_handle: %u, idx: %d kref: %d uref: %d",
+			tbl.bufq[idx].buf_handle, idx, krefcount, urefcount);
 	}
 end:
 	mutex_unlock(&tbl.bufq[idx].q_lock);
@@ -1547,8 +1549,16 @@ void cam_mem_put_kref(int32_t buf_handle)
 		if (urefcount == 0) {
 			_SPIN_UNLOCK_PROCESS_TO_BH(&tbl.bufq[idx].idx_lock);
 			goto warn;
-		} else
+		} else {
 			kref_put(&tbl.bufq[idx].krefcount, cam_mem_util_unmap_dummy);
+			krefcount = kref_read(&tbl.bufq[idx].krefcount);
+			if (krefcount == 0) {
+				CAM_ERR(CAM_MEM,
+					"Unbalanced release called buf_handle 0x%x idx %d kref %d uref:%d buf 0x%x",
+					tbl.bufq[idx].buf_handle, idx,
+					krefcount, urefcount, buf_handle);
+			}
+		}
 	}
 	_SPIN_UNLOCK_PROCESS_TO_BH(&tbl.bufq[idx].idx_lock);
 	return;
