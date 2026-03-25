@@ -37,7 +37,7 @@ static int cam_virtual_cdm_work(void *priv, void *data)
 		core = (struct cam_cdm *)cdm_hw->core_info;
 
 		cam_common_util_thread_switch_delay_detect(
-			"Virtual CDM worker schedule",
+			"virtual_cdm_worker", "schedule", cam_virtual_cdm_work,
 			payload->worker_scheduled_ts,
 			CAM_WORKER_SCHEDULE_TIME_THRESHOLD);
 

@@ -1219,7 +1219,7 @@ static int cam_hw_cdm_work(void *priv, void *data)
 	}
 
 	cam_common_util_thread_switch_delay_detect(
-		"CDM worker schedule",
+		"cam_cdm_worker", "schedule", cam_hw_cdm_work,
 		payload->worker_scheduled_ts,
 		CAM_WORKER_SCHEDULE_TIME_THRESHOLD);
 

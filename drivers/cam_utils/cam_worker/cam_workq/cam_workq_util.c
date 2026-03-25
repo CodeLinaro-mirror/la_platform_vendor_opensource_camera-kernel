@@ -149,7 +149,7 @@ void cam_workq_process(struct work_struct *w)
 				struct cam_workq_task, entry);
 			cb = (void *)task->process_cb;
 			cam_common_util_thread_switch_delay_detect(
-				"schedule",
+				workq->workq_name, "schedule", cb,
 				workq->workq_scheduled_ts,
 				CAM_WORKQ_SCHEDULE_TIME_THRESHOLD);
 			sched_start_time = ktime_get_boottime();
@@ -158,7 +158,7 @@ void cam_workq_process(struct work_struct *w)
 			WORKQ_RELEASE_LOCK(workq, flags);
 			cam_workq_process_task(task);
 			cam_common_util_thread_switch_delay_detect(
-				"execution",
+				workq->workq_name, "execution", cb,
 				sched_start_time,
 				CAM_WORKQ_SCHEDULE_TIME_THRESHOLD);
 			CAM_DBG(CAM_ISP, "processed task %pK free_cnt %d",
