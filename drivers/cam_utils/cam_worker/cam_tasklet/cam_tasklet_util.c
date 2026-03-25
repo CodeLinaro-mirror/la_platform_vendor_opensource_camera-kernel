@@ -330,12 +330,14 @@ static void cam_tasklet_action(unsigned long data)
 	struct cam_tasklet_info          *tasklet_info = NULL;
 	struct cam_tasklet_queue_cmd     *tasklet_cmd = NULL;
 	ktime_t                           curr_time;
+	void                             *cb = NULL;
 
 	tasklet_info = (struct cam_tasklet_info *)data;
 
 	while (!cam_tasklet_dequeue_cmd(tasklet_info, &tasklet_cmd)) {
+		cb = (void *)tasklet_cmd->bottom_half_handler;
 		cam_common_util_thread_switch_delay_detect(
-			"Tasklet schedule",
+			"ISP Tasklet", "Tasklet schedule", cb,
 			tasklet_cmd->tasklet_enqueue_ts,
 			CAM_TASKLET_SCHED_TIME_THRESHOLD);
 		curr_time = ktime_get();
@@ -344,7 +346,7 @@ static void cam_tasklet_action(unsigned long data)
 			tasklet_cmd->payload);
 
 		cam_common_util_thread_switch_delay_detect(
-			"Tasklet execution",
+			"ISP Tasklet", "Tasklet execution", cb,
 			curr_time,
 			CAM_TASKLET_EXE_TIME_THRESHOLD);
 		cam_tasklet_put_cmd(tasklet_info, (void **)(&tasklet_cmd));

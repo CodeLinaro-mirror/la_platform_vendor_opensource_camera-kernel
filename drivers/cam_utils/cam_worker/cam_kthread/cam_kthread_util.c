@@ -148,7 +148,7 @@ void cam_kthread_process(struct kthread_work *w)
 			}
 
 			cam_common_util_thread_switch_delay_detect(
-				"kthread schedule",
+				worker_kthread->worker_name, "kthread schedule", cb,
 				worker_kthread->worker_scheduled_ts,
 				CAM_KTHREAD_SCHEDULE_TIME_THRESHOLD);
 
@@ -161,7 +161,7 @@ void cam_kthread_process(struct kthread_work *w)
 				cam_kthread_process_task(task);
 
 			cam_common_util_thread_switch_delay_detect(
-				"kthread execution",
+				worker_kthread->worker_name, "kthread execution", cb,
 				exec_start_time, CAM_KTHREAD_EXE_TIME_THRESHOLD);
 			CAM_DBG(CAM_ISP, "Processed task %pK, free_cnt %d, worker name: %s",
 				task, atomic_read(&worker_kthread->task.free_cnt),

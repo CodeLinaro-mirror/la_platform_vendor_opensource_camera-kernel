@@ -50,8 +50,8 @@ uint32_t cam_common_util_remove_duplicate_arr(int32_t *arr, uint32_t num)
 	return wr_idx;
 }
 
-void cam_common_util_thread_switch_delay_detect(
-	const char *token, ktime_t scheduled_time, uint32_t threshold)
+void cam_common_util_thread_switch_delay_detect(char *wq_name,
+	const char *token, void *cb, ktime_t scheduled_time, uint32_t threshold)
 {
 	uint64_t                         diff;
 	ktime_t                          cur_time;
@@ -65,8 +65,8 @@ void cam_common_util_thread_switch_delay_detect(
 		scheduled_ts  = ktime_to_timespec64(scheduled_time);
 		cur_ts = ktime_to_timespec64(cur_time);
 		CAM_WARN_RATE_LIMIT_CUSTOM(CAM_UTIL, 1, 1,
-			"%s delay detected %lld:%06ld cur %lld:%06ld diff %lld: threshold %d",
-			token, scheduled_ts.tv_sec,
+			"%s cb: %ps delay in %s detected %lld:%06ld cur %lld:%06ld diff %lld: threshold %d",
+			wq_name, cb, token, scheduled_ts.tv_sec,
 			scheduled_ts.tv_nsec/NSEC_PER_USEC,
 			cur_ts.tv_sec, cur_ts.tv_nsec/NSEC_PER_USEC,
 			diff, threshold);

@@ -99,13 +99,15 @@ uint32_t cam_common_util_remove_duplicate_arr(int32_t *array,
  *
  * @brief                  Detect if there is any scheduling delay
  *
+ * @wq_name:               workq name
  * @token:                 String identifier to print workq name or tasklet
+ * @cb:                    callback scheduled or executed
  * @scheduled_time:        Time when workq or tasklet was scheduled
  * @threshold:             Threshold time
  *
  */
-void cam_common_util_thread_switch_delay_detect(const char *token,
-	ktime_t scheduled_time, uint32_t threshold);
+void cam_common_util_thread_switch_delay_detect(char *wq_name, const char *token,
+	void *cb, ktime_t scheduled_time, uint32_t threshold);
 
 /**
  * @brief:                 Memory alloc and copy

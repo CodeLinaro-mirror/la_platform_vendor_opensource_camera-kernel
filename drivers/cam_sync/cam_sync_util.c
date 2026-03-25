@@ -297,7 +297,7 @@ int cam_sync_util_cb_dispatch(void *priv, void *data)
 	sync_callback sync_data = cb_info->callback_func;
 
 	cam_common_util_thread_switch_delay_detect(
-		"CAM-SYNC worker schedule",
+		"cam_sync_worker", "schedule", cam_sync_util_cb_dispatch,
 		cb_info->worker_scheduled_ts,
 		CAM_WORKER_SCHEDULE_TIME_THRESHOLD);
 	sync_data(cb_info->sync_obj, cb_info->status, cb_info->cb_data);
