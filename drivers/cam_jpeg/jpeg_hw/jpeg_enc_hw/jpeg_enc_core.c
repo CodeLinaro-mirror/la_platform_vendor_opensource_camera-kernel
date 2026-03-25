@@ -44,7 +44,7 @@ int cam_jpeg_enc_init_hw(void *device_priv,
 	struct cam_jpeg_enc_device_core_info *core_info = NULL;
 	struct cam_ahb_vote ahb_vote;
 	struct cam_axi_vote axi_vote = {0};
-	unsigned long flags;
+	unsigned long flags = 0;
 	int rc;
 
 	if (!device_priv) {
@@ -118,7 +118,7 @@ int cam_jpeg_enc_deinit_hw(void *device_priv,
 	struct cam_hw_info *jpeg_enc_dev = device_priv;
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_jpeg_enc_device_core_info *core_info = NULL;
-	unsigned long flags;
+	unsigned long flags = 0;
 	int rc;
 
 	if (!device_priv) {
@@ -275,7 +275,7 @@ int cam_jpeg_enc_reset_hw(void *data,
 	struct cam_jpeg_enc_device_hw_info *hw_info = NULL;
 	void __iomem *mem_base;
 	unsigned long rem_jiffies;
-	unsigned long flags;
+	unsigned long flags = 0;
 	int rc = 0;
 
 	if (!jpeg_enc_dev) {
@@ -368,7 +368,7 @@ int cam_jpeg_enc_start_hw(void *data,
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_jpeg_enc_device_hw_info *hw_info = NULL;
 	void __iomem *mem_base;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!jpeg_enc_dev) {
 		CAM_ERR(CAM_JPEG, "Invalid args");
@@ -410,7 +410,7 @@ int cam_jpeg_enc_stop_hw(void *data,
 	struct cam_jpeg_enc_device_hw_info *hw_info = NULL;
 	void __iomem *mem_base;
 	unsigned long rem_jiffies;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!jpeg_enc_dev) {
 		CAM_ERR(CAM_JPEG, "Invalid args");

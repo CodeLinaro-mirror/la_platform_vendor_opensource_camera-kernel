@@ -54,7 +54,7 @@ int cam_ofe_init_hw(void *device_priv,
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_ofe_device_core_info *core_info = NULL;
 	struct cam_icp_cpas_vote cpas_vote;
-	unsigned long flags;
+	unsigned long flags = 0;
 	int rc = 0;
 
 	if (!device_priv) {
@@ -134,7 +134,7 @@ int cam_ofe_deinit_hw(void *device_priv,
 	struct cam_hw_info *ofe_dev = device_priv;
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_ofe_device_core_info *core_info = NULL;
-	unsigned long flags;
+	unsigned long flags = 0;
 	int rc = 0;
 
 	if (!device_priv) {

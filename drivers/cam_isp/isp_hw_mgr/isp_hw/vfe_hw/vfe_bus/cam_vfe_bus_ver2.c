@@ -289,7 +289,7 @@ static int cam_vfe_bus_put_evt_payload(
 	struct cam_vfe_bus_ver2_common_data     *common_data,
 	struct cam_vfe_bus_irq_evt_payload     **evt_payload)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!common_data) {
 		CAM_ERR(CAM_ISP, "Invalid param core_info NULL");

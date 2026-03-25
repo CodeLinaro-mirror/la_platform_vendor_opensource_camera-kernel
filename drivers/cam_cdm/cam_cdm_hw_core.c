@@ -857,7 +857,7 @@ int cam_hw_cdm_submit_gen_irq(
 	bool fast_callback_enabled = false;
 	size_t len, genirq_cmd_size;
 	uint8_t bl_tag = core->bl_fifo[fifo_idx].bl_tag;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (bl_tag > (core->bl_fifo[fifo_idx].bl_depth - 1)) {
 		CAM_ERR(CAM_CDM, "Invalid BL Tag: %u, BL Depth: %d, Fifo_idx: %d",
@@ -1264,7 +1264,7 @@ static void cam_hw_cdm_reset_cleanup(
 	struct cam_cdm_bl_cb_request_entry *node, *tnode;
 	bool flush_hw = false;
 	bool reset_err = false;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (test_bit(CAM_CDM_ERROR_HW_STATUS, &core->cdm_status) ||
 		test_bit(CAM_CDM_FLUSH_HW_STATUS, &core->cdm_status))

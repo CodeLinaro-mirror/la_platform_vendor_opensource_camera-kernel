@@ -1641,7 +1641,7 @@ static int cam_sfe_top_put_evt_payload(
 	struct cam_sfe_top_priv                *top_priv,
 	struct cam_sfe_top_irq_evt_payload    **evt_payload)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!top_priv) {
 		CAM_ERR(CAM_SFE, "Invalid param core_info NULL");
@@ -2422,7 +2422,7 @@ int cam_sfe_top_deinit(
 	struct cam_sfe_top **sfe_top_ptr)
 {
 	int i, rc = 0;
-	unsigned long flags;
+	unsigned long flags = 0;
 	struct cam_sfe_top      *sfe_top;
 	struct cam_sfe_top_priv *top_priv;
 

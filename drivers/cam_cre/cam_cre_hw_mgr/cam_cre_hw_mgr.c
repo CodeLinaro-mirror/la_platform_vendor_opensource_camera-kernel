@@ -615,6 +615,11 @@ static int cam_cre_supported_clk_rates(struct cam_cre_hw_mgr *hw_mgr,
 	struct cam_hw_intf *dev_intf = NULL;
 	struct cam_hw_info *dev = NULL;
 
+	if (!hw_mgr->num_cre) {
+		CAM_ERR(CAM_CRE, "No CRE devices available");
+		return -EINVAL;
+	}
+
 	dev_intf = hw_mgr->cre_dev_intf[0];
 	if (!dev_intf) {
 		CAM_ERR(CAM_CRE, "dev_intf is invalid");
@@ -705,7 +710,7 @@ done:
 
 static void cam_cre_device_timer_cb(struct timer_list *timer_data)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 	struct cam_worker_wrapper_taskdata_args task;
 	struct cre_clk_work_data *task_data;
 	struct cam_req_mgr_timer *timer =
@@ -906,8 +911,11 @@ static int32_t cam_cre_mgr_process_msg(void *priv, void *data)
 		active_req_idx, ctx->last_done_req_idx);
 
 	active_req = ctx->req_list[active_req_idx];
-	if (!active_req)
+	if (!active_req) {
 		CAM_ERR(CAM_CRE, "Active req cannot be null");
+		mutex_unlock(&ctx->ctx_mutex);
+		return -EINVAL;
+	}
 
 	if (irq_data.error) {
 		evt_id = CAM_CTX_EVT_ID_ERROR;
@@ -1312,7 +1320,7 @@ static int cam_cre_mgr_cre_clk_update(struct cam_cre_hw_mgr *hw_mgr,
 int32_t cam_cre_hw_mgr_cb(void *irq_data, int32_t result_size, void *data)
 {
 	int32_t rc = 0;
-	unsigned long flags;
+	unsigned long flags = 0;
 	struct cam_cre_hw_mgr *hw_mgr = data;
 	struct cam_worker_wrapper_taskdata_args task;
 	struct cre_msg_work_data *task_data;
@@ -1333,6 +1341,12 @@ int32_t cam_cre_hw_mgr_cb(void *irq_data, int32_t result_size, void *data)
 
 	task_data = (struct cre_msg_work_data *)cam_worker_wrapper_get_task_payload(
 		cre_hw_mgr->msg_worker_ctx, &task);
+	if (!task_data) {
+		CAM_ERR(CAM_CRE, "task_data is NULL");
+		spin_unlock_irqrestore(&hw_mgr->hw_mgr_lock, flags);
+		return -ENOMEM;
+	}
+
 	task_data->data = hw_mgr;
 	task_data->irq_data = *local_irq_data;
 	task_data->type = CRE_WORKER_TASK_MSG_TYPE;
@@ -1356,7 +1370,7 @@ static int cam_cre_mgr_process_io_cfg(struct cam_cre_hw_mgr *hw_mgr,
 {
 	int i, j = 0, k = 0, l, rc = 0;
 	struct cre_io_buf *io_buf;
-	int32_t sync_in_obj[CRE_MAX_IN_RES];
+	int32_t sync_in_obj[CRE_MAX_IN_RES] = {0};
 	int32_t merged_sync_in_obj;
 	struct cam_cre_request *cre_request;
 
