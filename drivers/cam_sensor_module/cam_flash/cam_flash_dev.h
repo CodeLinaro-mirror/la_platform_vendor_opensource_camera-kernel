@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021,The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_FLASH_DEV_H_
@@ -19,7 +20,7 @@
 #include <media/cam_sensor.h>
 #include <media/cam_req_mgr.h>
 
-#if IS_REACHABLE(CONFIG_LEDS_QPNP_FLASH_V2) || IS_REACHABLE(CONFIG_BACKLIGHT_QCOM_SPMI_WLED)
+#if IS_REACHABLE(CONFIG_LEDS_QPNP_FLASH_V2)
 #include <linux/leds-qpnp-flash.h>
 #elif IS_REACHABLE(CONFIG_LEDS_QTI_FLASH)
 #include <linux/leds-qti-flash.h>
