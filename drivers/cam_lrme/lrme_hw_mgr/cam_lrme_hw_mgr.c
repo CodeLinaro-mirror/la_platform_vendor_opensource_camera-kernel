@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -365,7 +365,7 @@ static void cam_lrme_mgr_util_put_frame_req(
 
 	mutex_lock(lock);
 	if (free_buffer)
-		cam_mem_put_cpu_buf(frame_req->hw_update_entries[0]->handle);
+		cam_mem_put_cpu_buf(frame_req->hw_update_entries[0].handle);
 
 	list_add_tail(&frame_req->frame_list, src_list);
 	mutex_unlock(lock);

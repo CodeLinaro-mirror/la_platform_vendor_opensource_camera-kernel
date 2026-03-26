@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -271,7 +271,7 @@ static int cam_a5_fw_dump(
 		return -EINVAL;
 	}
 	if (!core_info->fw_kva_addr || !dump_args->cpu_addr) {
-		CAM_ERR(CAM_ICP, "invalid params %pK, 0x%zx",
+		CAM_ERR(CAM_ICP, "invalid params %lu, 0x%zx",
 		    core_info->fw_kva_addr, dump_args->cpu_addr);
 		return -EINVAL;
 	}
