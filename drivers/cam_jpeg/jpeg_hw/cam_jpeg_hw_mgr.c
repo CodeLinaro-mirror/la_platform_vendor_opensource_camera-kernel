@@ -953,7 +953,7 @@ static int cam_jpeg_mgr_flush(void *hw_mgr_priv,
 			continue;
 
 		list_del_init(&cfg_req->list);
-		list_add_tail(&cfg_req->list, &hw_mgr->free_req_list);
+		cam_jpeg_mgr_move_req_to_free_list(cfg_req);
 	}
 
 	CAM_DBG(CAM_JPEG, "X: JPEG flush ctx");
@@ -1019,7 +1019,7 @@ static int cam_jpeg_mgr_flush_req(void *hw_mgr_priv,
 			continue;
 
 		list_del_init(&cfg_req->list);
-		list_add_tail(&cfg_req->list, &hw_mgr->free_req_list);
+		cam_jpeg_mgr_move_req_to_free_list(cfg_req);
 		b_req_found = true;
 		break;
 	}
