@@ -821,7 +821,7 @@ int cam_isp_ul_parse_io_config(struct cam_isp_ctx_ul_data *ul_data,
 	struct cam_isp_hw_get_wm_update     wm_update;
 	struct cam_hw_update_entry         *hw_update_entry;
 	uint32_t                            out_port;
-	struct cam_hw_fence_map_entry       out_map_entry;
+	struct cam_hw_fence_map_entry       out_map_entry = {0};
 
 	io_cfg = (struct cam_buf_io_cfg *) ((uint8_t *)
 		&packet->payload_flex + packet->io_configs_offset);

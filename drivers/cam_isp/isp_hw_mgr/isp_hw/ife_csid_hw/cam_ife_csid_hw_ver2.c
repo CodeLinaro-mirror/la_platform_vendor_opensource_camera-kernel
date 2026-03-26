@@ -180,7 +180,12 @@ static int cam_ife_csid_ver2_sof_irq_debug(
 		return 0;
 	}
 
-	data_idx = csid_hw->rx_cfg.phy_sel - 1;
+	if (csid_hw->rx_cfg.phy_sel > 0) {
+		data_idx = csid_hw->rx_cfg.phy_sel - 1;
+	} else {
+		data_idx = 0;
+		CAM_ERR(CAM_ISP, "Invalid param phy_sel %d", csid_hw->rx_cfg.phy_sel);
+	}
 
 	for (i = CAM_IFE_PIX_PATH_RES_RDI_0; i < CAM_IFE_PIX_PATH_RES_MAX;
 		i++) {
@@ -1009,13 +1014,13 @@ static int cam_ife_csid_ver2_rx_top_half(
 	uint32_t                                    vc_dt_rst_val = 0;
 
 	csid_hw = th_payload->handler_priv;
-	csid_reg = (struct cam_ife_csid_ver2_reg_info *) csid_hw->core_info->csid_reg;
-	soc_info = &csid_hw->hw_info->soc_info;
-
 	if (!csid_hw) {
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "No private returned");
 		return -ENODEV;
 	}
+
+	csid_reg = (struct cam_ife_csid_ver2_reg_info *) csid_hw->core_info->csid_reg;
+	soc_info = &csid_hw->hw_info->soc_info;
 
 	irq_status = th_payload->evt_status_arr[CAM_IFE_CSID_IRQ_REG_RX];
 
@@ -1342,6 +1347,9 @@ void cam_ife_csid_hw_ver2_rdi_line_buffer_conflict_handler(
 	uint8_t *log_buf = NULL;
 	size_t len = 0;
 
+	log_buf = csid_hw->log_buf;
+	memset(log_buf, 0, sizeof(csid_hw->log_buf));
+
 	for (i = CAM_IFE_PIX_PATH_RES_RDI_0; i < CAM_IFE_PIX_PATH_RES_RDI_5;
 		i++) {
 		path_reg = csid_reg->path_reg[i - CAM_IFE_PIX_PATH_RES_RDI_0];
@@ -1642,13 +1650,20 @@ void cam_ife_csid_ver2_print_format_measure_info(
 	void *csid, void *resource)
 {
 	struct cam_ife_csid_ver2_hw       *csid_hw = csid;
-        struct cam_isp_resource_node      *res = resource;
+	struct cam_isp_resource_node      *res = resource;
 	struct cam_ife_csid_ver2_reg_info *csid_reg = csid_hw->core_info->csid_reg;
 	const struct cam_ife_csid_ver2_path_reg_info *path_reg =
 		csid_reg->path_reg[res->res_id];
 	struct cam_hw_soc_info *soc_info = &csid_hw->hw_info->soc_info;
 	void __iomem *base = soc_info->reg_map[CAM_IFE_CSID_CLC_MEM_BASE_ID].mem_base;
 	uint32_t expected_frame = 0, actual_frame = 0, data_idx;
+
+	if (csid_hw->rx_cfg.phy_sel > 0) {
+		data_idx = csid_hw->rx_cfg.phy_sel - 1;
+	} else {
+		data_idx = 0;
+		CAM_ERR(CAM_ISP, "Invalid param phy_sel %d", csid_hw->rx_cfg.phy_sel);
+	}
 
 	data_idx = csid_hw->rx_cfg.phy_sel - 1;
 	actual_frame = cam_io_r_mb(base + path_reg->format_measure0_addr);
@@ -2036,9 +2051,10 @@ static int cam_ife_csid_ver2_rdi_bottom_half(
 		csid_hw->event_cb(token, CAM_ISP_HW_EVENT_EPOCH, (void *)&evt_info);
 	}
 end:
-	cam_ife_csid_ver2_put_evt_payload(csid_hw, &payload,
-		&csid_hw->path_free_payload_list, &csid_hw->path_payload_lock);
-
+	if (csid_hw) {
+		cam_ife_csid_ver2_put_evt_payload(csid_hw, &payload,
+			&csid_hw->path_free_payload_list, &csid_hw->path_payload_lock);
+	}
 	return rc;
 }
 
@@ -5268,6 +5284,13 @@ static int cam_ife_csid_ver2_reg_update(
 
 	req_port_mask = rup_args->req_port_mask;
 	for_each_set_bit(bit, &req_port_mask, sizeof(req_port_mask) * 8) {
+
+		if (bit >= CAM_IFE_PIX_PATH_RES_MAX) {
+			CAM_ERR(CAM_ISP, "Invalid port bit: %d, max: %d",
+				bit, CAM_IFE_PIX_PATH_RES_MAX);
+			rc = -EINVAL;
+			goto err;
+		}
 		path_reg = csid_reg->path_reg[bit];
 		if (!path_reg) {
 			CAM_ERR(CAM_ISP, "Invalid Path Resource [id %d name %s]",
@@ -5441,16 +5464,14 @@ static int cam_ife_csid_ver2_get_time_stamp(
 			path_reg->timestamp_curr1_sof_addr);
 	}
 
+	mutex_lock(&g_ref_time.lock);
 	if (g_ref_time.btime == 0) {
-		mutex_lock(&g_ref_time.lock);
-		if (g_ref_time.btime == 0) {
-			g_ref_time.qtime = arch_timer_read_counter();
-			g_ref_time.btime = ktime_get_boottime_ns();
-			g_ref_time.qtime = mul_u64_u32_div(g_ref_time.qtime,
-				CAM_IFE_CSID_QTIMER_MUL_FACTOR, CAM_IFE_CSID_QTIMER_DIV_FACTOR);
-		}
-		mutex_unlock(&g_ref_time.lock);
+		g_ref_time.qtime = arch_timer_read_counter();
+		g_ref_time.btime = ktime_get_boottime_ns();
+		g_ref_time.qtime = mul_u64_u32_div(g_ref_time.qtime,
+			CAM_IFE_CSID_QTIMER_MUL_FACTOR, CAM_IFE_CSID_QTIMER_DIV_FACTOR);
 	}
+	mutex_unlock(&g_ref_time.lock);
 
 	timestamp_args->boot_timestamp = g_ref_time.btime + timestamp_args->time_stamp_val -
 		g_ref_time.qtime;

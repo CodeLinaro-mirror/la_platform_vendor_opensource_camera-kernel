@@ -437,6 +437,7 @@ struct cam_req_mgr_connected_device {
  * @is_new_setting_available  : Flag to indicate if new setting is available from UMD
  * @qtvm_wait_for_unlink : Flag to indicate if QTVM crash handling is waiting for unlink
  * @num_trigger_devices       : Number of trigger devices
+ * @task_data                 : Pointer to an array of task data to be processed by worker cb
  */
 struct cam_req_mgr_core_link {
 	int32_t                              link_hdl;
@@ -486,6 +487,7 @@ struct cam_req_mgr_core_link {
 	bool                                 is_setting_sticky;
 	bool                                 qtvm_wait_for_unlink;
 	uint32_t                             num_trigger_devices;
+	struct crm_task_payload             *task_data;
 };
 
 /**
