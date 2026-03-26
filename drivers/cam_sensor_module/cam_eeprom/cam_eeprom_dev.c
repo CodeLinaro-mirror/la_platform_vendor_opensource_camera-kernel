@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_eeprom_dev.h"
@@ -178,14 +178,18 @@ static int cam_eeprom_init_subdev(struct cam_eeprom_ctrl_t *e_ctrl)
 
 	return rc;
 }
-
-static int cam_eeprom_i2c_driver_probe(struct i2c_client *client,
-	 const struct i2c_device_id *id)
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+static int cam_eeprom_i2c_driver_probe(struct i2c_client *client)
 {
 	int                             rc = 0;
 	struct cam_eeprom_ctrl_t       *e_ctrl = NULL;
 	struct cam_eeprom_soc_private  *soc_private = NULL;
 	struct cam_hw_soc_info         *soc_info = NULL;
+
+	if (client == NULL) {
+		CAM_ERR(CAM_EEPROM, "Invalid Args client: %pK",	client);
+		return -EINVAL;
+	}
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		CAM_ERR(CAM_EEPROM, "i2c_check_functionality failed");
@@ -254,6 +258,89 @@ ectrl_free:
 probe_failure:
 	return rc;
 }
+#else
+static int cam_eeprom_i2c_driver_probe(struct i2c_client *client,
+	 const struct i2c_device_id *id)
+{
+	int                             rc = 0;
+	struct cam_eeprom_ctrl_t       *e_ctrl = NULL;
+	struct cam_eeprom_soc_private  *soc_private = NULL;
+	struct cam_hw_soc_info         *soc_info = NULL;
+
+	if (client == NULL || id == NULL) {
+		CAM_ERR(CAM_EEPROM, "Invalid Args client: %pK id: %pK",
+			client, id);
+		return -EINVAL;
+	}
+
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+		CAM_ERR(CAM_EEPROM, "i2c_check_functionality failed");
+		goto probe_failure;
+	}
+
+	e_ctrl = kzalloc(sizeof(*e_ctrl), GFP_KERNEL);
+	if (!e_ctrl) {
+		CAM_ERR(CAM_EEPROM, "kzalloc failed");
+		rc = -ENOMEM;
+		goto probe_failure;
+	}
+
+	soc_private = kzalloc(sizeof(*soc_private), GFP_KERNEL);
+	if (!soc_private)
+		goto ectrl_free;
+
+	e_ctrl->soc_info.soc_private = soc_private;
+
+	i2c_set_clientdata(client, e_ctrl);
+
+	mutex_init(&(e_ctrl->eeprom_mutex));
+
+	INIT_LIST_HEAD(&(e_ctrl->wr_settings.list_head));
+	soc_info = &e_ctrl->soc_info;
+	soc_info->dev = &client->dev;
+	soc_info->dev_name = client->name;
+	e_ctrl->io_master_info.master_type = I2C_MASTER;
+	e_ctrl->io_master_info.client = client;
+	e_ctrl->eeprom_device_type = MSM_CAMERA_I2C_DEVICE;
+	e_ctrl->cal_data.mapdata = NULL;
+	e_ctrl->cal_data.map = NULL;
+	e_ctrl->userspace_probe = false;
+
+	rc = cam_eeprom_parse_dt(e_ctrl);
+	if (rc) {
+		CAM_ERR(CAM_EEPROM, "failed: soc init rc %d", rc);
+		goto free_soc;
+	}
+
+	rc = cam_eeprom_update_i2c_info(e_ctrl, &soc_private->i2c_info);
+	if (rc) {
+		CAM_ERR(CAM_EEPROM, "failed: to update i2c info rc %d", rc);
+		goto free_soc;
+	}
+
+	rc = cam_eeprom_init_subdev(e_ctrl);
+	if (rc)
+		goto free_soc;
+
+	if (soc_private->i2c_info.slave_addr != 0)
+		e_ctrl->io_master_info.client->addr =
+			soc_private->i2c_info.slave_addr;
+
+	e_ctrl->bridge_intf.device_hdl = -1;
+	e_ctrl->bridge_intf.ops.get_dev_info = NULL;
+	e_ctrl->bridge_intf.ops.link_setup = NULL;
+	e_ctrl->bridge_intf.ops.apply_req = NULL;
+	e_ctrl->cam_eeprom_state = CAM_EEPROM_INIT;
+
+	return rc;
+free_soc:
+	kfree(soc_private);
+ectrl_free:
+	kfree(e_ctrl);
+probe_failure:
+	return rc;
+}
+#endif
 
 int cam_eeprom_i2c_driver_remove_common(struct i2c_client *client)
 {
@@ -575,10 +662,17 @@ static int32_t cam_eeprom_platform_driver_probe(
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_eeprom_platform_driver_remove(struct platform_device *pdev)
+#else
+static void cam_eeprom_platform_driver_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_eeprom_component_ops);
+
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_eeprom_dt_match[] = {
