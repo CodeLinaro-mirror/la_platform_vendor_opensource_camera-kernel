@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/init.h>
@@ -58,7 +58,7 @@ int cam_sync_create(int32_t *sync_obj, const char *name)
 		idx = find_first_zero_bit(sync_dev->bitmap, CAM_SYNC_MAX_OBJS);
 		if (idx >= CAM_SYNC_MAX_OBJS) {
 			CAM_ERR(CAM_SYNC,
-				"Error: Unable to create sync idx = %d reached max!",
+				"Error: Unable to create sync idx = %ld reached max!",
 				idx);
 			cam_sync_print_fence_table();
 			return -ENOMEM;
@@ -1001,7 +1001,7 @@ static int cam_sync_media_controller_init(struct sync_device *sync_dev,
 		return -ENOMEM;
 
 	media_device_init(sync_dev->v4l2_dev.mdev);
-	strlcpy(sync_dev->v4l2_dev.mdev->model, CAM_SYNC_DEVICE_NAME,
+	strscpy(sync_dev->v4l2_dev.mdev->model, CAM_SYNC_DEVICE_NAME,
 			sizeof(sync_dev->v4l2_dev.mdev->model));
 	sync_dev->v4l2_dev.mdev->dev = &(pdev->dev);
 
@@ -1177,7 +1177,7 @@ static int cam_sync_component_bind(struct device *dev,
 	if (rc < 0)
 		goto register_fail;
 
-	strlcpy(sync_dev->vdev->name, CAM_SYNC_NAME,
+	strscpy(sync_dev->vdev->name, CAM_SYNC_NAME,
 				sizeof(sync_dev->vdev->name));
 	sync_dev->vdev->release  = video_device_release_empty;
 	sync_dev->vdev->fops     = &cam_sync_v4l2_fops;
@@ -1280,10 +1280,16 @@ static int cam_sync_probe(struct platform_device *pdev)
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_sync_remove(struct platform_device *pdev)
+#else
+static void cam_sync_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_sync_component_ops);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_sync_dt_match[] = {

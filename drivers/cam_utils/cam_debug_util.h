@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_DEBUG_UTIL_H_
@@ -43,6 +43,7 @@
 #define CAM_OPE        (1 << 28)
 #define CAM_IO_ACCESS  (1 << 29)
 #define CAM_SFE        (1 << 30)
+#define CAM_IO_DUMP    (1 << 31)
 
 /* Log level types */
 #define CAM_TYPE_TRACE      (1 << 0)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -947,7 +947,7 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 				test_bit(CAM_CDM_RESET_HW_STATUS,
 					&core->cdm_status)) {
 			CAM_ERR_RATE_LIMIT(CAM_CDM,
-				"In error/reset state cnt=%d total cnt=%d cdm_status 0x%x",
+				"In error/reset state cnt=%d total cnt=%d cdm_status 0x%lx",
 				i, req->data->cmd_arrary_count,
 				core->cdm_status);
 			rc = -EAGAIN;
@@ -2234,7 +2234,7 @@ static int cam_hw_cdm_component_bind(struct device *dev,
 
 		init_completion(&cdm_core->bl_fifo[i].bl_complete);
 
-		len = strlcpy(work_q_name, cdm_core->name,
+		len = strscpy(work_q_name, cdm_core->name,
 				sizeof(cdm_core->name));
 		snprintf(work_q_name + len, sizeof(work_q_name) - len, "%d", i);
 		cdm_core->bl_fifo[i].work_queue = alloc_workqueue(work_q_name,
@@ -2263,7 +2263,7 @@ static int cam_hw_cdm_component_bind(struct device *dev,
 	cpas_parms.cell_index = cdm_hw->soc_info.index;
 	cpas_parms.dev = &pdev->dev;
 	cpas_parms.userdata = cdm_hw_intf;
-	strlcpy(cpas_parms.identifier, cdm_hw->soc_info.label_name,
+	strscpy(cpas_parms.identifier, cdm_hw->soc_info.label_name,
 		CAM_HW_IDENTIFIER_LENGTH);
 	rc = cam_cpas_register_client(&cpas_parms);
 	if (rc) {
@@ -2512,10 +2512,16 @@ int cam_hw_cdm_probe(struct platform_device *pdev)
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 int cam_hw_cdm_remove(struct platform_device *pdev)
+#else
+void cam_hw_cdm_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_hw_cdm_component_ops);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 struct platform_driver cam_hw_cdm_driver = {

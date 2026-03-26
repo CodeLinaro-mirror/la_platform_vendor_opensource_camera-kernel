@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -113,7 +114,7 @@ static int cam_vfe_top_ver3_set_hw_clk_rate(
 			soc_info->src_clk_idx, &clk_lvl);
 		if (rc) {
 			CAM_WARN(CAM_ISP,
-				"Failed to get clk level for %s with clk_rate %llu src_idx %d rc %d",
+				"Failed to get clk level for %s with clk_rate %lu src_idx %d rc %d",
 				soc_info->dev_name, max_clk_rate,
 				soc_info->src_clk_idx, rc);
 			rc = 0;
@@ -273,7 +274,7 @@ static int cam_vfe_top_wait_comp_event(struct cam_vfe_top_ver3_priv *top_priv,
 	struct cam_cdm_utils_ops         *cdm_util_ops = NULL;
 
 	if (arg_size != sizeof(struct cam_isp_hw_get_cmd_update)) {
-		CAM_ERR(CAM_ISP, "Error, Invalid arg size = %d expected = %d",
+		CAM_ERR(CAM_ISP, "Error, Invalid arg size = %d expected = %lu",
 			arg_size, sizeof(struct cam_isp_hw_get_cmd_update));
 		return -EINVAL;
 	}
@@ -318,7 +319,7 @@ static int cam_vfe_top_add_wait_trigger(struct cam_vfe_top_ver3_priv *top_priv,
 	uint32_t set_cdm_trigger_event;
 
 	if (arg_size != sizeof(struct cam_isp_hw_get_cmd_update)) {
-		CAM_ERR(CAM_ISP, "Error, Invalid arg size = %d expected = %d",
+		CAM_ERR(CAM_ISP, "Error, Invalid arg size = %d expected = %lu",
 			arg_size, sizeof(struct cam_isp_hw_get_cmd_update));
 		return -EINVAL;
 	}

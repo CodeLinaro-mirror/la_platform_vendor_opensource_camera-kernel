@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of.h>
@@ -680,7 +680,8 @@ int cam_cpas_prepare_subpart_info(enum cam_subparts_index idx, uint32_t num_subp
 	soc_private = (struct cam_cpas_private_soc *)cpas_hw->soc_info.soc_private;
 
 	if (!soc_private) {
-		CAM_ERR(CAM_CPAS, "Invalid soc_private: 0x%x", soc_private);
+		CAM_ERR(CAM_CPAS, "Invalid soc_private: 0x%lx",
+			(unsigned long)(uintptr_t)soc_private);
 		mutex_unlock(&cpas_hw->hw_mutex);
 		return -EINVAL;
 	}
@@ -1064,10 +1065,16 @@ static int cam_cpas_dev_probe(struct platform_device *pdev)
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_cpas_dev_remove(struct platform_device *pdev)
+#else
+static void cam_cpas_dev_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_cpas_dev_component_ops);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_cpas_dt_match[] = {
