@@ -4471,7 +4471,7 @@ static int cam_ife_csid_ver2_enable_core(struct cam_ife_csid_ver2_hw *csid_hw)
 
 	if (csid_reg->cmn_reg->is_core_clk_gate_enable) {
 		rc = cam_cpas_set_ife_core_clk_gate_value(
-			csid_hw->hw_intf->hw_idx - CAM_IFE_CSID_IFE_HW_NUM_MAX,
+			csid_hw->hw_intf->hw_idx - csid_reg->cmn_reg->num_full_ife,
 			true);
 		if (rc) {
 			CAM_ERR(CAM_ISP,
