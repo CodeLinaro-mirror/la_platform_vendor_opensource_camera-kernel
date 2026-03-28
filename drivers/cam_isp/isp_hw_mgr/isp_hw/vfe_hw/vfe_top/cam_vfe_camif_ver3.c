@@ -80,7 +80,7 @@ static int cam_vfe_camif_ver3_get_evt_payload(
 
 	spin_lock(&camif_priv->spin_lock);
 	if (list_empty(&camif_priv->free_payload_list)) {
-		CAM_ERR_RATE_LIMIT(CAM_ISP, "No free CAMIF event payload");
+		CAM_ERR(CAM_ISP, "No free CAMIF event payload");
 		rc = -ENODEV;
 		goto done;
 	}
@@ -1026,7 +1026,7 @@ static int cam_vfe_camif_ver3_handle_irq_top_half(uint32_t evt_id,
 
 	rc  = cam_vfe_camif_ver3_get_evt_payload(camif_priv, &evt_payload);
 	if (rc) {
-		CAM_INFO_RATE_LIMIT(CAM_ISP,
+		CAM_INFO(CAM_ISP,
 		"VFE:%d CAMIF IRQ status_0: 0x%X status_1: 0x%X status_2: 0x%X",
 		camif_node->hw_intf->hw_idx, th_payload->evt_status_arr[0],
 		th_payload->evt_status_arr[1], th_payload->evt_status_arr[2]);
@@ -1116,6 +1116,12 @@ static int cam_vfe_camif_ver3_handle_irq_bottom_half(void *handler_priv,
 	soc_private =
 		(struct cam_vfe_soc_private *)soc_info->soc_private;
 
+	if ((camif_node->res_state == CAM_ISP_RESOURCE_STATE_RESERVED) ||
+		(camif_node->res_state == CAM_ISP_RESOURCE_STATE_AVAILABLE)) {
+		ret = 0;
+		CAM_WARN(CAM_ISP, "Bottom half scheduled post stop call, return success");
+		goto end;
+	}
 	for (i = 0; i < CAM_IFE_IRQ_REGISTERS_MAX; i++)
 		irq_status[i] = payload->irq_reg_val[i];
 
@@ -1257,6 +1263,7 @@ static int cam_vfe_camif_ver3_handle_irq_bottom_half(void *handler_priv,
 			cam_io_r(mem_base + camif_priv->common_reg->diag_sensor_status_0));
 	}
 
+end:
 	cam_vfe_camif_ver3_put_evt_payload(camif_priv, &payload);
 
 	CAM_DBG(CAM_ISP, "returning status = %d", ret);

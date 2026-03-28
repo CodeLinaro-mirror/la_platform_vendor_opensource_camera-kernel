@@ -987,6 +987,11 @@ static int cam_vfe_camif_lite_handle_irq_bottom_half(
 		return -ENODEV;
 	}
 
+	if ((camif_lite_node->res_state == CAM_ISP_RESOURCE_STATE_RESERVED) ||
+		(camif_lite_node->res_state == CAM_ISP_RESOURCE_STATE_AVAILABLE)) {
+		ret = 0;
+		goto end;
+	}
 	for (i = 0; i < CAM_IFE_IRQ_REGISTERS_MAX; i++)
 		irq_status[i] = payload->irq_reg_val[i];
 
@@ -1126,6 +1131,7 @@ static int cam_vfe_camif_lite_handle_irq_bottom_half(
 			cam_vfe_camif_lite_reg_dump(camif_lite_node);
 	}
 
+end:
 	cam_vfe_camif_lite_put_evt_payload(camif_lite_priv, &payload);
 
 	CAM_DBG(CAM_ISP, "returning status = %d", ret);
@@ -1220,4 +1226,3 @@ int cam_vfe_camif_lite_ver3_deinit(
 
 	return 0;
 }
-
