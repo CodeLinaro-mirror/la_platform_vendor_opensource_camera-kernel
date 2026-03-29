@@ -9756,13 +9756,14 @@ static void __cam_isp_ctx_ul_populate_fences(
 	}
 }
 
-static void __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
+static int __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 	int32_t *result_idx, uint64_t timestamp, uint64_t boot_timestamp, uint64_t request_id,
 	struct cam_isp_context *isp_ctx, struct cam_isp_ctx_req *req_isp,
 	struct response_buffer *response_buffers, uint32_t status)
 {
-	int idx = *result_idx, i, num_out = 0;
+	int idx = *result_idx, i, num_out = 0, rc = 0;
 	struct cam_context *ctx;
+	uint64_t prev_ts = 0;
 
 	ctx = (struct cam_context *)isp_ctx->base;
 	response_buffers[idx].setting_id = request_id;
@@ -9775,6 +9776,15 @@ static void __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 			req_isp->fence_map_out[i].buf_handle[0];
 	}
 
+	if (timestamp == 0) {
+		rc = __cam_isp_ctx_get_hw_timestamp(ctx, CAM_IFE_PIX_PATH_RES_MAX, &prev_ts,
+			&timestamp, &boot_timestamp);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "ctx:%u Failed to get timestamp from HW", ctx->ctx_id);
+			return rc;
+		}
+	}
+
 	response_buffers[idx].sof_timestamp = timestamp;
 	response_buffers[idx].boot_timestamp = boot_timestamp;
 	response_buffers[idx].num_buffer = num_out;
@@ -9785,6 +9795,7 @@ static void __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 		ctx->ctx_id, response_buffers[idx].setting_id,
 		timestamp, response_buffers[idx].num_buffer);
 	*result_idx = ++idx;
+	return rc;
 }
 
 static bool __cam_isp_ctx_ul_fastpath_match_for_primary_port(
