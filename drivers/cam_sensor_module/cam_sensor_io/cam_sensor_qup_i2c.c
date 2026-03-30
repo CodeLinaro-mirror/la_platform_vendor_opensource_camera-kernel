@@ -267,6 +267,120 @@ int32_t cam_qup_i2c_poll(struct i2c_client *client,
 	return rc;
 }
 
+int32_t cam_qup_i2c_read_append_write(struct i2c_client *client,
+	struct cam_sensor_i2c_reg_setting *rd_append_write_setting)
+{
+	int32_t rc = 0;
+	uint32_t reg_data = 0;
+	unsigned char *buf = NULL;
+	uint16_t len = 0;
+	struct i2c_msg msg;
+	uint32_t addr;
+	uint16_t data, data_mask;
+	enum camera_sensor_i2c_type addr_type;
+	enum camera_sensor_i2c_type data_type;
+	uint32_t delay_ms;
+
+	if (!rd_append_write_setting || !rd_append_write_setting->reg_setting) {
+		CAM_ERR(CAM_SENSOR_IO, "Invalid register settings");
+		return -EINVAL;
+	}
+
+	addr      = rd_append_write_setting->reg_setting->reg_addr;
+	data      = rd_append_write_setting->reg_setting->reg_data;
+	data_mask = rd_append_write_setting->reg_setting->data_mask;
+	addr_type = rd_append_write_setting->addr_type;
+	data_type = rd_append_write_setting->data_type;
+	delay_ms  = rd_append_write_setting->reg_setting->delay;
+
+	CAM_DBG(CAM_SENSOR_IO, "read_append_write addr 0x%x mask 0x%x data 0x%x delay %d",
+		addr, data_mask, data, delay_ms);
+
+	/* Validate parameters */
+	if (addr_type <= CAMERA_SENSOR_I2C_TYPE_INVALID
+		|| addr_type >= CAMERA_SENSOR_I2C_TYPE_MAX
+		|| data_type <= CAMERA_SENSOR_I2C_TYPE_INVALID
+		|| data_type >= CAMERA_SENSOR_I2C_TYPE_MAX) {
+		CAM_ERR(CAM_SENSOR_IO, "Failed with addr/data_type verification");
+		return -EINVAL;
+	}
+
+	rc = cam_qup_i2c_read(client, addr, &reg_data, addr_type, data_type);
+	if (rc < 0) {
+		CAM_ERR(CAM_SENSOR_IO, "read failed rc: %d", rc);
+		return rc;
+	}
+
+	reg_data = (reg_data & ~data_mask) | (data & data_mask);
+
+	buf = kzalloc(addr_type + data_type, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	if (addr_type == CAMERA_SENSOR_I2C_TYPE_BYTE) {
+		buf[0] = addr;
+		len = 1;
+	} else if (addr_type == CAMERA_SENSOR_I2C_TYPE_WORD) {
+		buf[0] = addr >> 8;
+		buf[1] = addr;
+		len = 2;
+	} else if (addr_type == CAMERA_SENSOR_I2C_TYPE_3B) {
+		buf[0] = addr >> 16;
+		buf[1] = addr >> 8;
+		buf[2] = addr;
+		len = 3;
+	} else {
+		buf[0] = addr >> 24;
+		buf[1] = addr >> 16;
+		buf[2] = addr >> 8;
+		buf[3] = addr;
+		len = 4;
+	}
+
+	if (data_type == CAMERA_SENSOR_I2C_TYPE_BYTE) {
+		buf[len] = reg_data;
+		len += 1;
+	} else if (data_type == CAMERA_SENSOR_I2C_TYPE_WORD) {
+		buf[len] = reg_data >> 8;
+		buf[len + 1] = reg_data;
+		len += 2;
+	} else if (data_type == CAMERA_SENSOR_I2C_TYPE_3B) {
+		buf[len] = reg_data >> 16;
+		buf[len + 1] = reg_data >> 8;
+		buf[len + 2] = reg_data;
+		len += 3;
+	} else {
+		buf[len] = reg_data >> 24;
+		buf[len + 1] = reg_data >> 16;
+		buf[len + 2] = reg_data >> 8;
+		buf[len + 3] = reg_data;
+		len += 4;
+	}
+
+	msg.addr = client->addr >> 1;
+	msg.flags = 0;
+	msg.len = len;
+	msg.buf = buf;
+
+	rc = i2c_transfer(client->adapter, &msg, 1);
+	if (rc == 1)
+		rc = 0;
+	else {
+		CAM_ERR(CAM_SENSOR_IO, "i2c transfer failed rc:%d", rc);
+		rc = -EIO;
+		goto write_fail;
+	}
+
+	if (delay_ms > 20)
+		msleep(delay_ms);
+	else if (delay_ms)
+		usleep_range(delay_ms * 1000, (delay_ms * 1000) + 1000);
+
+write_fail:
+	kfree(buf);
+	return rc;
+}
+
 static inline int32_t cam_qup_i2c_write_optimized(struct camera_io_master *client,
 	struct cam_sensor_i2c_reg_setting *write_setting,
 	struct i2c_msg *msgs,

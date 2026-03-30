@@ -163,6 +163,17 @@ int32_t cam_qup_i2c_poll(struct i2c_client *client,
 	uint32_t delay_ms);
 
 /**
+ * cam_qup_i2c_read_append_write : QUP based I2C read-append-write operation
+ * @client                  : QUP I2C client structure
+ * @rd_append_write_setting : I2C register settings
+ *
+ * This API implements QUP based I2C read-append-write
+ */
+
+int32_t cam_qup_i2c_read_append_write(struct i2c_client *client,
+	struct cam_sensor_i2c_reg_setting *rd_append_write_setting);
+
+/**
  * cam_qup_i2c_write_table : QUP based I2C write random
  * @client        : QUP I2C client structure
  * @write_setting : I2C register settings
