@@ -10,6 +10,9 @@
 #include "cam_flash_soc.h"
 #include "cam_res_mgr_api.h"
 #include <dt-bindings/msm-camera.h>
+#include "cam_mem_mgr_api.h"
+#include <linux/leds.h>
+#include <linux/led-class-flash.h>
 
 static int32_t cam_get_source_node_info(
 	struct device_node *of_node,
@@ -86,11 +89,14 @@ static int32_t cam_get_source_node_info(
 			cam_res_mgr_led_trigger_register(
 				soc_private->flash_trigger_name[i],
 				&fctrl->flash_trigger[i]);
-
 			if (soc_private->is_wled_flash) {
 				rc = cam_flash_led_prepare(
 					fctrl->flash_trigger[i],
+#if IS_REACHABLE(CONFIG_LEDS_QPNP_FLASH_V2)
 					QUERY_MAX_AVAIL_CURRENT,
+#else
+					BIT(2),
+#endif
 					&soc_private->flash_max_current[i],
 					true);
 				if (rc) {
@@ -181,7 +187,11 @@ static int32_t cam_get_source_node_info(
 			if (soc_private->is_wled_flash) {
 				rc = cam_flash_led_prepare(
 					fctrl->torch_trigger[i],
+#if IS_REACHABLE(CONFIG_LEDS_QPNP_FLASH_V2)
 					QUERY_MAX_AVAIL_CURRENT,
+#else
+					BIT(2),
+#endif
 					&soc_private->torch_max_current[i],
 					true);
 				if (rc) {
@@ -227,6 +237,96 @@ static int32_t cam_get_source_node_info(
 	return rc;
 }
 
+#if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
+static int32_t cam_get_led_source_node_info(
+	struct device_node *of_node,
+	struct cam_flash_ctrl *fctrl,
+	struct cam_flash_private_soc *soc_private)
+{
+	int32_t rc = 0;
+	uint32_t count = 0, i = 0;
+	struct device_node *flash_src_node = NULL;
+
+	fctrl->led_cldev_en = 0;
+	fctrl->switch_trigger = NULL;
+	fctrl->torch_num_sources = 0;
+	fctrl->flash_num_sources = 0;
+	for (i = 0; i < CAM_FLASH_MAX_LED_TRIGGERS; i++) {
+		fctrl->flash_trigger[i] = NULL;
+		fctrl->torch_trigger[i] = NULL;
+	}
+	if (of_get_property(of_node, "leds", &count)) {
+		count /= sizeof(uint32_t);
+
+		if (count > CAM_FLASH_MAX_LED_TRIGGERS) {
+			CAM_ERR(CAM_FLASH, "Invalid LED count: %d", count);
+			return -EINVAL;
+		}
+
+		fctrl->flash_num_sources = count;
+
+		for (i = 0; i < count; i++) {
+			flash_src_node = of_parse_phandle(of_node,
+				"leds", i);
+			if (!flash_src_node) {
+				CAM_WARN(CAM_FLASH, "flash_src_node NULL");
+				continue;
+			} else if (fctrl->pdev != NULL) {
+				fctrl->pmic_lcdev[i] =
+					devm_of_led_get(&fctrl->pdev->dev, i);
+				if (IS_ERR(fctrl->pmic_lcdev[i])) {
+					CAM_ERR(CAM_FLASH,
+						"failed to get led_classdev, rc=%d",
+						PTR_ERR(fctrl->pmic_lcdev[i]));
+					return PTR_ERR(fctrl->pmic_lcdev[i]);
+				}
+				fctrl->pmic_flcdev[i] =
+					lcdev_to_flcdev(fctrl->pmic_lcdev[i]);
+				rc = of_property_read_u32(flash_src_node,
+					"flash-max-microamp",
+					&soc_private->flash_max_current[i]);
+				if (rc < 0) {
+					CAM_WARN(CAM_FLASH,
+					"LED FLASH flash-max-microamp read fail: %d",
+					rc);
+					of_node_put(flash_src_node);
+					continue;
+				}
+				rc = of_property_read_u32(flash_src_node,
+					"led-max-microamp",
+					&soc_private->torch_max_current[i]);
+				if (rc < 0) {
+					CAM_WARN(CAM_FLASH,
+					"LED-TORCH max-current read failed: %d",
+						rc);
+					of_node_put(flash_src_node);
+					continue;
+				}
+			}
+			/* Read max-duration */
+			rc = of_property_read_u32(flash_src_node,
+				"flash-max-timeout-us",
+				&soc_private->flash_max_duration[i]);
+			if (rc) {
+				CAM_DBG(CAM_FLASH,
+					"max-duration prop unavailable: %d",
+					rc);
+				rc = 0;
+			}
+			of_node_put(flash_src_node);
+
+			CAM_DBG(CAM_FLASH, "TorchMaxCurrent[%d]: %d uA",
+				i, soc_private->torch_max_current[i]);
+			CAM_DBG(CAM_FLASH, "MainFlashMaxCurrent[%d]: %d uA",
+				i, soc_private->flash_max_current[i]);
+		}
+		fctrl->led_cldev_en = 1;
+	}
+
+	return rc;
+}
+#endif
+
 int cam_flash_get_dt_data(struct cam_flash_ctrl *fctrl,
 	struct cam_hw_soc_info *soc_info)
 {
@@ -258,13 +358,28 @@ int cam_flash_get_dt_data(struct cam_flash_ctrl *fctrl,
 		CAM_ERR(CAM_FLASH, "Get_dt_properties failed rc %d", rc);
 		goto free_soc_private;
 	}
-
+#if __or(IS_ENABLED(CONFIG_LEDS_QPNP_FLASH_V2), \
+			IS_ENABLED(CONFIG_LEDS_QTI_FLASH))
 	rc = cam_get_source_node_info(of_node, fctrl, soc_info->soc_private);
 	if (rc) {
 		CAM_ERR(CAM_FLASH,
 			"cam_flash_get_pmic_source_info failed rc %d", rc);
 		goto free_soc_private;
 	}
+#endif
+
+#if IS_ENABLED(CONFIG_LEDS_QCOM_FLASH)
+	rc = cam_get_led_source_node_info(of_node, fctrl, soc_info->soc_private);
+	if (rc) {
+		CAM_ERR(CAM_FLASH,
+			"cam_flash_get_pmic_source_info failed rc %d", rc);
+		goto free_soc_private;
+	}
+#else
+	CAM_ERR(CAM_FLASH,
+		"FATAL: CONFIG_LEDS_QCOM_FLASH is not Defined");
+	goto free_soc_private;
+#endif
 	return rc;
 
 free_soc_private:
