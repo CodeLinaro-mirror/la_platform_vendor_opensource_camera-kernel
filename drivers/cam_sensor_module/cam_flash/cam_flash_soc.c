@@ -14,6 +14,8 @@
 #include <linux/leds.h>
 #include <linux/led-class-flash.h>
 
+#if __or(IS_ENABLED(CONFIG_LEDS_QPNP_FLASH_V2), \
+			IS_ENABLED(CONFIG_LEDS_QTI_FLASH))
 static int32_t cam_get_source_node_info(
 	struct device_node *of_node,
 	struct cam_flash_ctrl *fctrl,
@@ -236,6 +238,7 @@ static int32_t cam_get_source_node_info(
 
 	return rc;
 }
+#endif
 
 #if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
 static int32_t cam_get_led_source_node_info(
@@ -276,7 +279,7 @@ static int32_t cam_get_led_source_node_info(
 					devm_of_led_get(&fctrl->pdev->dev, i);
 				if (IS_ERR(fctrl->pmic_lcdev[i])) {
 					CAM_ERR(CAM_FLASH,
-						"failed to get led_classdev, rc=%d",
+						"failed to get led_classdev, rc=%ld",
 						PTR_ERR(fctrl->pmic_lcdev[i]));
 					return PTR_ERR(fctrl->pmic_lcdev[i]);
 				}
@@ -366,9 +369,7 @@ int cam_flash_get_dt_data(struct cam_flash_ctrl *fctrl,
 			"cam_flash_get_pmic_source_info failed rc %d", rc);
 		goto free_soc_private;
 	}
-#endif
-
-#if IS_ENABLED(CONFIG_LEDS_QCOM_FLASH)
+#elif IS_ENABLED(CONFIG_LEDS_QCOM_FLASH)
 	rc = cam_get_led_source_node_info(of_node, fctrl, soc_info->soc_private);
 	if (rc) {
 		CAM_ERR(CAM_FLASH,
@@ -376,8 +377,8 @@ int cam_flash_get_dt_data(struct cam_flash_ctrl *fctrl,
 		goto free_soc_private;
 	}
 #else
-	CAM_ERR(CAM_FLASH,
-		"FATAL: CONFIG_LEDS_QCOM_FLASH is not Defined");
+	CAM_ERR(CAM_FLASH, "Flash Not supported");
+	rc = -EOPNOTSUPP;
 	goto free_soc_private;
 #endif
 	return rc;
