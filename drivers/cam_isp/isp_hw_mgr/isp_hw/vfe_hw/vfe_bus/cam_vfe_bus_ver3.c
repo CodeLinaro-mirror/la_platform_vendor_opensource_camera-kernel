@@ -3474,7 +3474,7 @@ static void cam_vfe_check_violations_out_dyn(
 		}
 
 		index = bus_priv->bus_hw_info->bus_client_reg[bus_client_index - 1].out_type;
-		if (index > CAM_VFE_BUS_VER3_VFE_OUT_MAX) {
+		if (index >= CAM_VFE_BUS_VER3_VFE_OUT_MAX) {
 			CAM_ERR(CAM_ISP, "Invalid VFE out index %d", index);
 			return;
 		}
