@@ -44,7 +44,6 @@ static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 		void *arg, struct cam_flash_private_soc *soc_private)
 {
 	int rc = 0;
-	int i = 0;
 	struct cam_control *cmd = (struct cam_control *)arg;
 
 	if (!fctrl || !arg) {
@@ -171,6 +170,7 @@ static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 
 		CAM_DBG(CAM_FLASH, "CAM_QUERY_CAP");
 		flash_cap.slot_info = fctrl->soc_info.index;
+		flash_cap.flash_type = soc_private->flash_type;
 		cam_flash_populate_query_current(fctrl, &flash_cap, soc_private);
 		if (copy_to_user(u64_to_user_ptr(cmd->handle),
 			&flash_cap, sizeof(struct cam_flash_query_cap_info))) {
@@ -361,7 +361,6 @@ static void cam_flash_i2c_driver_remove(struct i2c_client *client)
 	if (!fctrl) {
 		CAM_ERR(CAM_FLASH, "Flash device is NULL");
 	}
-
 	CAM_INFO(CAM_FLASH, "i2c driver remove invoked");
 	/*Free Allocated Mem */
 	kfree(fctrl->i2c_data.per_frame);
