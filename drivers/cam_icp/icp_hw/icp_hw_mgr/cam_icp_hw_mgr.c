@@ -4766,19 +4766,19 @@ static int cam_icp_mgr_send_memory_region_info(
 
 	if (hw_mgr->fw_based_sys_caching) {
 		/* Update ipc llcc mem */
-		region_info->region_info[region_info->num_valid_regions].region_id =
+		region_info->region_info_flex[region_info->num_valid_regions].region_id =
 			HFI_MEM_REGION_ID_LLCC_REGISTER;
-		region_info->region_info[region_info->num_valid_regions].region_type =
+		region_info->region_info_flex[region_info->num_valid_regions].region_type =
 			HFI_MEM_REGION_TYPE_DEVICE;
-		region_info->region_info[region_info->num_valid_regions].start_addr =
+		region_info->region_info_flex[region_info->num_valid_regions].start_addr =
 			hw_mgr->hfi_mem.llcc_reg.iova;
-		region_info->region_info[region_info->num_valid_regions].size =
+		region_info->region_info_flex[region_info->num_valid_regions].size =
 			hw_mgr->hfi_mem.llcc_reg.len;
 
 		region_info->num_valid_regions++;
 
 		CAM_DBG(CAM_ICP,
-			"LLCC mem regions iova[0x%x:0x%x] len[0x%x:0x%x]",
+			"LLCC mem region [0x%x:0x%x]",
 			hw_mgr->hfi_mem.llcc_reg.iova, hw_mgr->hfi_mem.llcc_reg.len);
 	}
 
