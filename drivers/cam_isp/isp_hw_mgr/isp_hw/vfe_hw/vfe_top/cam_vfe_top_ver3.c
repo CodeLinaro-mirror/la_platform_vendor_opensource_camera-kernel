@@ -602,21 +602,26 @@ int cam_vfe_top_ver3_stop(void *device_priv,
 		return -EINVAL;
 	}
 
-	if (!rc) {
-		for (i = 0; i < top_priv->top_common.num_mux; i++) {
-			if (top_priv->top_common.mux_rsrc[i].res_id ==
-				mux_res->res_id) {
+	if (rc) {
+		CAM_ERR(CAM_ISP, "stop failed for res id:%d, rc=%d", mux_res->res_id, rc);
+		return rc;
+	}
+
+	for (i = 0; i < top_priv->top_common.num_mux; i++) {
+		if (top_priv->top_common.mux_rsrc[i].res_id == mux_res->res_id) {
+			if (!top_priv->top_common.skip_data_rst_on_stop) {
 				top_priv->top_common.req_clk_rate[i] = 0;
 				memset(&top_priv->top_common.req_axi_vote[i],
 					0, sizeof(struct cam_axi_vote));
 				top_priv->top_common.axi_vote_control[i] =
 					CAM_ISP_BW_CONTROL_EXCLUDE;
-				break;
 			}
+			break;
 		}
 	}
 
-	soc_private->ife_clk_src = 0;
+	if (!top_priv->top_common.skip_data_rst_on_stop)
+		soc_private->ife_clk_src = 0;
 
 	return rc;
 }
