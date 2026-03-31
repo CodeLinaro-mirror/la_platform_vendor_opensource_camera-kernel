@@ -77,6 +77,9 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp,
 static void cam_isp_update_fastpath_result_queue(void *data,
 	uint32_t value);
 
+static void cam_isp_update_ul_timestamp(void *data, uint64_t prev_ts, uint64_t curr_ts,
+	uint64_t boot_ts);
+
 static const char *__cam_isp_evt_val_to_type(
 	uint32_t evt_id)
 {
@@ -1165,14 +1168,17 @@ static inline void __cam_isp_ctx_update_sof_ts_util(
 	struct cam_isp_hw_sof_event_data *sof_event_data,
 	struct cam_isp_context *ctx_isp)
 {
+	if (ctx_isp->ul_path_en)
+		goto skip_sof_update;
 	/* Delayed update, skip if ts is already updated */
 	if (ctx_isp->sof_timestamp_val == sof_event_data->timestamp)
 		return;
 
-	ctx_isp->frame_id++;
 	ctx_isp->sof_timestamp_val = sof_event_data->timestamp;
 	ctx_isp->boot_timestamp = sof_event_data->boot_time;
 
+skip_sof_update:
+	ctx_isp->frame_id++;
 	if (ctx_isp->independent_crm_en) {
 		if (ctx_isp->stream_type == CAM_REQ_MGR_LINK_STREAMING_TYPE)
 			crm_timer_modify(ctx_isp->independent_crm_sof_timer,
@@ -1189,14 +1195,17 @@ static inline void __cam_isp_ctx_handle_sof_util(
 	struct cam_isp_hw_epoch_event_data *epoch_event_data,
 	struct cam_isp_context *ctx_isp)
 {
+	if (ctx_isp->ul_path_en)
+		goto skip_sof_update;
 	/* Delayed update, skip if ts is already updated */
 	if (ctx_isp->sof_timestamp_val == epoch_event_data->timestamp)
 		return;
 
-	ctx_isp->frame_id++;
 	ctx_isp->sof_timestamp_val = epoch_event_data->timestamp;
 	ctx_isp->boot_timestamp = epoch_event_data->boot_time;
 
+skip_sof_update:
+	ctx_isp->frame_id++;
 	if (ctx_isp->independent_crm_en) {
 		if (ctx_isp->stream_type == CAM_REQ_MGR_LINK_STREAMING_TYPE)
 			crm_timer_modify(ctx_isp->independent_crm_sof_timer,
@@ -9010,6 +9019,21 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 				rc, ctx->ctx_id);
 			goto free_req;
 		}
+
+		hw_cmd_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
+		hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+		isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_FAST_TIMESTAMP_NOTIFIER_CFG;
+		isp_hw_cmd_args.cmd_data = ctx_isp;
+		isp_hw_cmd_args.u.fastpath_timestamp_handler = cam_isp_update_ul_timestamp;
+		hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+		rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
+			&hw_cmd_args);
+		if (rc) {
+			CAM_ERR(CAM_ISP,
+				"Configuring fastpath timestamp notifier failed rc: %d ctx: %u",
+				rc, ctx->ctx_id);
+			goto free_req;
+		}
 	}
 
 	if ((ctx->state == CAM_CTX_FLUSHED) && (packet_opcode == CAM_ISP_PACKET_INIT_DEV)) {
@@ -9795,6 +9819,29 @@ end:
 	return rc;
 }
 
+static void cam_isp_update_ul_timestamp(void *data, uint64_t prev_ts,
+	uint64_t curr_ts, uint64_t boot_ts)
+{
+	struct cam_isp_context *isp_ctx;
+
+	if (!data) {
+		CAM_ERR(CAM_ISP, "Invalid params");
+		return;
+	}
+
+	isp_ctx = (struct cam_isp_context *)data;
+
+	isp_ctx->sof_timestamp_val = curr_ts;
+	isp_ctx->boot_timestamp = boot_ts;
+	isp_ctx->last_sof_timestamp = prev_ts;
+
+	CAM_DBG(CAM_ISP, "ctx_id:%d prev_sof_ts:%llu curr_sof_ts:%llu boot_ts:%llu",
+		isp_ctx->base->ctx_id,
+		prev_ts,
+		curr_ts,
+		boot_ts);
+}
+
 static void cam_isp_update_fastpath_result_queue(void *data,
 	uint32_t value)
 {
@@ -9867,14 +9914,13 @@ static void __cam_isp_ctx_ul_populate_fences(
 	}
 }
 
-static int __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
+static void __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 	int32_t *result_idx, uint64_t timestamp, uint64_t boot_timestamp, uint64_t request_id,
 	struct cam_isp_context *isp_ctx, struct cam_isp_ctx_req *req_isp,
 	struct response_buffer *response_buffers, uint32_t status)
 {
-	int idx = *result_idx, i, num_out = 0, rc = 0;
+	int idx = *result_idx, i, num_out = 0;
 	struct cam_context *ctx;
-	uint64_t prev_ts = 0;
 
 	ctx = (struct cam_context *)isp_ctx->base;
 	response_buffers[idx].setting_id = request_id;
@@ -9887,15 +9933,6 @@ static int __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 			req_isp->fence_map_out[i].buf_handle[0];
 	}
 
-	if (timestamp == 0) {
-		rc = __cam_isp_ctx_get_hw_timestamp(ctx, CAM_IFE_PIX_PATH_RES_MAX, &prev_ts,
-			&timestamp, &boot_timestamp);
-		if (rc) {
-			CAM_ERR(CAM_ISP, "ctx:%u Failed to get timestamp from HW", ctx->ctx_id);
-			return rc;
-		}
-	}
-
 	response_buffers[idx].sof_timestamp = timestamp;
 	response_buffers[idx].boot_timestamp = boot_timestamp;
 	response_buffers[idx].num_buffer = num_out;
@@ -9906,7 +9943,6 @@ static int __cam_isp_ctx_ul_fastpath_populate_buf_hdls(
 		ctx->ctx_id, response_buffers[idx].setting_id,
 		timestamp, response_buffers[idx].num_buffer);
 	*result_idx = ++idx;
-	return rc;
 }
 
 static bool __cam_isp_ctx_ul_fastpath_match_for_primary_port(
