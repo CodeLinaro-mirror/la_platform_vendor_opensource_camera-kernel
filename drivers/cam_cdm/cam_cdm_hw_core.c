@@ -1299,16 +1299,6 @@ static int cam_hw_cdm_work(void *priv, void *data)
 	}
 
 	if (payload->irq_status &
-		CAM_CDM_IRQ_STATUS_BL_DONE_MASK) {
-		if (test_bit(payload->fifo_idx, &core->cdm_status)) {
-			CAM_DBG(CAM_CDM, "%s%u HW BL done IRQ",
-				cdm_hw->soc_info.label_name,
-				cdm_hw->soc_info.index);
-			complete(&core->bl_fifo[payload->fifo_idx]
-				.bl_complete);
-		}
-	}
-	if (payload->irq_status &
 		CAM_CDM_IRQ_STATUS_ERRORS) {
 		int reset_hw_hdl = 0x0;
 
@@ -1515,6 +1505,17 @@ irqreturn_t cam_hw_cdm_irq(int irq_num, void *data)
 				CAM_INFO(CAM_CDM, "Debug gen_irq received");
 
 			atomic_inc(&cdm_core->bl_fifo[i].work_record);
+		}
+
+		/* Handle BL done immediately in IRQ handler */
+		if (irq_status[i] & CAM_CDM_IRQ_STATUS_BL_DONE_MASK) {
+			if (test_bit(i, &cdm_core->cdm_status)) {
+				CAM_DBG(CAM_CDM,
+					"%s%u HW BL done IRQ fifo_idx: %d",
+					cdm_hw->soc_info.label_name,
+					cdm_hw->soc_info.index, i);
+				 complete(&cdm_core->bl_fifo[i].bl_complete);
+			}
 		}
 
 		CAM_DBG(CAM_CDM,
