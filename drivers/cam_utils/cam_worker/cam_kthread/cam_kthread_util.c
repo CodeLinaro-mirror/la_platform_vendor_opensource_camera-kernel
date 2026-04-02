@@ -113,7 +113,6 @@ inline void cam_kthread_flush(struct cam_core_kthread *kthread)
 static void cam_kthread_process_task(struct cam_kthread_task *task)
 {
 	task->process_cb(task->priv, task->payload);
-	cam_kthread_put_task(task);
 }
 
 void cam_kthread_process(struct kthread_work *w)
@@ -121,6 +120,7 @@ void cam_kthread_process(struct kthread_work *w)
 	struct cam_core_kthread *worker_kthread;
 	struct cam_kthread_task *task;
 	int32_t                  i = CAM_KTHREAD_TASK_PRIORITY_0;
+	static int               count = 0;
 	unsigned long            flags = 0;
 	ktime_t                  exec_start_time;
 	void                    *cb;
@@ -156,10 +156,12 @@ void cam_kthread_process(struct kthread_work *w)
 			atomic_sub(1, &worker_kthread->task.pending_cnt);
 			list_del_init(&task->entry);
 			KTHREAD_RELEASE_LOCK(worker_kthread, flags);
+			if (unlikely(atomic_read(&worker_kthread->flush_in_process)))
+				CAM_INFO(CAM_WORKER, "Kthread process called during flush - count:%d",
+					count++);
+			cam_kthread_process_task(task);
 
-			if (!unlikely(atomic_read(&worker_kthread->flush_in_process)))
-				cam_kthread_process_task(task);
-
+			cam_kthread_put_task(task);
 			cam_common_util_thread_switch_delay_detect(
 				worker_kthread->worker_name, "kthread execution",
 				cb, exec_start_time, CAM_KTHREAD_EXE_TIME_THRESHOLD);
@@ -234,6 +236,7 @@ int cam_kthread_enqueue_task(struct cam_kthread_task *task,
 	int                      rc = 0;
 	struct cam_core_kthread *kthread;
 	unsigned long            flags = 0;
+	static int               count = 0;
 
 	if (!task) {
 		CAM_WARN(CAM_WORKER, "Invalid task pointer, can not schedule");
@@ -246,11 +249,6 @@ int cam_kthread_enqueue_task(struct cam_kthread_task *task,
 		return -EINVAL;
 	}
 
-	if (task->cancel == 1 || atomic_read(&kthread->flush_in_process)) {
-		rc = 0;
-		goto abort;
-	}
-
 	task->priv = priv;
 	task->priority = (prio < CAM_KTHREAD_TASK_PRIORITY_MAX &&
 		prio >= CAM_KTHREAD_TASK_PRIORITY_0)
@@ -260,6 +258,14 @@ int cam_kthread_enqueue_task(struct cam_kthread_task *task,
 	KTHREAD_ACQUIRE_LOCK(kthread, flags);
 	if (!kthread->job) {
 		rc = -EINVAL;
+		KTHREAD_RELEASE_LOCK(kthread, flags);
+		goto abort;
+	}
+
+	if (task->cancel == 1 || atomic_read(&kthread->flush_in_process)) {
+		rc = 0;
+		CAM_INFO(CAM_WORKER, "Enqueue ignored due to flush in progress - count:%d",
+			count++);
 		KTHREAD_RELEASE_LOCK(kthread, flags);
 		goto abort;
 	}
