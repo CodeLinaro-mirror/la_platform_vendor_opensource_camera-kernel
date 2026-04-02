@@ -7833,8 +7833,10 @@ static int __cam_isp_ctx_release_hw_in_top_state(struct cam_context *ctx,
 	rc = __cam_isp_ctx_flush_req(ctx, &ctx->pending_req_list, &flush_req);
 	spin_unlock_bh(&ctx->lock);
 	__cam_isp_ctx_free_mem_hw_entries(ctx);
-	if (ctx_isp->worker_ctx)
+	if (ctx_isp->worker_ctx) {
 		cam_worker_wrapper_deinit(ctx_isp->worker_ctx);
+		ctx_isp->worker_ctx = NULL;
+	}
 	ctx->state = CAM_CTX_ACQUIRED;
 
 	trace_cam_context_state("ISP", ctx);
