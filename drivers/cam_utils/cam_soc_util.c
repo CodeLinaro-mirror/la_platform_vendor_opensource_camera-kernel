@@ -26,6 +26,10 @@
 #include <linux/clk/qcom.h>
 #endif
 
+#if IS_ENABLED(CONFIG_COMMON_CLK_QCOM)
+#include <linux/clk/qcom.h>
+#endif
+
 #define CAM_TO_MASK(bitn)          (1 << (int)(bitn))
 #define CAM_IS_BIT_SET(mask, bit)  ((mask) & CAM_TO_MASK(bit))
 #define CAM_SET_BIT(mask, bit)     ((mask) |= CAM_TO_MASK(bit))
@@ -3230,6 +3234,31 @@ end:
 
 	return rc;
 };
+
+int cam_soc_util_dump_clk(struct cam_hw_soc_info *soc_info)
+{
+	int i;
+
+	if (!soc_info) {
+		CAM_ERR(CAM_UTIL, "soc_info is NULL");
+		return -EINVAL;
+	}
+
+	for (i = 0; i < soc_info->num_clk; i++) {
+		if (!soc_info->clk[i])
+			continue;
+
+#if IS_ENABLED(CONFIG_COMMON_CLK_QCOM)
+		qcom_clk_dump(soc_info->clk[i], NULL, false);
+#else
+		CAM_INFO(CAM_UTIL, "[%s] idx = %d clk name = %s clk_rate=%lld",
+			soc_info->dev_name, i, soc_info->clk_name[i],
+			cam_wrapper_clk_get_rate(soc_info->clk[i], soc_info->clk_name[i]));
+#endif
+	}
+
+	return 0;
+}
 
 static int cam_soc_util_get_dt_gpio_req_tbl(struct device_node *of_node,
 	struct cam_soc_gpio_data *gconf, uint16_t *gpio_array,
