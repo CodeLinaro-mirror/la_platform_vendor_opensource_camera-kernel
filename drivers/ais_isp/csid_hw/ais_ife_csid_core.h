@@ -245,6 +245,7 @@ struct ais_ife_csid_rdi_reg_offset {
 	uint32_t ccif_violation_en;
 	uint32_t epoch0_shift_val;
 	uint32_t rup_aup_mask;
+	uint32_t early_eof_en_shift_val;
 };
 
 struct ais_ife_csid_csi2_rx_reg_offset {

@@ -258,6 +258,7 @@ static struct ais_ife_csid_rdi_reg_offset ais_ife_csid_780_rdi_0_reg_offset = {
 	.csid_rdi_byte_cntr_pong_addr             = 0x524,
 	.epoch0_shift_val                         = 16,
 	.rup_aup_mask                             = 0x100010,
+	.early_eof_en_shift_val                   = 14,
 };
 
 static struct ais_ife_csid_rdi_reg_offset ais_ife_csid_780_rdi_1_reg_offset = {
@@ -302,6 +303,7 @@ static struct ais_ife_csid_rdi_reg_offset ais_ife_csid_780_rdi_1_reg_offset = {
 	.csid_rdi_byte_cntr_pong_addr             = 0x624,
 	.epoch0_shift_val                         = 16,
 	.rup_aup_mask                             = 0x200020,
+	.early_eof_en_shift_val                   = 14,
 };
 
 static struct ais_ife_csid_rdi_reg_offset ais_ife_csid_780_rdi_2_reg_offset = {
@@ -347,6 +349,7 @@ static struct ais_ife_csid_rdi_reg_offset ais_ife_csid_780_rdi_2_reg_offset = {
 	.csid_rdi_byte_cntr_pong_addr             = 0x724,
 	.epoch0_shift_val                         = 16,
 	.rup_aup_mask                             = 0x400040,
+	.early_eof_en_shift_val                   = 14,
 };
 
 static struct ais_ife_csid_reg_offset ais_ife_csid_780_reg_offset = {
