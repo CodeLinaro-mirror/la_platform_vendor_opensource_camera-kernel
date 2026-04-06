@@ -4722,6 +4722,8 @@ end:
 			}
 			req_isp->fence_map_out[i].sync_id = -1;
 		}
+		if (ctx_isp->ul_path_en)
+			cam_isp_ctx_reset_producer_q_for_req(ctx_isp, req_isp);
 		list_del_init(&req->list);
 		__cam_isp_ctx_move_req_to_free_list(ctx, req);
 
