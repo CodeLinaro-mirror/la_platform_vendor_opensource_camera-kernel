@@ -1146,6 +1146,7 @@ static int32_t cam_sensor_cmd_buffer(struct cam_sensor_ctrl_t *s_ctrl,
 		offset += (sizeof(struct cam_cmd_buf_desc)/4);
 	}
 	cci_settings->request_id = csl_packet->header.request_id;
+	cci_settings->setting_id = csl_packet->header.request_id;
 
 	/* fill cmd buf data to event list, need to pass it to cci */
 	rc = cam_sensor_fill_event_data(cci_settings);
@@ -2884,6 +2885,7 @@ int cam_sensor_no_crm_add_req_ul(
 	struct i2c_settings_array   *i2c_reg_settings = NULL;
 	struct cam_buf_io_cfg       *io_cfg = NULL;
 	uint32_t                    *offset;
+	struct cci_trigger_cam_setting_array *cci_settings = NULL;
 
 	if (!packet) {
 		CAM_ERR(CAM_SENSOR, "invalid pointer");
@@ -2899,71 +2901,70 @@ int cam_sensor_no_crm_add_req_ul(
 	offset  += packet->cmd_buf_offset / 4;
 	cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 
-	CAM_DBG(CAM_SENSOR, "slot[%d] Add Req %d, num_cmd_buf %d, num_io_configs %d ",
+	CAM_DBG(CAM_SENSOR, "slot[%d] Add Req %d, num_cmd_buf %d, num_io_configs %d opcode %d",
 			s_ctrl->soc_info.index,
 			packet->header.request_id,
-			packet->num_cmd_buf, packet->num_io_configs);
+			packet->num_cmd_buf, packet->num_io_configs,
+			(packet->header.op_code & 0xFFFFFF));
 
 	i2c_data = &(s_ctrl->i2c_data);
-	if ((packet->header.op_code & 0xFFFFFF) == CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE) {
-		i2c_reg_settings = &i2c_data->per_frame[packet->header.request_id % MAX_PER_FRAME_ARRAY];
-		if (i2c_reg_settings->is_settings_valid == 1) {
-			CAM_DBG(CAM_SENSOR, "Clear old settings for request %d and update new", packet->header.request_id);
-			rc = delete_request(i2c_reg_settings);
+	if ((packet->header.op_code & 0xFFFFFF) == CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE ||
+		(packet->header.op_code & 0xFFFFFF) == CAM_SENSOR_PACKET_OPCODE_SENSOR_NOP) {
+		if (s_ctrl->is_trigger_mode) {
+			// Trigger mode of sensor
+			cci_settings =
+				&i2c_data->per_frame_event_settings[packet->header.request_id %
+					MAX_PER_FRAME_ARRAY];
+			rc = cam_sensor_cmd_buffer(s_ctrl, packet, cci_settings, io_cfg);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR, "Fail parsing cmd buffer %d", rc);
+				return rc;
+			}
+			// ISP Apply request came before sensor request
+			if (s_ctrl->frame_state == CAM_SENSOR_FRAME_APPLY_PENDING) {
+				int offset = packet->header.request_id % MAX_PER_FRAME_ARRAY;
+
+				s_ctrl->frame_state = CAM_SENSOR_FRAME_APPLY;
+
+				CAM_DBG(CAM_SENSOR, "ISP apply request came before Sensor request");
+
+				if (cci_settings[offset].is_settings_valid) {
+					rc = cam_sensor_apply_event_settings(s_ctrl,
+							packet->header.request_id);
+					if (!rc) {
+						s_ctrl->last_applied_req =
+							packet->header.request_id;
+						CAM_DBG(CAM_SENSOR, "slot[%d] apply[%llu]",
+									s_ctrl->soc_info.index,
+									s_ctrl->last_applied_req);
+					}
+				}
+			}
+		} else {
+			i2c_reg_settings = &i2c_data->per_frame[
+				packet->header.request_id % MAX_PER_FRAME_ARRAY];
+			if (i2c_reg_settings->is_settings_valid == 1) {
+				CAM_DBG(CAM_SENSOR, "Clear old settings for req %d and update new",
+						packet->header.request_id);
+				rc = delete_request(i2c_reg_settings);
+				if (rc < 0)
+					CAM_WARN(CAM_SENSOR, "Failed to clear old settings %d",
+							packet->header.request_id);
+			}
+			rc = cam_sensor_i2c_command_parser(&s_ctrl->io_master_info,
+				i2c_reg_settings, cmd_desc, 1, io_cfg);
 			if (rc < 0)
-				CAM_WARN(CAM_SENSOR, "Failed to clear old settings %d", packet->header.request_id);
-		}
-		rc = cam_sensor_i2c_command_parser(&s_ctrl->io_master_info,
-			i2c_reg_settings, cmd_desc, 1, io_cfg);
-		if (rc < 0)
-			CAM_ERR(CAM_SENSOR, "parsing I2C packet %d", rc);
-		else {
-			i2c_reg_settings->request_id = -1;
-			i2c_reg_settings->setting_id = packet->header.request_id;
+				CAM_ERR(CAM_SENSOR, "parsing I2C packet %d", rc);
+			else {
+				i2c_reg_settings->request_id = -1;
+				i2c_reg_settings->setting_id = packet->header.request_id;
+			}
 		}
 	}
 	else {
 		CAM_WARN(CAM_SENSOR, "invalid opcode %x", packet->header.op_code);
 	}
 
-	return rc;
-}
-
-static int cam_sensor_apply_settings_ul(
-	struct cam_sensor_ctrl_t *s_ctrl,
-	struct cam_req_mgr_no_crm_apply_request *notify)
-{
-	int rc                                = 0;
-	struct i2c_settings_array *i2c_set    = NULL;
-	int64_t setting_id                    = 0;
-	int offset                            = 0;
-	enum cam_sensor_packet_opcodes opcode;
-
-	if (!s_ctrl || !notify) {
-		CAM_ERR(CAM_SENSOR, "Invalid params");
-		return -EINVAL;
-	}
-
-	setting_id  = notify->setting_id;
-	offset      = setting_id % MAX_PER_FRAME_ARRAY;
-	opcode      = CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE;
-	i2c_set     = s_ctrl->i2c_data.per_frame;
-
-	if (i2c_set[offset].setting_id == setting_id) {
-		rc = cam_sensor_apply_settings(
-				s_ctrl,
-				setting_id,
-				opcode);
-		if (!rc) {
-			CAM_DBG(CAM_SENSOR, "slot [%d] apply[%llu]",
-					s_ctrl->soc_info.index,
-					setting_id);
-		} else {
-			CAM_ERR(CAM_SENSOR, "slot [%d] failed to apply setting %d",
-					s_ctrl->soc_info.index,
-					setting_id);
-		}
-	}
 	return rc;
 }
 
@@ -3004,6 +3005,50 @@ static int cam_sensor_apply_trigger_mode_event_settings(
 	} else {
 		CAM_DBG(CAM_SENSOR, "setting are not valid");
 		s_ctrl->frame_state = CAM_SENSOR_FRAME_APPLY_PENDING;
+	}
+	return rc;
+}
+
+static int cam_sensor_apply_settings_ul(
+	struct cam_sensor_ctrl_t *s_ctrl,
+	struct cam_req_mgr_no_crm_apply_request *notify)
+{
+	int rc                                = 0;
+	struct i2c_settings_array *i2c_set    = NULL;
+	int64_t setting_id                    = 0;
+	int offset                            = 0;
+	enum cam_sensor_packet_opcodes opcode;
+
+	if (!s_ctrl || !notify) {
+		CAM_ERR(CAM_SENSOR, "Invalid params");
+		return -EINVAL;
+	}
+
+	setting_id  = notify->setting_id;
+	offset      = setting_id % MAX_PER_FRAME_ARRAY;
+	opcode      = CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE;
+	i2c_set     = s_ctrl->i2c_data.per_frame;
+
+	if (i2c_set[offset].setting_id == setting_id && !(s_ctrl->is_trigger_mode)) {
+		rc = cam_sensor_apply_settings(
+				s_ctrl,
+				setting_id,
+				opcode);
+		if (!rc) {
+			CAM_DBG(CAM_SENSOR, "slot [%d] apply[%llu]",
+					s_ctrl->soc_info.index,
+					setting_id);
+		} else {
+			CAM_ERR(CAM_SENSOR, "slot [%d] failed to apply setting %d",
+					s_ctrl->soc_info.index,
+					setting_id);
+		}
+	} else if (s_ctrl->is_trigger_mode) {
+		rc = cam_sensor_apply_trigger_mode_event_settings(s_ctrl,
+					notify, setting_id);
+		CAM_DBG(CAM_SENSOR, "slot [%d] apply[%llu]",
+				s_ctrl->soc_info.index,
+				setting_id);
 	}
 	return rc;
 }
@@ -3474,15 +3519,13 @@ int cam_sensor_apply_event_settings(struct cam_sensor_ctrl_t *s_ctrl,
 		return -EINVAL;
 	}
 
-	if (!s_ctrl->is_setting_id_valid) {
-		rc = cam_sensor_delete_perframe_event_settings(s_ctrl, req_id);
-		if (rc) {
-			CAM_ERR(CAM_SENSOR,
-				"slot[%d] req[%lld] failed clear previous req, err:%d",
-				s_ctrl->soc_info.index,
-				req_id,
-				rc);
-		}
+	rc = cam_sensor_delete_perframe_event_settings(s_ctrl, req_id);
+	if (rc) {
+		CAM_ERR(CAM_SENSOR,
+			"slot[%d] req[%lld] failed clear previous req, err:%d",
+			s_ctrl->soc_info.index,
+			req_id,
+			rc);
 	}
 	return rc;
 }
