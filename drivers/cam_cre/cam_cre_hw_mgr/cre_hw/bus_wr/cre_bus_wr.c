@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #include <linux/delay.h>
 #include "cam_io_util.h"
@@ -67,6 +67,11 @@ static int cam_cre_bus_wr_reg_set_update(struct cam_cre_hw *cam_cre_hw_info,
 	struct cre_reg_set *wr_reg_set;
 	struct cam_cre_dev_reg_set_update *reg_set_upd_cmd =
 		(struct cam_cre_dev_reg_set_update *)data;
+
+	if (!data) {
+		CAM_ERR(CAM_CRE, "Invalid data parameter");
+		return -EINVAL;
+	}
 
 	num_reg_set = reg_set_upd_cmd->cre_reg_buf.num_wr_reg_set;
 	wr_reg_set = reg_set_upd_cmd->cre_reg_buf.wr_reg_set;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/debugfs.h>
@@ -207,8 +207,9 @@ static int __cam_icp_config_dev_in_ready(struct cam_context *ctx,
 	packet_u = (struct cam_packet *) ((uint8_t *)packet_addr +
 		(uint32_t)cmd->offset);
 	rc = cam_packet_util_copy_pkt_to_kmd(packet_u, &packet, remain_len);
-	if (rc) {
-		CAM_ERR(CAM_ICP, "copying packet to kmd failed");
+	if (rc || (!packet)) {
+		CAM_ERR(CAM_ICP, "copying packet to kmd failed or packet is NULL");
+		rc = -EINVAL;
 		goto put_cpu_buf;
 	}
 

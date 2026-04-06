@@ -1350,7 +1350,7 @@ int cam_sensor_stream_off(struct cam_sensor_ctrl_t *s_ctrl)
 {
 	int               rc = 0;
 	struct timespec64 ts;
-	uint64_t          ms, sec, min, hrs;
+	uint64_t          ms = 0, sec = 0, min = 0, hrs = 0;
 
 	if (s_ctrl->sensor_state != CAM_SENSOR_START &&
 		(s_ctrl->sensor_state != CAM_SENSOR_STANDBY)) {
@@ -1398,7 +1398,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 	struct cam_control *cmd = (struct cam_control *)arg;
 	struct cam_sensor_power_ctrl_t *power_info = NULL;
 	struct timespec64 ts;
-	uint64_t ms, sec, min, hrs;
+	uint64_t ms = 0, sec = 0, min = 0, hrs = 0;
 
 	if (!s_ctrl || !arg) {
 		CAM_ERR(CAM_SENSOR, "s_ctrl is NULL");
@@ -2663,7 +2663,13 @@ int cam_sensor_process_evt(struct cam_req_mgr_link_evt_data *evt_data)
 		break;
 	case CAM_REQ_MGR_LINK_EVT_RESUME_HW: {
 		struct timespec64 ts;
-		uint64_t ms, sec, min, hrs;
+		uint64_t ms = 0, sec = 0, min = 0, hrs = 0;
+
+		if (s_ctrl->sensor_state != CAM_SENSOR_CONFIG) {
+			CAM_DBG(CAM_SENSOR, "Skipping resume HW of %s, Not in CONFIG state: %d",
+				s_ctrl->sensor_name, s_ctrl->sensor_state);
+			break;
+		}
 
 		if (s_ctrl->i2c_data.streamon_settings.is_settings_valid &&
 			(s_ctrl->i2c_data.streamon_settings.request_id == 0)) {

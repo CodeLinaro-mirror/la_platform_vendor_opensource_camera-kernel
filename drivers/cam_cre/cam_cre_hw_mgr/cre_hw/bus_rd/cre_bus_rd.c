@@ -230,7 +230,7 @@ static int cam_cre_bus_rd_prepare(struct cam_cre_hw *cam_cre_hw_info,
 	struct cre_io_buf *io_buf;
 	struct cam_cre_bus_rd_reg *rd_reg;
 	struct cam_cre_bus_rd_reg_val *rd_reg_val;
-	struct cre_reg_buffer *cre_reg_buf;
+	struct cre_reg_buffer *cre_reg_buf = NULL;
 
 	int val;
 
@@ -273,6 +273,11 @@ static int cam_cre_bus_rd_prepare(struct cam_cre_hw *cam_cre_hw_info,
 		update_cre_reg_set(cre_reg_buf,
 			rd_reg->offset + rd_reg->input_if_cmd,
 			val);
+	}
+
+	if (!cre_reg_buf) {
+		CAM_DBG(CAM_CRE, "No batches to process");
+		goto end;
 	}
 
 	for (i = 0; i < cre_reg_buf->num_rd_reg_set; i++) {
@@ -355,6 +360,11 @@ static int cam_cre_bus_rd_reg_set_update(struct cam_cre_hw *cam_cre_hw_info,
 	struct cre_reg_set *rd_reg_set;
 	struct cam_cre_dev_reg_set_update *reg_set_upd_cmd =
 		(struct cam_cre_dev_reg_set_update *)data;
+
+	if (!data) {
+		CAM_ERR(CAM_CRE, "Invalid data parameter");
+		return -EINVAL;
+	}
 
 	num_reg_set = reg_set_upd_cmd->cre_reg_buf.num_rd_reg_set;
 	rd_reg_set = reg_set_upd_cmd->cre_reg_buf.rd_reg_set;

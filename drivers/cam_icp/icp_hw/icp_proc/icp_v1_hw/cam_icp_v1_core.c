@@ -190,7 +190,7 @@ int cam_icp_v1_init_hw(void *device_priv, void *args,
 	struct cam_icp_v1_device_core_info *core_info = NULL;
 	struct cam_icp_soc_info *icp_v1_soc_info;
 	struct cam_icp_cpas_vote cpas_vote;
-	unsigned long flags;
+	unsigned long flags = 0;
 	int rc = 0;
 	bool send_freq_info;
 
@@ -277,7 +277,7 @@ int cam_icp_v1_deinit_hw(void *device_priv,
 	struct cam_hw_info *icp_v1_dev = device_priv;
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_icp_v1_device_core_info *core_info = NULL;
-	unsigned long flags;
+	unsigned long flags = 0;
 	int rc = 0;
 	bool send_freq_info;
 
@@ -395,7 +395,7 @@ static void prepare_boot(struct cam_hw_info *icp_v1_dev,
 	struct cam_icp_boot_args *args)
 {
 	struct cam_icp_v1_device_core_info *core_info = icp_v1_dev->core_info;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	core_info->fw_buf = args->firmware.iova;
 	core_info->fw_kva_addr = args->firmware.kva;
@@ -410,7 +410,7 @@ static void prepare_boot(struct cam_hw_info *icp_v1_dev,
 static void prepare_shutdown(struct cam_hw_info *icp_v1_dev)
 {
 	struct cam_icp_v1_device_core_info *core_info = icp_v1_dev->core_info;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	core_info->fw_buf = 0;
 	core_info->fw_kva_addr = 0;

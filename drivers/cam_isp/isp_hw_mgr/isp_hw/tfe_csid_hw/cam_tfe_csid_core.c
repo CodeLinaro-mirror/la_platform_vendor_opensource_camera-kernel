@@ -1124,7 +1124,7 @@ static int cam_tfe_csid_enable_hw(struct cam_tfe_csid_hw  *csid_hw)
 	struct cam_hw_soc_info                    *soc_info;
 	struct cam_tfe_csid_path_cfg              *path_data = NULL;
 	uint32_t i, val, clk_lvl;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	csid_reg = csid_hw->csid_info->csid_reg;
 	soc_info = &csid_hw->hw_info->soc_info;
@@ -3250,7 +3250,7 @@ static int cam_tfe_csid_put_evt_payload(
 	struct cam_tfe_csid_hw *csid_hw,
 	struct cam_csid_evt_payload **evt_payload)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (*evt_payload == NULL) {
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "Invalid payload core %d",
@@ -3423,7 +3423,7 @@ irqreturn_t cam_tfe_csid_irq(int irq_num, void *data)
 	uint32_t                   irq_status[TFE_CSID_IRQ_REG_MAX];
 	bool fatal_err_detected = false, is_error_irq = false;
 	uint32_t sof_irq_debug_en = 0, log_en = 0;
-	unsigned long flags;
+	unsigned long flags = 0;
 	uint32_t i, val, val1;
 	uint32_t data_idx;
 

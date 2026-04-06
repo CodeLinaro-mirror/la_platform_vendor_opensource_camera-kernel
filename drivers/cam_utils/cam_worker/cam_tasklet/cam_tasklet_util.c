@@ -82,7 +82,7 @@ int cam_tasklet_get_cmd(
 	void                        **bh_cmd)
 {
 	int           rc = 0;
-	unsigned long flags;
+	unsigned long flags = 0;
 	struct cam_tasklet_info        *tasklet = bottom_half;
 	struct cam_tasklet_queue_cmd   *tasklet_cmd = NULL;
 
@@ -122,7 +122,7 @@ void cam_tasklet_put_cmd(
 	void                         *bottom_half,
 	void                        **bh_cmd)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 	struct cam_tasklet_info        *tasklet = bottom_half;
 	struct cam_tasklet_queue_cmd   *tasklet_cmd = *bh_cmd;
 
@@ -162,7 +162,7 @@ static int cam_tasklet_dequeue_cmd(
 	struct cam_tasklet_queue_cmd  **tasklet_cmd)
 {
 	int rc = 0;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	*tasklet_cmd = NULL;
 

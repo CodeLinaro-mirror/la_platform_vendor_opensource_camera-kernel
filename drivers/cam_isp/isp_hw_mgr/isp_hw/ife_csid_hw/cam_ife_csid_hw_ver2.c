@@ -793,7 +793,7 @@ static int cam_ife_csid_ver2_put_evt_payload(
 	struct list_head    *payload_list,
 	spinlock_t          *lock)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (*evt_payload == NULL) {
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "Invalid payload core %d",
@@ -9542,7 +9542,7 @@ free_res:
 static void cam_ife_csid_hw_deinit_irq(
 	struct cam_ife_csid_ver2_hw *csid_hw)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 	int i;
 	struct cam_ife_csid_ver2_reg_info *csid_reg = (struct cam_ife_csid_ver2_reg_info *)
 							csid_hw->core_info->csid_reg;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sensor_i3c.h"
@@ -231,7 +231,7 @@ int cam_qup_i3c_poll(struct i3c_device *client,
 	enum camera_sensor_i2c_type data_type,
 	uint32_t delay_ms)
 {
-	int rc;
+	int rc = 0;
 	int i;
 
 	if ((delay_ms > MAX_POLL_DELAY_MS) || (delay_ms == 0)) {

@@ -319,7 +319,7 @@ static int cam_ife_csid_ver1_prepare_reset(
 	struct cam_hw_soc_info                *soc_info;
 	struct cam_ife_csid_ver1_reg_info *csid_reg;
 	uint32_t i;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	soc_info = &csid_hw->hw_info->soc_info;
 	csid_reg = (struct cam_ife_csid_ver1_reg_info *)
@@ -2662,7 +2662,7 @@ static int cam_ife_csid_ver1_enable_hw(struct cam_ife_csid_ver1_hw *csid_hw)
 	struct cam_hw_soc_info              *soc_info;
 	const struct cam_ife_csid_ver1_reg_info *csid_reg;
 	uint32_t clk_lvl, i, val;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	csid_reg = (struct cam_ife_csid_ver1_reg_info *)
 			csid_hw->core_info->csid_reg;
@@ -4140,7 +4140,7 @@ static int cam_ife_csid_ver1_put_evt_payload(
 	struct cam_ife_csid_ver1_evt_payload **evt_payload,
 	struct list_head    *payload_list)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (*evt_payload == NULL) {
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "Invalid payload core %d",

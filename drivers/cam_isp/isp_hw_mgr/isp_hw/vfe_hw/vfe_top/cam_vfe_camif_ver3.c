@@ -97,7 +97,7 @@ static int cam_vfe_camif_ver3_put_evt_payload(
 	struct cam_vfe_mux_camif_ver3_data     *camif_priv,
 	struct cam_vfe_top_irq_evt_payload    **evt_payload)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!camif_priv) {
 		CAM_ERR(CAM_ISP, "Invalid param core_info NULL");
@@ -884,6 +884,7 @@ static int cam_vfe_camif_ver3_process_cmd(
 		camif_priv = (struct cam_vfe_mux_camif_ver3_data *)
 			rsrc_node->res_priv;
 		camif_priv->camif_debug = *((uint32_t *)cmd_args);
+		rc = 0;
 		break;
 	case CAM_ISP_HW_CMD_QUERY_REGSPACE_DATA:
 		camif_priv = (struct cam_vfe_mux_camif_ver3_data *)

@@ -249,7 +249,7 @@ int cam_icp_v2_hw_init(void *priv, void *args, uint32_t arg_size)
 {
 	struct cam_hw_info *icp_v2 = priv;
 	struct cam_icp_v2_core_info *core_info;
-	unsigned long flags;
+	unsigned long flags = 0;
 	int rc;
 	bool send_freq_info;
 
@@ -320,7 +320,7 @@ int cam_icp_v2_hw_deinit(void *priv, void *args,
 {
 	struct cam_hw_info *icp_v2_info = priv;
 	struct cam_icp_v2_core_info *core_info;
-	unsigned long flags;
+	unsigned long flags = 0;
 	int rc;
 	bool send_freq_info;
 
@@ -382,7 +382,7 @@ int cam_icp_v2_hw_deinit(void *priv, void *args,
 static int prepare_boot(struct cam_hw_info *icp_v2_info, struct cam_icp_boot_args *args)
 {
 	struct cam_icp_v2_core_info *core_info = icp_v2_info->core_info;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!core_info) {
 		CAM_ERR(CAM_ICP, "invalid args: core_info is NULL icp_v2_info=%pK args=%pK",
@@ -433,7 +433,7 @@ static int cam_icp_v2_prepare_boot(struct cam_hw_info *icp_v2_info,
 static int prepare_shutdown(struct cam_hw_info *icp_v2_info)
 {
 	struct cam_icp_v2_core_info *core_info = icp_v2_info->core_info;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!core_info) {
 		CAM_ERR(CAM_ICP, "invalid args:core_info is NULL icp_v2_info=%pK", icp_v2_info);

@@ -89,7 +89,7 @@ irqreturn_t cam_cci_irq(int irq_num, void *data)
 	struct cam_hw_soc_info *soc_info =
 		&cci_dev->soc_info;
 	void __iomem *base = soc_info->reg_map[0].mem_base;
-	unsigned long flags;
+	unsigned long flags = 0;
 	bool rd_done_th_assert = false;
 	struct cam_cci_master_info *cci_master_info;
 	irqreturn_t rc = IRQ_HANDLED;
@@ -572,7 +572,7 @@ irqreturn_t cam_cci_threaded_irq(int irq_num, void *data)
 	struct cam_hw_soc_info *soc_info =
 		&cci_dev->soc_info;
 	struct cci_irq_data cci_data;
-	unsigned long flags;
+	unsigned long flags = 0;
 	uint32_t triggerHalfQueue = 1;
 	struct task_struct *task = current;
 

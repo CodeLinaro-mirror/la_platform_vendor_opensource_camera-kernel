@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #include <linux/platform_device.h>
 #include <linux/delay.h>
@@ -28,7 +29,7 @@ static int cam_cre_top_reset(struct cam_cre_hw *cre_hw_info,
 	struct cam_cre_top_reg *top_reg;
 	struct cam_cre_top_reg_val *top_reg_val;
 	uint32_t irq_mask, irq_status;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!cre_hw_info) {
 		CAM_ERR(CAM_CRE, "Invalid cre_hw_info");
@@ -131,7 +132,7 @@ static int cam_cre_top_init(struct cam_cre_hw *cre_hw_info,
 	struct cam_cre_top_reg_val *top_reg_val;
 	struct cam_cre_dev_init *dev_init = data;
 	uint32_t irq_mask, irq_status;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!cre_hw_info) {
 		CAM_ERR(CAM_CRE, "Invalid cre_hw_info");
