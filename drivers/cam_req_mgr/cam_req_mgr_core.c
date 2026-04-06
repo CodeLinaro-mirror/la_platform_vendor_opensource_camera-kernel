@@ -4106,7 +4106,7 @@ int cam_req_mgr_preempt_ul(struct cam_preempt_ul_cmd *cmd)
 
 int cam_req_mgr_batch_request_v2(struct cam_batch_config_dev_cmd *cmd)
 {
-	int i, j, k;
+	int i, j, k, rc;
 	struct ul_cam_packet_v2                    *ul_packet  = NULL;
 	struct cam_packet               *packet;
 	struct cam_req_mgr_core_link    *link = NULL;
@@ -4160,7 +4160,6 @@ int cam_req_mgr_batch_request_v2(struct cam_batch_config_dev_cmd *cmd)
 						link->l_dev[j].dev_info.name);
 					return -EINVAL;
 				}
-
 				if (ul_packet->update_port_patern_period)
 					port_enable_pattern_period =
 						ul_packet->port_enable_pattern_period[i];
@@ -4192,9 +4191,14 @@ int cam_req_mgr_batch_request_v2(struct cam_batch_config_dev_cmd *cmd)
 						CAM_ERR(CAM_CRM, "Unable to fetch packet");
 						return -EINVAL;
 					}
-					link->l_dev[j].no_crm_ops->add_req(
+					rc = link->l_dev[j].no_crm_ops->add_req(
 					ul_packet->device_hdl[i], packet,
 					port_enable_pattern_period);
+					if (rc < 0) {
+						CAM_ERR(CAM_CRM, "Failed to add req for dev hdl %d",
+							link->l_dev[j].dev_hdl);
+						return rc;
+					}
 					port_enable_pattern_period = NULL;
 				}
 			}
@@ -4252,10 +4256,14 @@ int cam_req_mgr_batch_request_v2(struct cam_batch_config_dev_cmd *cmd)
 							"Unable to fetch packet");
 						return -EINVAL;
 					}
-					link->l_dev[j].no_crm_ops->add_req(
+					rc = link->l_dev[j].no_crm_ops->add_req(
 					ul_packet->device_hdl[i], packet,
 					port_enable_pattern_period);
-					port_enable_pattern_period = NULL;
+					if (rc < 0) {
+						CAM_ERR(CAM_CRM, "Failed to add req for dev hdl %d",
+							link->l_dev[j].dev_hdl);
+						return rc;
+					}
 				}
 			}
 		}
