@@ -19157,6 +19157,38 @@ static int cam_ife_mgr_get_session_cookie(
 	return rc;
 }
 
+static int cam_ife_hw_mgr_skip_csid_discard_frame_cfg(
+	struct cam_ife_hw_mgr_ctx *ctx)
+{
+	struct cam_isp_hw_mgr_res                  *hw_mgr_res;
+	struct cam_isp_resource_node               *isp_res;
+	struct cam_hw_intf                         *hw_intf;
+	uint32_t i;
+	int rc = 0;
+
+	list_for_each_entry(hw_mgr_res, &ctx->res_list_ife_csid, list) {
+		for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
+			if (!hw_mgr_res->hw_res[i])
+				continue;
+
+			isp_res = hw_mgr_res->hw_res[i];
+			hw_intf = isp_res->hw_intf;
+			rc = hw_intf->hw_ops.process_cmd(
+				hw_intf->hw_priv,
+				CAM_ISP_HW_CMD_SKIP_CSID_DISCARD_FRAME_CFG,
+				hw_intf->hw_priv,
+				0);
+			if (rc) {
+				CAM_ERR(CAM_ISP,
+					"ctx:%u skip CSID discard frame cfg failed rc :%d",
+					ctx->ctx_index, rc);
+				break;
+			}
+		}
+	}
+	return rc;
+}
+
 static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 {
 	int rc = 0;
@@ -19331,6 +19363,9 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			isp_hw_cmd_args->u.is_tpg_en =
 				cam_ife_mgr_is_tpg(ctx->res_list_ife_in.res_id);
 			rc = 0;
+			break;
+		case CAM_ISP_HW_MGR_SKIP_CSID_DISCARD_FRAME_CFG:
+			rc = cam_ife_hw_mgr_skip_csid_discard_frame_cfg(ctx);
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "Invalid HW mgr command:0x%x",

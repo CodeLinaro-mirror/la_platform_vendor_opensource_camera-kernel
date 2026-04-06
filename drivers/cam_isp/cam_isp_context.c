@@ -8997,6 +8997,21 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 		}
 	}
 
+	if ((ctx->state == CAM_CTX_FLUSHED) && (packet_opcode == CAM_ISP_PACKET_INIT_DEV)) {
+		struct cam_hw_cmd_args        skip_hw_cmd_args;
+		struct cam_isp_hw_cmd_args    skip_isp_hw_cmd_args;
+
+		skip_hw_cmd_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
+		skip_hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+		skip_isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_SKIP_CSID_DISCARD_FRAME_CFG;
+		skip_hw_cmd_args.u.internal_args = (void *)&skip_isp_hw_cmd_args;
+		rc = ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv, &skip_hw_cmd_args);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "Failed to Skip csid discard frame cfg rc %d", rc);
+			goto free_req;
+		}
+	}
+
 	req_isp->num_cfg = cfg.num_hw_update_entries;
 	req_isp->num_fence_map_out = cfg.num_out_map_entries;
 	req_isp->num_fence_map_in = cfg.num_in_map_entries;
