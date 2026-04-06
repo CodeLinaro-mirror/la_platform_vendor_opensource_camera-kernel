@@ -1333,6 +1333,7 @@ static int32_t cam_sensor_i2c_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 				s_ctrl->sensordata->slave_info.sensor_slave_addr
 				);
 		}
+		s_ctrl->sensor_state = CAM_SENSOR_STANDBY;
 		goto end;
 	}
 	case CAM_SENSOR_PACKET_OPCODE_SENSOR_POWER_ON: {
@@ -1352,6 +1353,9 @@ static int32_t cam_sensor_i2c_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 				s_ctrl->soc_info.index,
 				s_ctrl->hw_no_probe_pw_ops);
 		}
+
+		if (s_ctrl->sensor_state == CAM_SENSOR_STANDBY)
+			s_ctrl->sensor_state = CAM_SENSOR_ACQUIRE;
 
 		i2c_reg_settings = &i2c_data->init_settings;
 		i2c_reg_settings->request_id = 0;
@@ -1479,7 +1483,8 @@ static int32_t cam_sensor_i2c_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 	}
 	case CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE: {
 		if ((s_ctrl->sensor_state == CAM_SENSOR_INIT) ||
-			(s_ctrl->sensor_state == CAM_SENSOR_ACQUIRE)) {
+			(s_ctrl->sensor_state == CAM_SENSOR_ACQUIRE) ||
+			(s_ctrl->sensor_state == CAM_SENSOR_STANDBY)) {
 			CAM_WARN(CAM_SENSOR,
 				"Rxed Update packets without linking");
 			goto end;
@@ -1525,7 +1530,8 @@ static int32_t cam_sensor_i2c_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 	}
 	case CAM_SENSOR_PACKET_OPCODE_SENSOR_FRAME_SKIP_UPDATE: {
 		if ((s_ctrl->sensor_state == CAM_SENSOR_INIT) ||
-			(s_ctrl->sensor_state == CAM_SENSOR_ACQUIRE)) {
+			(s_ctrl->sensor_state == CAM_SENSOR_ACQUIRE) ||
+			(s_ctrl->sensor_state == CAM_SENSOR_STANDBY)) {
 			CAM_WARN(CAM_SENSOR,
 				"Rxed Update packets without linking");
 			goto end;
@@ -1555,7 +1561,8 @@ static int32_t cam_sensor_i2c_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 	}
 	case CAM_SENSOR_PACKET_OPCODE_SENSOR_NOP: {
 		if ((s_ctrl->sensor_state == CAM_SENSOR_INIT) ||
-			(s_ctrl->sensor_state == CAM_SENSOR_ACQUIRE)) {
+			(s_ctrl->sensor_state == CAM_SENSOR_ACQUIRE) ||
+			(s_ctrl->sensor_state == CAM_SENSOR_STANDBY)) {
 			CAM_WARN(CAM_SENSOR,
 				"Rxed NOP packets without linking");
 			goto end;
@@ -2111,7 +2118,8 @@ void cam_sensor_shutdown(struct cam_sensor_ctrl_t *s_ctrl)
 	cam_sensor_release_stream_rsc(s_ctrl);
 	cam_sensor_release_per_frame_resource(s_ctrl);
 
-	if (s_ctrl->sensor_state != CAM_SENSOR_INIT)
+	if (s_ctrl->sensor_state != CAM_SENSOR_INIT &&
+		s_ctrl->sensor_state != CAM_SENSOR_STANDBY)
 		cam_sensor_power_down(s_ctrl);
 
 	if (s_ctrl->bridge_intf.device_hdl != -1) {
@@ -2440,15 +2448,22 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			goto release_mutex;
 		}
 
-		rc = cam_sensor_power_down(s_ctrl);
-		if (rc < 0) {
-			CAM_ERR(CAM_SENSOR,
-				"Sensor Power Down failed for %s sensor_id: 0x%x, slave_addr:0x%x",
-				s_ctrl->sensor_name,
-				s_ctrl->sensordata->slave_info.sensor_id,
-				s_ctrl->sensordata->slave_info.sensor_slave_addr
-				);
-			goto release_mutex;
+		/*
+		 * Skip power down if sensor is already in standby
+		 * (powered off via CAM_SENSOR_PACKET_OPCODE_SENSOR_POWER_OFF).
+		 * Prevents unbalanced regulator disables in AON back-to-back tests.
+		 */
+		if (s_ctrl->sensor_state != CAM_SENSOR_STANDBY) {
+			rc = cam_sensor_power_down(s_ctrl);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR,
+					"Sensor Power Down failed for %s sensor_id: 0x%x, slave_addr:0x%x",
+					s_ctrl->sensor_name,
+					s_ctrl->sensordata->slave_info.sensor_id,
+					s_ctrl->sensordata->slave_info.sensor_slave_addr
+					);
+				goto release_mutex;
+			}
 		}
 
 		cam_sensor_release_per_frame_resource(s_ctrl);
@@ -2514,7 +2529,8 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 	case CAM_START_DEV: {
 		struct cam_req_mgr_timer_notify timer;
 		if ((s_ctrl->sensor_state == CAM_SENSOR_INIT) ||
-			(s_ctrl->sensor_state == CAM_SENSOR_START)) {
+			(s_ctrl->sensor_state == CAM_SENSOR_START) ||
+			(s_ctrl->sensor_state == CAM_SENSOR_STANDBY)) {
 			rc = -EINVAL;
 			CAM_WARN(CAM_SENSOR,
 			"Not in right state to start %s state: %d",
