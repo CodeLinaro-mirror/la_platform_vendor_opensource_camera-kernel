@@ -786,6 +786,16 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd);
 int cam_req_mgr_batch_request_v2(struct cam_batch_config_dev_cmd *cmd);
 
 /**
+ * cam_req_mgr_preempt_ul()
+ *
+ * @brief  : This function preempts the devices registered with preempt call to
+ *           release the main thread.
+ * @cmd    : command information.
+ * @return : 0 on success.
+ */
+int cam_req_mgr_preempt_ul(struct cam_preempt_ul_cmd *cmd);
+
+/**
  * crm_register_qtvm_callback()
  * @brief: register cb into qtvm/hypervisor to get notified of GH_VM events.
  *

@@ -783,6 +783,23 @@ static long cam_private_ioctl(struct file *file, void *fh,
 			CAM_ERR(CAM_CORE, "Batch request failed");
 		}
 		break;
+	case CAM_REQ_MGR_PREEMPT_UL_DEV: {
+		struct cam_preempt_ul_cmd cmd;
+
+		if (k_ioctl->size != sizeof(cmd))
+			return -EINVAL;
+
+		if (copy_from_user(&cmd,
+			u64_to_user_ptr(k_ioctl->handle),
+			sizeof(struct cam_preempt_ul_cmd))) {
+			rc = -EFAULT;
+			break;
+		}
+		rc = cam_req_mgr_preempt_ul(&cmd);
+		if (rc)
+			CAM_ERR(CAM_CORE, "Preempt UL failed");
+		}
+		break;
 	default:
 		CAM_ERR(CAM_CRM, "Invalid ioctl command %x", k_ioctl->op_code);
 		return -ENOIOCTLCMD;

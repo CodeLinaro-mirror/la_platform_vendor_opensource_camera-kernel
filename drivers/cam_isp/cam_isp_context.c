@@ -10620,8 +10620,10 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 		num_entries = MAX_IO_PACKETS - (rd_idx - wr_idx);
 
 	for (i = 0; i < num_entries; i++) {
-		if (isp_ctx->ul_fp_results[rd_idx].status == BATCH_PACKET_RESULT_NO_BUFFER) {
-			no_buf_error = true;
+		if (isp_ctx->ul_fp_results[rd_idx].status == BATCH_PACKET_RESULT_NO_BUFFER
+		|| isp_ctx->ul_fp_results[rd_idx].status == BATCH_PACKET_RESULT_PREEMPT_UL) {
+			if (isp_ctx->ul_fp_results[rd_idx].status == BATCH_PACKET_RESULT_NO_BUFFER)
+				no_buf_error = true;
 			INC_VAL(rd_idx, 1, MAX_IO_PACKETS);
 			continue;
 		}
@@ -12943,6 +12945,40 @@ static int cam_isp_no_crm_update_last_apply_reqid(int32_t dev_hdl,
 	return rc;
 }
 
+static int cam_isp_preempt_ul(int32_t dev_hdl)
+{
+	uint32_t wr_idx;
+	int rc = -EINVAL;
+	struct cam_context *cam_ctx = NULL;
+	struct cam_isp_context *isp_ctx = NULL;
+
+	cam_ctx = (struct cam_context *)cam_get_device_priv(dev_hdl);
+	if (!cam_ctx) {
+		CAM_ERR(CAM_ISP, "Can not get context for handle %d", dev_hdl);
+		goto end;
+	}
+
+	isp_ctx = (struct cam_isp_context *)cam_ctx->ctx_priv;
+	if (!isp_ctx) {
+		CAM_ERR(CAM_ISP, "Can not get isp context for handle %d",
+		dev_hdl);
+		goto end;
+	}
+
+	spin_lock(&isp_ctx->ul_fp_params.fast_path_lock);
+	wr_idx = atomic_read(&isp_ctx->ul_fp_params.write_idx);
+	isp_ctx->ul_fp_results[wr_idx].status = BATCH_PACKET_RESULT_PREEMPT_UL;
+	atomic_set(&isp_ctx->ul_fp_params.write_idx, INC_VAL(wr_idx, 1, MAX_IO_PACKETS));
+	complete(&isp_ctx->ul_fp_params.fast_path_buf_done);
+	spin_unlock(&isp_ctx->ul_fp_params.fast_path_lock);
+
+	CAM_DBG(CAM_ISP, "Complete success for dev_hdl %x", dev_hdl);
+	rc = 0;
+
+end:
+	return rc;
+}
+
 /* No other driver except ISP needs this, so define it in ISP itself. */
 struct cam_req_mgr_no_crm_kmd_ops no_crm_isp_intf = {
 	.is_secure_mode = cam_isp_no_crm_is_secure_mode,
@@ -12956,6 +12992,7 @@ struct cam_req_mgr_no_crm_kmd_ops no_crm_isp_intf = {
 	.retrieve  = cam_isp_ul_retrieve_results,
 	.retrieve_v2 = cam_isp_ul_retrieve_results_v2,
 	.update_last_apply_reqid = cam_isp_no_crm_update_last_apply_reqid,
+	.preempt_ul = cam_isp_preempt_ul,
 };
 
 int cam_isp_context_init(struct cam_isp_context *ctx,
