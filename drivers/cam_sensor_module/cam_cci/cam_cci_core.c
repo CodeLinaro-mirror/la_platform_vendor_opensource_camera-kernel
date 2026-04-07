@@ -1482,7 +1482,7 @@ static int cam_cci_write_async_helper(void *priv, void *data)
 	struct cam_cci_master_info *cci_master_info;
 
 	cam_common_util_thread_switch_delay_detect(
-		"CCI worker schedule",
+		"cam_cci_worker", "schedule", cam_cci_write_async_helper,
 		write_async->workq_scheduled_ts,
 		CAM_WORKER_SCHEDULE_TIME_THRESHOLD);
 	cci_dev = write_async->cci_dev;

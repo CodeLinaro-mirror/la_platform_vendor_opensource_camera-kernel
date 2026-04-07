@@ -615,7 +615,7 @@ static int cam_cpastop_work(void *priv, void *data)
 	}
 
 	cam_common_util_thread_switch_delay_detect(
-		"CPAS worker schedule",
+		"cam_cpastop_work", "schedule", cam_cpastop_work,
 		payload->worker_scheduled_ts,
 		CAM_WORKER_SCHEDULE_TIME_THRESHOLD);
 

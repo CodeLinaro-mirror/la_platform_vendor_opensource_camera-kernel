@@ -1780,7 +1780,7 @@ static void cam_ope_ctx_cdm_callback(uint32_t handle, void *userdata,
 		ts.tv_nsec);
 
 	CAM_DBG(CAM_REQ,
-		"hdl=%x, udata=%pK, status=%d, cookie=%d",
+		"hdl=%x, udata=%pK, status=%d, cookie=%llu",
 		handle, userdata, status, cookie);
 	CAM_DBG(CAM_REQ, "req_id= %llu ctx_id= %d lcb=%llu",
 		ope_req->request_id, ctx->ctx_id,
@@ -1796,7 +1796,7 @@ static void cam_ope_ctx_cdm_callback(uint32_t handle, void *userdata,
 
 	if (status == CAM_CDM_CB_STATUS_BL_SUCCESS) {
 		CAM_DBG(CAM_OPE,
-			"hdl=%x, udata=%pK, status=%d, cookie=%d  req_id=%llu ctx_id=%d",
+			"hdl=%x, udata=%pK, status=%d, cookie=%llu  req_id=%llu ctx_id=%d",
 			handle, userdata, status, cookie,
 			ope_req->request_id, ctx->ctx_id);
 		cam_ope_req_timer_reset(ctx);
@@ -3248,7 +3248,7 @@ static int cam_ope_mgr_release_hw(void *hw_priv, void *hw_release_args)
 
 	mutex_unlock(&hw_mgr->hw_mgr_mutex);
 
-	CAM_DBG(CAM_OPE, "Release done for ctx_id %d", ctx_id);
+	CAM_INFO(CAM_OPE, "Release done for ctx_id %d", ctx_id);
 	return rc;
 }
 
