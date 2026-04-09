@@ -120,7 +120,6 @@ void cam_kthread_process(struct kthread_work *w)
 	struct cam_core_kthread *worker_kthread;
 	struct cam_kthread_task *task;
 	int32_t                  i = CAM_KTHREAD_TASK_PRIORITY_0;
-	static int               count = 0;
 	unsigned long            flags = 0;
 	ktime_t                  exec_start_time;
 	void                    *cb;
@@ -157,8 +156,9 @@ void cam_kthread_process(struct kthread_work *w)
 			list_del_init(&task->entry);
 			KTHREAD_RELEASE_LOCK(worker_kthread, flags);
 			if (unlikely(atomic_read(&worker_kthread->flush_in_process)))
-				CAM_INFO(CAM_WORKER, "Kthread process called during flush - count:%d",
-					count++);
+				CAM_WARN(CAM_WORKER,
+				"Kthread process called during flush, worker name: %s",
+				worker_kthread->worker_name);
 			cam_kthread_process_task(task);
 
 			cam_kthread_put_task(task);
@@ -236,7 +236,6 @@ int cam_kthread_enqueue_task(struct cam_kthread_task *task,
 	int                      rc = 0;
 	struct cam_core_kthread *kthread;
 	unsigned long            flags = 0;
-	static int               count = 0;
 
 	if (!task) {
 		CAM_WARN(CAM_WORKER, "Invalid task pointer, can not schedule");
@@ -264,8 +263,8 @@ int cam_kthread_enqueue_task(struct cam_kthread_task *task,
 
 	if (task->cancel == 1 || atomic_read(&kthread->flush_in_process)) {
 		rc = 0;
-		CAM_INFO(CAM_WORKER, "Enqueue ignored due to flush in progress - count:%d",
-			count++);
+		CAM_WARN(CAM_WORKER, "Enqueue ignored due to flush in progress, worker name: %s",
+			kthread->worker_name);
 		KTHREAD_RELEASE_LOCK(kthread, flags);
 		goto abort;
 	}

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -211,7 +211,7 @@ int cam_ife_csid_hw_init(struct cam_hw_intf **ife_csid_hw,
 		*ife_csid_hw = cam_ife_csid_hw_list[hw_idx];
 	} else {
 		*ife_csid_hw = NULL;
-		rc = -1;
+		rc = -ENODEV;
 	}
 
 	return rc;

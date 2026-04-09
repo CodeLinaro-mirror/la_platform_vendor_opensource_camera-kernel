@@ -41,6 +41,7 @@ struct cam_vfe_mux_camif_lite_data {
 	struct list_head                             free_payload_list;
 	spinlock_t                                   spin_lock;
 	uint32_t                                     camif_debug;
+	uint32_t                                     no_payload_err_cnt;
 	struct cam_vfe_top_irq_evt_payload
 		evt_payload[CAM_VFE_CAMIF_LITE_EVT_MAX];
 	struct timespec64                            sof_ts;
@@ -59,7 +60,13 @@ static int cam_vfe_camif_lite_get_evt_payload(
 
 	spin_lock(&camif_lite_priv->spin_lock);
 	if (list_empty(&camif_lite_priv->free_payload_list)) {
-		CAM_ERR_RATE_LIMIT(CAM_ISP, "No free CAMIF LITE event payload");
+		if (camif_lite_priv->no_payload_err_cnt == U32_MAX - 1)
+			camif_lite_priv->no_payload_err_cnt = 0;
+
+		if (!(camif_lite_priv->no_payload_err_cnt++ % CAM_VFE_GET_PAYLOAD_ERR_MAX)) {
+			CAM_ERR(CAM_ISP, "No free CAMIF LITE event payload no_payload_err_cnt:%u",
+				camif_lite_priv->no_payload_err_cnt);
+		}
 		rc = -ENODEV;
 		goto done;
 	}
@@ -94,7 +101,6 @@ static int cam_vfe_camif_lite_put_evt_payload(
 	*evt_payload = NULL;
 	spin_unlock_irqrestore(&camif_lite_priv->spin_lock, flags);
 
-	CAM_DBG(CAM_ISP, "Done");
 	return 0;
 }
 
@@ -335,6 +341,8 @@ skip_core_cfg:
 	val = cam_io_r(mem_base + rsrc_data->common_reg->top_debug_cfg);
 	val |= rsrc_data->reg_data->top_debug_cfg_en;
 	cam_io_w_mb(val, mem_base + rsrc_data->common_reg->top_debug_cfg);
+
+	rsrc_data->no_payload_err_cnt = 0;
 
 	if (!camif_lite_res->is_rdi_primary_res)
 		goto subscribe_err;
@@ -720,6 +728,9 @@ static int cam_vfe_camif_lite_resource_stop(
 		rsrc_data->irq_err_handle = 0;
 	}
 
+	CAM_DBG(CAM_ISP, "VFE:%d camif lite res stop success, no_payload_err_cnt:%u",
+		camif_lite_res->hw_intf->hw_idx, rsrc_data->no_payload_err_cnt);
+
 	return rc;
 }
 
@@ -990,6 +1001,7 @@ static int cam_vfe_camif_lite_handle_irq_bottom_half(
 	if ((camif_lite_node->res_state == CAM_ISP_RESOURCE_STATE_RESERVED) ||
 		(camif_lite_node->res_state == CAM_ISP_RESOURCE_STATE_AVAILABLE)) {
 		ret = 0;
+		CAM_WARN(CAM_ISP, "BH scheduled in stop state, ignore with success");
 		goto end;
 	}
 	for (i = 0; i < CAM_IFE_IRQ_REGISTERS_MAX; i++)
