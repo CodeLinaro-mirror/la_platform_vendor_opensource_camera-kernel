@@ -1486,13 +1486,14 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 
 				rc = cam_csiphy_notify_secure_mode(csiphy_dev,
 					CAM_SECURE_MODE_SECURE, offset, false);
-				if (rc < 0) {
+				if (rc) {
 					csiphy_dev->csiphy_info[offset]
 						.secure_mode =
 						CAM_SECURE_MODE_NON_SECURE;
 					CAM_ERR(CAM_CSIPHY,
 						"sec_cam: notify failed: rc: %d",
 						rc);
+					rc = -EINVAL;
 					goto release_mutex;
 				}
 			}
@@ -1554,7 +1555,8 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			rc = cam_csiphy_notify_secure_mode(
 				csiphy_dev,
 				CAM_SECURE_MODE_SECURE, offset, false);
-			if (rc < 0) {
+			if (rc) {
+				rc = -EINVAL;
 				csiphy_dev->csiphy_info[offset].secure_mode =
 					CAM_SECURE_MODE_NON_SECURE;
 				cam_cpas_stop(csiphy_dev->cpas_handle);

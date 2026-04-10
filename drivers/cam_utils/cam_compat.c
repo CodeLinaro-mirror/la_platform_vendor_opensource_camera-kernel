@@ -199,15 +199,17 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 
 	if (offset >= CSIPHY_MAX_INSTANCES_PER_PHY) {
 		CAM_ERR(CAM_CSIPHY, "Invalid CSIPHY offset");
-		rc = -EINVAL;
-	} else if (qcom_scm_camera_protect_phy_lanes(protect,
-			csiphy_dev->csiphy_info[offset]
-				.csiphy_cpas_cp_reg_mask)) {
-		CAM_ERR(CAM_CSIPHY, "SCM call to hypervisor failed");
-		rc = -EINVAL;
+		return -EINVAL;
 	}
 
-	return rc;
+	rc = qcom_scm_camera_protect_phy_lanes(protect,
+		csiphy_dev->csiphy_info[offset].csiphy_cpas_cp_reg_mask);
+	if (rc) {
+		CAM_ERR(CAM_CSIPHY, "SCM call to hypervisor failed");
+		return rc;
+	}
+
+	return 0;
 }
 #endif
 
