@@ -53,17 +53,13 @@ static int cam_gpio_init(
 	uint32_t gpio_mask = c_ctrl->cfg.trigger_data.gpio_mask;
 	uint32_t cci_mux_en_val, val, cci_gpio_mux_en_val;
 
-	c_ctrl->cci_info->id_map = context_data->idx;
-
 	soc_info = &cci_dev->soc_info;
 	base = soc_info->reg_map[0].mem_base;
+	c_ctrl->cci_info->id_map = context_data->idx;
 
-	if (!soc_info || !base) {
-		CAM_ERR(CAM_CCI,
-			"CCI%d_GPIOQ%d failed: invalid params soc_info:%pK, base:%pK",
-			cci_dev->soc_info.index, context_data->gpioqueue, soc_info, base);
-		rc = -EINVAL;
-		return rc;
+	if (!base) {
+		CAM_ERR(CAM_CCI, "invalid params, base is NULL: %p", base);
+		return -EINVAL;
 	}
 
 	CAM_DBG(CAM_CCI,
