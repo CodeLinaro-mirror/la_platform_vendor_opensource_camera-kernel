@@ -21715,6 +21715,7 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 	struct cam_sync_hwfence_session_initialize_params init_params;
 	uint32_t num_ipcc_clients;
 #endif
+	char str[10];
 
 	memset(&g_ife_hw_mgr, 0, sizeof(g_ife_hw_mgr));
 	memset(&path_port_map, 0, sizeof(path_port_map));
@@ -21879,7 +21880,16 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 		g_ife_hw_mgr.mgr_common.img_iommu_hdl,
 		g_ife_hw_mgr.mgr_common.img_iommu_hdl_secure);
 
-	if (!cam_cdm_get_iommu_handle("ife3", &cdm_handles)) {
+	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
+		if (g_ife_hw_mgr.ife_devices[i]) {
+			if (g_ife_hw_mgr.ife_dev_caps[i].is_lite) {
+				snprintf(str, sizeof(str), "ife%d", i);
+				break;
+			}
+		}
+	}
+
+	if (!cam_cdm_get_iommu_handle(str, &cdm_handles)) {
 		CAM_DBG(CAM_ISP,
 			"Successfully acquired CDM iommu handles 0x%x, 0x%x",
 			cdm_handles.non_secure, cdm_handles.secure);
