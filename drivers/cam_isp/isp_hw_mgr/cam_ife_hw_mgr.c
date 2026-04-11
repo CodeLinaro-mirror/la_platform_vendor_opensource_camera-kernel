@@ -473,7 +473,7 @@ static int cam_ife_mgr_get_hw_caps_common(void *hw_mgr_priv,
 	struct cam_isp_dev_cap_info       *ife_lite_hw_info = NULL;
 	struct cam_isp_dev_cap_info       *csid_full_hw_info = NULL;
 	struct cam_isp_dev_cap_info       *csid_lite_hw_info = NULL;
-	struct cam_ife_csid_hw_caps       *ife_csid_caps = {0};
+	struct cam_ife_csid_hw_caps       *ife_csid_caps = NULL;
 	struct cam_hw_intf                *hw_intf = NULL;
 	uint32_t                           dev_type, fence_info_hw_idx;
 	int                               *num_dev = NULL;
@@ -596,8 +596,16 @@ static int cam_ife_mgr_get_hw_caps_common(void *hw_mgr_priv,
 				return -EINVAL;
 			}
 			fence_info_hw_idx = query_isp_v3->hw_fence_device_info.num_valid_hws - 1;
+			if (fence_info_hw_idx >= CAM_NUM_HW_MAX) {
+				CAM_ERR(CAM_ISP, "fence_info_hw_idx %u out of bounds",
+					fence_info_hw_idx);
+				kvfree(query_isp_v3);
+				return -EINVAL;
+			}
+
 			for (j = 0; j < query_isp_v3->hw_fence_device_info.
-				num_resources_per_hw[fence_info_hw_idx]; j++)
+				num_resources_per_hw[fence_info_hw_idx] &&
+				j < CAM_NUM_ID_MAX; j++)
 				query_isp_v3->hw_fence_device_info.
 					fence_info[fence_info_hw_idx][j].dev_type = dev_type;
 		}
@@ -1143,6 +1151,14 @@ static int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 					goto err;
 			}
 			grp_cfg->stream_cfg_cnt++;
+		}
+		if (sensor_grp_config->stream_grp_cfg[i].stream_cfg_cnt > CAM_ISP_STREAM_CFG_MAX) {
+			CAM_ERR(CAM_ISP,
+				"Invalid stream config count %d > %d for stream_grp_cfg[%d]",
+				sensor_grp_config->stream_grp_cfg[i].stream_cfg_cnt,
+				CAM_ISP_STREAM_CFG_MAX, i);
+			rc = -EINVAL;
+			goto err;
 		}
 
 		grp_cfg->rdi_stream_cfg_cnt =
@@ -3623,10 +3639,10 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 	int  index)
 {
 	int rc = -EINVAL;
-	struct cam_vfe_acquire_args               vfe_acquire;
+	struct cam_vfe_acquire_args               vfe_acquire = {0};
 	struct cam_isp_out_port_generic_info     *out_port = NULL;
-	struct cam_isp_hw_mgr_res                *ife_out_res;
-	struct cam_hw_intf                       *hw_intf;
+	struct cam_isp_hw_mgr_res                *ife_out_res = NULL;
+	struct cam_hw_intf                       *hw_intf = NULL;
 	bool                                      per_port_acquire;
 	uint32_t  i, vfe_out_res_id, vfe_in_res_id, num_out_res;
 
@@ -5385,6 +5401,12 @@ static int cam_ife_hw_mgr_acquire_csid_hw(
 				continue;
 
 			hw_intf = csid_res_iterator->hw_res[i]->hw_intf;
+			if (hw_intf->hw_idx >= CAM_IFE_CSID_HW_NUM_MAX) {
+				CAM_ERR(CAM_ISP,
+					"Invalid csid hw_idx %d, exceeds max %d",
+					hw_intf->hw_idx, CAM_IFE_CSID_HW_NUM_MAX);
+				continue;
+			}
 			csid_caps =
 				&ife_hw_mgr->csid_hw_caps[hw_intf->hw_idx];
 
@@ -5472,6 +5494,12 @@ static int cam_ife_hw_mgr_acquire_csid_hw(
 		if (hw_info->is_virtual == 1)
 			continue;
 
+		if (hw_intf->hw_idx >= CAM_IFE_CSID_HW_NUM_MAX) {
+			CAM_ERR(CAM_ISP,
+				"Invalid csid hw_idx %d, exceeds max %d",
+				hw_intf->hw_idx, CAM_IFE_CSID_HW_NUM_MAX);
+			continue;
+		}
 		if (ife_hw_mgr->csid_hw_caps[hw_intf->hw_idx].is_lite &&
 			!can_use_lite) {
 			CAM_DBG(CAM_ISP, "CSID[%u] cannot use lite",
@@ -8829,17 +8857,16 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 		total_port += in_port[i].num_out_res;
 		ife_ctx->acquire_type = in_port[i].acquire_type;
 		free_in_port &= (ife_ctx->acquire_type != CAM_ISP_ACQUIRE_TYPE_VIRTUAL &&
-				ife_ctx->acquire_type != CAM_ISP_ACQUIRE_TYPE_HYBRID);
-	}
-
-	for (i = 0; i < in_port->num_valid_vc_dt; i++) {
-		if (cam_ife_mgr_hw_validate_vc_dt_stream_grp(in_port,
-				in_port->vc[i], in_port->dt[i])) {
-			CAM_ERR(CAM_ISP, "Invalid vc[%d]-dt[%d] args range: %d | %d",
-				in_port->vc[i], in_port->dt[i], i,
-				in_port->num_valid_vc_dt);
-			rc = -EINVAL;
-			goto err;
+			ife_ctx->acquire_type != CAM_ISP_ACQUIRE_TYPE_HYBRID);
+		for (j = 0; j < in_port[i].num_valid_vc_dt; j++) {
+			if (cam_ife_mgr_hw_validate_vc_dt_stream_grp(&in_port[i],
+				in_port[i].vc[j], in_port[i].dt[j])) {
+				CAM_ERR(CAM_ISP, "Invalid vc[%d]-dt[%d] args range: %d | %d",
+					in_port[i].vc[j], in_port[i].dt[j], j,
+					in_port[i].num_valid_vc_dt);
+				rc = -EINVAL;
+				goto err;
+			}
 		}
 	}
 
@@ -11667,6 +11694,7 @@ static int cam_ife_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 			CAM_ERR(CAM_ISP,
 				"SAFE SCM call failed:Check TZ/HYP dependency");
 			rc = -EFAULT;
+			mutex_unlock(&g_ife_hw_mgr.ctx_mutex);
 			goto deinit_hw;
 		}
 	}
@@ -17241,6 +17269,14 @@ int cam_ife_mgr_prepare_ul_hw_update(void *hw_mgr_priv,
 				hw_mgr->csid_rup_en);
 			goto end;
 		}
+
+		if (prepare->num_hw_update_entries < num_ent) {
+			CAM_ERR(CAM_ISP, "Invalid num_hw_update_entries %d < num_ent %d",
+				prepare->num_hw_update_entries, num_ent);
+			rc = -EINVAL;
+			goto end;
+		}
+
 		rup_num_ent = prepare->num_hw_update_entries - num_ent;
 		prepare->num_hw_update_entries = num_ent;
 		//remove entry from prepare and put it in ul_data

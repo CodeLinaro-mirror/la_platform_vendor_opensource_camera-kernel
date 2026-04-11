@@ -540,7 +540,8 @@ static long cam_private_ioctl(struct file *file, void *fh,
 			return -EFAULT;
 		}
 
-		if (tmp_sync_info.version != 2 || tmp_sync_info.num_links <= 0) {
+		if (tmp_sync_info.version != 2 || tmp_sync_info.num_links <= 0 ||
+			tmp_sync_info.num_links > MAX_LINKS_PER_SESSION_V2) {
 			CAM_ERR(CAM_CRM, "Invalid version (%x) or num_links (%d)",
 					tmp_sync_info.version, tmp_sync_info.num_links);
 			return -EINVAL;

@@ -126,11 +126,20 @@ static void __cam_isp_ctx_update_event_record(
 	int                      iterator = 0;
 	ktime_t                  cur_time;
 	struct cam_isp_ctx_req  *req_isp;
+	struct cam_context      *ctx;
 
 	if (!ctx_isp) {
 		CAM_ERR(CAM_ISP, "Invalid Args");
 		return;
 	}
+
+	ctx = ctx_isp->base;
+	if (event >= CAM_ISP_CTX_EVENT_MAX) {
+		CAM_ERR(CAM_ISP, "ctx_idx: %u req id: %lld invalid event %d",
+			ctx->ctx_id, req ? req->request_id : 0, event);
+		return;
+	}
+
 	switch (event) {
 	case CAM_ISP_CTX_EVENT_EPOCH:
 	case CAM_ISP_CTX_EVENT_RUP:
@@ -3935,12 +3944,14 @@ static int __cam_isp_ctx_reg_upd_in_top_state(struct cam_isp_context *ctx_isp,
 		goto end;
 	}
 
-	req = list_first_entry(&ctx->wait_req_list,
-		struct cam_ctx_request, list);
-	req_isp = (struct cam_isp_ctx_req *) req->req_priv;
-	if (req_isp->intermediate_irq_mask.reg_up_irq_mask) {
-		req_isp->intermediate_irq_mask.reg_up_irq_mask = 1 << rup_event_data->res_id;
-		return 0;
+	if (!list_empty(&ctx->wait_req_list)) {
+		req = list_first_entry(&ctx->wait_req_list, struct cam_ctx_request, list);
+		req_isp = (struct cam_isp_ctx_req *) req->req_priv;
+		if (req_isp->intermediate_irq_mask.reg_up_irq_mask) {
+			req_isp->intermediate_irq_mask.reg_up_irq_mask =
+				1 << rup_event_data->res_id;
+			return 0;
+		}
 	}
 
 	/*
@@ -5495,7 +5506,7 @@ static int __cam_isp_ctx_apply_dropped_req_in_bubble_state(
 	struct cam_isp_context          *ctx_isp = NULL;
 	struct cam_ctx_request  *req_temp = NULL;
 	uint64_t last_ife_merged_req, ife_recover_req;
-	uint32_t event_cause, reapply_type;
+	uint32_t event_cause, reapply_type = 0;
 
 	ctx_isp = (struct cam_isp_context *) ctx->ctx_priv;
 	*last_applied_ife_req = 0;
@@ -10692,7 +10703,7 @@ static int cam_isp_ctx_ul_fastpath_retrieve_results(
 	struct cam_isp_context *isp_ctx;
 	uint32_t rd_idx, wr_idx, last_consumed;
 	unsigned long flags;
-	bool no_buf_error;
+	bool no_buf_error = false;
 
 	if (!ctx || !num_responses || !response_buffers) {
 		CAM_ERR(CAM_ISP, "Invalid params");
@@ -11763,6 +11774,13 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp, int t
 				if (res_data[j].resource_type ==
 					ctx_isp->primary_port_info[i]->res_id)
 					break;
+			}
+			if (j >= MAX_IO_RESOURCES) {
+				CAM_ERR(CAM_ISP,
+					"res_id 0x%x not found in res_data ctx:%u",
+					ctx_isp->primary_port_info[i]->res_id,
+					cam_ctx->ctx_id);
+				return -ENODEV;
 			}
 
 			k = (res_data[j].curr_buf_index + 1) % res_data[j].buf_count;

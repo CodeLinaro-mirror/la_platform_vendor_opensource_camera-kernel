@@ -98,11 +98,14 @@ void cam_req_mgr_handle_core_shutdown(void)
 	}
 }
 
-static int __cam_req_mgr_setup_payload(struct cam_req_mgr_core_worker *worker)
+static int __cam_req_mgr_setup_payload(struct cam_req_mgr_core_link *link)
 {
 	int32_t                  i = 0;
 	int                      rc = 0;
+	struct cam_req_mgr_core_worker *worker = NULL;
 	struct crm_task_payload *task_data = NULL;
+
+	worker = link->worker;
 
 	task_data = kcalloc(
 		worker->task.num_task, sizeof(*task_data),
@@ -113,6 +116,7 @@ static int __cam_req_mgr_setup_payload(struct cam_req_mgr_core_worker *worker)
 		for (i = 0; i < worker->task.num_task; i++)
 			worker->task.pool[i].payload = &task_data[i];
 	}
+	link->task_data = task_data;
 
 	return rc;
 }
@@ -5315,6 +5319,8 @@ static int __cam_req_mgr_unlink(
 	mutex_unlock(&session->lock);
 	/* Destroy worker of link */
 	cam_req_mgr_worker_destroy(&link->worker);
+	kfree(link->task_data);
+	link->task_data = NULL;
 	/* Acquire session mutex after worker flush */
 	mutex_lock(&session->lock);
 	/* Cleanup request tables and unlink devices */
@@ -5484,7 +5490,7 @@ int cam_req_mgr_link(struct cam_req_mgr_ver_info *link_info)
 	}
 
 	/* Assign payload to workqueue tasks */
-	rc = __cam_req_mgr_setup_payload(link->worker);
+	rc = __cam_req_mgr_setup_payload(link);
 	if (rc < 0) {
 		__cam_req_mgr_destroy_link_info(link);
 		cam_req_mgr_worker_destroy(&link->worker);
@@ -5595,7 +5601,7 @@ int cam_req_mgr_link_v2(struct cam_req_mgr_ver_info *link_info)
 	}
 
 	/* Assign payload to workqueue tasks */
-	rc = __cam_req_mgr_setup_payload(link->worker);
+	rc = __cam_req_mgr_setup_payload(link);
 	if (rc < 0) {
 		__cam_req_mgr_destroy_link_info(link);
 		cam_req_mgr_worker_destroy(&link->worker);
@@ -5717,7 +5723,7 @@ int cam_req_mgr_link_v3(struct cam_req_mgr_ver_info *link_info)
 	}
 
 	/* Assign payload to workqueue tasks */
-	rc = __cam_req_mgr_setup_payload(link->worker);
+	rc = __cam_req_mgr_setup_payload(link);
 	if (rc < 0) {
 		__cam_req_mgr_destroy_link_info(link);
 		cam_req_mgr_worker_destroy(&link->worker);

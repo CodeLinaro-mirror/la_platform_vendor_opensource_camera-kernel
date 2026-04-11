@@ -783,6 +783,8 @@ static irqreturn_t cam_cpastop_handle_irq(int irq_num, void *data)
 	task = cam_req_mgr_worker_get_task(cpas_core->worker);
 	if (IS_ERR_OR_NULL(task)) {
 		CAM_ERR(CAM_CPAS, "Failed to get task = %d", PTR_ERR(task));
+		kfree(payload);
+		payload = NULL;
 	} else {
 		task->payload = payload;
 		task->process_cb = cam_cpastop_work;
