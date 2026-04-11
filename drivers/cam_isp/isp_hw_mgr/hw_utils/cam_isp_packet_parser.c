@@ -817,7 +817,7 @@ int cam_isp_ul_parse_io_config(struct cam_isp_ctx_ul_data *ul_data,
 	struct cam_isp_hw_get_cmd_update    secure_mode;
 	int                                 rc = 0;
 	uint32_t                            kmd_buf_remain_size;
-	struct cam_isp_hw_get_cmd_update    update_buf;
+	struct cam_isp_hw_get_cmd_update    update_buf = {0};
 	struct cam_isp_hw_get_wm_update     wm_update;
 	struct cam_hw_update_entry         *hw_update_entry;
 	uint32_t                            out_port;
