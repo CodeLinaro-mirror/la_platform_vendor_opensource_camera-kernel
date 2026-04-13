@@ -552,7 +552,7 @@ int cam_icp_context_init(struct cam_icp_context *ctx, struct cam_hw_mgr_intf *hw
 	}
 
 	rc = cam_context_init(ctx->base, icp_dev_name, CAM_ICP, ctx_id,
-		NULL, hw_intf, ctx->req_base, CAM_CTX_ICP_REQ_MAX, img_iommu_hdl);
+		NULL, hw_intf, ctx->req_base, CAM_CTX_REQ_MAX, img_iommu_hdl);
 	if (rc) {
 		CAM_ERR(CAM_ICP, "[%s] Camera Context Base init failed", icp_dev_name);
 		goto err;
