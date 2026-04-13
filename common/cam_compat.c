@@ -422,7 +422,7 @@ static inline int cam_subdev_list_cmp(struct cam_subdev *entry_1, struct cam_sub
 int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 {
 	struct iosys_map mapping = {0};
-	int error_code = dma_buf_vmap(dmabuf, &mapping);
+	int error_code = dma_buf_vmap_unlocked(dmabuf, &mapping);
 
 	if (error_code) {
 		*vaddr = 0;
@@ -441,7 +441,7 @@ void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
 {
 	struct iosys_map mapping = IOSYS_MAP_INIT_VADDR(vaddr);
 
-	dma_buf_vunmap(dmabuf, &mapping);
+	dma_buf_vunmap_unlocked(dmabuf, &mapping);
 }
 
 void cam_smmu_util_iommu_custom(struct device *dev,
