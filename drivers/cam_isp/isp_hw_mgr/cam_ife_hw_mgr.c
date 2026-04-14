@@ -2036,13 +2036,8 @@ static int cam_ife_mgr_acquire_cid_res(
 		ife_ctx->is_fe_enabled, in_port->usage_type,
 		ife_ctx->dsp_enabled, csid_acquire.node_res);
 
-	if (ife_ctx->is_fe_enabled ||
-		ife_ctx->dsp_enabled)
-		rc = cam_ife_hw_mgr_acquire_csid_hw(ife_hw_mgr,
+	rc = cam_ife_hw_mgr_acquire_csid_hw(ife_hw_mgr,
 			&csid_acquire, true, ife_ctx->dynamic_rdi_alloc);
-	else
-		rc = cam_ife_hw_mgr_acquire_csid_hw(ife_hw_mgr,
-			&csid_acquire, false, ife_ctx->dynamic_rdi_alloc);
 
 	if (rc || !csid_acquire.node_res) {
 		CAM_ERR(CAM_ISP, "No %d paths available rc %d rsrc %p",
