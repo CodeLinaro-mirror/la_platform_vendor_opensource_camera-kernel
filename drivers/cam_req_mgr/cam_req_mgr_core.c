@@ -4337,6 +4337,13 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd)
 		return -EINVAL;
 	}
 
+	if (ul_packet->number_devices > UL_MAX_DEVICES  ||
+		ul_packet->number_devices > link->num_devs) {
+		CAM_ERR(CAM_CRM, "Invalid number_devices %d, max allowed %d link num_devs %d",
+			ul_packet->number_devices, UL_MAX_DEVICES, link->num_devs);
+		return -EINVAL;
+	}
+
 	if (ul_packet->batch_packet_type == BATCH_PACKET_TYPE_SETUP_IOBUF) {
 		if (link->ul_state != CAM_CRM_UL_LINK_STATE_INIT) {
 			CAM_ERR(CAM_CRM, "Link 0x%x is not in init state",
