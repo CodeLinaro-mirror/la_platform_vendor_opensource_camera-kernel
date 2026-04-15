@@ -70,6 +70,13 @@
 #define CAM_ISP_IFE_MAX_FCG_CH_CTXS    3
 #define CAM_ISP_SFE_MAX_FCG_CHANNELS   2
 
+/* ctx get virtual rdi mapping callback function type */
+typedef int (*cam_hw_get_virtual_rdi_mapping_cb_func)(void *context,
+	uint32_t out_port, bool is_virtual_rdi);
+
+/* Update result info for fastpath */
+typedef void (*cam_isp_ctx_update_fastpath_result)(void *data,
+	uint32_t value);
 /**
  *  enum cam_isp_hw_event_type - Collection of the ISP hardware events
  */

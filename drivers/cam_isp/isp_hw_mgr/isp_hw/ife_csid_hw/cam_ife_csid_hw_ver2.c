@@ -4456,7 +4456,6 @@ int cam_ife_csid_ver2_reserve(void *hw_priv,
 	res->tasklet_info  = reserve->tasklet;
 	csid_hw->event_cb = reserve->event_cb;
 	csid_hw->tasklet  = reserve->tasklet;
-	csid_hw->token  = reserve->cb_priv;
 	csid_hw->tasklet  = reserve->tasklet;
 	reserve->buf_done_controller = csid_hw->buf_done_irq_controller;
 	reserve->mc_comp_buf_done_controller =
@@ -8640,6 +8639,7 @@ static int cam_ife_csid_ver2_update_path_irq(
 				rc = -EINVAL;
 				goto end;
 			}
+			//path_data->path_cfg.irq_handle = 0;
 		} else {
 			CAM_ERR(CAM_ISP, "CSID[%d] path Irq handle not found for res:%d",
 				csid_hw->hw_intf->hw_idx, res->res_id);

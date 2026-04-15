@@ -67,6 +67,9 @@ enum cam_ife_ctx_master_type {
 /* Trigger single out of sync debugfs */
 #define CAM_IFE_CTX_TRIGGER_SINGLE_OUT_OF_SYNC_CFG 1
 
+/* Number of stream group cfg to allocate once */
+#define CAM_ISP_STREAM_GROUP_CFG_NUM   1
+
 /**
  * struct cam_ife_hw_mgr_debug - contain the debug information
  *
@@ -729,6 +732,7 @@ struct cam_ife_hw_mgr_sensor_stream_config {
  * @acquire_cnt                 : count of number of acquire calls
  * @stream_cfg_cnt              : number of sensor configurations for pxl and rdi paths
  * @rdi_stream_cfg_cnt          : number of sensor configurations for only rdi path
+ * @hw_ctx_cnt                  : count of number of hw ctx
  * @stream_on_cnt               : count of number of streamon calls for this ife device
  * @res_ife_csid_list           : CSID resource list
  * @res_ife_src_list            : IFE input resource list
@@ -749,6 +753,7 @@ struct cam_ife_hw_mgr_stream_grp_config {
 	uint32_t                                      acquire_cnt;
 	uint32_t                                      stream_cfg_cnt;
 	uint32_t                                      rdi_stream_cfg_cnt;
+	uint32_t                                      hw_ctx_cnt;
 	uint32_t                                      stream_on_cnt;
 	struct list_head                              res_ife_csid_list;
 	struct list_head                              res_ife_src_list;
@@ -768,7 +773,7 @@ struct cam_ife_hw_mgr_stream_grp_config {
  */
 struct cam_ife_hw_mgr_sensor_grp_cfg {
 	uint32_t                                  num_grp_cfg;
-	struct cam_ife_hw_mgr_stream_grp_config  *grp_cfg;
+	struct cam_ife_hw_mgr_stream_grp_config  *grp_cfg[CAM_ISP_STREAM_GROUP_CFG_MAX];
 };
 
 /**
