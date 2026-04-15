@@ -679,11 +679,17 @@ struct cam_ife_hw_mgr {
  * @num_valid_vc_dt_rdi         : valid vc and dt in array for rdi path
  * @pxl_vc                      : input virtual channel number for pxl path
  * @pxl_dt                      : input data type number for pxl path
- * @rdi_vc                      : input virtual channel number for pxl path
- * @rdi_dt                      : input data type number for pxl path
+ * @ppp_vc                      : input virtual channel number for ppp path
+ * @ppp_dt                      : input data type number for ppp path
+ * @lcr_vc                      : input virtual channel number for lcr path
+ * @lcr_dt                      : input data type number for lcr path
+ * @rdi_vc                      : input virtual channel number for rdi path
+ * @rdi_dt                      : input data type number for rdi path
  * @decode_format               : input data format
  * @rdi_vc_dt_updated           : Indicates count of rdi vc-dt associated to any hw res
  * @pxl_vc_dt_updated           : Indicates if pxl vc-dt is associated to any hw res
+ * @lcr_vc_dt_updated           : Indicates if lcr vc-dt associated to any hw res
+ * @ppp_vc_dt_updated           : Indicates if ppp vc-dt is associated to any hw res
  * @acquired                    : indicates whether acquire is done for this sensor id
  * @is_streamon                 : indicates whether streamon is done for this sensor id
  */
@@ -692,16 +698,25 @@ struct cam_ife_hw_mgr_sensor_stream_config {
 	uint32_t                                   sensor_id;
 	uint32_t                                   num_valid_vc_dt_pxl;
 	uint32_t                                   num_valid_vc_dt_rdi;
+	uint32_t                                   num_valid_vc_dt_ppp;
+	uint32_t                                   num_valid_vc_dt_lcr;
 	uint32_t                                   pxl_vc;
 	uint32_t                                   pxl_dt;
+	uint32_t                                   ppp_vc;
+	uint32_t                                   ppp_dt;
+	uint32_t                                   lcr_vc;
+	uint32_t                                   lcr_dt;
 	uint32_t                                   rdi_vc[CAM_ISP_VC_DT_CFG];
 	uint32_t                                   rdi_dt[CAM_ISP_VC_DT_CFG];
 	uint32_t                                   decode_format;
 	uint32_t                                   rdi_vc_dt_updated;
 	bool                                       pxl_vc_dt_updated;
+	uint32_t                                   lcr_vc_dt_updated;
+	bool                                       ppp_vc_dt_updated;
 	bool                                       acquired;
 	bool                                       is_streamon;
 };
+
 
 /**
  * struct cam_ife_hw_mgr_stream_grp_config  -  camera sensor stream group configurations
