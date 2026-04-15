@@ -2578,7 +2578,8 @@ static void cam_ife_hw_mgr_print_acquire_info(
 		log_info,
 		num_pix_port, num_pd_port, num_rdi_port,
 		hw_mgr_ctx->ctx_index,
-		hw_mgr_ctx->flags.per_port_en);
+		hw_mgr_ctx->flags.per_port_en,
+		hw_mgr_ctx->sensor_id);
 
 	return;
 
@@ -3251,8 +3252,12 @@ static int cam_ife_hw_mgr_link_csid_pxl_resources(
 	csid_acquire.workq = ife_ctx->common.workq_info;
 	csid_acquire.cb_priv = ife_ctx;
 	csid_acquire.cdm_ops = ife_ctx->cdm_ops;
+	csid_acquire.vc = hw_mgr_res->vc;
+	csid_acquire.dt = hw_mgr_res->dt;
+	csid_acquire.decode_fmt = hw_mgr_res->decode_fmt;
 
-	rc = cam_ife_hw_mgr_update_csid_res_data(ife_ctx, hw_mgr_res, &csid_acquire);
+	rc = cam_ife_hw_mgr_update_csid_res_data(ife_ctx, hw_mgr_res,
+		&csid_acquire);
 	if (rc)
 		goto end;
 
@@ -3340,6 +3345,9 @@ static int cam_ife_hw_mgr_link_csid_rdi_resources(
 		rdi_csid_acquire.cb_priv = ife_ctx;
 		rdi_csid_acquire.cdm_ops = ife_ctx->cdm_ops;
 		rdi_csid_acquire.per_port_acquire = false;
+		rdi_csid_acquire.vc = hw_mgr_res->vc;
+		rdi_csid_acquire.dt = hw_mgr_res->dt;
+		rdi_csid_acquire.decode_fmt = hw_mgr_res->decode_fmt;
 
 		/*
 		 * Enable RDI pixel drop by default. CSID will enable only for
@@ -5746,6 +5754,8 @@ static int cam_ife_hw_mgr_update_vc_dt_pxl_path(
 					grp_cfg->stream_cfg[stream_index].pxl_vc;
 				isp_res->dt =
 					grp_cfg->stream_cfg[stream_index].pxl_dt;
+				isp_res->decode_fmt =
+					grp_cfg->stream_cfg[stream_index].decode_format;
 				grp_cfg->stream_cfg[stream_index].pxl_vc_dt_updated =
 					true;
 				*found = true;
@@ -5759,6 +5769,8 @@ static int cam_ife_hw_mgr_update_vc_dt_pxl_path(
 					grp_cfg->stream_cfg[stream_index].lcr_vc;
 				isp_res->dt =
 					grp_cfg->stream_cfg[stream_index].lcr_dt;
+				isp_res->decode_fmt =
+					grp_cfg->stream_cfg[stream_index].decode_format;
 				grp_cfg->stream_cfg[stream_index].lcr_vc_dt_updated =
 					true;
 				*found = true;
@@ -5775,6 +5787,8 @@ static int cam_ife_hw_mgr_update_vc_dt_pxl_path(
 					grp_cfg->stream_cfg[stream_index].ppp_vc;
 				isp_res->dt =
 					grp_cfg->stream_cfg[stream_index].ppp_dt;
+				isp_res->decode_fmt =
+					grp_cfg->stream_cfg[stream_index].decode_format;
 				grp_cfg->stream_cfg[stream_index].ppp_vc_dt_updated =
 					true;
 				*found = true;
@@ -5812,6 +5826,7 @@ static int cam_ife_hw_mgr_update_vc_dt_stream_grp(
 					j++) {
 					isp_res->vc = grp_cfg->stream_cfg[i].rdi_vc[j];
 					isp_res->dt = grp_cfg->stream_cfg[i].rdi_dt[j];
+					isp_res->decode_fmt = grp_cfg->stream_cfg[i].decode_format;
 					grp_cfg->stream_cfg[i].rdi_vc_dt_updated++;
 					found = true;
 					break;
@@ -5947,6 +5962,11 @@ static int cam_ife_hw_mgr_acquire_res_ife_csid_pxl(
 		csid_acquire.crop_enable = crop_enable;
 		csid_acquire.drop_enable = false;
 		csid_acquire.per_port_acquire = per_port_acquire;
+		if (per_port_acquire) {
+			csid_acquire.vc = csid_res->vc;
+			csid_acquire.dt = csid_res->dt;
+			csid_acquire.decode_fmt = csid_res->decode_fmt;
+		}
 
 		if (csid_res->is_dual_isp)
 			csid_acquire.sync_mode = i == CAM_ISP_HW_SPLIT_LEFT ?
@@ -6131,6 +6151,13 @@ static int cam_ife_hw_mgr_acquire_csid_rdi_util(
 	csid_acquire.cb_priv = ife_ctx;
 	csid_acquire.cdm_ops = ife_ctx->cdm_ops;
 	csid_acquire.per_port_acquire = per_port_acquire;
+
+	if (per_port_acquire) {
+		csid_acquire.vc = csid_res->vc;
+		csid_acquire.dt = csid_res->dt;
+		csid_acquire.decode_fmt = csid_res->decode_fmt;
+	}
+
 	if (ife_ctx->ctx_type == CAM_IFE_CTX_TYPE_SFE)
 		csid_acquire.sfe_en = true;
 

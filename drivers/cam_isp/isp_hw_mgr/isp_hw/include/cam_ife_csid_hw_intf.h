@@ -252,6 +252,9 @@ struct cam_csid_secondary_evt_config {
  * @dynamic_drv_supported: Flag to indicate if dynamic drv is supported
  * @per_port_acquire:    Indicates if acquire as real acquire or per port
  *                       virtual acquire for current res path
+ * @vc:                  input virtual channel number
+ * @dt:                  input data type number
+ * @decode_fmt:          decode format
  *
  */
 struct cam_csid_hw_reserve_resource_args {
@@ -281,6 +284,9 @@ struct cam_csid_hw_reserve_resource_args {
 	bool                                      handle_camif_irq;
 	bool                                      dynamic_drv_supported;
 	bool                                      per_port_acquire;
+	uint32_t                                  vc;
+	uint32_t                                  dt;
+	uint32_t                                  decode_fmt;
 };
 
 /**

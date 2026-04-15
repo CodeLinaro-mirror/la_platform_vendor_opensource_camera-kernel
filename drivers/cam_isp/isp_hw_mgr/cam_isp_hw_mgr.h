@@ -81,6 +81,7 @@ struct cam_isp_hw_mgr {
  * @vc:                  input virtual channel number
  * @dt:                  input data type number
  * @use_wm_pack:         Flag to indicate if WM is to be used for packing
+ * @decode_fmt:          decode format
  * @linked:              Indicates if this hw res to linked to any ife context
  * @hw_ctxt_id:          HW context ID mask corresponding to this resource
  * @comp_grp_id:         Composite group ID corresponding to this resource
@@ -97,6 +98,7 @@ struct cam_isp_hw_mgr_res {
 	uint32_t                         vc;
 	uint32_t                         dt;
 	bool                             use_wm_pack;
+	uint32_t                         decode_fmt;
 	bool                             linked;
 	uint32_t                         hw_ctxt_id_mask;
 	uint32_t                         comp_grp_id;
