@@ -130,6 +130,17 @@ enum cam_isp_state_change_trigger {
 	CAM_ISP_STATE_CHANGE_TRIGGER_MAX
 };
 
+/**
+ * enum cam_isp_ctx_flush_event - Different types of Flush event for affected ctx
+ * in cae of group stream configurations
+ *
+ */
+enum cam_isp_ctx_flush_event {
+	CAM_ISP_CTX_FLUSH_AFFECTED_CTX_REQ_LIST,
+	CAM_ISP_CTX_FLUSH_AFFECTED_CTX_SET_FLUSH_IN_PROGRESS,
+	CAM_ISP_CTX_FLUSH_EVENT_MAX
+};
+
 #define CAM_ISP_CTX_DISABLE_RECOVERY_AEB           BIT(0)
 #define CAM_ISP_CTX_DISABLE_RECOVERY_BUS_OVERFLOW  BIT(1)
 #define CAM_ISP_CTX_DISABLE_RECOVERY_BUBBLE        BIT(2)
@@ -429,6 +440,7 @@ struct cam_isp_fcg_prediction_tracker {
  * @mode_switch_en:            Indicates if mode switch is enabled
  * @sfe_en:                    Indicates if SFE is being used
  * @last_sent_sof_timestamp:   SOF timestamp of the last sent SOF timestamp frame
+ * @flush_in_progress:         indicates whether flush is in progress
  *
  */
 struct cam_isp_context {
@@ -500,6 +512,9 @@ struct cam_isp_context {
 	bool                                  sfe_en;
 	bool                                  standby_en;
 	uint64_t                              last_sent_sof_timestamp;
+	atomic_t                               flush_in_progress;
+	uint32_t                               waitlist_req_cnt;
+	struct mutex                           isp_mutex;
 };
 
 /**
