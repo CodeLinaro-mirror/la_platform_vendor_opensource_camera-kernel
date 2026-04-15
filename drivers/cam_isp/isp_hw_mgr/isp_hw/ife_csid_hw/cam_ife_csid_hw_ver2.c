@@ -8424,7 +8424,6 @@ static int cam_ife_csid_ver2_update_res_data(struct cam_ife_csid_ver2_hw *csid_h
 			case CAM_IFE_PIX_PATH_RES_RDI_2:
 			case CAM_IFE_PIX_PATH_RES_RDI_3:
 			case CAM_IFE_PIX_PATH_RES_RDI_4:
-			case CAM_IFE_PIX_PATH_RES_RDI_5:
 				rc = cam_ife_csid_ver2_program_init_cfg1_rdi_path(csid_hw, res);
 				if (rc) {
 					CAM_ERR(CAM_ISP,

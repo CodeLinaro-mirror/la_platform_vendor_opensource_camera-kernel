@@ -1166,7 +1166,6 @@ static int cam_ife_mgr_get_rdi_stream_cfg_cnt(
 		case CAM_ISP_VIRTUAL_RDI2_PATH:
 		case CAM_ISP_VIRTUAL_RDI3_PATH:
 		case CAM_ISP_VIRTUAL_RDI4_PATH:
-		case CAM_ISP_VIRTUAL_RDI5_PATH:
 			cnt++;
 			CAM_DBG(CAM_ISP, "path_id: %d",
 				sensor_grp_config->stream_grp_cfg[index].stream_cfg[i].path_id);
@@ -1246,7 +1245,6 @@ static int cam_ife_mgr_update_vc_dt_sensor_stream_cfg(
 	case CAM_ISP_VIRTUAL_RDI2_PATH:
 	case CAM_ISP_VIRTUAL_RDI3_PATH:
 	case CAM_ISP_VIRTUAL_RDI4_PATH:
-	case CAM_ISP_VIRTUAL_RDI5_PATH:
 		for (j = 0; j < CAM_ISP_VC_DT_CFG; j++) {
 			if ((!grp_cfg->stream_cfg[stream_idx].rdi_vc[j]) &&
 				(!grp_cfg->stream_cfg[stream_idx].rdi_dt[j])) {
@@ -1584,13 +1582,11 @@ static int cam_ife_hw_mgr_is_rdi_res(uint32_t res_id)
 	case CAM_ISP_IFE_OUT_RES_RDI_2:
 	case CAM_ISP_IFE_OUT_RES_RDI_3:
 	case CAM_ISP_IFE_OUT_RES_RDI_4:
-	case CAM_ISP_IFE_OUT_RES_RDI_5:
 	case CAM_ISP_IFE_OUT_RES_VIRTUAL_RDI0:
 	case CAM_ISP_IFE_OUT_RES_VIRTUAL_RDI1:
 	case CAM_ISP_IFE_OUT_RES_VIRTUAL_RDI2:
 	case CAM_ISP_IFE_OUT_RES_VIRTUAL_RDI3:
 	case CAM_ISP_IFE_OUT_RES_VIRTUAL_RDI4:
-	case CAM_ISP_IFE_OUT_RES_VIRTUAL_RDI5:
 		rc = 1;
 		break;
 	default:
@@ -3151,9 +3147,6 @@ static int cam_ife_hw_mgr_update_res_virtual_mapping_table(
 		case CAM_IFE_PIX_PATH_RES_RDI_4:
 			vfe_out_res_id = CAM_ISP_IFE_OUT_RES_RDI_4;
 			break;
-		case CAM_IFE_PIX_PATH_RES_RDI_5:
-			vfe_out_res_id = CAM_ISP_IFE_OUT_RES_RDI_5;
-			break;
 		default:
 			CAM_ERR(CAM_ISP, "invalid resource type :%d",
 				hw_mgr_res->res_id);
@@ -3300,7 +3293,7 @@ static int cam_ife_hw_mgr_link_csid_rdi_resources(
 			if (((hw_mgr_res->hw_res[0]->res_id >=
 				CAM_IFE_PIX_PATH_RES_RDI_0) &&
 				(hw_mgr_res->hw_res[0]->res_id <=
-				CAM_IFE_PIX_PATH_RES_RDI_5)) &&
+				CAM_IFE_PIX_PATH_RES_RDI_4)) &&
 				(!hw_mgr_res->linked)) {
 				for (i = 0; i < in_port->num_valid_vc_dt; i++) {
 					if ((in_port->vc[i] == hw_mgr_res->vc) &&
@@ -4681,8 +4674,6 @@ static int cam_convert_res_id_to_hw_path(int res_id, int csid_res_id)
 		return CAM_ISP_RDI3_PATH;
 	} else if (res_id == CAM_ISP_HW_VFE_IN_RDI4) {
 		return CAM_ISP_RDI4_PATH;
-	} else if (res_id == CAM_ISP_HW_VFE_IN_RDI5) {
-		return CAM_ISP_RDI5_PATH;
 	}
 
 	return 0;
@@ -5340,7 +5331,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_src(
 		} else {
 			if ((csid_res->res_id != res_path_id) && !(is_rdi_res &&
 				(csid_res->res_id >= CAM_IFE_PIX_PATH_RES_RDI_0 &&
-				csid_res->res_id <= CAM_IFE_PIX_PATH_RES_RDI_5)))
+				csid_res->res_id <= CAM_IFE_PIX_PATH_RES_RDI_4)))
 				continue;
 		}
 
@@ -6085,9 +6076,6 @@ static enum cam_ife_pix_path_res_id
 	case CAM_ISP_IFE_OUT_RES_RDI_4:
 	case CAM_ISP_IFE_OUT_RES_VIRTUAL_RDI4:
 		path_id = CAM_IFE_PIX_PATH_RES_RDI_4;
-		break;
-	case CAM_ISP_IFE_OUT_RES_VIRTUAL_RDI5:
-		path_id = CAM_IFE_PIX_PATH_RES_RDI_5;
 		break;
 	default:
 		path_id = CAM_IFE_PIX_PATH_RES_MAX;
@@ -11174,7 +11162,6 @@ static int cam_ife_mgr_enable_irq(
 		case CAM_ISP_IFE_OUT_RES_RDI_2:
 		case CAM_ISP_IFE_OUT_RES_RDI_3:
 		case CAM_ISP_IFE_OUT_RES_RDI_4:
-		case CAM_ISP_IFE_OUT_RES_RDI_5:
 			if (!(res_rdi_context_set) && ctx->flags.is_rdi_only_context) {
 				hw_mgr_res->hw_res[0]->rdi_only_ctx =
 					ctx->flags.is_rdi_only_context;
