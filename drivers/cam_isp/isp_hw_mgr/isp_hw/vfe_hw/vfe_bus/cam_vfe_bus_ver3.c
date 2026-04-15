@@ -1005,7 +1005,8 @@ static int cam_vfe_bus_ver3_config_rdi_wm(
 static int cam_vfe_bus_ver3_config_ports_with_ubwc(
 	struct cam_vfe_bus_ver3_wm_resource_data  *rsrc_data,
 	enum cam_vfe_bus_ver3_vfe_out_type      vfe_out_res_id,
-	enum cam_vfe_bus_plane_type                plane)
+	enum cam_vfe_bus_plane_type                plane,
+	bool is_per_port_acquire)
 {
 	struct cam_vfe_bus_ver3_reg_offset_common *common_reg = rsrc_data->common_data->common_reg;
 
@@ -1065,6 +1066,10 @@ static int cam_vfe_bus_ver3_config_ports_with_ubwc(
 		rsrc_data->cfg.height /= 2;
 		break;
 	default:
+		if (is_per_port_acquire) {
+			rsrc_data->cfg.height /= 2;
+			break;
+		}
 		CAM_ERR(CAM_ISP, "Invalid format %d out_type:%d",
 			rsrc_data->cfg.format, vfe_out_res_id);
 		return -EINVAL;
@@ -1081,7 +1086,8 @@ static int cam_vfe_bus_ver3_config_port(
 	struct cam_vfe_bus_ver3_priv           *ver3_bus_priv,
 	struct cam_vfe_bus_ver3_wm_resource_data  *rsrc_data,
 	enum cam_vfe_bus_ver3_vfe_out_type      vfe_out_res_id,
-	enum cam_vfe_bus_plane_type plane)
+	enum cam_vfe_bus_plane_type plane,
+	bool is_per_port_acquire)
 {
 	int rc = 0;
 	struct cam_vfe_bus_ver3_reg_offset_common *common_reg = rsrc_data->common_data->common_reg;
@@ -1108,7 +1114,8 @@ static int cam_vfe_bus_ver3_config_port(
 	case CAM_VFE_BUS_VER3_VFE_OUT_DS16:
 	case CAM_VFE_BUS_VER3_VFE_OUT_FD:
 	case CAM_VFE_BUS_VER3_VFE_OUT_FULL_DISP:
-		rc = cam_vfe_bus_ver3_config_ports_with_ubwc(rsrc_data, vfe_out_res_id, plane);
+		rc = cam_vfe_bus_ver3_config_ports_with_ubwc(rsrc_data, vfe_out_res_id,
+			plane, is_per_port_acquire);
 		if (rc)
 			return rc;
 
@@ -1245,10 +1252,12 @@ static int cam_vfe_bus_ver3_acquire_wm(
 	rsrc_data->cfg.meta_offset  = 0;
 	rsrc_data->cfg.image_offset  = 0;
 	CAM_DBG(CAM_ISP,
-		"VFE:%u WM:%d width %d height %d, supported_format: 0x%llx, pack_fmt: %d use_wm_pack:%s",
+		"VFE:%u WM:%d width %d height %d, supported_format: 0x%llx, pack_fmt: %d use_wm_pack:%s per_port_en %d",
 		wm_res->hw_intf->hw_idx, rsrc_data->index,
 		rsrc_data->cfg.width, rsrc_data->cfg.height, rsrc_data->hw_regs->supported_formats,
-		rsrc_data->cfg.pack_fmt, CAM_BOOL_TO_YESNO(rsrc_data->use_wm_pack));
+		rsrc_data->cfg.pack_fmt, CAM_BOOL_TO_YESNO(rsrc_data->use_wm_pack),
+		is_per_port_acquire);
+
 
 	if (!(rsrc_data->hw_regs->supported_formats & BIT_ULL(rsrc_data->cfg.format))) {
 		CAM_ERR(CAM_ISP, "Invalid format %d out_type:%d",
@@ -1256,7 +1265,11 @@ static int cam_vfe_bus_ver3_acquire_wm(
 		return -EINVAL;
 	}
 
-	rc = cam_vfe_bus_ver3_config_port(ver3_bus_priv, rsrc_data, vfe_out_res_id, plane);
+	if (is_per_port_acquire)
+		wm_res->is_per_port_acquire = true;
+
+	rc = cam_vfe_bus_ver3_config_port(ver3_bus_priv, rsrc_data, vfe_out_res_id,
+		plane, wm_res->is_per_port_acquire);
 	if (rc) {
 		CAM_ERR(CAM_ISP, "VFE:%u WM:%d %s Failed to configure port",
 			rsrc_data->common_data->core_index, rsrc_data->index, wm_res->res_name);
@@ -1289,8 +1302,6 @@ static int cam_vfe_bus_ver3_acquire_wm(
 	}
 
 	wm_res->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
-	if (is_per_port_acquire)
-		wm_res->is_per_port_acquire = true;
 	wm_res->tasklet_info = tasklet;
 
 	CAM_DBG(CAM_ISP,
@@ -1642,11 +1653,13 @@ static int cam_vfe_bus_ver3_acquire_comp_grp(
 		}
 	}
 
-	CAM_DBG(CAM_ISP, "Acquire VFE:%u comp_grp:%u",
-		rsrc_data->common_data->core_index, rsrc_data->comp_grp_type);
-
 	if (is_per_port_acquire)
 		comp_grp->is_per_port_acquire = true;
+
+	CAM_DBG(CAM_ISP, "Acquire VFE:%d comp_grp:%u is_per_port_acquire :%d",
+		rsrc_data->common_data->core_index,
+		rsrc_data->comp_grp_type, comp_grp->is_per_port_acquire);
+
 	rsrc_data->acquire_dev_cnt++;
 	rsrc_data->composite_mask |= comp_acq_args->composite_mask;
 
@@ -4936,6 +4949,8 @@ static int cam_vfe_bus_ver3_update_res_wm(
 
 	memset(wm_mode, '\0', sizeof(wm_mode));
 
+	wm_res->is_per_port_acquire = false;
+
 	rsrc_data = wm_res->res_priv;
 	wm_idx = rsrc_data->index;
 	rsrc_data->cfg.format = out_acq_args->out_port_info->format;
@@ -4951,15 +4966,16 @@ static int cam_vfe_bus_ver3_update_res_wm(
 
 	/* Set WM offset value to default */
 	rsrc_data->cfg.offset  = 0;
-	CAM_DBG(CAM_ISP, "WM:%d width %d height %d", rsrc_data->index,
-		rsrc_data->cfg.width, rsrc_data->cfg.height);
+	CAM_DBG(CAM_ISP, "WM:%d width %d height %d is_per_port:%d",
+		rsrc_data->index, rsrc_data->cfg.width,
+		rsrc_data->cfg.height, wm_res->is_per_port_acquire);
 
-	rc = cam_vfe_bus_ver3_config_port(ver3_bus_priv, rsrc_data, vfe_out_res_id, plane);
+	rc = cam_vfe_bus_ver3_config_port(ver3_bus_priv, rsrc_data, vfe_out_res_id,
+		plane, wm_res->is_per_port_acquire);
 	if (rc)
 		return rc;
 
 	wm_res->workq_info = workq;
-	wm_res->is_per_port_acquire = false;
 
 	CAM_DBG(CAM_ISP,
 		"VFE:%d WM:%d %s processed width:%d height:%d stride:%d format:0x%X en_ubwc:%d %s",
@@ -4978,7 +4994,6 @@ static int cam_vfe_bus_ver3_update_res_comp_grp(
 	struct cam_isp_resource_node        *comp_grp,
 	struct cam_vfe_bus_ver3_comp_grp_acquire_args *comp_acq_args)
 {
-	int rc = 0;
 	struct cam_vfe_bus_ver3_comp_grp_data  *rsrc_data = comp_grp->res_priv;
 
 	if (comp_grp->res_state == CAM_ISP_RESOURCE_STATE_AVAILABLE) {
@@ -5021,7 +5036,7 @@ static int cam_vfe_bus_ver3_update_res_comp_grp(
 	rsrc_data->composite_mask |= comp_acq_args->composite_mask;
 	comp_grp->is_per_port_acquire = false;
 
-	return rc;
+	return 0;
 }
 
 static int cam_vfe_bus_ver3_update_res_vfe_out(void *bus_priv, void *acquire_args,

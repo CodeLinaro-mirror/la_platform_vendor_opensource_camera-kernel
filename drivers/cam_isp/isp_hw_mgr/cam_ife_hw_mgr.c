@@ -1600,6 +1600,33 @@ static int cam_ife_hw_mgr_is_rdi_res(uint32_t res_id)
 	return rc;
 }
 
+static inline bool cam_ife_hw_mgr_check_outport_supported_for_lite(
+	uint32_t res_type)
+{
+	bool vfe_out_supported_lite = false;
+
+	switch (res_type) {
+	case CAM_ISP_IFE_OUT_RES_RDI_0:
+	case CAM_ISP_IFE_OUT_RES_RDI_1:
+	case CAM_ISP_IFE_OUT_RES_RDI_2:
+	case CAM_ISP_IFE_OUT_RES_RDI_3:
+	case CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW:
+//	case CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW1:
+//	case CAM_ISP_IFE_LITE_OUT_RES_PREPROCESS_RAW2:
+	case CAM_ISP_IFE_LITE_OUT_RES_STATS_BG:
+//	case CAM_ISP_IFE_LITE_OUT_RES_STATS_BHIST:
+		vfe_out_supported_lite = true;
+		break;
+	default:
+		vfe_out_supported_lite = false;
+		CAM_DBG(CAM_ISP, "Invalid isp res id: %d not supported for lite target",
+			res_type);
+		break;
+	}
+
+	return vfe_out_supported_lite;
+}
+
 static inline bool cam_ife_hw_mgr_is_ife_out_port(uint32_t res_id)
 {
 	bool is_ife_out = false;
@@ -4034,6 +4061,12 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_pixel(
 			res_type))
 			continue;
 
+		if (in_port->can_use_lite) {
+			if (!cam_ife_hw_mgr_check_outport_supported_for_lite(
+				res_type))
+				continue;
+		}
+
 		CAM_DBG(CAM_ISP, "res_type 0x%x, ctx_idx: %u per_port_acquire: %d",
 			res_type, ife_ctx->ctx_index, per_port_acquire);
 
@@ -5258,9 +5291,10 @@ end:
 static int cam_ife_hw_mgr_acquire_res_ife_src(
 	struct cam_ife_hw_mgr_ctx *ife_ctx,
 	struct cam_isp_in_port_generic_info *in_port,
-	bool acquire_lcr, bool acquire_ppp,
+	bool acquire_lcr, bool acquire_ppp, bool is_rdi_res,
 	uint32_t *acquired_hw_id,
 	uint32_t *acquired_hw_path,
+	uint32_t res_path_id,
 	int   index)
 {
 	int rc                = -1;
@@ -5295,13 +5329,18 @@ static int cam_ife_hw_mgr_acquire_res_ife_src(
 		if (!per_port_acquire) {
 			if (csid_res->num_children && !acquire_lcr)
 				continue;
-
-			if (acquire_lcr && csid_res->res_id != CAM_IFE_PIX_PATH_RES_IPP)
-				continue;
-
-			if (csid_res->res_id == CAM_IFE_PIX_PATH_RES_PPP && !acquire_ppp)
+		} else {
+			if ((csid_res->res_id != res_path_id) && !(is_rdi_res &&
+				(csid_res->res_id >= CAM_IFE_PIX_PATH_RES_RDI_0 &&
+				csid_res->res_id <= CAM_IFE_PIX_PATH_RES_RDI_5)))
 				continue;
 		}
+
+		if (acquire_lcr && csid_res->res_id != CAM_IFE_PIX_PATH_RES_IPP)
+			continue;
+
+		if (csid_res->res_id == CAM_IFE_PIX_PATH_RES_PPP && !acquire_ppp)
+			continue;
 
 		/*
 		 * For Multi-context cases, acquire for different hw contexts of the same src
@@ -7164,9 +7203,9 @@ static int cam_ife_hw_mgr_acquire_ife_src_stream_grp(
 
 	if (cam_ife_mgr_check_res_path_enabled(CAM_ISP_PXL_PATH, index)) {
 		rc = cam_ife_hw_mgr_acquire_res_ife_src(ife_ctx,
-			in_port, false, false,
+			in_port, false, false, false,
 			acquired_hw_id, acquired_hw_path,
-			index);
+			CAM_IFE_PIX_PATH_RES_IPP, index);
 		if (rc) {
 			CAM_ERR(CAM_ISP,
 				"Acquire IFE IPP SRC resource Failed");
@@ -7174,10 +7213,15 @@ static int cam_ife_hw_mgr_acquire_ife_src_stream_grp(
 		}
 	}
 
+	/* in case of rdi_res, pix path is sent as rdi0 always.
+	 * This rdi0 path doesn't play any role for rdi res.
+	 * Just for compilation purpose PIX_PATH_RES_RDI_0 is added for rdi res.
+	 */
 	if (g_ife_sns_grp_cfg.grp_cfg[index].rdi_stream_cfg_cnt) {
 		rc = cam_ife_hw_mgr_acquire_res_ife_src(ife_ctx,
-			in_port, false, false,
+			in_port, false, false, true,
 			acquired_hw_id, acquired_hw_path,
+			CAM_IFE_PIX_PATH_RES_RDI_0,
 			index);
 
 		if (rc) {
@@ -7189,9 +7233,9 @@ static int cam_ife_hw_mgr_acquire_ife_src_stream_grp(
 
 	if (cam_ife_mgr_check_res_path_enabled(CAM_ISP_LCR_PATH, index)) {
 		rc = cam_ife_hw_mgr_acquire_res_ife_src(
-			ife_ctx, in_port, true, false,
+			ife_ctx, in_port, true, false, false,
 			acquired_hw_id, acquired_hw_path,
-			index);
+			CAM_IFE_PIX_PATH_RES_IPP, index);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Acquire IFE LCR SRC resource Failed");
 			goto err;
@@ -7201,8 +7245,8 @@ static int cam_ife_hw_mgr_acquire_ife_src_stream_grp(
 
 	if (cam_ife_mgr_check_res_path_enabled(CAM_ISP_PPP_PATH, index)) {
 		rc = cam_ife_hw_mgr_acquire_res_ife_src(ife_ctx, in_port,
-				false, true, acquired_hw_id, acquired_hw_path,
-				index);
+				false, true, false, acquired_hw_id, acquired_hw_path,
+				CAM_IFE_PIX_PATH_RES_PPP, index);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Acquire IFE PPP SRC resource Failed");
 			goto err;
@@ -7458,8 +7502,9 @@ static int cam_ife_mgr_acquire_hw_for_ctx(
 					acquired_hw_id, acquired_hw_path);
 		} else {
 			rc = cam_ife_hw_mgr_acquire_res_ife_src(ife_ctx,
-				in_port, false, false,
+				in_port, false, false, false,
 				acquired_hw_id, acquired_hw_path,
+				CAM_IFE_PIX_PATH_RES_IPP,
 				CAM_IFE_STREAM_GRP_INDEX_NONE);
 		}
 
@@ -7472,11 +7517,17 @@ static int cam_ife_mgr_acquire_hw_for_ctx(
 	}
 
 	/* get ife RDI src resource for non SFE streams */
+
+	/* in case of rdi_res, pix path is sent as rdi0 always.
+	 * This rdi0 path doesn't play any role for rdi res.
+	 * Just for compilation purpose PIX_PATH_RES_RDI_0 is added for rdi res.
+	 */
 	if (in_port->rdi_count) {
 		if (ife_ctx->ctx_type != CAM_IFE_CTX_TYPE_SFE) {
 			rc = cam_ife_hw_mgr_acquire_res_ife_src(ife_ctx,
-				in_port, false, false,
+				in_port, false, false, true,
 				acquired_hw_id, acquired_hw_path,
+				CAM_IFE_PIX_PATH_RES_RDI_0,
 				CAM_IFE_STREAM_GRP_INDEX_NONE);
 
 			if (rc) {
@@ -7490,8 +7541,9 @@ static int cam_ife_mgr_acquire_hw_for_ctx(
 
 	if (in_port->lcr_count) {
 		rc = cam_ife_hw_mgr_acquire_res_ife_src(
-			ife_ctx, in_port, true, false,
+			ife_ctx, in_port, true, false, false,
 			acquired_hw_id, acquired_hw_path,
+			CAM_IFE_PIX_PATH_RES_IPP,
 			CAM_IFE_STREAM_GRP_INDEX_NONE);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Acquire IFE LCR SRC resource Failed, ctx_idx: %u",
@@ -7503,7 +7555,8 @@ static int cam_ife_mgr_acquire_hw_for_ctx(
 	/* PPP path is from CSID->IFE bypassing SFE */
 	if (in_port->ppp_count) {
 		rc = cam_ife_hw_mgr_acquire_res_ife_src(ife_ctx, in_port,
-				false, true, acquired_hw_id, acquired_hw_path,
+				false, true, false, acquired_hw_id, acquired_hw_path,
+				CAM_IFE_PIX_PATH_RES_PPP,
 				CAM_IFE_STREAM_GRP_INDEX_NONE);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Acquire IFE PPP SRC resource Failed, ctx_idx: %u",
