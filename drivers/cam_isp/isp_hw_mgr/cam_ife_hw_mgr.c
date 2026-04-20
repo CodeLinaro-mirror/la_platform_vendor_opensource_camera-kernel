@@ -19049,6 +19049,63 @@ err:
 	return rc;
 }
 
+static int cam_ife_mgr_set_fast_path_timestamp_notifier(
+	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx,
+	struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
+{
+	int                                             rc = 0, i;
+	struct cam_isp_hw_fast_path_timestamp_notifier  notifier_ts = {0};
+	struct cam_isp_hw_mgr_res                      *hw_mgr_res;
+	struct cam_isp_resource_node                   *node_res;
+	struct cam_hw_intf                             *hw_intf;
+
+	/* Check for fastpath */
+	if (!hw_mgr_ctx->flags.is_ul_path)
+		return -EAGAIN;
+
+	notifier_ts.data = isp_hw_cmd_args->cmd_data;
+	notifier_ts.handler_cb = isp_hw_cmd_args->u.fastpath_timestamp_handler;
+
+	list_for_each_entry(hw_mgr_res, &hw_mgr_ctx->res_list_ife_csid, list) {
+		for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
+			if (!hw_mgr_res->hw_res[i])
+				continue;
+
+			node_res = hw_mgr_res->hw_res[i];
+
+			CAM_DBG(CAM_ISP,
+				"ctx_idx:%d evaluating csid_res_id:%d split:%d res_type:%d",
+				hw_mgr_ctx->ctx_index, node_res->res_id, i,
+				node_res->res_type);
+
+			hw_intf = node_res->hw_intf;
+			if (hw_intf->hw_ops.process_cmd) {
+
+				notifier_ts.res = node_res;
+				rc = hw_intf->hw_ops.process_cmd(
+					hw_intf->hw_priv,
+					CAM_ISP_HW_CMD_FAST_TIMESTAMP_NOTIFIER,
+					&notifier_ts, sizeof(notifier_ts));
+				if (rc) {
+					CAM_ERR(CAM_ISP,
+						"ctx_idx:%d Failed to assign UL timestamp "
+						"handler for csid_res_id:%d split:%d",
+						hw_mgr_ctx->ctx_index, node_res->res_id, i);
+					goto end;
+				}
+
+				CAM_DBG(CAM_ISP,
+					"ctx_idx:%d successfully registered UL timestamp "
+					"notifier csid_res_id:%d split:%d",
+					hw_mgr_ctx->ctx_index, node_res->res_id, i);
+			}
+		}
+	}
+
+end:
+	return rc;
+}
+
 static int cam_ife_mgr_set_fast_path_notifier(
 	struct cam_ife_hw_mgr_ctx *hw_mgr_ctx,
 	struct cam_isp_hw_cmd_args *isp_hw_cmd_args)
@@ -19378,6 +19435,9 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			break;
 		case CAM_ISP_HW_MGR_FAST_RESULT_NOTIFIER_CFG:
 			rc = cam_ife_mgr_set_fast_path_notifier(ctx, isp_hw_cmd_args);
+			break;
+		case CAM_ISP_HW_MGR_FAST_TIMESTAMP_NOTIFIER_CFG:
+			rc = cam_ife_mgr_set_fast_path_timestamp_notifier(ctx, isp_hw_cmd_args);
 			break;
 		case CAM_ISP_HW_MGR_GET_LAST_CONSUMED_ADDR_INFO:
 			rc = cam_ife_mgr_get_last_consumed_addr_info(ctx, isp_hw_cmd_args);
@@ -20314,7 +20374,15 @@ static int cam_ife_hw_mgr_handle_csid_camif_sof(
 			ts.tv_nsec);
 			CAM_DBG(CAM_ISP, "boot_time 0x%llx",
 				sof_done_event_data.boot_time);
-		} else {
+		} else if (ctx->flags.is_ul_path)
+			/* UL: timestamp + boot_time already handled in
+			 * CSID top half via fastpath_timestamp_notifier.
+			 * ISP ctx guard in __cam_isp_ctx_update_sof_ts_util
+			 * will skip update since timestamps match.
+			 * Skip cam_ife_mgr_cmd_get_sof_timestamp entirely.
+			 */
+			goto sof_cb;
+		else {
 			if (ctx->flags.is_offline)
 				cam_ife_hw_mgr_get_offline_sof_timestamp(
 					&sof_done_event_data.timestamp,
@@ -20325,7 +20393,7 @@ static int cam_ife_hw_mgr_handle_csid_camif_sof(
 					&sof_done_event_data.timestamp,
 					&sof_done_event_data.boot_time, NULL);
 		}
-
+sof_cb:
 		ife_hw_irq_sof_cb(ctx->common.cb_priv,
 			CAM_ISP_HW_EVENT_SOF, (void *)&sof_done_event_data);
 
@@ -20388,7 +20456,15 @@ static int cam_ife_hw_mgr_handle_csid_camif_epoch(
 				(uint64_t)((ts.tv_sec * 1000000000) + ts.tv_nsec);
 			CAM_DBG(CAM_ISP, "boot_time 0x%llx, ctx_idx: %u",
 				epoch_done_event_data.boot_time, ctx->ctx_index);
-		} else {
+		} else if (ctx->flags.is_ul_path)
+			/* UL: timestamp + boot_time already handled in
+			 * CSID top half via fastpath_timestamp_notifier.
+			 * ISP ctx guard in __cam_isp_ctx_handle_sof_util
+			 * will skip update since timestamps match.
+			 * Skip cam_ife_mgr_cmd_get_sof_timestamp entirely.
+			 */
+			goto sof_cb;
+		else {
 			if (ctx->flags.is_offline)
 				cam_ife_hw_mgr_get_offline_sof_timestamp(
 				&epoch_done_event_data.timestamp,
@@ -20399,7 +20475,7 @@ static int cam_ife_hw_mgr_handle_csid_camif_epoch(
 				&epoch_done_event_data.timestamp,
 				&epoch_done_event_data.boot_time, NULL);
 		}
-
+sof_cb:
 		ife_hw_irq_epoch_cb(ctx->common.cb_priv,
 			CAM_ISP_HW_EVENT_EPOCH, (void *)&epoch_done_event_data);
 
