@@ -230,6 +230,75 @@ release_mutex:
 	return rc;
 }
 
+static inline int  precise_flash_timer_init(struct cam_flash_ctrl *flash_ctrl)
+{
+	int  rc = 0;
+	char wq_name[CAM_FLASH_WQ_NAME_SIZE];
+
+	if (!flash_ctrl) {
+		CAM_ERR(CAM_FLASH, "Fctrl is NULL");
+		return -EINVAL;
+	}
+
+	flash_ctrl->precise_flash.on_time_ms = 0;
+	flash_ctrl->precise_flash.off_time_ms = 0;
+	hrtimer_init(&flash_ctrl->precise_flash.on_timer,
+		CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	hrtimer_init(&flash_ctrl->precise_flash.off_timer,
+		CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	flash_ctrl->precise_flash.on_timer.function = on_timer_function;
+	flash_ctrl->precise_flash.off_timer.function = off_timer_function;
+	flash_ctrl->precise_flash.enabled = false;
+	flash_ctrl->precise_flash.timer_state = TIMER_STATE_INIT;
+
+	snprintf(wq_name, CAM_FLASH_WQ_NAME_SIZE, "%s%d%s", "camflash",
+			flash_ctrl->soc_info.index, "_wq");
+
+	rc = cam_req_mgr_workq_create(wq_name, CAM_FLASH_WORKQ_NUM_TASK,
+			&flash_ctrl->precise_flash.timer_workq, CRM_WORKQ_USAGE_IRQ, 0,
+			cam_flash_work_queue_handler);
+	if (rc) {
+		CAM_ERR(CAM_FLASH, "unable to create workq for %s",
+			wq_name);
+		return rc;
+	}
+
+	for (int i = 0; i < CAM_FLASH_WORKQ_NUM_TASK; i++) {
+		flash_ctrl->precise_flash.timer_workq->task.pool[i].payload =
+			flash_ctrl;
+	}
+	CAM_DBG(CAM_FLASH,
+		"fctrl: %p on_timer: %p off_timer: %p ",
+		flash_ctrl, &flash_ctrl->precise_flash.on_timer,
+		&flash_ctrl->precise_flash.off_timer);
+
+	return rc;
+}
+
+static int precise_flash_timer_deinit(struct cam_flash_ctrl *flash_ctrl)
+{
+	int rc = 0, ret = 0;
+
+	if (!flash_ctrl) {
+		CAM_ERR(CAM_FLASH, "Fctrl is NULL");
+		return -EINVAL;
+	}
+
+	flash_ctrl->precise_flash.enabled = false;
+	flash_ctrl->precise_flash.timer_state = TIMER_STATE_INVALID;
+	cam_req_mgr_workq_destroy(&flash_ctrl->precise_flash.timer_workq);
+	rc = hrtimer_cancel(&flash_ctrl->precise_flash.on_timer);
+	if (rc)
+		CAM_ERR(CAM_FLASH,
+			"The HR ON Timer was still in use...rc: %d", rc);
+	ret = hrtimer_cancel(&flash_ctrl->precise_flash.off_timer);
+	if (ret)
+		CAM_ERR(CAM_FLASH,
+			"The HR OFF Timer was still in use...rc: %d", rc);
+
+	return (rc | ret);
+}
+
 static int32_t cam_flash_init_default_params(struct cam_flash_ctrl *fctrl)
 {
 	/* Validate input parameters */
@@ -345,6 +414,8 @@ static void cam_flash_platform_remove(struct platform_device *pdev)
 
 	CAM_INFO(CAM_FLASH, "Platform remove invoked");
 	mutex_lock(&fctrl->flash_mutex);
+	if (precise_flash_timer_deinit(fctrl))
+		CAM_WARN(CAM_FLASH, "hrtimer deinit failed");
 	cam_flash_shutdown(fctrl);
 	mutex_unlock(&fctrl->flash_mutex);
 	cam_unregister_subdev(&(fctrl->v4l2_dev_str));
@@ -361,6 +432,9 @@ static void cam_flash_i2c_driver_remove(struct i2c_client *client)
 	if (!fctrl) {
 		CAM_ERR(CAM_FLASH, "Flash device is NULL");
 	}
+
+	if (precise_flash_timer_deinit(fctrl))
+		CAM_WARN(CAM_FLASH, "hrtimer deinit failed");
 
 	CAM_INFO(CAM_FLASH, "i2c driver remove invoked");
 	/*Free Allocated Mem */
@@ -418,8 +492,13 @@ static int cam_flash_init_subdev(struct cam_flash_ctrl *fctrl)
 	fctrl->v4l2_dev_str.token = fctrl;
 
 	rc = cam_register_subdev(&(fctrl->v4l2_dev_str));
-	if (rc)
+	if (rc) {
 		CAM_ERR(CAM_FLASH, "Fail to create subdev with %d", rc);
+		return rc;
+	}
+	rc = precise_flash_timer_init(fctrl);
+	if (rc < 0)
+		CAM_ERR(CAM_FLASH, "Precise Flash Init Failed: rc: %d", rc);
 
 	return rc;
 }
