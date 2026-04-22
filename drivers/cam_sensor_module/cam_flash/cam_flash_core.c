@@ -15,7 +15,6 @@
 #include "cam_mem_mgr_api.h"
 #include <linux/leds.h>
 #include <linux/led-class-flash.h>
-#include <linux/hrtimer.h>
 #if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
 #include <linux/soc/qcom/leds-qcom-flash.h>
 #endif
@@ -378,83 +377,35 @@ end:
 	return rc;
 }
 
-enum hrtimer_restart off_timer_function(struct hrtimer *timer)
+static uint32_t cam_flash_get_max_current(
+	struct led_classdev   *pmic_lcdev,
+	uint32_t     static_max_current)
 {
-	struct precise_flash_ctrl_t *p_flash = NULL;
-	struct cam_flash_ctrl       *flash_ctrl = NULL;
+	int  max_query_current_ma = 0;
+	uint32_t max_current_ma;
+#if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
 	int rc = 0;
-	int i;
 
-	if (!timer) {
-		CAM_ERR(CAM_FLASH, "Invalid Timer: %p", timer);
-		return HRTIMER_NORESTART;
+	/* Query the Dynamic max Current from Battery */
+	rc = qcom_flash_led_get_max_avail_current(
+		pmic_lcdev, &max_query_current_ma);
+	if (rc) {
+		CAM_ERR(CAM_FLASH, "Query Current Failed rc: %d", rc);
+		return 0;
+	}
+#else
+	max_query_current_ma = static_max_current / UA_PER_MA;
+#endif
+	/* Derive static max current from DT in mA */
+	max_current_ma = static_max_current / UA_PER_MA;
+	if (max_query_current_ma < max_current_ma) {
+		max_current_ma = max_query_current_ma;
+		CAM_WARN(CAM_FLASH,
+			"static_curr: %d mA > qcurr: %d mA",
+			max_current_ma, max_query_current_ma);
 	}
 
-	p_flash = container_of(timer,
-		struct precise_flash_ctrl_t, off_timer);
-	flash_ctrl = container_of(p_flash,
-		struct cam_flash_ctrl, precise_flash);
-
-	/* Issue Strobe signal for each channel */
-	for (i = 0; i < flash_ctrl->flash_num_sources; i++)	{
-		CAM_DBG(CAM_FLASH,
-			"LED_FLASH[%d]: set FALSE for LED Flash STROBE", i);
-		rc |= led_set_flash_strobe(flash_ctrl->pmic_flcdev[i], false);
-	}
-
-	if (rc)
-		CAM_ERR(CAM_FLASH,
-			"LED_Flash[%d]: set flash strobe failed, rc=%d", i, rc);
-	else
-		p_flash->enabled = false;
-
-	/* Reset the Timer */
-	flash_ctrl->precise_flash.off_time_ms = 0;
-	flash_ctrl->precise_flash.on_time_ms = 0;
-
-	return HRTIMER_NORESTART;
-}
-
-enum hrtimer_restart on_timer_function(struct hrtimer *timer)
-{
-	struct precise_flash_ctrl_t *p_flash = NULL;
-	struct cam_flash_ctrl       *flash_ctrl = NULL;
-	int rc = 0;
-	int i;
-
-	if (!timer) {
-		CAM_ERR(CAM_FLASH, "Invalid Timer: %p", timer);
-		return HRTIMER_NORESTART;
-	}
-
-	CAM_DBG(CAM_FLASH, "timer: %p", timer);
-
-	p_flash = container_of(timer,
-		struct precise_flash_ctrl_t, on_timer);
-	flash_ctrl = container_of(p_flash,
-		struct cam_flash_ctrl, precise_flash);
-
-	/* Issue Strobe signal for each channel */
-	for (i = 0; i < flash_ctrl->flash_num_sources; i++)	{
-		CAM_DBG(CAM_FLASH,
-			"LED_FLASH[%d]: set TRUE for LED Flash STROBE", i);
-		rc |= led_set_flash_strobe(flash_ctrl->pmic_flcdev[i], true);
-	}
-
-	if (rc < 0) {
-		p_flash->enabled = false;
-		CAM_ERR(CAM_FLASH,
-			"LED_Flash[%d]:set flash strobe failed, rc=%d", i, rc);
-	} else {
-		if (p_flash->off_time_ms) {
-			hrtimer_start(&p_flash->off_timer,
-				ms_to_ktime(p_flash->off_time_ms),
-				HRTIMER_MODE_REL);
-		}
-		p_flash->enabled = true;
-	}
-
-	return HRTIMER_NORESTART;
+	return max_current_ma;
 }
 
 static void cam_flash_set_brightness(struct cam_flash_ctrl *flash_ctrl,
@@ -463,10 +414,7 @@ static void cam_flash_set_brightness(struct cam_flash_ctrl *flash_ctrl,
 	struct cam_flash_private_soc *soc_private = NULL;
 	enum led_brightness brightness = LED_OFF;
 	uint32_t curr = 0, max_current = 0;
-	int  max_query_current_ma, i;
-#if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
-	int rc = 0;
-#endif
+	int  i;
 
 	soc_private = (struct cam_flash_private_soc *)
 		flash_ctrl->soc_info.soc_private;
@@ -486,33 +434,23 @@ static void cam_flash_set_brightness(struct cam_flash_ctrl *flash_ctrl,
 			flash_ctrl->torch_trigger[i], curr);
 	}
 	if (flash_ctrl->led_cldev_en == 1) {
-		for (i = 0; i < flash_ctrl->flash_num_sources; i++) {
-			max_query_current_ma = 0;
-#if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
-			rc = qcom_flash_led_get_max_avail_current(
-					flash_ctrl->pmic_lcdev[i], &max_query_current_ma);
-			if (rc) {
-				CAM_ERR(CAM_FLASH, "Query Current Failed rc: %d", rc);
-				return;
-			}
-#else
-			max_query_current_ma =
-				soc_private->torch_max_current[i] / UA_PER_MA;
-#endif
+		for (i = 0; (i < flash_ctrl->flash_num_sources) &&
+			(flash_ctrl->pmic_lcdev[i] != NULL); i++) {
+			max_current = cam_flash_get_max_current(flash_ctrl->pmic_lcdev[i],
+				soc_private->torch_max_current[i]);
 			if ((flash_data->led_current_ma[i]) <=
-				max_query_current_ma)
+				max_current)
 				curr = flash_data->led_current_ma[i];
 			else
-				curr = max_query_current_ma;
-			if (flash_ctrl->pmic_lcdev[i] != NULL) {
-				brightness =
-					LED_CURRENT_TO_BRIGHTNESS(
-						curr, (uint32_t)max_query_current_ma);
-				CAM_DBG(CAM_FLASH,
-					"Led_Torch[%d]: Current: %d max_qcurr: %d brightness: %d",
-					i, curr, max_query_current_ma, brightness);
-				led_set_brightness(flash_ctrl->pmic_lcdev[i], brightness);
-			}
+				curr = max_current;
+
+			brightness =
+				LED_CURRENT_TO_BRIGHTNESS(
+					curr, (uint32_t)max_current);
+			CAM_DBG(CAM_FLASH,
+				"Led_Torch[%d]: Current: %d max_curr: %d brightness: %d",
+				i, curr, max_current, brightness);
+			led_set_brightness(flash_ctrl->pmic_lcdev[i], brightness);
 		}
 	}
 }
@@ -546,20 +484,25 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 				else
 					curr = max_current;
 			}
-			if (flash_ctrl->led_cldev_en == 1) {
+			if ((flash_ctrl->led_cldev_en == 1) &&
+				(flash_ctrl->pmic_lcdev[i] != NULL)) {
 				/*flash_max_current[i] is in micro amp*/
-				max_current = soc_private->flash_max_current[i];
-				if ((flash_data->led_current_ma[i] * UA_PER_MA) <=
+				max_current =
+					cam_flash_get_max_current(flash_ctrl->pmic_lcdev[i],
+					soc_private->flash_max_current[i]);
+				if (flash_data->led_current_ma[i] <=
 					max_current)
-					curr = (flash_data->led_current_ma[i] * UA_PER_MA);
+					curr = flash_data->led_current_ma[i];
 				else
 					curr = max_current;
-				CAM_DBG(CAM_FLASH, "Led_Flash[%d]: Current: %d max_curr: %d",
+
+				CAM_DBG(CAM_FLASH, "Led_Flash[%d]: Current: %d mA max_curr: %d mA",
 					i, curr, max_current);
+				curr = curr * UA_PER_MA;
 				rc = led_set_flash_brightness(flash_ctrl->pmic_flcdev[i], curr);
 				if (rc) {
 					CAM_ERR(CAM_FLASH,
-						"LED_Flash[%d]:curr:%d set brightness failed, rc=%d",
+						"LED_Flash[%d]:curr:%d uA set brightness failed, rc=%d",
 						i, curr, rc);
 					return rc;
 				}
@@ -606,7 +549,6 @@ int cam_flash_off(struct cam_flash_ctrl *flash_ctrl)
 		cam_res_mgr_led_trigger_event(flash_ctrl->switch_trigger,
 			(enum led_brightness)LED_SWITCH_OFF);
 	else if (flash_ctrl->led_cldev_en == 1) {
-		flash_ctrl->flash_state = CAM_FLASH_STATE_START;
 		for (i = 0; i < flash_ctrl->flash_num_sources; i++) {
 			if (flash_ctrl->pmic_lcdev[i] != NULL) {
 				CAM_DBG(CAM_FLASH,
@@ -614,7 +556,6 @@ int cam_flash_off(struct cam_flash_ctrl *flash_ctrl)
 				led_set_brightness_sync(flash_ctrl->pmic_lcdev[i], LED_OFF);
 			}
 		}
-		flash_ctrl->flash_state = CAM_FLASH_STATE_CONFIG;
 	}
 
 	return 0;
@@ -625,7 +566,6 @@ static int cam_flash_low(
 	struct cam_flash_frame_setting *flash_data)
 {
 	int i = 0, rc = 0;
-	struct led_classdev_flash *led_cdev_flash = NULL;
 
 	if (!flash_data) {
 		CAM_ERR(CAM_FLASH, "Flash Data Null");
@@ -637,11 +577,6 @@ static int cam_flash_low(
 			cam_res_mgr_led_trigger_event(
 				flash_ctrl->flash_trigger[i],
 				LED_OFF);
-		} else if (flash_ctrl->pmic_flcdev[i] != NULL) {
-			led_cdev_flash = flash_ctrl->pmic_flcdev[i];
-			CAM_DBG(CAM_FLASH, "Led_flash[%d]: set strobe to false",
-				i);
-			led_set_flash_strobe(led_cdev_flash, false);
 		}
 	}
 
