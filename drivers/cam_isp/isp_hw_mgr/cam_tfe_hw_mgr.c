@@ -5062,11 +5062,15 @@ static int cam_tfe_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			cam_tfe_mgr_sof_irq_debug(ctx,
 				isp_hw_cmd_args->u.sof_irq_enable);
 			break;
-		case CAM_ISP_HW_MGR_CMD_CTX_TYPE:
+		case CAM_ISP_HW_MGR_CMD_CTX_TYPE: {
+			struct cam_worker_wrapper_ctx *worker_ctx = ctx->common.worker_ctx;
+
+			isp_hw_cmd_args->u.worker_type = worker_ctx->worker_type;
 			if (ctx->is_rdi_only_context)
 				isp_hw_cmd_args->u.ctx_type = CAM_ISP_CTX_RDI;
 			else
 				isp_hw_cmd_args->u.ctx_type = CAM_ISP_CTX_PIX;
+			}
 			break;
 		case CAM_ISP_HW_MGR_GET_PACKET_OPCODE:
 			packet = (struct cam_packet *)
