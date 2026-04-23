@@ -640,10 +640,8 @@ static int ais_ife_csid_config_rdi_path(
 
 	ais_ife_csid_ver_config_camif(csid_hw, path_cfg, id);
 
-	/* [TODO] corp: disable first, have not verity yet */
-	path_cfg->crop_enable = 0;
 	if (path_cfg->crop_enable) {
-		val = (((path_cfg->end_pixel & 0xFFFF) <<
+		val = (((path_cfg->end_pixel & 0x3FFF) <<
 			csid_reg->cmn_reg->crop_shift) |
 			(path_cfg->start_pixel & 0xFFFF));
 
@@ -652,7 +650,7 @@ static int ais_ife_csid_config_rdi_path(
 		CAM_DBG(CAM_ISP, "CSID:%d Horizontal crop config val: 0x%x",
 			csid_hw->hw_intf->hw_idx, val);
 
-		val = (((path_cfg->end_line & 0xFFFF) <<
+		val = (((path_cfg->end_line & 0x3FFF) <<
 			csid_reg->cmn_reg->crop_shift) |
 			(path_cfg->start_line & 0xFFFF));
 
@@ -732,6 +730,9 @@ static int ais_ife_csid_config_rdi_path(
 	cfg1 |= (path_cfg->plain_fmt << csid_reg->cmn_reg->plain_fmt_shit_val) |
 			(path_cfg->crop_enable  << csid_reg->cmn_reg->crop_h_en_shift_val) |
 			(path_cfg->crop_enable  << csid_reg->cmn_reg->crop_v_en_shift_val);
+
+	if (path_cfg->crop_enable)
+		cfg1 |= (1 << csid_reg->rdi_reg[id]->early_eof_en_shift_val);
 
 	//plain_alignment_shift_val
 	cfg1 |= (1 << 11);
@@ -1786,6 +1787,7 @@ static int ais_ife_csid_process_cmd(void *hw_priv,
 		break;
 	case AIS_IFE_CSID_CMD_DISABLE_RDI:
 		rc = ais_ife_csid_disable_rdi(csid_hw, cmd_args);
+		break;
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d unsupported cmd:%d",
 			csid_hw->hw_intf->hw_idx, cmd_type);
