@@ -33,6 +33,7 @@
 #include "cam_subdev.h"
 #include "cam_mem_mgr.h"
 #include "cam_sensor_cmn_header.h"
+#include "cam_sensor_util.h"
 #include "cam_soc_util.h"
 #include "cam_debug_util.h"
 #include "cam_sensor_io.h"
@@ -49,6 +50,8 @@
 #define CAM_FLASH_PACKET_OPCODE_SET_OPS              1
 #define CAM_FLASH_PACKET_OPCODE_NON_REALTIME_SET_OPS 2
 #define CAM_FLASH_WORKER_NUM_TASK                    1
+#define CAM_FLASH_PACKET_OPCODE_STREAM_OFF           3
+#define CAM_FLASH_PACKET_OPCODE_INIT_FIRE            4
 
 #define CAM_FLASH_WQ_NAME_SIZE  32
 
@@ -152,6 +155,7 @@ struct cam_flash_frame_setting {
  * @torch_op_current    : Torch operational current
  * @torch_max_current   : Max supported current for LED in torch mode
  * @is_wled_flash       : Detection between WLED/LED flash
+ * @flash_type          : Flash type
  */
 
 struct cam_flash_private_soc {
@@ -164,6 +168,7 @@ struct cam_flash_private_soc {
 	uint32_t     torch_op_current[CAM_FLASH_MAX_LED_TRIGGERS];
 	uint32_t     torch_max_current[CAM_FLASH_MAX_LED_TRIGGERS];
 	bool         is_wled_flash;
+	uint32_t     flash_type;
 };
 
 /**
@@ -221,6 +226,8 @@ struct cam_flash_func_tbl {
  * @io_master_info      : Information about the communication master
  * @i2c_data            : I2C register settings
  * @last_flush_req      : last request to flush
+ * @streamoff_count     : Count to hold the number of times stream off called
+ * @apply_streamoff     : variable to store when to apply stream off
  * @led_cldev_en        : LED Class Device Available
  * @pmic_lcdev          : handle to led class device
  * @pmic_flcdev         : handle to led class device flash
@@ -253,6 +260,8 @@ struct cam_flash_ctrl {
 	struct camera_io_master             io_master_info;
 	struct i2c_data_settings            i2c_data;
 	uint32_t                            last_flush_req;
+	uint32_t                            streamoff_count;
+	int32_t                             apply_streamoff;
 	uint32_t                            led_cldev_en;
 	struct led_classdev                *pmic_lcdev[CAM_FLASH_MAX_LED_TRIGGERS];
 	struct led_classdev_flash          *pmic_flcdev[CAM_FLASH_MAX_LED_TRIGGERS];
