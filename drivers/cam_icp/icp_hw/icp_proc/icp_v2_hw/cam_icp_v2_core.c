@@ -1216,6 +1216,9 @@ int cam_icp_v2_process_cmd(void *priv, uint32_t cmd_type,
 	case CAM_ICP_CMD_PREP_SHUTDOWN:
 		rc = cam_icp_v2_prepare_shutdown(icp_v2_info);
 		break;
+	case CAM_ICP_CMD_DUMP_CLK:
+		rc = cam_soc_util_dump_clk(&icp_v2_info->soc_info);
+		break;
 	default:
 		CAM_ERR(CAM_ICP, "invalid command type=%u", cmd_type);
 		break;

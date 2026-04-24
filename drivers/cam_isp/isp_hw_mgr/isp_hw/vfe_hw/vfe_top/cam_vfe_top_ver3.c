@@ -758,6 +758,10 @@ int cam_vfe_top_ver3_process_cmd(void *device_priv, uint32_t cmd_type,
 				sof_addr_args);
 	}
 		break;
+	case CAM_ISP_HW_CMD_QUERY_CAP:
+		/*Not supported for v3*/
+		rc = 0;
+		break;
 	default:
 		rc = -EINVAL;
 		CAM_ERR(CAM_ISP, "Error, Invalid cmd:%d", cmd_type);

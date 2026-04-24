@@ -319,7 +319,6 @@ int cam_vfe_hw_init(struct cam_isp_hw_intf_data **vfe_hw_intf,
 		*vfe_hw_intf = &cam_vfe_hw_list[hw_idx];
 		rc = 0;
 	} else {
-		CAM_ERR(CAM_ISP, "inval param");
 		*vfe_hw_intf = NULL;
 		rc = -ENODEV;
 	}
