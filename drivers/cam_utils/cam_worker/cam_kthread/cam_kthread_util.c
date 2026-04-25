@@ -120,7 +120,6 @@ void cam_kthread_process(struct kthread_work *w)
 	struct cam_core_kthread *worker_kthread;
 	struct cam_kthread_task *task;
 	int32_t                  i = CAM_KTHREAD_TASK_PRIORITY_0;
-	static int               count = 0;
 	unsigned long            flags = 0;
 	ktime_t                  exec_start_time;
 	void                    *cb;
@@ -237,7 +236,6 @@ int cam_kthread_enqueue_task(struct cam_kthread_task *task,
 	int                      rc = 0;
 	struct cam_core_kthread *kthread;
 	unsigned long            flags = 0;
-	static int               count = 0;
 
 	if (!task) {
 		CAM_WARN(CAM_WORKER, "Invalid task pointer, can not schedule");
