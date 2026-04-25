@@ -3392,10 +3392,12 @@ int cam_sensor_power_up(struct cam_sensor_ctrl_t *s_ctrl)
 
 	if (s_ctrl->aon_camera_id != NOT_AON_CAM) {
 		CAM_INFO(CAM_SENSOR,
-			"Setup for Main Camera with csiphy index: %d",
-			s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY]);
+			"Setup for Main Camera with csiphy index: %d cam_id %d",
+			s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY],
+			s_ctrl->aon_camera_id);
 		rc = cam_sensor_util_aon_ops(true,
-			s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY]);
+			s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY],
+			s_ctrl->aon_config_index);
 		if (rc) {
 			CAM_ERR(CAM_SENSOR,
 				"Main camera access operation is not successful rc: %d",
@@ -3463,10 +3465,12 @@ int cam_sensor_power_down(struct cam_sensor_ctrl_t *s_ctrl)
 
 	if (s_ctrl->aon_camera_id != NOT_AON_CAM) {
 		CAM_INFO(CAM_SENSOR,
-			"Setup for AON FW with csiphy index: %d",
-			s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY]);
+			"Setup for AON FW with csiphy index: %d cam_id %d",
+			s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY],
+			s_ctrl->aon_camera_id);
 		rc = cam_sensor_util_aon_ops(false,
-			s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY]);
+			s_ctrl->sensordata->subdev_id[SUB_MODULE_CSIPHY],
+			s_ctrl->aon_config_index);
 		if (rc) {
 			CAM_ERR(CAM_SENSOR,
 				"AON FW access operation is not successful rc: %d",
