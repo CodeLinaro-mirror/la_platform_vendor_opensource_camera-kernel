@@ -662,13 +662,20 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 			}
 
 			if ((is_sensor_read) && (io_cfg != NULL)) {
+				struct cam_buf_io_cfg *p_io_cfg = io_cfg;
+
 				mutex_lock(&(s_ctrl->read_buf_lock));
-				rc = cam_sensor_util_add_read_buf_to_list(&(s_ctrl->read_buf_list),
-					io_cfg->mem_handle[0]);
-				if (rc < 0) {
-					CAM_ERR(CAM_SENSOR, "Add read buf to list failed rc:%d", rc);
-					mutex_unlock(&(s_ctrl->read_buf_lock));
-					goto end;
+				for (idx = 0; idx < csl_packet->num_io_configs; idx++) {
+					rc = cam_sensor_util_add_read_buf_to_list(&(s_ctrl->read_buf_list),
+						p_io_cfg->mem_handle[0]);
+
+					if (rc < 0) {
+						CAM_ERR(CAM_SENSOR, "Add read buf to list failed rc:%d", rc);
+						mutex_unlock(&(s_ctrl->read_buf_lock));
+						goto end;
+					}
+
+					p_io_cfg++;
 				}
 				mutex_unlock(&(s_ctrl->read_buf_lock));
 			}
