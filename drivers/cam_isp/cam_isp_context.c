@@ -11614,7 +11614,7 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp, int t
 	struct cam_isp_ul_resource_update_entry *res_data;
 	bool buffer_found;
 	uint8_t *producer_queue;
-	uint32_t rd_idx, wr_idx;
+	uint32_t rd_idx, wr_idx, next_wr_idx;
 	unsigned long flags;
 	struct cam_sync_hw_fence_res_info  *fence_res_info = NULL;
 	struct crm_worker_task                   *task = NULL;
@@ -11706,8 +11706,16 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp, int t
 						BATCH_PACKET_RESULT_NO_BUFFER)){
 						ctx_isp->ul_fp_results[wr_idx].status =
 							BATCH_PACKET_RESULT_NO_BUFFER;
+						next_wr_idx = INC_VAL(wr_idx, 1, MAX_IO_PACKETS);
+						/*
+						 * Sometimes umd thread does not retrieve results
+						 * in time. Need to check wr_idx and rd_idx to
+						 * avoid override the valid results
+						 */
+						if (next_wr_idx == rd_idx)
+							next_wr_idx = wr_idx;
 						atomic_set(&ctx_isp->ul_fp_params.write_idx,
-							INC_VAL(wr_idx, 1, MAX_IO_PACKETS));
+							next_wr_idx);
 						complete(&ctx_isp->ul_fp_params.fast_path_buf_done);
 					}
 					spin_unlock_irqrestore(
