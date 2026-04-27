@@ -1326,6 +1326,38 @@ int32_t cam_sensor_i2c_read_data(
 	return rc;
 }
 
+int32_t cam_sensor_io_dev_read_seq(struct camera_io_master *io_master_info,
+			       struct cam_sensor_i2c_reg_setting *read_setting)
+{
+	int32_t                   rc = 0;
+	uint8_t                   *read_buff = NULL;
+	uint32_t                  buff_length = 0;
+	uint32_t                  read_length = 0;
+
+	read_buff = read_setting->read_buff;
+	buff_length = read_setting->read_buff_len;
+	read_length = read_setting->data_type * read_setting->size;
+
+	if ((read_length > buff_length) ||
+		(read_length < read_setting->size)) {
+		CAM_ERR(CAM_SENSOR_UTIL,
+		"Invalid size, readLen:%d, bufLen:%d, size: %d",
+		read_length, buff_length,
+		read_setting->size);
+		return -EINVAL;
+	}
+
+	rc = camera_io_dev_read_seq(
+		io_master_info,
+		read_setting->reg_setting->reg_addr,
+		read_buff,
+		read_setting->addr_type,
+		read_setting->data_type,
+		read_length);
+
+	return rc;
+}
+
 int32_t msm_camera_fill_vreg_params(
 	struct cam_hw_soc_info *soc_info,
 	struct cam_sensor_power_setting *power_setting,

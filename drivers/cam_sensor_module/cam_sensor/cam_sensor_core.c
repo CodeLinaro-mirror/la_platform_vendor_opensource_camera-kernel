@@ -964,11 +964,14 @@ static int32_t cam_sensor_i2c_modes_util(
 		rc = cam_sensor_update_i2c_info(&i2c_list->slave_info,
 			s_ctrl,
 			false);
-	} else if ((i2c_list->op_code == CAM_SENSOR_I2C_READ_RANDOM) ||
-		(i2c_list->op_code == CAM_SENSOR_I2C_READ_SEQ)) {
+	} else if (i2c_list->op_code == CAM_SENSOR_I2C_READ_RANDOM) {
 		rc = cam_sensor_i2c_read_data(
 			&s_ctrl->i2c_data.read_settings,
 			&s_ctrl->io_master_info);
+	} else if (i2c_list->op_code == CAM_SENSOR_I2C_READ_SEQ) {
+		rc = cam_sensor_io_dev_read_seq(
+			io_master_info,
+			&(i2c_list->i2c_settings));
 	} else if (i2c_list->op_code == CAM_SENSOR_I2C_READ_APPEND_WRITE) {
 		CAM_DBG(CAM_SENSOR, "Captured READ_APPEND_WRITE OPCODE");
 		rc = camera_io_dev_read_append_write(io_master_info,
