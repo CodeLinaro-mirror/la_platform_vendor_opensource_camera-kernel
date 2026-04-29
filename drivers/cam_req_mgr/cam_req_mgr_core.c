@@ -98,11 +98,14 @@ void cam_req_mgr_handle_core_shutdown(void)
 	}
 }
 
-static int __cam_req_mgr_setup_payload(struct cam_req_mgr_core_worker *worker)
+static int __cam_req_mgr_setup_payload(struct cam_req_mgr_core_link *link)
 {
 	int32_t                  i = 0;
 	int                      rc = 0;
+	struct cam_req_mgr_core_worker *worker = NULL;
 	struct crm_task_payload *task_data = NULL;
+
+	worker = link->worker;
 
 	task_data = kcalloc(
 		worker->task.num_task, sizeof(*task_data),
@@ -113,6 +116,7 @@ static int __cam_req_mgr_setup_payload(struct cam_req_mgr_core_worker *worker)
 		for (i = 0; i < worker->task.num_task; i++)
 			worker->task.pool[i].payload = &task_data[i];
 	}
+	link->task_data = task_data;
 
 	return rc;
 }
@@ -2605,8 +2609,16 @@ error:
 static void __cam_req_mgr_free_link(struct cam_req_mgr_core_link *link)
 {
 	ptrdiff_t i;
+
+	/*
+	 * Acquire link->lock to synchronize with cam_req_mgr_cb_add_req()
+	 * and prevent TOCTOU race when freeing in_q
+	 */
+	mutex_lock(&link->lock);
 	kfree(link->req.in_q);
 	link->req.in_q = NULL;
+	mutex_unlock(&link->lock);
+
 	link->parent = NULL;
 	i = link - g_links;
 	CAM_DBG(CAM_CRM, "free link index %d", i);
@@ -2958,7 +2970,7 @@ int cam_req_mgr_process_add_req(void *priv, void *data)
 	struct cam_req_mgr_slot             *last_applied_slot = NULL;
 	struct crm_task_payload             *task_data = NULL;
 	struct cam_req_mgr_req_queue        *in_q;
-	struct cam_req_mgr_trigger_notify   notify_trigger;
+	struct cam_req_mgr_trigger_notify   notify_trigger = {0};
 
 	if (!data || !priv) {
 		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
@@ -3493,6 +3505,16 @@ static int cam_req_mgr_cb_add_req(struct cam_req_mgr_add_request *add_req)
 		link->state);
 
 	mutex_lock(&link->lock);
+
+	/*
+	 * UAF mitigation: Check if in_q was freed
+	 */
+	if (!link->req.in_q) {
+		CAM_ERR(CAM_CRM, "in_q freed for link %x", add_req->link_hdl);
+		mutex_unlock(&link->lock);
+		return -EINVAL;
+	}
+
 	/* Validate if req id is present in input queue */
 	idx = __cam_req_mgr_find_slot_for_req(link->req.in_q, add_req->req_id);
 	if (idx < 0) {
@@ -4045,9 +4067,50 @@ err:
 
 }
 
+int cam_req_mgr_preempt_ul(struct cam_preempt_ul_cmd *cmd)
+{
+	int rc = -EINVAL, i;
+	struct cam_req_mgr_core_link *link;
+	struct cam_req_mgr_connected_device *dev;
+
+	if (!cmd->link_hdl) {
+		CAM_ERR(CAM_ISP, "link is NULL");
+		return -EINVAL;
+	}
+
+	link = cam_get_link_priv(cmd->link_hdl);
+	if (!link) {
+		CAM_ERR(CAM_CRM, "Link 0x%x not valid",
+			cmd->link_hdl);
+		return -EINVAL;
+	}
+	if (link->state != CAM_CRM_LINK_STATE_READY) {
+		CAM_ERR(CAM_CRM, "Link 0x%x is not in ready state",
+			cmd->link_hdl);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < link->num_devs; i++) {
+		dev = &link->l_dev[i];
+		if (!dev->no_crm_ops || !dev->no_crm_ops->preempt_ul) {
+			CAM_DBG(CAM_CRM, "No preempt for %s", dev->dev_info.name);
+			continue;
+		}
+		CAM_DBG(CAM_CRM, "%d preempt \"%s\" ", i, dev->dev_info.name);
+		rc = dev->no_crm_ops->preempt_ul(dev->dev_hdl);
+		if (rc) {
+			CAM_ERR(CAM_CRM,
+				"Failed no-crm preempt for \"%s\" link_hdl %x dev_hdl %x",
+				dev->dev_info.name, cmd->link_hdl, dev->dev_hdl);
+		}
+	}
+
+	return rc;
+}
+
 int cam_req_mgr_batch_request_v2(struct cam_batch_config_dev_cmd *cmd)
 {
-	int i, j, k;
+	int i, j, k, rc;
 	struct ul_cam_packet_v2                    *ul_packet  = NULL;
 	struct cam_packet               *packet;
 	struct cam_req_mgr_core_link    *link = NULL;
@@ -4101,7 +4164,6 @@ int cam_req_mgr_batch_request_v2(struct cam_batch_config_dev_cmd *cmd)
 						link->l_dev[j].dev_info.name);
 					return -EINVAL;
 				}
-
 				if (ul_packet->update_port_patern_period)
 					port_enable_pattern_period =
 						ul_packet->port_enable_pattern_period[i];
@@ -4133,9 +4195,14 @@ int cam_req_mgr_batch_request_v2(struct cam_batch_config_dev_cmd *cmd)
 						CAM_ERR(CAM_CRM, "Unable to fetch packet");
 						return -EINVAL;
 					}
-					link->l_dev[j].no_crm_ops->add_req(
+					rc = link->l_dev[j].no_crm_ops->add_req(
 					ul_packet->device_hdl[i], packet,
 					port_enable_pattern_period);
+					if (rc < 0) {
+						CAM_ERR(CAM_CRM, "Failed to add req for dev hdl %d",
+							link->l_dev[j].dev_hdl);
+						return rc;
+					}
 					port_enable_pattern_period = NULL;
 				}
 			}
@@ -4193,10 +4260,14 @@ int cam_req_mgr_batch_request_v2(struct cam_batch_config_dev_cmd *cmd)
 							"Unable to fetch packet");
 						return -EINVAL;
 					}
-					link->l_dev[j].no_crm_ops->add_req(
+					rc = link->l_dev[j].no_crm_ops->add_req(
 					ul_packet->device_hdl[i], packet,
 					port_enable_pattern_period);
-					port_enable_pattern_period = NULL;
+					if (rc < 0) {
+						CAM_ERR(CAM_CRM, "Failed to add req for dev hdl %d",
+							link->l_dev[j].dev_hdl);
+						return rc;
+					}
 				}
 			}
 		}
@@ -4263,6 +4334,13 @@ int cam_req_mgr_batch_request(struct cam_batch_config_dev_cmd *cmd)
 	if (link->state != CAM_CRM_LINK_STATE_READY) {
 		CAM_ERR(CAM_CRM, "Link 0x%x is not in ready state",
 			ul_packet->link_hdl);
+		return -EINVAL;
+	}
+
+	if (ul_packet->number_devices > UL_MAX_DEVICES  ||
+		ul_packet->number_devices > link->num_devs) {
+		CAM_ERR(CAM_CRM, "Invalid number_devices %d, max allowed %d link num_devs %d",
+			ul_packet->number_devices, UL_MAX_DEVICES, link->num_devs);
 		return -EINVAL;
 	}
 
@@ -5248,6 +5326,8 @@ static int __cam_req_mgr_unlink(
 	mutex_unlock(&session->lock);
 	/* Destroy worker of link */
 	cam_req_mgr_worker_destroy(&link->worker);
+	kfree(link->task_data);
+	link->task_data = NULL;
 	/* Acquire session mutex after worker flush */
 	mutex_lock(&session->lock);
 	/* Cleanup request tables and unlink devices */
@@ -5417,7 +5497,7 @@ int cam_req_mgr_link(struct cam_req_mgr_ver_info *link_info)
 	}
 
 	/* Assign payload to workqueue tasks */
-	rc = __cam_req_mgr_setup_payload(link->worker);
+	rc = __cam_req_mgr_setup_payload(link);
 	if (rc < 0) {
 		__cam_req_mgr_destroy_link_info(link);
 		cam_req_mgr_worker_destroy(&link->worker);
@@ -5528,7 +5608,7 @@ int cam_req_mgr_link_v2(struct cam_req_mgr_ver_info *link_info)
 	}
 
 	/* Assign payload to workqueue tasks */
-	rc = __cam_req_mgr_setup_payload(link->worker);
+	rc = __cam_req_mgr_setup_payload(link);
 	if (rc < 0) {
 		__cam_req_mgr_destroy_link_info(link);
 		cam_req_mgr_worker_destroy(&link->worker);
@@ -5650,7 +5730,7 @@ int cam_req_mgr_link_v3(struct cam_req_mgr_ver_info *link_info)
 	}
 
 	/* Assign payload to workqueue tasks */
-	rc = __cam_req_mgr_setup_payload(link->worker);
+	rc = __cam_req_mgr_setup_payload(link);
 	if (rc < 0) {
 		__cam_req_mgr_destroy_link_info(link);
 		cam_req_mgr_worker_destroy(&link->worker);

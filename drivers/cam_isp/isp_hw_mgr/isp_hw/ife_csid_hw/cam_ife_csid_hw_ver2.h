@@ -117,12 +117,20 @@ struct cam_ife_csid_ver2_evt_payload {
 	uint32_t                    irq_reg_val[CAM_IFE_CSID_IRQ_REG_MAX];
 };
 
-
 enum cam_ife_csid_ver2_stored_irq_masks {
 	CAM_IFE_CSID_TOP_MASK,
 	CAM_IFE_CSID_SOF_DISCARD_MASK,
 	CAM_IFE_CSID_ERR_MASK,
 	CAM_IFE_CSID_MAX_STORED_MASKS,
+};
+
+/* struct fastpath_ul_timestamp_notifier
+ * @data:        Stores the isp_ctx to be used in the cb handler
+ * @handler_cb:  Callback handler
+ */
+struct fastpath_ul_timestamp_notifier {
+	void *data;
+	cam_isp_ctx_update_fastpath_timestamp handler_cb;
 };
 
 /*
@@ -214,6 +222,7 @@ struct cam_ife_csid_ver2_path_cfg {
 	bool                                 handle_camif_irq;
 	struct completion                    epoch_done;
 	struct cam_ife_csid_path_cfg_vcdt_data path_vcdt;
+	struct fastpath_ul_timestamp_notifier fastpath_timestamp_notifier;
 };
 
 struct cam_ife_csid_ver2_top_reg_info {
@@ -472,6 +481,7 @@ struct cam_ife_csid_ver2_common_reg_info {
 	bool     timestamp_enabled_in_cfg0;
 	bool     camif_irq_support;
 	bool     is_core_clk_gate_enable;
+	uint32_t num_full_ife;
 
 	/* Masks */
 	uint32_t pxl_cnt_mask;
