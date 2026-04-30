@@ -114,3 +114,18 @@ config DYNAMIC_FD_PORT_CONFIG
 		feature that allows the userspace to configure
 		the FD port to secure or non-secure based on
 		the FD solution in use in secure camera use cases.
+
+config MSM_AIS
+	bool "enable ais ISP module"
+	help
+	  This is enabling ais ISP module.
+	  IFE ais driver file be included.
+	  This will enable ais ISP driver to handle IFE driver.
+	  Core ais driver to handle VFE HW.
+
+config V4L2_LOOPBACK_V2
+	bool "enable ais v4l2 module"
+	help
+	  This is enabling ais V4L2 module.
+	  V4L2 ais driver file be included.
+	  Core ais driver to handle V4L2 HW.
