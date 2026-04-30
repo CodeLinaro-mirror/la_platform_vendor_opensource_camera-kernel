@@ -1350,6 +1350,13 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			goto release_mutex;
 		}
 
+		if (csiphy_dev->csiphy_state == CAM_CSIPHY_START) {
+			CAM_ERR(CAM_CSIPHY, "Not in right state to release: %d",
+				csiphy_dev->csiphy_state);
+			rc = -EINVAL;
+			goto release_mutex;
+		}
+
 		if (copy_from_user(&release,
 			u64_to_user_ptr(cmd->handle),
 			sizeof(release))) {
