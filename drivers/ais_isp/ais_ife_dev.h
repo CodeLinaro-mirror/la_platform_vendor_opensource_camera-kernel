@@ -1,0 +1,81 @@
+/* Copyright (c) 2017-2018, 2020, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#ifndef _AIS_IFE_DEV_H_
+#define _AIS_IFE_DEV_H_
+
+#include "cam_subdev.h"
+#include "cam_hw_intf.h"
+
+#include "ais_isp_hw.h"
+
+#define AIS_IFE_DEV_NAME_MAX_LENGTH 20
+
+#define AIS_ISP_MGR_HW_TYPE_IFE  0
+#define AIS_ISP_MGR_HW_TYPE_TFE  1
+
+struct ais_isp_mgr_data {
+	uint32_t hw_type;
+};
+
+/**
+ * struct ais_ife_dev - Camera IFE V4l2 device node
+ *
+ * @sd:                    IFE subdevice node
+ * @ctx:                   IFE base context storage
+ * @ctx_isp:               IFE private context storage
+ * @mutex:                 IFE dev mutex
+ * @open_cnt:              Open device count
+ */
+struct ais_ife_dev {
+	/*subdev info*/
+	char device_name[AIS_IFE_DEV_NAME_MAX_LENGTH];
+	struct cam_subdev cam_sd;
+
+	uint32_t hw_idx;
+
+	struct cam_hw_intf *p_vfe_drv;
+	struct cam_hw_intf *p_csid_drv;
+
+	int iommu_hdl;
+	int iommu_hdl_secure;
+
+	struct mutex mutex;
+	int32_t open_cnt;
+
+	uint32_t partial_reserved_path_mask;
+	uint32_t reserved_path_mask;
+	uint32_t num_grp_ife_dev;
+	struct ais_ife_dev *p_grp_ife_dev[AIS_IFE_HW_NUM_MAX];
+	struct ais_ife_stream_config *p_stream_cfg;
+	uint32_t csiphy_id;
+	struct ais_isp_mgr_data       *isp_mgr_data;
+};
+
+struct ais_ife_mgr {
+	struct ais_ife_stream_group_config_args stream_grp_cfg;
+	struct ais_ife_dev                      *p_ife_dev[AIS_IFE_HW_NUM_MAX];
+};
+
+/**
+ * @brief : API to register IFE HW to platform framework.
+ * @return struct platform_device pointer on success, or ERR_PTR() on error.
+ */
+int ais_ife_dev_init_module(void);
+
+/**
+ * @brief : API to remove IFE HW from platform framework.
+ */
+void ais_ife_dev_exit_module(void);
+
+
+#endif /* _AIS_IFE_DEV_H_ */
