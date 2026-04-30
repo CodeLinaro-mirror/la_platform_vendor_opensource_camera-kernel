@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef CAMERA_MAIN_H
@@ -16,7 +16,13 @@ extern struct platform_driver cam_smmu_driver;
 extern struct platform_driver cam_cpas_driver;
 extern struct platform_driver cam_cdm_intf_driver;
 extern struct platform_driver cam_hw_cdm_driver;
-#ifdef CONFIG_SPECTRA_ISP
+#ifdef CONFIG_MSM_AIS
+extern struct platform_driver ais_ife_csid17x_driver;
+extern struct platform_driver ais_ife_csid_lite_driver;
+extern struct platform_driver ais_vfe_driver;
+extern struct platform_driver ife_driver;
+extern struct platform_driver cam_sfe_driver;
+#elif CONFIG_SPECTRA_ISP
 extern struct platform_driver cam_ife_csid_driver;
 extern struct platform_driver cam_ife_csid_lite_driver;
 extern struct platform_driver cam_vfe_driver;
@@ -24,9 +30,14 @@ extern struct platform_driver cam_sfe_driver;
 extern struct platform_driver isp_driver;
 #endif
 #ifdef CONFIG_SPECTRA_TFE
+#ifdef CONFIG_MSM_AIS
+extern struct platform_driver ais_tfe_csid_driver;
+extern struct platform_driver ais_tfe_driver;
+#else
 extern struct platform_driver cam_csid_ppi100_driver;
 extern struct platform_driver cam_tfe_driver;
 extern struct platform_driver cam_tfe_csid_driver;
+#endif
 #endif
 #ifdef CONFIG_SPECTRA_SENSOR
 extern struct platform_driver cam_res_mgr_driver;
@@ -94,11 +105,25 @@ static struct platform_driver *const cam_component_platform_drivers[] = {
 	&cam_cdm_intf_driver,
 	&cam_hw_cdm_driver,
 #ifdef CONFIG_SPECTRA_TFE
+#ifdef CONFIG_MSM_AIS
+	&ais_tfe_csid_driver,
+	&ais_tfe_driver,
+	&ife_driver,
+#else
 	&cam_csid_ppi100_driver,
 	&cam_tfe_driver,
 	&cam_tfe_csid_driver,
 #endif
-#ifdef CONFIG_SPECTRA_ISP
+#endif
+#ifdef CONFIG_MSM_AIS
+	&ais_ife_csid17x_driver,
+	&ais_ife_csid_lite_driver,
+	&ais_vfe_driver,
+#ifndef CONFIG_SPECTRA_TFE
+	&ife_driver,
+#endif
+	&cam_sfe_driver,
+#elif CONFIG_SPECTRA_ISP
 	&cam_ife_csid_driver,
 	&cam_ife_csid_lite_driver,
 	&cam_vfe_driver,

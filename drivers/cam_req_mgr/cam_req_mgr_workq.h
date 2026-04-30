@@ -187,4 +187,15 @@ struct crm_workq_task *cam_req_mgr_workq_get_task(
  */
 void cam_req_mgr_workq_flush(struct cam_req_mgr_core_workq *workq);
 
+typedef bool (*PFnCancelTaskFilter)(void *, void *);
+
+/**
+ * cam_req_mgr_workq_cancel_task()
+ * @brief: cancel some waiting process task
+ * @workq: workqueue
+ * @match: filter function, return true, then cancel this task
+ */
+void cam_req_mgr_workq_cancel_task(
+		struct cam_req_mgr_core_workq *workq, PFnCancelTaskFilter filter);
+
 #endif

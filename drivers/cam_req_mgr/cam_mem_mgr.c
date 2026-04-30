@@ -830,6 +830,13 @@ static int cam_mem_mgr_get_dma_heaps(void)
 		tbl.camera_heap = NULL;
 	}
 
+	tbl.secure_pixel_heap = dma_heap_find("qcom,secure-pixel");
+	if (IS_ERR_OR_NULL(tbl.secure_pixel_heap)) {
+					rc = PTR_ERR(tbl.secure_pixel_heap);
+					CAM_ERR(CAM_MEM, "qcom,secure-pixel heap not found, rc=%d", rc);
+					tbl.secure_pixel_heap = NULL;
+	}
+
 	tbl.camera_uncached_heap = dma_heap_find("qcom,camera-uncached");
 	if (IS_ERR_OR_NULL(tbl.camera_uncached_heap)) {
 		/* optional heap, not a fatal error */
@@ -839,10 +846,11 @@ static int cam_mem_mgr_get_dma_heaps(void)
 	}
 
 	CAM_INFO(CAM_MEM,
-		"Heaps : system=%pK %pK, system_uncached=%pK, camera=%pK, camera-uncached=%pK, secure_display=%pK, ubwc_p=%pK %pK",
+		"Heaps : system=%pK %pK, system_uncached=%pK, camera=%pK, camera-uncached=%pK, secure_display=%pK, ubwc_p=%pK %pK, secure_pixel=%pK",
 		tbl.system_heap, tbl.system_movable_heap, tbl.system_uncached_heap,
 		tbl.camera_heap, tbl.camera_uncached_heap,
-		tbl.secure_display_heap, tbl.ubwc_p_heap,  tbl.ubwc_p_movable_heap);
+		tbl.secure_display_heap, tbl.ubwc_p_heap,  tbl.ubwc_p_movable_heap,
+		tbl.secure_pixel_heap);
 
 	return 0;
 put_heaps:
@@ -898,6 +906,9 @@ static int cam_mem_util_get_dma_buf(size_t len,
 			"Using CACHED heap, cam_flags=0x%x, force_cache_allocs=%d",
 			cam_flags, tbl.force_cache_allocs);
 		use_cached_heap = true;
+	} else if (cam_flags & CAM_MEM_FLAG_CP_PIXEL) {
+		try_heap = tbl.secure_pixel_heap;
+		heap = tbl.system_heap;
 	} else if (cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) {
 		use_cached_heap = true;
 		CAM_DBG(CAM_MEM,
@@ -1085,6 +1096,9 @@ static int cam_mem_util_get_dma_buf(size_t len,
 	} else if (cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) {
 		heap_id = ION_HEAP(ION_SECURE_DISPLAY_HEAP_ID);
 		ion_flag |= ION_FLAG_SECURE | ION_FLAG_CP_CAMERA;
+	} else if (cmd->flags & CAM_MEM_FLAG_CP_PIXEL) {
+		heap_id = ION_HEAP(ION_SECURE_HEAP_ID);
+		ion_flag |= ION_FLAG_SECURE | ION_FLAG_CP_PIXEL;
 	} else {
 		heap_id = ION_HEAP(ION_SYSTEM_HEAP_ID) |
 			ION_HEAP(ION_CAMERA_HEAP_ID);
@@ -1161,8 +1175,8 @@ static int cam_mem_util_check_alloc_flags(struct cam_mem_mgr_alloc_cmd_v2 *cmd)
 			CAM_MEM_MMU_MAX_HANDLE);
 		return -EINVAL;
 	}
-
-	if (cmd->flags & CAM_MEM_FLAG_PROTECTED_MODE &&
+	if ((cmd->flags & CAM_MEM_FLAG_PROTECTED_MODE ||
+		(cmd->flags & CAM_MEM_FLAG_CP_PIXEL)) &&
 		cmd->flags & CAM_MEM_FLAG_KMD_ACCESS) {
 		CAM_ERR(CAM_MEM, "Kernel mapping in secure mode not allowed");
 		return -EINVAL;
@@ -1205,7 +1219,8 @@ static int cam_mem_util_check_map_flags(struct cam_mem_mgr_map_cmd_v2 *cmd)
 		return -EINVAL;
 	}
 
-	if (cmd->flags & CAM_MEM_FLAG_PROTECTED_MODE &&
+	if ((cmd->flags & CAM_MEM_FLAG_PROTECTED_MODE ||
+		(cmd->flags & CAM_MEM_FLAG_CP_PIXEL)) &&
 		cmd->flags & CAM_MEM_FLAG_KMD_ACCESS) {
 		CAM_ERR(CAM_MEM,
 			"Kernel mapping in secure mode not allowed, flags=0x%x",

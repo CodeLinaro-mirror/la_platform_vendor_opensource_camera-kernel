@@ -63,6 +63,9 @@ static long cam_cci_subdev_ioctl(struct v4l2_subdev *sd,
 		rc = cam_cci_core_cfg(sd, arg);
 		break;
 	case VIDIOC_CAM_CONTROL:
+#ifdef CONFIG_MSM_AIS
+		rc = cam_cci_core_cam_ctrl(sd, arg);
+#endif
 		break;
 	default:
 		CAM_ERR(CAM_CCI, "Invalid ioctl cmd: %d", cmd);
@@ -725,7 +728,8 @@ static int cam_cci_component_bind(struct device *dev,
 		sizeof(new_cci_dev->device_name));
 	new_cci_dev->v4l2_dev_str.name =
 		new_cci_dev->device_name;
-	new_cci_dev->v4l2_dev_str.sd_flags = V4L2_SUBDEV_FL_HAS_EVENTS;
+	new_cci_dev->v4l2_dev_str.sd_flags =
+		(V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS);
 	new_cci_dev->v4l2_dev_str.ent_function =
 		CAM_CCI_DEVICE_TYPE;
 	new_cci_dev->v4l2_dev_str.token =

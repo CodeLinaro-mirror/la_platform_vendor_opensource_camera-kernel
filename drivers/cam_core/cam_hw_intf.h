@@ -81,6 +81,7 @@ struct cam_hw_ops {
 struct cam_hw_intf {
 	uint32_t                     hw_type;
 	uint32_t                     hw_idx;
+	uint32_t                     hw_version;
 	struct cam_hw_ops            hw_ops;
 	void                        *hw_priv;
 };

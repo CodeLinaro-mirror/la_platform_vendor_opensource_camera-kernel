@@ -20,6 +20,17 @@
 void cam_cci_get_clk_rates(struct cci_device *cci_dev,
 	struct cam_cci_ctrl *c_ctrl);
 
+	#ifdef CONFIG_MSM_AIS
+/**
+ * @sd: V4L2 sub device
+ * @arg: user argument
+*
+ * This API handles user I2C operations for CCI
+ */
+int32_t cam_cci_core_cam_ctrl(struct v4l2_subdev *sd,
+	void *arg);
+#endif
+
 /**
  * @sd: V4L2 sub device
  * @c_ctrl: CCI control structure

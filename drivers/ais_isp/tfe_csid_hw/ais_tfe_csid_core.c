@@ -578,6 +578,7 @@ static int ais_tfe_csid_get_format_rdi(
         switch (out_format) {
         case CAM_FORMAT_MIPI_RAW_8:
         case CAM_FORMAT_PLAIN128:
+	case CAM_FORMAT_YUV422:
             *decode_fmt = 0xf;
             break;
         case CAM_FORMAT_PLAIN8:

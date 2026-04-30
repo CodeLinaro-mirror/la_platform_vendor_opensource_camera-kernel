@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SENSOR_UTIL_H_
@@ -120,6 +120,32 @@ int cam_sensor_util_power_down(struct cam_sensor_power_ctrl_t *ctrl,
 int msm_camera_fill_vreg_params(struct cam_hw_soc_info *soc_info,
 	struct cam_sensor_power_setting *power_setting,
 	uint16_t power_setting_size);
+
+#ifdef CONFIG_MSM_AIS
+int ais_sensor_power_up(struct cam_sensor_power_ctrl_t *ctrl,
+	struct cam_hw_soc_info *soc_info, struct completion *i3c_probe_status);
+
+int ais_sensor_power_down(struct cam_sensor_power_ctrl_t *ctrl,
+	struct cam_hw_soc_info *soc_info);
+
+int32_t ais_sensor_update_power_settings(
+	struct ais_sensor_probe_cmd *probe_cmd,
+	struct cam_sensor_power_ctrl_t *power_info);
+
+int cam_sensor_util_power_apply(struct cam_sensor_power_ctrl_t *ctrl,
+	struct cam_hw_soc_info *soc_info,
+	struct cam_sensor_power_setting *power_seq);
+
+int32_t ais_sensor_update_power_sequence(
+	struct ais_sensor_power_settings_seq *pwr_cfg,
+	struct cam_sensor_power_seq_array *pwr_info);
+
+int cam_sensor_disable_regulator(struct cam_sensor_power_ctrl_t *ctrl,
+	struct cam_hw_soc_info *soc_info, struct cam_sensor_power_setting *ps);
+
+int cam_sensor_enable_regulator(struct cam_hw_soc_info *soc_info,
+	struct cam_sensor_power_setting *power_setting);
+#endif
 
 int32_t cam_sensor_update_power_settings(void *cmd_buf,
 	uint32_t cmd_length, struct cam_sensor_power_ctrl_t *power_info,

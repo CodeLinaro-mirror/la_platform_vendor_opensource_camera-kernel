@@ -65,6 +65,12 @@
 #define V4L_EVENT_CAM_REQ_MGR_SOF_UNIFIED_TS                            5
 #define V4L_EVENT_CAM_REQ_MGR_PF_ERROR                                  6
 
+/* Suspend to RAM and Hibernation events */
+#define V4L_EVENT_CAM_REQ_MGR_S2R_SUSPEND           10
+#define V4L_EVENT_CAM_REQ_MGR_S2R_RESUME            11
+#define V4L_EVENT_CAM_REQ_MGR_HIBERNATION_SUSPEND   12
+#define V4L_EVENT_CAM_REQ_MGR_HIBERNATION_RESUME    13
+
 /* SOF Event status */
 #define CAM_REQ_MGR_SOF_EVENT_SUCCESS           0
 #define CAM_REQ_MGR_SOF_EVENT_ERROR             1
@@ -376,6 +382,7 @@ struct cam_req_mgr_link_properties {
 
 /* Allocation forced to system heap */
 #define CAM_MEM_FLAG_USE_SYS_HEAP_ONLY          (1<<19)
+#define CAM_MEM_FLAG_CP_PIXEL                   (1<<20)
 
 #define CAM_MEM_MMU_MAX_HANDLE                  16
 

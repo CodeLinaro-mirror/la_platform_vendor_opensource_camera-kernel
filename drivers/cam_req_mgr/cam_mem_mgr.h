@@ -164,6 +164,7 @@ struct cam_mem_table {
 	struct dma_heap *secure_display_heap;
 	struct dma_heap *ubwc_p_heap;
 	struct dma_heap *ubwc_p_movable_heap;
+	struct dma_heap *secure_pixel_heap;
 #endif
 
 };
