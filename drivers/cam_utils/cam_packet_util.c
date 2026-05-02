@@ -660,16 +660,7 @@ void cam_packet_util_dump_io_bufs(struct cam_packet *packet,
 				io_cfg[i].offsets[j],
 				io_cfg[i].mem_handle[j]);
 		}
-
-		if (res_id_support)
-			return;
 	}
-
-	if (res_id_support)
-		CAM_ERR(CAM_UTIL,
-			"getting io port for mid resource id failed req id: %llu res id: 0x%x",
-			packet->header.request_id, resource_type);
-
 }
 
 int cam_packet_util_process_generic_blob(uint32_t length, uint32_t *blob_ptr,
