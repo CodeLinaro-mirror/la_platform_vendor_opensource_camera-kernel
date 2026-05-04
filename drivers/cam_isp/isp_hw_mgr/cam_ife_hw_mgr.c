@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -15836,7 +15836,7 @@ static int cam_ife_hw_mgr_check_if_primary_port_has_buffer(
 	return rc;
 }
 
-static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
+int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 	void *prepare_hw_update_args)
 {
 	int rc = 0;
@@ -15881,12 +15881,13 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 		return rc;
 
 	/* Pre parse the packet*/
-	rc = cam_packet_util_get_kmd_buffer(prepare->packet, &kmd_buf);
+	rc = cam_packet_util_get_kmd_buffer(prepare->packet,
+			&prepare_hw_data->kmd_cmd_buff_info);
 	if (rc)
 		return rc;
 
 	if (ctx->ctx_config & CAM_IFE_CTX_CFG_FRAME_HEADER_TS) {
-		rc = cam_ife_mgr_util_insert_frame_header(&kmd_buf,
+		rc = cam_ife_mgr_util_insert_frame_header(&prepare_hw_data->kmd_cmd_buff_info,
 			prepare_hw_data);
 		if (rc)
 			return rc;
@@ -15950,7 +15951,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 		}
 
 		rc = cam_ife_hw_mgr_update_cmd_buffer(ctx, prepare,
-			&kmd_buf, &cmd_buf_count, i, NULL);
+			&prepare_hw_data->kmd_cmd_buff_info, &cmd_buf_count, i, NULL);
 
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Add cmd buffer failed base_idx: %d hw_type %d",
@@ -15965,7 +15966,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 				hw_mgr->mgr_common.img_iommu_hdl,
 				hw_mgr->mgr_common.img_iommu_hdl_secure,
 				prepare, ctx->base[i].idx,
-				&kmd_buf, ctx->res_list_ife_out,
+				&prepare_hw_data->kmd_cmd_buff_info, ctx->res_list_ife_out,
 				res_list_ife_rd_tmp, (void *)ctx,
 				CAM_ISP_IFE_OUT_RES_BASE,
 				(CAM_ISP_IFE_OUT_RES_BASE + max_ife_out_res),
@@ -15978,7 +15979,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 				hw_mgr->mgr_common.img_iommu_hdl,
 				hw_mgr->mgr_common.img_iommu_hdl_secure,
 				prepare, ctx->base[i].idx,
-				&kmd_buf, ctx->res_list_sfe_out,
+				&prepare_hw_data->kmd_cmd_buff_info, ctx->res_list_sfe_out,
 				&ctx->res_list_ife_in_rd, (void *)ctx,
 				CAM_ISP_SFE_OUT_RES_BASE,
 				CAM_ISP_SFE_OUT_RES_MAX,
@@ -16015,7 +16016,8 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 						sfe_res_info->sfe_rdi_cfg_mask);
 					rc = cam_isp_sfe_add_scratch_buffer_cfg(
 						ctx->base[i].idx, sfe_res_info->sfe_rdi_cfg_mask,
-						prepare, &kmd_buf, ctx->res_list_sfe_out,
+						prepare, &prepare_hw_data->kmd_cmd_buff_info,
+						ctx->res_list_sfe_out,
 						&ctx->res_list_ife_in_rd, ctx);
 					if (rc)
 						goto end;
@@ -16043,7 +16045,8 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 					rc = cam_isp_ife_add_scratch_buffer_cfg(
 						ctx->base[i].idx,
 						ife_res_info->ife_scratch_cfg_mask, prepare,
-						&kmd_buf, ctx->res_list_ife_out, ctx);
+						&prepare_hw_data->kmd_cmd_buff_info,
+						ctx->res_list_ife_out, ctx);
 					if (rc)
 						goto end;
 				}
@@ -16131,11 +16134,11 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 	/* add reg update commands */
 	if (hw_mgr->csid_rup_en)
 		rc = cam_ife_mgr_csid_add_reg_update(ctx,
-			prepare, &kmd_buf);
+			prepare, &prepare_hw_data->kmd_cmd_buff_info);
 
 	else
 		rc = cam_ife_mgr_isp_add_reg_update(ctx,
-			prepare, &kmd_buf);
+			prepare, &prepare_hw_data->kmd_cmd_buff_info);
 
 	if (rc) {
 		CAM_ERR(CAM_ISP, "Add RUP fail csid_rup_en %d",
@@ -16149,11 +16152,11 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 		ctx->flags.is_offline) {
 		if (ctx->ctx_type != CAM_IFE_CTX_TYPE_SFE)
 			rc = cam_isp_add_go_cmd(prepare, &ctx->res_list_ife_in_rd,
-				ctx->base[i].idx, &kmd_buf);
+				ctx->base[i].idx, &prepare_hw_data->kmd_cmd_buff_info);
 		else
 			rc = cam_isp_add_csid_offline_cmd(prepare,
 				&ctx->res_list_ife_csid,
-				ctx->base[i].idx, &kmd_buf);
+				ctx->base[i].idx, &prepare_hw_data->kmd_cmd_buff_info);
 		if (rc)
 			CAM_ERR(CAM_ISP,
 				"Add %s GO_CMD faled i: %d, idx: %d, rc: %d",
