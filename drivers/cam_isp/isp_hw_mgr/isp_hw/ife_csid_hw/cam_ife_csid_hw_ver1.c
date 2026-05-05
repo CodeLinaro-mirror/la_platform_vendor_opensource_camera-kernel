@@ -4380,10 +4380,13 @@ static int cam_ife_csid_ver1_path_bottom_half_handler(
 	memset(log_buf, 0, sizeof(csid_hw->log_buf));
 	irq_reg_tag = cam_ife_csid_get_irq_reg_tag_ptr();
 
+	CAM_DBG(CAM_ISP, "CSID[%u] Path:%s bh irq_status:%x",
+		csid_hw->hw_intf->hw_idx, irq_reg_tag[index], irq_status);
+
 	while (irq_status) {
 		if ((irq_status & 0x1))
 			CAM_ERR_BUF(CAM_ISP, log_buf, CAM_IFE_CSID_LOG_BUF_LEN, &len,
-				"%s\n", ver1_path_irq_desc[bit_pos]);
+				"%s\n", ver1_path_irq_desc[bit_pos].desc);
 		bit_pos++;
 		irq_status >>= 1;
 	}
