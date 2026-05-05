@@ -64,8 +64,6 @@ void cam_flash_put_source_node_data(struct cam_flash_ctrl *fctrl)
 	}
 }
 
-#if __or(IS_REACHABLE(CONFIG_LEDS_QPNP_FLASH_V2), \
-			IS_REACHABLE(CONFIG_LEDS_QTI_FLASH))
 static int32_t cam_get_source_node_info(
 	struct device_node *of_node,
 	struct cam_flash_ctrl *fctrl,
@@ -284,9 +282,7 @@ static int32_t cam_get_source_node_info(
 
 	return rc;
 }
-#endif
 
-#if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
 static int32_t cam_get_led_source_node_info(
 	struct device_node *of_node,
 	struct cam_flash_ctrl *fctrl,
@@ -374,12 +370,12 @@ static int32_t cam_get_led_source_node_info(
 
 	return rc;
 }
-#endif
 
 int cam_flash_get_dt_data(struct cam_flash_ctrl *fctrl,
 	struct cam_hw_soc_info *soc_info)
 {
 	int32_t rc = 0;
+	int flash_type;
 	struct device_node *of_node = NULL;
 
 	if (!fctrl) {
@@ -407,27 +403,28 @@ int cam_flash_get_dt_data(struct cam_flash_ctrl *fctrl,
 		CAM_ERR(CAM_FLASH, "Get_dt_properties failed rc %d", rc);
 		goto free_soc_private;
 	}
+	rc = of_property_read_u32(of_node,
+			"flash-type", &flash_type);
+		if (rc) {
+			CAM_ERR(CAM_FLASH, "flash-type read failed rc=%d", rc);
+			flash_type = CAM_FLASH_TYPE_PMIC;
+		}
 
-#if __or(IS_ENABLED(CONFIG_LEDS_QPNP_FLASH_V2), \
-			IS_ENABLED(CONFIG_LEDS_QTI_FLASH))
-	rc = cam_get_source_node_info(of_node, fctrl, soc_info->soc_private);
-	if (rc) {
-		CAM_ERR(CAM_FLASH,
-			"cam_flash_get_pmic_source_info failed rc %d", rc);
-		goto free_soc_private;
+	if (flash_type == CAM_FLASH_TYPE_I2C) {
+		rc = cam_get_source_node_info(of_node, fctrl, soc_info->soc_private);
+		if (rc) {
+			CAM_ERR(CAM_FLASH,
+					"cam_get_source_node_info failed rc %d", rc);
+			goto free_soc_private;
+		}
+	} else {
+		rc = cam_get_led_source_node_info(of_node, fctrl, soc_info->soc_private);
+		if (rc) {
+			CAM_ERR(CAM_FLASH,
+					"cam_get_led_source_node_info failed rc %d", rc);
+			goto free_soc_private;
+		}
 	}
-#elif IS_ENABLED(CONFIG_LEDS_QCOM_FLASH)
-	rc = cam_get_led_source_node_info(of_node, fctrl, soc_info->soc_private);
-	if (rc) {
-		CAM_ERR(CAM_FLASH,
-			"cam_flash_get_pmic_source_info failed rc %d", rc);
-		goto free_soc_private;
-	}
-#else
-	CAM_ERR(CAM_FLASH, "Flash Not supported");
-	rc = -EOPNOTSUPP;
-	goto free_soc_private;
-#endif
 	return rc;
 
 free_soc_private:
