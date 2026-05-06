@@ -24,6 +24,9 @@
 /* Kthread priority update latency threshold in ms */
 #define CAM_KTHREAD_PRIORITY_UPDATE_THRESHOLD 200
 
+/* Kthread default priorty recommended */
+#define CAM_KTHREAD_DEFAULT_PRIORITY          98
+
 /* Task priorities, lower the number higher the priority */
 enum cam_kthread_task_priority {
 	CAM_KTHREAD_TASK_PRIORITY_0,
