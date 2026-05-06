@@ -437,6 +437,8 @@ struct cam_isp_fcg_prediction_tracker {
  * @init_pending_req_cnt:      Count of the init pending reqs received before stream on
  * @max_delay:                 The max pipeline delay
  * @last_sent_sof_timestamp:   SOF timestamp of the last sent SOF timestamp frame
+ * @isp_mutex:                 isp context mutex to protect req lists
+ * @ife_hw_mgr_worker_type:    IFE HW manager worker type
  *
  */
 struct cam_isp_context {
@@ -511,6 +513,8 @@ struct cam_isp_context {
 	uint32_t                              init_pending_req_cnt;
 	enum cam_pipeline_delay               max_delay;
 	uint64_t                              last_sent_sof_timestamp;
+	struct mutex                          isp_mutex;
+	enum cam_worker_wrapper_type          ife_hw_mgr_worker_type;
 };
 
 /**

@@ -16606,7 +16606,10 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			cam_ife_mgr_sof_irq_debug(ctx,
 				isp_hw_cmd_args->u.sof_irq_enable);
 			break;
-		case CAM_ISP_HW_MGR_CMD_CTX_TYPE:
+		case CAM_ISP_HW_MGR_CMD_CTX_TYPE: {
+			struct cam_worker_wrapper_ctx *worker_ctx = ctx->common.worker_ctx;
+
+			isp_hw_cmd_args->u.ctx_info.worker_type = worker_ctx->worker_type;
 			if (ctx->flags.is_fe_enabled && ctx->flags.is_offline)
 				isp_hw_cmd_args->u.ctx_info.type = CAM_ISP_CTX_OFFLINE;
 			else if (ctx->flags.is_fe_enabled && !ctx->flags.is_offline &&
@@ -16619,6 +16622,7 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 				isp_hw_cmd_args->u.ctx_info.bubble_recover_dis  = 1;
 			else
 				isp_hw_cmd_args->u.ctx_info.bubble_recover_dis = 0;
+		}
 			break;
 		case CAM_ISP_HW_MGR_GET_PACKET_OPCODE:
 			packet = (struct cam_packet *)
