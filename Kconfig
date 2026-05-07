@@ -95,6 +95,13 @@ config SPECTRA_SECURE_CAMNOC_REG_UPDATE
 	  camnoc registers through HYP to avoid
 	  potential security issues.
 
+config SPECTRA_SECURE
+	bool "enable secure camera 2.5"
+	help
+		This config enables 2.5 secure camera
+		feature that allows the usage of non contiguous
+		buffers for the secure camera images by
+		lending the buffers to a trusted virtual machine.
 config ENABLE_US_API
 	bool "enable US API support"
 	help

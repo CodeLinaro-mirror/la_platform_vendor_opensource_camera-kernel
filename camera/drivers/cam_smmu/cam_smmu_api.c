@@ -332,6 +332,19 @@ struct cam_smmu_mini_dump_info {
 
 static struct cam_iommu_cb_set iommu_cb_set;
 
+/*
+ * This is expected to succeed as the SMMU bind would have
+ * failed if it could not fetch the CSF version from SMMU proxy
+ */
+void cam_smmu_get_csf_version(struct cam_csf_version *csf_ver)
+{
+	if (!csf_ver) {
+		CAM_ERR(CAM_SMMU, "Invalid csf_ver pointer");
+		return;
+	}
+	memcpy(csf_ver, &iommu_cb_set.csf_version, sizeof(*csf_ver));
+}
+
 static enum dma_data_direction cam_smmu_translate_dir(
 	enum cam_smmu_map_dir dir);
 

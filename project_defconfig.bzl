@@ -13,6 +13,7 @@ shikra_configs = [
     "CONFIG_SPECTRA_TFE=y",
     "CONFIG_ENABLE_US_API=y",
     "CONFIG_SHIKRA=y",
+    "CONFIG_SPECTRA_SECURE=y",
 ]
 
 project_configs = select({

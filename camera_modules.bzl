@@ -59,6 +59,16 @@ def _define_module(target, variant):
             ":camera_banner",
             ":camera_dt_bindings",
             "//soc-repo:all_headers",
+            "//soc-repo:{}/drivers/firmware/qcom/qcom-scm".format(tv),
+            "//soc-repo:{}/drivers/iommu/qcom_iommu_util".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/llcc-qcom".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/qcom_va_minidump".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/mem_buf/mem_buf_dev".format(tv),
+            "//soc-repo:{}/drivers/clk/qcom/clk-qcom".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/qcom_rpmh".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/socinfo".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/mdt_loader".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/smem".format(tv),
         ],
         "//build/kernel/kleaf:socrepo_false": [
             ":camera_headers",
@@ -86,6 +96,13 @@ def _define_module(target, variant):
         outs = ["{}_defconfig.generated".format(tv)],
         cmd = "cat $(SRCS) > $@",
     )
+    if target in ["holi", "shikra"]:
+        deps.extend([
+		"//vendor/qcom/opensource/securemsm-kernel:smcinvoke_kernel_headers",
+		"//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
+		"//vendor/qcom/opensource/securemsm-kernel:smmu_proxy_headers",
+		"//vendor/qcom/opensource/securemsm-kernel:{}_smmu_proxy_dlkm".format(tv),
+        ])
 
     base_srcs = _get_camera_base_srcs() + _get_common_srcs()
     src_prefix = "camera/drivers"

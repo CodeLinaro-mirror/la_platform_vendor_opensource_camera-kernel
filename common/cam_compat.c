@@ -240,9 +240,88 @@ int cam_ife_notify_safe_lut_scm(bool safe_trigger)
 
 	return rc;
 }
+void cam_cpastop_scm_write(struct cam_cpas_hw_errata_wa *errata_wa)
+{
+	int reg_val;
 
+	qcom_scm_io_readl(errata_wa->data.reg_info.offset, &reg_val);
+	reg_val |= errata_wa->data.reg_info.value;
+	qcom_scm_io_writel(errata_wa->data.reg_info.offset, reg_val);
+}
+#endif /* CONFIG_SPECTRA_SECURE */
+#ifdef CONFIG_SPECTRA_SECURE
 int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
-	bool protect, int32_t offset)
+	bool protect, int32_t offset, bool is_shutdown)
+{
+	int rc = 0;
+	struct Object client_env, sc_object;
+	ITCDriverSensorInfo params = {0};
+	struct cam_csiphy_secure_info *secure_info;
+
+	if (offset >= CSIPHY_MAX_INSTANCES_PER_PHY) {
+		CAM_ERR(CAM_CSIPHY, "Invalid CSIPHY offset");
+		return -EINVAL;
+	}
+
+	if (!is_shutdown) {
+		rc = get_client_env_object(&client_env);
+		if (rc) {
+			CAM_ERR(CAM_CSIPHY, "Failed getting mink env object, rc: %d", rc);
+			return rc;
+		}
+
+		rc = IClientEnv_open(client_env, CTrustedCameraDriver_UID, &sc_object);
+		if (rc) {
+			CAM_ERR(CAM_CSIPHY, "Failed getting mink sc_object, rc: %d", rc);
+			return rc;
+		}
+
+		secure_info = &csiphy_dev->csiphy_info[offset].secure_info;
+		params.csid_hw_idx_mask = secure_info->csid_hw_idx_mask;
+		params.cdm_hw_idx_mask = secure_info->cdm_hw_idx_mask;
+		params.vc_mask = secure_info->vc_mask;
+		params.phy_lane_sel_mask =
+			csiphy_dev->csiphy_info[offset].csiphy_phy_lane_sel_mask;
+		params.protect = protect ? 1 : 0;
+
+		rc = ITrustedCameraDriver_dynamicProtectSensor(sc_object, &params);
+		if (rc) {
+			CAM_ERR(CAM_CSIPHY, "Mink secure call failed, rc: %d", rc);
+			/* Clean up objects before returning */
+			Object_release(sc_object);
+			Object_release(client_env);
+			return rc;
+		}
+
+		rc = Object_release(sc_object);
+		if (rc) {
+			CAM_ERR(CAM_CSIPHY, "Failed releasing secure camera object, rc: %d", rc);
+			return rc;
+		}
+
+		rc = Object_release(client_env);
+		if (rc) {
+			CAM_ERR(CAM_CSIPHY, "Failed releasing mink env object, rc: %d", rc);
+			return rc;
+		}
+	} else {
+		/* This is a temporary work around until the SMC Invoke driver is
+		 * refactored to avoid the dependency on FDs, which was causing issues
+		 * during process shutdown.
+		 */
+		rc = qcom_scm_camera_protect_phy_lanes(protect, 0);
+		if (rc) {
+			CAM_ERR(CAM_CSIPHY, "SCM call to hypervisor failed");
+			return rc;
+		}
+	}
+
+	return 0;
+}
+#else
+int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
+	bool protect, int32_t offset, bool __always_unused is_shutdown)
+
 {
 	int rc = 0;
 
@@ -257,15 +336,6 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 	}
 
 	return rc;
-}
-
-void cam_cpastop_scm_write(struct cam_cpas_hw_errata_wa *errata_wa)
-{
-	int reg_val;
-
-	qcom_scm_io_readl(errata_wa->data.reg_info.offset, &reg_val);
-	reg_val |= errata_wa->data.reg_info.value;
-	qcom_scm_io_writel(errata_wa->data.reg_info.offset, reg_val);
 }
 #endif /* CONFIG_SPECTRA_SECURE */
 
