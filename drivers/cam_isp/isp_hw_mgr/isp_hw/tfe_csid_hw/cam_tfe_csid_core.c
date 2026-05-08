@@ -904,7 +904,7 @@ static void cam_tfe_csid_send_secure_info(struct cam_tfe_csid_hw  *csid_hw)
 	secure_info.vc_mask = 0;
 	secure_info.csid_hw_idx_mask = BIT(csid_hw->hw_intf->hw_idx);
 
-	CAM_DBG(CAM_ISP,
+	CAM_INFO(CAM_ISP,
 		"PHY secure info for CSID[%u], lane_cfg: 0x%x, tfe: 0x%x, cdm: 0x%x, vc_mask: 0x%llx",
 		csid_hw->hw_intf->hw_idx, secure_info.lane_cfg, secure_info.csid_hw_idx_mask,
 		secure_info.cdm_hw_idx_mask, secure_info.vc_mask);

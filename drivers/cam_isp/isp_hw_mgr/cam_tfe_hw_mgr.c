@@ -1329,8 +1329,19 @@ static int cam_tfe_hw_mgr_acquire_res_tfe_csid_pxl(
 	csid_acquire.node_res = NULL;
 	csid_acquire.event_cb_prv = tfe_ctx;
 	csid_acquire.event_cb = cam_tfe_hw_mgr_event_handler;
-	if (in_port->num_out_res)
-		out_port = &(in_port->data[0]);
+
+	/* Update the secure mode of CSID based on all the out ports */
+	for (i = 0; i < in_port->num_out_res; i++) {
+		out_port = &(in_port->data[i]);
+		if (cam_tfe_hw_mgr_is_rdi_res(out_port->res_id))
+			continue;
+
+		if (out_port->secure_mode) {
+			csid_res_temp->is_secure = out_port->secure_mode;
+			csid_acquire.out_port = out_port;
+			break;
+		}
+	}
 
 	if (tfe_ctx->is_tpg) {
 		if (tfe_ctx->res_list_tpg.hw_res[0]->hw_intf->hw_idx == 0)
@@ -1469,9 +1480,6 @@ acquire_successful:
 			csid_res_temp->hw_res[0]->hw_intf->hw_idx;
 	} else
 		csid_res_temp->is_dual_isp = 0;
-
-	if (in_port->num_out_res)
-		csid_res_temp->is_secure = out_port->secure_mode;
 
 	cam_tfe_hw_mgr_put_res(&tfe_ctx->res_list_tfe_csid, &csid_res);
 
