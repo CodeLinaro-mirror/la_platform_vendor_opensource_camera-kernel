@@ -74,23 +74,6 @@ def _define_module(target, variant):
     # For shikra and holi, use msm_kernel_build for perf variant and kernel_aarch64_consolidate for consolidate variant
     # For other platforms, use the standard naming convention
     if target in ["holi", "shikra"]:
-        if variant == "perf":
-            kernel_build = select({
-                "//build/kernel/kleaf:socrepo_true": "//soc-repo:msm_kernel_build",
-                "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}".format(tv),
-            })
-        elif variant == "consolidate":
-            kernel_build = select({
-                "//build/kernel/kleaf:socrepo_true": "//soc-repo:kernel_aarch64_consolidate",
-                "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}".format(tv),
-            })
-        else:
-            # For debug or other variants, use msm_kernel_build as default
-            kernel_build = select({
-                "//build/kernel/kleaf:socrepo_true": "//soc-repo:msm_kernel_build",
-                "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}".format(tv),
-            })
-    else:
         kernel_build = select({
             "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_base_kernel".format(tv),
             "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}".format(tv),
