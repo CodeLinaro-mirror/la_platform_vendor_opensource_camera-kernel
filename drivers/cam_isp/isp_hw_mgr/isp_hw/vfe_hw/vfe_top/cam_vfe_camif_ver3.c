@@ -1035,7 +1035,7 @@ static int cam_vfe_camif_ver3_handle_irq_top_half(uint32_t evt_id,
 
 	rc  = cam_vfe_camif_ver3_get_evt_payload(camif_priv, &evt_payload);
 	if (rc) {
-		CAM_INFO(CAM_ISP,
+		CAM_INFO_RATE_LIMIT(CAM_ISP,
 		"VFE:%d CAMIF IRQ status_0: 0x%X status_1: 0x%X status_2: 0x%X",
 		camif_node->hw_intf->hw_idx, th_payload->evt_status_arr[0],
 		th_payload->evt_status_arr[1], th_payload->evt_status_arr[2]);
