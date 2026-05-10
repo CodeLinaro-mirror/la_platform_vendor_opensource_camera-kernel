@@ -26,13 +26,10 @@ int cam_cx_ipeak_register_cx_ipeak(struct cam_hw_soc_info *soc_info)
 	soc_info->cam_cx_ipeak_bit = 1 << cam_cx_client_cnt++;
 	cx_default_ipeak_mask |= soc_info->cam_cx_ipeak_bit;
 
-	if (cam_cx_ipeak)
-		goto exit;
-
 	cam_cx_ipeak = cx_ipeak_register(soc_info->dev->of_node,
 		"qcom,cam-cx-ipeak");
 
-	if (cam_cx_ipeak) {
+	if (!IS_ERR_OR_NULL(cam_cx_ipeak)){
 		goto exit;
 	} else {
 		rc = -EINVAL;
