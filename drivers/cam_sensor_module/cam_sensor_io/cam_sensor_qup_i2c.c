@@ -258,9 +258,11 @@ int32_t cam_qup_i2c_poll(struct i2c_client *client,
 
 		usleep_range(1000, 1010);
 	}
-	/* If rc is MISMATCH then read is successful but poll is failure */
-	if (rc == I2C_COMPARE_MISMATCH)
-		CAM_ERR(CAM_SENSOR_IO, "poll failed rc=%d(non-fatal)", rc);
+	/* If rc is MISMATCH then read is successful but comparison failed */
+	if (rc == I2C_COMPARE_MISMATCH) {
+		rc = -EAGAIN;
+		CAM_ERR(CAM_SENSOR_IO, "Poll timed out rc=%d", rc);
+	}
 	if (rc < 0)
 		CAM_ERR(CAM_SENSOR_IO, "poll failed rc=%d", rc);
 
