@@ -325,9 +325,10 @@ struct cam_csiphy_param {
  * @combo_mode:                 Info regarding combo_mode is enable / disable
  * @ops:                        KMD operations
  * @crm_cb:                     Callback API pointers
- * @enable_irq_dump:            Debugfs flag to enable hw IRQ register dump
+ * @enable_irq_status_reg_dump: Debugfs flag to enable hw IRQ status register dump
  * @en_status_reg_dump:         Debugfs flag to enable cphy/dphy specific
  *                              status register dump
+ * @en_full_phy_reg_dump:       Debugfs flag to enable the dump for all the Phy registers
  */
 struct csiphy_device {
 	char                           device_name[CAM_CTX_DEV_NAME_MAX_LENGTH];
@@ -360,8 +361,9 @@ struct csiphy_device {
 	uint8_t                        cphy_dphy_combo_mode;
 	struct cam_req_mgr_kmd_ops     ops;
 	struct cam_req_mgr_crm_cb     *crm_cb;
-	bool                           enable_irq_dump;
+	bool                           enable_irq_status_reg_dump;
 	bool                           en_status_reg_dump;
+	bool                           en_full_phy_reg_dump;
 };
 
 /**

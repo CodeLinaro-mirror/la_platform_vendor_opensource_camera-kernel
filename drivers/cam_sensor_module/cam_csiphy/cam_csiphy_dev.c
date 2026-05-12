@@ -12,7 +12,7 @@
 #include <dt-bindings/msm-camera.h>
 #include "camera_main.h"
 
-#define CSIPHY_DEBUGFS_NAME_MAX_SIZE 30
+#define CSIPHY_DEBUGFS_NAME_MAX_SIZE 35
 static struct dentry *root_dentry;
 
 static void cam_csiphy_populate_secure_info(
@@ -71,12 +71,15 @@ static void cam_csiphy_subdev_handle_message(
 		CAM_INFO(CAM_CSIPHY, "subdev index : %d CSIPHY index: %d",
 				csiphy_dev->soc_info.index, data_idx);
 		if (data_idx == csiphy_dev->soc_info.index) {
-			cam_csiphy_status_dmp(csiphy_dev);
+			cam_csiphy_irq_status_reg_dmp(csiphy_dev);
+
+			if (csiphy_dev->en_full_phy_reg_dump)
+				cam_csiphy_reg_dump(&csiphy_dev->soc_info);
 
 			if (csiphy_dev->en_status_reg_dump) {
 				CAM_INFO(CAM_CSIPHY,
 					"Status Reg Dump on failure");
-				cam_csiphy_print_status_reg(csiphy_dev);
+				cam_csiphy_dump_status_reg(csiphy_dev);
 			}
 		}
 		break;
@@ -114,9 +117,9 @@ static int cam_csiphy_debug_register(struct csiphy_device *csiphy_dev)
 
 	snprintf(debugfs_name, CSIPHY_DEBUGFS_NAME_MAX_SIZE, "%s%d%s", "csiphy",
 		csiphy_dev->soc_info.index,
-		"_en_irq_dump");
+		"_en_irq_status_reg_dump");
 	debugfs_create_bool(debugfs_name, 0644,
-		root_dentry, &csiphy_dev->enable_irq_dump);
+		root_dentry, &csiphy_dev->enable_irq_status_reg_dump);
 
 	memset(debugfs_name, 0, CSIPHY_DEBUGFS_NAME_MAX_SIZE);
 
@@ -125,6 +128,14 @@ static int cam_csiphy_debug_register(struct csiphy_device *csiphy_dev)
 		"_en_status_reg_dump");
 	debugfs_create_bool(debugfs_name, 0644,
 		root_dentry, &csiphy_dev->en_status_reg_dump);
+
+	memset(debugfs_name, 0, CSIPHY_DEBUGFS_NAME_MAX_SIZE);
+
+	snprintf(debugfs_name, CSIPHY_DEBUGFS_NAME_MAX_SIZE, "%s%d%s", "csiphy",
+		csiphy_dev->soc_info.index,
+		"_en_full_phy_reg_dump");
+	debugfs_create_bool(debugfs_name, 0644,
+		root_dentry, &csiphy_dev->en_full_phy_reg_dump);
 
 	if (IS_ERR(dbgfileptr)) {
 		if (PTR_ERR(dbgfileptr) == -ENODEV)

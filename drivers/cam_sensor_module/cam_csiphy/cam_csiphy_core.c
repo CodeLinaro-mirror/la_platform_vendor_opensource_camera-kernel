@@ -39,14 +39,10 @@
 
 static DEFINE_MUTEX(active_csiphy_cnt_mutex);
 
-static int csiphy_dump;
-module_param(csiphy_dump, int, 0644);
-
-
 static int csiphy_onthego_reg_count;
 static unsigned int csiphy_onthego_regs[150];
 module_param_array(csiphy_onthego_regs, uint, &csiphy_onthego_reg_count, 0644);
-MODULE_PARM_DESC(csiphy_onthego_regs, "Functionality to program csiphy registers on the fly");
+MODULE_PARM_DESC(csiphy_onthego_regs, "Functionality to let csiphy registers program on the fly");
 
 struct g_csiphy_data {
 	void __iomem *base_address;
@@ -104,7 +100,7 @@ void cam_csiphy_query_cap(struct csiphy_device *csiphy_dev,
 	csiphy_cap->clk_lane = csiphy_dev->clk_lane;
 }
 
-int cam_csiphy_print_status_reg(struct csiphy_device *csiphy_dev)
+int cam_csiphy_dump_status_reg(struct csiphy_device *csiphy_dev)
 {
 	struct cam_hw_soc_info *soc_info;
 	void __iomem *phybase = NULL;
@@ -199,7 +195,7 @@ void cam_csiphy_reset(struct csiphy_device *csiphy_dev)
 
 	if (csiphy_dev->en_status_reg_dump) {
 		CAM_INFO(CAM_CSIPHY, "Status Reg Dump after phy reset");
-		cam_csiphy_print_status_reg(csiphy_dev);
+		cam_csiphy_dump_status_reg(csiphy_dev);
 	}
 }
 
@@ -647,8 +643,8 @@ irqreturn_t cam_csiphy_irq(int irq_num, void *data)
 	base = csiphy_dev->soc_info.reg_map[0].mem_base;
 	csiphy_reg = &csiphy_dev->ctrl_reg->csiphy_reg;
 
-	if (csiphy_dev->enable_irq_dump) {
-		cam_csiphy_status_dmp(csiphy_dev);
+	if (csiphy_dev->enable_irq_status_reg_dump) {
+		cam_csiphy_irq_status_reg_dmp(csiphy_dev);
 		cam_io_w_mb(0x1,
 			base + csiphy_reg->mipi_csiphy_glbl_irq_cmd_addr);
 		cam_io_w_mb(0x0,
@@ -1611,13 +1607,14 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			}
 
 			rc = cam_csiphy_update_lane(csiphy_dev, offset, true);
-			if (csiphy_dump == 1)
-				cam_csiphy_mem_dmp(&csiphy_dev->soc_info);
 			if (rc) {
 				CAM_ERR(CAM_CSIPHY,
 					"Update enable lane failed, rc: %d", rc);
 				goto release_mutex;
 			}
+
+			if (csiphy_dev->en_full_phy_reg_dump)
+				cam_csiphy_reg_dump(&csiphy_dev->soc_info);
 
 			csiphy_dev->start_dev_count++;
 			goto release_mutex;
@@ -1672,16 +1669,12 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			goto release_mutex;
 		}
 		rc = cam_csiphy_config_dev(csiphy_dev, config.dev_handle);
-		if (csiphy_dump == 1)
-			cam_csiphy_mem_dmp(&csiphy_dev->soc_info);
-
 		if (rc < 0) {
 			CAM_ERR(CAM_CSIPHY, "cam_csiphy_config_dev failed");
 			cam_csiphy_disable_hw(csiphy_dev);
 			cam_cpas_stop(csiphy_dev->cpas_handle);
 			goto release_mutex;
 		}
-		csiphy_dev->start_dev_count++;
 
 		if (csiphy_dev->ctrl_reg->csiphy_reg
 			.prgm_cmn_reg_across_csiphy) {
@@ -1714,11 +1707,16 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			}
 		}
 
+		if (csiphy_dev->en_full_phy_reg_dump)
+			cam_csiphy_reg_dump(&csiphy_dev->soc_info);
+
 		if (csiphy_dev->en_status_reg_dump) {
 			usleep_range(50000, 50005);
 			CAM_INFO(CAM_CSIPHY, "Status Reg Dump after config");
-			cam_csiphy_print_status_reg(csiphy_dev);
+			cam_csiphy_dump_status_reg(csiphy_dev);
 		}
+
+		csiphy_dev->start_dev_count++;
 
 		CAM_DBG(CAM_CSIPHY, "START DEV CNT: %d",
 			csiphy_dev->start_dev_count);

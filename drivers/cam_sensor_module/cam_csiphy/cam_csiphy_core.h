@@ -61,6 +61,6 @@ void cam_csiphy_register_baseaddress(struct csiphy_device *csiphy_dev);
  *
  * This API allows to print all the cphy/dphy specific status registers
  */
-int cam_csiphy_print_status_reg(struct csiphy_device *csiphy_dev);
+int cam_csiphy_dump_status_reg(struct csiphy_device *csiphy_dev);
 
 #endif /* _CAM_CSIPHY_CORE_H_ */
