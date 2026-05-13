@@ -927,7 +927,8 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			{
 				cam_hdmi_bdg_lt6911uxe_set_cam_ctrl(s_ctrl);
 			}
-			if (!strcmp(HDMI_SENSOR_NAME,s_ctrl->io_master_info.client->name))
+			if (!strcmp(HDMI_GXC_SENSOR_NAME,s_ctrl->io_master_info.client->name) ||
+				!strcmp(HDMI_UXC_SENSOR_NAME,s_ctrl->io_master_info.client->name))
 			{
 				cam_hdmi_bdg_set_cam_ctrl(s_ctrl);
 			}
