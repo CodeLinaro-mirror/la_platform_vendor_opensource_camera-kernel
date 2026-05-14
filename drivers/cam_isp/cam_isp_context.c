@@ -110,7 +110,8 @@ static inline void __cam_isp_ctx_move_req_to_free_list(
 		"Free req id: %lld, ctx_idx: %u, link: 0x%x",
 		req->request_id, ctx->ctx_id, ctx->link_hdl);
 
-	if (!ctx_isp->ul_path_en && req->packet)
+	if (req->packet && (!ctx_isp->ul_path_en ||
+		req_isp->hw_update_data.packet_opcode_type == CAM_ISP_PACKET_INIT_DEV))
 		cam_mem_put_kref(kmd_cmd_buff_info->handle);
 
 	if (req->packet) {
