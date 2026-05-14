@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -1194,16 +1194,16 @@ static int cam_vfe_camif_lite_handle_irq_bottom_half(
 		evt_info.err_type = CAM_VFE_IRQ_STATUS_OVERFLOW;
 		ktime_get_boottime_ts64(&ts);
 		CAM_INFO(CAM_ISP,
-			"current monotonic time stamp seconds %lld:%lld",
+			"current monotonic time stamp seconds %lld:%ld",
 			ts.tv_sec, ts.tv_nsec/1000);
 		CAM_INFO(CAM_ISP,
-			"ERROR time %lld:%lld",
+			"ERROR time %lld:%ld",
 			camif_lite_priv->error_ts.tv_sec,
 			camif_lite_priv->error_ts.tv_nsec);
 
 		if (camif_lite_node->rdi_only_ctx)
 			CAM_INFO(CAM_ISP,
-				"SOF %lld:%lld EPOCH %lld:%lld EOF %lld:%lld",
+				"SOF %lld:%ld EPOCH %lld:%ld EOF %lld:%ld",
 				camif_lite_priv->sof_ts.tv_sec,
 				camif_lite_priv->sof_ts.tv_nsec,
 				camif_lite_priv->epoch_ts.tv_sec,

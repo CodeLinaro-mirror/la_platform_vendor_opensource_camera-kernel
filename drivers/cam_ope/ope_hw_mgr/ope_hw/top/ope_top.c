@@ -167,7 +167,7 @@ static int cam_ope_top_acquire(struct ope_hw *ope_hw_info,
 	int rc = 0;
 
 	if (ctx_id < 0 || !data) {
-		CAM_ERR(CAM_OPE, "Invalid data: %d %x", ctx_id, data);
+		CAM_ERR(CAM_OPE, "Invalid data: %d %llx", ctx_id, (unsigned long long)(uintptr_t)data);
 		return -EINVAL;
 	}
 
