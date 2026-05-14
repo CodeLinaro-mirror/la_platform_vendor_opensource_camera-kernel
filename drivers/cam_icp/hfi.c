@@ -325,6 +325,7 @@ int hfi_cmd_ubwc_config(uint32_t *ubwc_cfg)
 	uint8_t *prop;
 	struct hfi_cmd_prop *dbg_prop;
 	uint32_t size = 0;
+	uint32_t *prop_ref_data;
 
 	size = sizeof(struct hfi_cmd_prop) +
 		sizeof(struct hfi_cmd_ubwc_cfg);
@@ -341,9 +342,10 @@ int hfi_cmd_ubwc_config(uint32_t *ubwc_cfg)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	dbg_prop->prop_data[0] = HFI_PROP_SYS_UBWC_CFG;
-	dbg_prop->prop_data[1] = ubwc_cfg[0];
-	dbg_prop->prop_data[2] = ubwc_cfg[1];
+	prop_ref_data = &dbg_prop->prop_data[0];
+	prop_ref_data[0] = HFI_PROP_SYS_UBWC_CFG;
+	prop_ref_data[1] = ubwc_cfg[0];
+	prop_ref_data[2] = ubwc_cfg[1];
 
 	hfi_write_cmd(prop);
 	kfree(prop);
@@ -357,6 +359,7 @@ int hfi_cmd_ubwc_config_ext(uint32_t *ubwc_ipe_cfg,
 	uint8_t *prop;
 	struct hfi_cmd_prop *dbg_prop;
 	uint32_t size = 0;
+	uint32_t *prop_ref_data;
 
 	size = sizeof(struct hfi_cmd_prop) +
 		sizeof(struct hfi_cmd_ubwc_cfg_ext);
@@ -374,12 +377,12 @@ int hfi_cmd_ubwc_config_ext(uint32_t *ubwc_ipe_cfg,
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	dbg_prop->prop_data[0] = HFI_PROPERTY_SYS_UBWC_CONFIG_EX;
-	dbg_prop->prop_data[1] = ubwc_bps_cfg[0];
-	dbg_prop->prop_data[2] = ubwc_bps_cfg[1];
-	dbg_prop->prop_data[3] = ubwc_ipe_cfg[0];
-	dbg_prop->prop_data[4] = ubwc_ipe_cfg[1];
-
+	prop_ref_data = &dbg_prop->prop_data[0];
+	prop_ref_data[0] = HFI_PROPERTY_SYS_UBWC_CONFIG_EX;
+	prop_ref_data[1] = ubwc_bps_cfg[0];
+	prop_ref_data[2] = ubwc_bps_cfg[1];
+	prop_ref_data[3] = ubwc_ipe_cfg[0];
+	prop_ref_data[4] = ubwc_ipe_cfg[1];
 	hfi_write_cmd(prop);
 	kfree(prop);
 
@@ -392,6 +395,7 @@ int hfi_enable_ipe_bps_pc(bool enable, uint32_t core_info)
 	uint8_t *prop;
 	struct hfi_cmd_prop *dbg_prop;
 	uint32_t size = 0;
+	uint32_t *prop_ref_data;
 
 	size = sizeof(struct hfi_cmd_prop) +
 		sizeof(struct hfi_ipe_bps_pc);
@@ -404,9 +408,10 @@ int hfi_enable_ipe_bps_pc(bool enable, uint32_t core_info)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	dbg_prop->prop_data[0] = HFI_PROP_SYS_IPEBPS_PC;
-	dbg_prop->prop_data[1] = enable;
-	dbg_prop->prop_data[2] = core_info;
+	prop_ref_data = &dbg_prop->prop_data[0];
+	prop_ref_data[0] = HFI_PROP_SYS_IPEBPS_PC;
+	prop_ref_data[1] = enable;
+	prop_ref_data[2] = core_info;
 
 	hfi_write_cmd(prop);
 	kfree(prop);
@@ -419,6 +424,7 @@ int hfi_set_debug_level(u64 icp_dbg_type, uint32_t lvl)
 	uint8_t *prop;
 	struct hfi_cmd_prop *dbg_prop;
 	uint32_t size = 0, val;
+	uint32_t *prop_ref_data;
 
 	val = HFI_DEBUG_MSG_LOW |
 		HFI_DEBUG_MSG_MEDIUM |
@@ -443,9 +449,10 @@ int hfi_set_debug_level(u64 icp_dbg_type, uint32_t lvl)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	dbg_prop->prop_data[0] = HFI_PROP_SYS_DEBUG_CFG;
-	dbg_prop->prop_data[1] = lvl;
-	dbg_prop->prop_data[2] = icp_dbg_type;
+	prop_ref_data = &dbg_prop->prop_data[0];
+	prop_ref_data[0] = HFI_PROP_SYS_DEBUG_CFG;
+	prop_ref_data[1] = lvl;
+	prop_ref_data[2] = icp_dbg_type;
 	hfi_write_cmd(prop);
 
 	kfree(prop);
@@ -458,6 +465,7 @@ int hfi_set_fw_dump_level(uint32_t lvl)
 	uint8_t *prop = NULL;
 	struct hfi_cmd_prop *fw_dump_level_switch_prop = NULL;
 	uint32_t size = 0;
+	uint32_t *prop_ref_data;
 
 	CAM_DBG(CAM_HFI, "fw dump ENTER");
 
@@ -470,8 +478,9 @@ int hfi_set_fw_dump_level(uint32_t lvl)
 	fw_dump_level_switch_prop->size = size;
 	fw_dump_level_switch_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	fw_dump_level_switch_prop->num_prop = 1;
-	fw_dump_level_switch_prop->prop_data[0] = HFI_PROP_SYS_FW_DUMP_CFG;
-	fw_dump_level_switch_prop->prop_data[1] = lvl;
+	prop_ref_data = &fw_dump_level_switch_prop->prop_data[0];
+	prop_ref_data[0] = HFI_PROP_SYS_FW_DUMP_CFG;
+	prop_ref_data[1] = lvl;
 
 	CAM_DBG(CAM_HFI, "prop->size = %d\n"
 			 "prop->pkt_type = %d\n"
@@ -481,8 +490,8 @@ int hfi_set_fw_dump_level(uint32_t lvl)
 			 fw_dump_level_switch_prop->size,
 			 fw_dump_level_switch_prop->pkt_type,
 			 fw_dump_level_switch_prop->num_prop,
-			 fw_dump_level_switch_prop->prop_data[0],
-			 fw_dump_level_switch_prop->prop_data[1]);
+			 prop_ref_data[0],
+			 prop_ref_data[1]);
 
 	hfi_write_cmd(prop);
 	kfree(prop);
