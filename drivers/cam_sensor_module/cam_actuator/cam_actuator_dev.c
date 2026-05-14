@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_actuator_dev.h"
@@ -200,6 +200,97 @@ static int cam_actuator_init_subdev(struct cam_actuator_ctrl_t *a_ctrl)
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+static int cam_actuator_driver_i2c_probe(struct i2c_client *client)
+{
+	int                            rc = 0;
+	int32_t                         i = 0;
+	struct cam_actuator_ctrl_t      *a_ctrl;
+	struct cam_hw_soc_info          *soc_info = NULL;
+	struct cam_actuator_soc_private *soc_private = NULL;
+
+	if (client == NULL) {
+		CAM_ERR(CAM_ACTUATOR, "Invalid Args client: %pK", client);
+		return -EINVAL;
+	}
+
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+		CAM_ERR(CAM_ACTUATOR, "%s :: i2c_check_functionality failed",
+			 client->name);
+		rc = -EFAULT;
+		return rc;
+	}
+
+	/* Create sensor control structure */
+	a_ctrl = kzalloc(sizeof(*a_ctrl), GFP_KERNEL);
+	if (!a_ctrl)
+		return -ENOMEM;
+
+	i2c_set_clientdata(client, a_ctrl);
+
+	soc_private = kzalloc(sizeof(struct cam_actuator_soc_private),
+		GFP_KERNEL);
+	if (!soc_private) {
+		rc = -ENOMEM;
+		goto free_ctrl;
+	}
+	a_ctrl->soc_info.soc_private = soc_private;
+
+	a_ctrl->io_master_info.client = client;
+	soc_info = &a_ctrl->soc_info;
+	soc_info->dev = &client->dev;
+	soc_info->dev_name = client->name;
+	a_ctrl->io_master_info.master_type = I2C_MASTER;
+
+	rc = cam_actuator_parse_dt(a_ctrl, &client->dev);
+	if (rc < 0) {
+		CAM_ERR(CAM_ACTUATOR, "failed: cam_sensor_parse_dt rc %d", rc);
+		goto free_soc;
+	}
+
+	rc = cam_actuator_init_subdev(a_ctrl);
+	if (rc)
+		goto free_soc;
+
+	if (soc_private->i2c_info.slave_addr != 0)
+		a_ctrl->io_master_info.client->addr =
+			soc_private->i2c_info.slave_addr;
+
+	a_ctrl->i2c_data.per_frame =
+		kzalloc(sizeof(struct i2c_settings_array) *
+		MAX_PER_FRAME_ARRAY, GFP_KERNEL);
+	if (a_ctrl->i2c_data.per_frame == NULL) {
+		rc = -ENOMEM;
+		goto unreg_subdev;
+	}
+
+	INIT_LIST_HEAD(&(a_ctrl->i2c_data.init_settings.list_head));
+
+	for (i = 0; i < MAX_PER_FRAME_ARRAY; i++)
+		INIT_LIST_HEAD(&(a_ctrl->i2c_data.per_frame[i].list_head));
+
+	a_ctrl->bridge_intf.device_hdl = -1;
+	a_ctrl->bridge_intf.link_hdl = -1;
+	a_ctrl->bridge_intf.ops.get_dev_info =
+		cam_actuator_publish_dev_info;
+	a_ctrl->bridge_intf.ops.link_setup =
+		cam_actuator_establish_link;
+	a_ctrl->bridge_intf.ops.apply_req =
+		cam_actuator_apply_request;
+	a_ctrl->last_flush_req = 0;
+	a_ctrl->cam_act_state = CAM_ACTUATOR_INIT;
+
+	return rc;
+
+unreg_subdev:
+	cam_unregister_subdev(&(a_ctrl->v4l2_dev_str));
+free_soc:
+	kfree(soc_private);
+free_ctrl:
+	kfree(a_ctrl);
+	return rc;
+}
+#else
 static int32_t cam_actuator_driver_i2c_probe(struct i2c_client *client,
 	const struct i2c_device_id *id)
 {
@@ -291,6 +382,7 @@ free_ctrl:
 	kfree(a_ctrl);
 	return rc;
 }
+#endif
 
 static int cam_actuator_component_bind(struct device *dev,
 	struct device *master_dev, void *data)
@@ -425,11 +517,19 @@ const static struct component_ops cam_actuator_component_ops = {
 	.unbind = cam_actuator_component_unbind,
 };
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int32_t cam_actuator_platform_remove(
 	struct platform_device *pdev)
+#else
+static void cam_actuator_platform_remove(
+	struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_actuator_component_ops);
+
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_actuator_driver_dt_match[] = {
