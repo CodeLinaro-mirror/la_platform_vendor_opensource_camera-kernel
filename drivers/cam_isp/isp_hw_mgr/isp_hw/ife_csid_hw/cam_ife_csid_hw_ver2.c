@@ -1816,6 +1816,43 @@ static inline uint32_t cam_ife_csid_ver2_input_core_to_hw_idx(int core_sel)
 	}
 }
 
+static int cam_ife_csid_ver2_get_token_for_res(
+	struct cam_ife_csid_ver2_hw *csid_hw, uint32_t res_id, void **token)
+{
+	int i;
+
+	if (!token)
+		return -EINVAL;
+
+	*token = NULL;
+	for (i = 0; i < CAM_IFE_PIX_PATH_RES_MAX; i++) {
+		if (csid_hw->token_data[i].res_id == res_id) {
+			*token = csid_hw->token_data[i].token;
+			break;
+		}
+	}
+
+	if (!*token) {
+		CAM_ERR(CAM_ISP, "cannot find token data for CSID[%u] res :%d",
+			csid_hw->hw_intf->hw_idx, res_id);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int cam_ife_csid_ver2_set_token_for_res(
+	struct cam_ife_csid_ver2_hw *csid_hw, uint32_t res_id, void *token)
+{
+	if (res_id >= CAM_IFE_PIX_PATH_RES_MAX)
+		return -EINVAL;
+
+	csid_hw->token_data[res_id].token = token;
+	csid_hw->token_data[res_id].res_id = res_id;
+
+	return 0;
+}
+
 static void cam_ife_csid_ver2_read_debug_err_vectors(
 	struct cam_ife_csid_ver2_hw  *csid_hw)
 {
@@ -1888,7 +1925,6 @@ static int cam_ife_csid_ver2_handle_event_err(
 	struct cam_isp_hw_error_event_info   err_evt_info;
 	struct cam_isp_hw_event_info         evt = {0};
 	struct cam_ife_csid_ver2_path_cfg   *path_cfg;
-	int i;
 	void *token = NULL;
 
 	if (!csid_hw->event_cb) {
@@ -1910,15 +1946,7 @@ static int cam_ife_csid_ver2_handle_event_err(
 	evt.is_secondary_evt = is_secondary;
 	err_evt_info.err_type = err_type;
 	evt.event_data = (void *)&err_evt_info;
-	for (i = 0; i < CAM_IFE_PIX_PATH_RES_MAX; i++) {
-		if (csid_hw->token_data[i].res_id == res->res_id) {
-			token = csid_hw->token_data[i].token;
-			break;
-		}
-	}
-
-	if (!token) {
-		CAM_ERR(CAM_ISP, "cannot find token data for res :%d ", res->res_id);
+	if (cam_ife_csid_ver2_get_token_for_res(csid_hw, res->res_id, &token)) {
 		goto end;
 	}
 
@@ -3017,7 +3045,7 @@ static int cam_ife_csid_ver2_ipp_bottom_half(
 	uint32_t                                      eof_irq_mask = 0;
 	uint32_t                                      epoch0_irq_mask = 0;
 	uint32_t                                      rup_irq_mask = 0;
-	int                                           i, rc = 0;
+	int                                           rc = 0;
 	bool                                          out_of_sync_fatal = false;
 
 	if (!handler_priv || !evt_payload_priv) {
@@ -3062,16 +3090,7 @@ static int cam_ife_csid_ver2_ipp_bottom_half(
 	evt_info.res_type = CAM_ISP_RESOURCE_PIX_PATH;
 	evt_info.reg_val  = irq_status_ipp;
 	evt_info.event_data = &sof_and_boot_time;
-	for (i = 0; i < CAM_IFE_PIX_PATH_RES_MAX; i++) {
-		if (csid_hw->token_data[i].res_id == res->res_id) {
-			token = csid_hw->token_data[i].token;
-			break;
-		}
-	}
-
-	if (!token) {
-		CAM_ERR(CAM_ISP, "cannot find token data for CSID[%u] res :%d ",
-			csid_hw->hw_intf->hw_idx, res->res_id);
+	if (cam_ife_csid_ver2_get_token_for_res(csid_hw, res->res_id, &token)) {
 		goto end;
 	}
 
@@ -3275,7 +3294,7 @@ static int cam_ife_csid_ver2_rdi_bottom_half(
 	uint32_t                                      err_type = 0;
 	struct cam_isp_hw_event_info                  evt_info;
 	struct cam_isp_sof_ts_data                    sof_and_boot_time;
-	int                                           i, rc = 0;
+	int                                           rc = 0;
 	void                                         *token = NULL;
 
 	if (!handler_priv || !evt_payload_priv) {
@@ -3362,16 +3381,7 @@ static int cam_ife_csid_ver2_rdi_bottom_half(
 	evt_info.res_id = res->res_id;
 	evt_info.reg_val = irq_status_rdi;
 	evt_info.hw_type = CAM_ISP_HW_TYPE_CSID;
-	for (i = 0; i < CAM_IFE_PIX_PATH_RES_MAX; i++) {
-		if (csid_hw->token_data[i].res_id == res->res_id) {
-			token = csid_hw->token_data[i].token;
-			break;
-		}
-	}
-
-	if (!token) {
-		CAM_ERR(CAM_ISP, "cannot find token data for CSID[%u] res :%d ",
-			csid_hw->hw_intf->hw_idx, res->res_id);
+	if (cam_ife_csid_ver2_get_token_for_res(csid_hw, res->res_id, &token)) {
 		goto end;
 	}
 
@@ -4265,7 +4275,7 @@ static int cam_ife_csid_ver2_in_port_validate(
 	struct cam_ife_csid_ver2_hw     *csid_hw,
 	bool is_per_port_acquire)
 {
-	int i, rc = 0;
+	int rc = 0;
 	void *token = NULL;
 
 	/* check in port args for RT streams*/
@@ -4277,16 +4287,8 @@ static int cam_ife_csid_ver2_in_port_validate(
 	}
 
 	if (!is_per_port_acquire) {
-		for (i = 0; i < CAM_IFE_PIX_PATH_RES_MAX; i++) {
-			if (csid_hw->token_data[i].res_id == reserve->res_id) {
-				token = csid_hw->token_data[i].token;
-				break;
-			}
-		}
-
-		if (!token) {
-			CAM_ERR(CAM_ISP, "cannot find token data for CSID[%u] res :%d ",
-				csid_hw->hw_intf->hw_idx, reserve->res_id);
+		rc = cam_ife_csid_ver2_get_token_for_res(csid_hw, reserve->res_id, &token);
+		if (rc) {
 			goto err;
 		}
 	}
@@ -4395,14 +4397,12 @@ int cam_ife_csid_ver2_reserve(void *hw_priv,
 		return -EBUSY;
 	}
 
-	if (reserve->res_id < CAM_IFE_PIX_PATH_RES_MAX) {
-		csid_hw->token_data[reserve->res_id].token = reserve->cb_priv;
-		csid_hw->token_data[reserve->res_id].res_id = reserve->res_id;
-	} else {
+	rc = cam_ife_csid_ver2_set_token_for_res(csid_hw, reserve->res_id, reserve->cb_priv);
+	if (rc) {
 		CAM_ERR(CAM_ISP,
 			"exceeded max expected resource path CSID[%u] res_id :%d",
 				csid_hw->hw_intf->hw_idx, reserve->res_id);
-		return -EINVAL;
+		return rc;
 	}
 
 	rc = cam_ife_csid_ver2_in_port_validate(reserve, csid_hw, is_per_port_acquire);
@@ -8378,14 +8378,12 @@ static int cam_ife_csid_ver2_update_res_data(struct cam_ife_csid_ver2_hw *csid_h
 		return -EBUSY;
 	}
 
-	if (reserve->res_id < CAM_IFE_PIX_PATH_RES_MAX) {
-		csid_hw->token_data[reserve->res_id].token = reserve->cb_priv;
-		csid_hw->token_data[reserve->res_id].res_id = reserve->res_id;
-	} else {
+	rc = cam_ife_csid_ver2_set_token_for_res(csid_hw, reserve->res_id, reserve->cb_priv);
+	if (rc) {
 		CAM_ERR(CAM_ISP,
 			"exceeded max expected resource path CSID[%u] res_id :%d ",
 				csid_hw->hw_intf->hw_idx, reserve->res_id);
-		return -EINVAL;
+		return rc;
 	}
 
 	res->is_per_port_acquire = false;
