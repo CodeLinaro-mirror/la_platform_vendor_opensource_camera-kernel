@@ -145,7 +145,7 @@ static int32_t cam_sensor_generic_blob_handler(void *user_data,
 			(struct cam_sensor_res_info *) blob_data;
 
 		if (blob_size < sizeof(struct cam_sensor_res_info)) {
-			CAM_ERR(CAM_SENSOR, "Invalid blob size expected: 0x%x actual: 0x%x",
+			CAM_ERR(CAM_SENSOR, "Invalid blob size expected: 0x%zu actual: 0x%x",
 				sizeof(struct cam_sensor_res_info), blob_size);
 			return -EINVAL;
 		}
