@@ -1479,7 +1479,7 @@ int cam_smmu_alloc_firmware(int32_t smmu_hdl,
 	 * But on chipsets which use dma-coherent - all the buffers that are
 	 * being mapped to this CB must be CACHED
 	 */
-	rc = iommu_map(domain,
+	rc = cam_iommu_map(domain,
 		firmware_start,
 		(phys_addr_t) icp_fw.fw_hdl,
 		firmware_len,
@@ -1627,7 +1627,7 @@ int cam_smmu_alloc_qdss(int32_t smmu_hdl,
 	 * But on chipsets which use dma-coherent - all the buffers that are
 	 * being mapped to this CB must be CACHED
 	 */
-	rc = iommu_map(domain,
+	rc = cam_iommu_map(domain,
 		qdss_start,
 		qdss_phy_addr,
 		qdss_len,
@@ -1912,7 +1912,7 @@ int cam_smmu_reserve_sec_heap(int32_t smmu_hdl,
 	if (iommu_cb_set.force_cache_allocs)
 		prot |= IOMMU_CACHE;
 
-	size = iommu_map_sg(iommu_cb_set.cb_info[idx].domain,
+	size = cam_iommu_map_sg(iommu_cb_set.cb_info[idx].domain,
 		sec_heap_iova,
 		secheap_buf->table->sgl,
 		secheap_buf->table->orig_nents,
@@ -2066,7 +2066,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 		if (iommu_cb_set.force_cache_allocs)
 			prot |= IOMMU_CACHE;
 
-		size = iommu_map_sg(domain, iova, table->sgl, table->orig_nents,
+		size = cam_iommu_map_sg(domain, iova, table->sgl, table->orig_nents,
 				prot);
 
 		if (size < 0) {
@@ -2580,7 +2580,7 @@ static int cam_smmu_alloc_scratch_buffer_add_to_list(int idx,
 	if (iommu_cb_set.force_cache_allocs)
 		iommu_dir |= IOMMU_CACHE;
 
-	if (iommu_map_sg(domain,
+	if (cam_iommu_map_sg(domain,
 		iova,
 		table->sgl,
 		table->nents,
