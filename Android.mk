@@ -15,8 +15,12 @@ DLKM_DIR := $(TOP)/device/qcom/common/dlkm
 
 LOCAL_MODULE_DDK_BUILD := true
 
+ifneq ($(TARGET_BOARD_PLATFORM),)
+LOCAL_MODULE_DDK_EXTRA_ARGS := "--//vendor/qcom/opensource/camera-kernel:project_name=$(TARGET_BOARD_PLATFORM)"
+endif
+
 # List of board platforms for which MMRM driver API should be enabled
-MMRM_BOARDS := taro parrot kalama pineapple
+MMRM_BOARDS := taro parrot kalama pineapple lahaina
 
 CAMERA_SRC_FILES := \
                     $(addprefix $(LOCAL_PATH)/, $(call all-named-files-under,*.h,drivers dt-bindings include))\
@@ -72,15 +76,7 @@ include $(LOCAL_PATH)/dependency.mk
 # $(info DLKM_DIR = $(DLKM_DIR))
 $(info KBUILD_OPTIONS = $(KBUILD_OPTIONS))
 
-BOARD_VENDOR_KERNEL_MODULES += $(LOCAL_MODULE_PATH)/$(LOCAL_MODULE)
-ifeq ($(TARGET_BOARD_PLATFORM), lahaina)
-# Include Kernel DLKM Android.mk target to place generated .ko file in image
-include $(DLKM_DIR)/AndroidKernelModule.mk
-# Include Camera UAPI Android.mk target to copy headers
-include $(LOCAL_PATH)/include/uapi/Android.mk
-else
 include $(DLKM_DIR)/Build_external_kernelmodule.mk
-endif
 
 endif # End of check for board platform
 endif # ifeq ($(CAMERA_DLKM_ENABLED),true)
