@@ -301,7 +301,7 @@ static inline int cam_kthread_property_update(struct cam_kthread_data *kthread_d
 		sched_attr.sched_priority, sched_attr.sched_nice,
 		__cam_kthread_sched_policy_to_name(sched_attr.sched_policy));
 
-	rc = sched_setattr(kthread_data->kthread_worker->task, &sched_attr);
+	rc = sched_setattr_nocheck(kthread_data->kthread_worker->task, &sched_attr);
 	if (rc) {
 		CAM_ERR(CAM_ISP,
 			"Failed to update kthread property, priority: %d, policy: %s, nice: %d, return: %d",
@@ -390,7 +390,6 @@ int cam_kthread_create(char *name, int32_t num_tasks,
 	char                     buf[128] = "crm_kt-";
 	int                      i, rc = 0;
 	struct cam_kthread_data *kthread_data;
-	unsigned long            rem_jiffies;
 
 	if (!kthread || *kthread) {
 		CAM_ERR(CAM_ISP, "Invalid kthread input");
@@ -491,38 +490,13 @@ int cam_kthread_create(char *name, int32_t num_tasks,
 	 * policy/priority/etc..., set is_prop_valid to true as well
 	 */
 	if (g_cam_kthread_info.is_prop_valid) {
-		init_completion(&cam_kthread->worker_completion);
-
-		task = cam_kthread_get_task(cam_kthread);
-		if (IS_ERR_OR_NULL(task)) {
-			CAM_ERR(CAM_ISP, "No empty task = %ld", PTR_ERR(task));
-			rc = -EINVAL;
+		rc = cam_kthread_property_update(kthread_data);
+		if (rc) {
+			CAM_ERR(CAM_ISP,
+				"Failed to set properties, worker name: %s, rc: %d",
+				cam_kthread->worker_name, rc);
 			goto free_kthread_data;
 		}
-
-		task->process_cb = &cam_set_kthread_prop_internal;
-		rc = cam_kthread_enqueue_task(task, cam_kthread, CAM_KTHREAD_TASK_PRIORITY_0);
-		if (rc) {
-			CAM_ERR(CAM_ISP, "Could not enqueue task, worker name: %s, rc: %d",
-				cam_kthread->worker_name, rc);
-			goto put_kthread_task;
-		}
-
-		rem_jiffies = wait_for_completion_timeout(
-			&cam_kthread->worker_completion,
-			msecs_to_jiffies(CAM_KTHREAD_PRIORITY_UPDATE_THRESHOLD));
-		if (!rem_jiffies) {
-			CAM_ERR(CAM_ISP,
-				"Setting kthread properties timed out, worker_name: %s",
-				cam_kthread->worker_name);
-			rc = -ETIME;
-			goto put_kthread_task;
-		}
-
-		if (g_cam_kthread_info.result)
-			CAM_WARN(CAM_ISP,
-				"Failed to set properties, worker name: %s, result: %d",
-				cam_kthread->worker_name, g_cam_kthread_info.result);
 	}
 
 	CAM_INFO(CAM_ISP,
@@ -535,8 +509,6 @@ int cam_kthread_create(char *name, int32_t num_tasks,
 		g_cam_kthread_info.affinity);
 	return rc;
 
-put_kthread_task:
-	cam_kthread_put_task(task);
 free_kthread_data:
 	mutex_lock(&g_cam_kthread_info.kthread_list_mutex);
 	list_del_init(&kthread_data->list);
