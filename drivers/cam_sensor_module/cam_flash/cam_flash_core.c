@@ -5,7 +5,7 @@
  */
 
 #include <linux/module.h>
-
+#include "linux/leds-qpnp-flash.h"
 #include "cam_sensor_cmn_header.h"
 #include "cam_flash_core.h"
 #include "cam_res_mgr_api.h"
