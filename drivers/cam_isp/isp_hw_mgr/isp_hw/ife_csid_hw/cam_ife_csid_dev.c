@@ -183,7 +183,7 @@ int cam_ife_csid_hw_init(struct cam_hw_intf **ife_csid_hw,
 		*ife_csid_hw = cam_ife_csid_hw_list[hw_idx];
 	} else {
 		*ife_csid_hw = NULL;
-		rc = -1;
+		rc = -ENODEV;
 	}
 
 	return rc;

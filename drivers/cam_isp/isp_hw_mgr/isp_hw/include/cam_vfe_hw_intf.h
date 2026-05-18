@@ -26,6 +26,8 @@
 
 #define CAM_VFE_MAX_UBWC_PORTS        4
 
+#define CAM_VFE_GET_PAYLOAD_ERR_MAX   50
+
 enum cam_isp_hw_vfe_in_mux {
 	CAM_ISP_HW_VFE_IN_CAMIF       = 0,
 	CAM_ISP_HW_VFE_IN_TESTGEN     = 1,

@@ -673,7 +673,8 @@ static int cam_tfe_irq_bottom_half(void *handler_priv,
 	struct cam_tfe_rdi_data             *rdi_priv;
 	cam_hw_mgr_event_cb_func             event_cb = NULL;
 	void                                *event_cb_priv = NULL;
-	uint32_t i;
+	uint32_t                             i;
+	uint32_t                             res_stop_cnt = 0;
 
 	if (!handler_priv || !evt_payload_priv) {
 		CAM_ERR(CAM_ISP,
@@ -720,7 +721,20 @@ static int cam_tfe_irq_bottom_half(void *handler_priv,
 				cam_tfe_rdi_irq_bottom_half(top_priv,
 					&top_priv->in_rsrc[i], false,
 					evt_payload);
+		} else if ((top_priv->in_rsrc[i].res_state ==
+			CAM_ISP_RESOURCE_STATE_RESERVED) ||
+			(top_priv->in_rsrc[i].res_state ==
+			CAM_ISP_RESOURCE_STATE_AVAILABLE)) {
+			res_stop_cnt++;
 		}
+	}
+
+	/* early exit in case bottom half is scheduled after stop*/
+	if (res_stop_cnt == CAM_TFE_TOP_IN_PORT_MAX) {
+		CAM_WARN(CAM_ISP,
+			"BH scheduled in stop state for TFE:%d, ignore with success",
+			top_priv->common_data.hw_intf->hw_idx);
+		goto end;
 	}
 
 	/* process the irq errors */
@@ -771,6 +785,7 @@ static int cam_tfe_irq_bottom_half(void *handler_priv,
 			false);
 	}
 
+end:
 	cam_tfe_put_evt_payload(core_info, &evt_payload);
 
 	return 0;

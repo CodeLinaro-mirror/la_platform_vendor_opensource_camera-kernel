@@ -156,10 +156,11 @@ void cam_kthread_process(struct kthread_work *w)
 			atomic_sub(1, &worker_kthread->task.pending_cnt);
 			list_del_init(&task->entry);
 			KTHREAD_RELEASE_LOCK(worker_kthread, flags);
-
-			if (!unlikely(atomic_read(&worker_kthread->flush_in_process)))
-				cam_kthread_process_task(task);
-
+			if (unlikely(atomic_read(&worker_kthread->flush_in_process)))
+				CAM_WARN(CAM_ISP,
+				"Kthread process called during flush, worker name: %s",
+				worker_kthread->worker_name);
+			cam_kthread_process_task(task);
 			cam_common_util_thread_switch_delay_detect(
 				worker_kthread->worker_name, "kthread execution", cb,
 				exec_start_time, CAM_KTHREAD_EXE_TIME_THRESHOLD);
@@ -248,11 +249,6 @@ int cam_kthread_enqueue_task(struct cam_kthread_task *task,
 		return -EINVAL;
 	}
 
-	if (task->cancel == 1 || atomic_read(&kthread->flush_in_process)) {
-		rc = 0;
-		goto abort;
-	}
-
 	task->priv = priv;
 	task->priority = (prio < CAM_KTHREAD_TASK_PRIORITY_MAX &&
 		prio >= CAM_KTHREAD_TASK_PRIORITY_0)
@@ -262,6 +258,14 @@ int cam_kthread_enqueue_task(struct cam_kthread_task *task,
 	KTHREAD_ACQUIRE_LOCK(kthread, flags);
 	if (!kthread->job) {
 		rc = -EINVAL;
+		KTHREAD_RELEASE_LOCK(kthread, flags);
+		goto abort;
+	}
+
+	if (task->cancel == 1 || atomic_read(&kthread->flush_in_process)) {
+		rc = 0;
+		CAM_WARN(CAM_ISP, "Enqueue ignored due to flush in progress, worker name: %s",
+			kthread->worker_name);
 		KTHREAD_RELEASE_LOCK(kthread, flags);
 		goto abort;
 	}

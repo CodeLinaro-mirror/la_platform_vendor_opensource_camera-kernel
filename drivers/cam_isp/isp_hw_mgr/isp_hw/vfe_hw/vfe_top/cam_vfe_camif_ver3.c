@@ -57,6 +57,7 @@ struct cam_vfe_mux_camif_ver3_data {
 	uint32_t                           qcfa_bin;
 	uint32_t                           dual_hw_idx;
 	uint32_t                           is_dual;
+	uint32_t                           no_payload_err_cnt;
 	bool                               is_fe_enabled;
 	bool                               is_offline;
 	struct timespec64                  sof_ts;
@@ -73,7 +74,12 @@ static int cam_vfe_camif_ver3_get_evt_payload(
 
 	spin_lock(&camif_priv->spin_lock);
 	if (list_empty(&camif_priv->free_payload_list)) {
-		CAM_ERR_RATE_LIMIT(CAM_ISP, "No free CAMIF event payload");
+		if (camif_priv->no_payload_err_cnt == U32_MAX - 1)
+			camif_priv->no_payload_err_cnt = 0;
+		if (!(camif_priv->no_payload_err_cnt++ % CAM_VFE_GET_PAYLOAD_ERR_MAX)) {
+			CAM_ERR(CAM_ISP, "No free CAMIF event payload, no_payload_err_cnt:%u",
+			camif_priv->no_payload_err_cnt);
+		}
 		rc = -ENODEV;
 		goto done;
 	}
@@ -106,7 +112,6 @@ static int cam_vfe_camif_ver3_put_evt_payload(
 	*evt_payload = NULL;
 	spin_unlock_irqrestore(&camif_priv->spin_lock, flags);
 
-	CAM_DBG(CAM_ISP, "Done");
 	return 0;
 }
 
@@ -525,6 +530,7 @@ static int cam_vfe_camif_ver3_resource_start(
 	/* disable sof irq debug flag */
 	rsrc_data->enable_sof_irq_debug = false;
 	rsrc_data->irq_debug_cnt = 0;
+	rsrc_data->no_payload_err_cnt = 0;
 
 	if (rsrc_data->camif_debug &
 		CAMIF_DEBUG_ENABLE_SENSOR_DIAG_STATUS) {
@@ -754,6 +760,9 @@ static int cam_vfe_camif_ver3_resource_stop(
 			camif_priv->irq_err_handle);
 		camif_priv->irq_err_handle = 0;
 	}
+
+	CAM_DBG(CAM_ISP, "VFE:%d camif res stop success, no_payload_err_cnt:%u",
+		camif_res->hw_intf->hw_idx, camif_priv->no_payload_err_cnt);
 
 	return rc;
 }
@@ -1436,6 +1445,13 @@ static int cam_vfe_camif_ver3_handle_irq_bottom_half(void *handler_priv,
 	soc_private =
 		(struct cam_vfe_soc_private *)soc_info->soc_private;
 
+	if ((camif_node->res_state == CAM_ISP_RESOURCE_STATE_RESERVED) ||
+		(camif_node->res_state == CAM_ISP_RESOURCE_STATE_AVAILABLE)) {
+		ret = 0;
+		CAM_WARN(CAM_ISP, "BH scheduled in stop state for VFE:%d, ignore with success",
+			camif_node->hw_intf->hw_idx);
+		goto end;
+	}
 	for (i = 0; i < CAM_IFE_IRQ_REGISTERS_MAX; i++)
 		irq_status[i] = payload->irq_reg_val[i];
 
@@ -1591,6 +1607,7 @@ static int cam_vfe_camif_ver3_handle_irq_bottom_half(void *handler_priv,
 			camif_priv->common_reg->diag_sensor_status_0));
 	}
 
+end:
 	cam_vfe_camif_ver3_put_evt_payload(camif_priv, &payload);
 
 	CAM_DBG(CAM_ISP, "returning status = %d", ret);
