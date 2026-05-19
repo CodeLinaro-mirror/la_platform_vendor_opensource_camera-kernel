@@ -50,6 +50,8 @@
 #define MAX_PARAMS_FOR_IRQ_INJECT     5
 #define IRQ_INJECT_DISPLAY_BUF_LEN    4096
 
+#define CAM_IFE_MGR_DUMP_STREAM_INFO_NUM_WORDS  10
+
 typedef int (*cam_isp_irq_inject_cmd_parse_handler)(
 	struct cam_isp_irq_inject_param *irq_inject_param,
 	uint32_t param_index, char *token, bool *is_query);
@@ -16573,6 +16575,8 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 	struct cam_isp_prepare_hw_update_data *hw_update_data;
 	struct cam_isp_hw_per_req_info *per_req_info = NULL;
 	struct cam_isp_hw_drv_info *drv_info = NULL;
+	struct cam_common_hw_dump_args *ife_dump_args;
+	size_t min_len, remain_len;
 
 	if (!hw_mgr_priv || !cmd_args) {
 		CAM_ERR(CAM_ISP, "Invalid arguments");
@@ -16666,6 +16670,28 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 				&isp_hw_cmd_args->u.sof_ts.prev, true);
 			break;
 		case CAM_ISP_HW_MGR_DUMP_STREAM_INFO:
+			ife_dump_args =
+				(struct cam_common_hw_dump_args *)isp_hw_cmd_args->cmd_data;
+
+			if (ife_dump_args->buf_len <= ife_dump_args->offset) {
+				CAM_WARN(CAM_ISP,
+					"IFE stream info: Dump buffer overshoot len %zu offset %zu",
+					ife_dump_args->buf_len, ife_dump_args->offset);
+				rc = -ENOSPC;
+				break;
+			}
+
+			min_len = sizeof(struct cam_common_hw_dump_header) +
+				CAM_IFE_MGR_DUMP_STREAM_INFO_NUM_WORDS * sizeof(int32_t);
+			remain_len = ife_dump_args->buf_len - ife_dump_args->offset;
+			if (remain_len < min_len) {
+				CAM_WARN(CAM_ISP,
+					"IFE stream info: Dump buffer exhaust remain %zu min %zu",
+					remain_len, min_len);
+				rc = -ENOSPC;
+				break;
+			}
+
 			rc = cam_common_user_dump_helper(
 				(void *)(isp_hw_cmd_args->cmd_data),
 				cam_ife_mgr_user_dump_stream_info, ctx,

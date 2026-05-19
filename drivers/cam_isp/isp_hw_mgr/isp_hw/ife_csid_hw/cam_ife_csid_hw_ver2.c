@@ -62,6 +62,9 @@
 /* Trustedvm domain id 0x08 for all CSID path */
 #define CAM_IFE_CSID_PATH_DOMAIN_ID                    0x08080808
 
+/* Number of words that in user dump */
+#define CAM_IFE_CSID_VER2_DUMP_PATH_NUM_WORDS  5
+
 char *cam_ife_csid_ver2_top_reg_name[] = {
 	"top",
 	"top2"
@@ -8454,6 +8457,9 @@ static int cam_ife_csid_ver2_user_dump(
 	void *cmd_args)
 {
 	uint32_t                                    i = 0;
+	uint32_t                                    active_paths = 0;
+	size_t                                      min_len;
+	size_t                                      remain_len;
 	struct cam_ife_csid_ver2_path_data         *path_data;
 	struct cam_isp_resource_node               *res;
 	struct cam_isp_hw_dump_args                *dump_args;
@@ -8471,6 +8477,23 @@ static int cam_ife_csid_ver2_user_dump(
 
 	dump_args = (struct cam_isp_hw_dump_args *)cmd_args;
 
+	if (dump_args->buf_len <= dump_args->offset) {
+		CAM_WARN(CAM_ISP,
+			"CSID:%u VER2: Dump buffer overshoot len %zu offset %zu",
+			csid_hw->hw_intf->hw_idx,
+			dump_args->buf_len, dump_args->offset);
+		return -ENOSPC;
+	}
+
+	min_len = sizeof(struct cam_common_hw_dump_header) + sizeof(uint64_t);
+	remain_len = dump_args->buf_len - dump_args->offset;
+	if (remain_len < min_len) {
+		CAM_WARN(CAM_ISP,
+			"CSID:%u VER2: Dump buffer exhaust remain %zu min %zu",
+			csid_hw->hw_intf->hw_idx, remain_len, min_len);
+		return -ENOSPC;
+	}
+
 	rc = cam_common_user_dump_helper(dump_args, cam_common_user_dump_clock,
 		csid_hw->hw_info, sizeof(uint64_t), "CLK_RATE_PRINT:");
 
@@ -8478,6 +8501,27 @@ static int cam_ife_csid_ver2_user_dump(
 		CAM_ERR(CAM_ISP, "CSID:%u VER2: Clock dump failed, rc: %d",
 			csid_hw->hw_intf->hw_idx, rc);
 		return rc;
+	}
+
+	/* Aggregate worst-case bytes for all active path dumps. */
+	for (i = 0; i < CAM_IFE_PIX_PATH_RES_MAX; i++) {
+		res = &csid_hw->path_res[i];
+		if (res->res_state < CAM_ISP_RESOURCE_STATE_RESERVED)
+			continue;
+		if (!res->res_priv)
+			continue;
+		active_paths++;
+	}
+	min_len = (size_t)active_paths *
+		(sizeof(struct cam_common_hw_dump_header) +
+		CAM_IFE_CSID_VER2_DUMP_PATH_NUM_WORDS * sizeof(uint32_t));
+
+	remain_len = dump_args->buf_len - dump_args->offset;
+	if (remain_len < min_len) {
+		CAM_WARN(CAM_ISP,
+			"CSID:%u VER2: Dump buffer exhaust remain %zu min %zu (path)",
+			csid_hw->hw_intf->hw_idx, remain_len, min_len);
+		return -ENOSPC;
 	}
 
 	/* Loop through CSID items */

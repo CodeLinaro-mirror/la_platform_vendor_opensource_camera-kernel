@@ -39,6 +39,7 @@
 #define CAM_TFE_SAFE_ENABLE 1
 #define SMMU_SE_TFE 0
 
+#define CAM_TFE_MGR_DUMP_STREAM_INFO_NUM_WORDS  3
 
 static struct cam_tfe_hw_mgr g_tfe_hw_mgr;
 
@@ -5272,6 +5273,8 @@ static int cam_tfe_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 	struct cam_isp_hw_cmd_args *isp_hw_cmd_args = NULL;
 	struct cam_packet          *packet;
 	struct cam_tfe_comp_record_query *query_cmd;
+	struct cam_common_hw_dump_args *tfe_dump_args;
+	size_t min_len, remain_len;
 
 	if (!hw_mgr_priv || !cmd_args) {
 		CAM_ERR(CAM_ISP, "Invalid arguments");
@@ -5342,6 +5345,28 @@ static int cam_tfe_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 			rc = cam_tfe_hw_mgr_csiphy_clk_sync(ctx, isp_hw_cmd_args->cmd_data);
 			break;
 		case CAM_ISP_HW_MGR_DUMP_STREAM_INFO:
+			tfe_dump_args =
+				(struct cam_common_hw_dump_args *)isp_hw_cmd_args->cmd_data;
+
+			if (tfe_dump_args->buf_len <= tfe_dump_args->offset) {
+				CAM_WARN(CAM_ISP,
+					"TFE stream info: Dump buffer overshoot len %zu offset %zu",
+					tfe_dump_args->buf_len, tfe_dump_args->offset);
+				rc = -ENOSPC;
+				break;
+			}
+
+			min_len = sizeof(struct cam_common_hw_dump_header) +
+				CAM_TFE_MGR_DUMP_STREAM_INFO_NUM_WORDS * sizeof(int32_t);
+			remain_len = tfe_dump_args->buf_len - tfe_dump_args->offset;
+			if (remain_len < min_len) {
+				CAM_WARN(CAM_ISP,
+					"TFE stream info: Dump buffer exhaust remain %zu min %zu",
+					remain_len, min_len);
+				rc = -ENOSPC;
+				break;
+			}
+
 			rc = cam_common_user_dump_helper(
 					(void *)(isp_hw_cmd_args->cmd_data),
 					cam_tfe_mgr_user_dump_stream_info, ctx,

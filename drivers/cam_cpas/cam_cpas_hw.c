@@ -4063,7 +4063,8 @@ static int cam_cpas_dump_state_monitor_array_info(
 	struct cam_common_hw_dump_args  dump_args;
 	size_t                          buf_len;
 	size_t                          remain_len;
-	uint32_t                        min_len = 0, camnoc_type;
+	size_t                          min_len = 0;
+	uint32_t                        camnoc_type;
 	uintptr_t                       cpu_addr;
 	struct cam_cpas *cpas_core = (struct cam_cpas *) cpas_hw->core_info;
 	int64_t                         state_head = 0;
@@ -4139,7 +4140,7 @@ static int cam_cpas_dump_state_monitor_array_info(
 	}
 
 	if (remain_len < min_len) {
-		CAM_WARN(CAM_CPAS, "Dump buffer exhaust remain %zu min %u",
+		CAM_WARN(CAM_CPAS, "Dump buffer exhaust remain %zu min %zu",
 			remain_len, min_len);
 		cam_mem_put_cpu_buf(dump_info->buf_handle);
 		return -ENOSPC;

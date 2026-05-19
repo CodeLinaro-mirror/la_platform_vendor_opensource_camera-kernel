@@ -776,6 +776,8 @@ static int __cam_isp_ctx_user_dump_state_monitor_array(
 	uint32_t                                     oldest_entry;
 	uint32_t                                     num_entries;
 	uint64_t                                     state_head = 0;
+	size_t                                       min_len;
+	size_t                                       remain_len;
 
 	if (!dump_args || !ctx_isp) {
 		CAM_ERR(CAM_ISP, "Invalid args %pK %pK",
@@ -795,6 +797,25 @@ static int __cam_isp_ctx_user_dump_state_monitor_array(
 		div_u64_rem(state_head + 1,
 			CAM_ISP_CTX_STATE_MONITOR_MAX_ENTRIES, &oldest_entry);
 	}
+
+	if (dump_args->buf_len <= dump_args->offset) {
+		CAM_WARN(CAM_ISP,
+			"State monitor: Dump buffer overshoot len %zu offset %zu",
+			dump_args->buf_len, dump_args->offset);
+		return -ENOSPC;
+	}
+
+	min_len = (size_t)num_entries *
+		(sizeof(struct cam_common_hw_dump_header) +
+		CAM_ISP_CTX_DUMP_STATE_MONITOR_NUM_WORDS * sizeof(uint64_t));
+	remain_len = dump_args->buf_len - dump_args->offset;
+	if (remain_len < min_len) {
+		CAM_WARN(CAM_ISP,
+			"State monitor: Dump buffer exhaust remain %zu min %zu",
+			remain_len, min_len);
+		return -ENOSPC;
+	}
+
 	CAM_ERR(CAM_ISP,
 		"Dumping state information for preceding requests");
 
@@ -6317,7 +6338,7 @@ static int __cam_isp_ctx_dump_req_info(
 	struct cam_common_hw_dump_args *dump_args)
 {
 	int                                 i, rc = 0;
-	uint32_t                            min_len;
+	size_t                              min_len;
 	size_t                              remain_len;
 	struct cam_isp_ctx_req             *req_isp;
 	struct cam_ctx_request             *req_temp;
@@ -6337,13 +6358,16 @@ static int __cam_isp_ctx_dump_req_info(
 	}
 
 	remain_len = dump_args->buf_len - dump_args->offset;
-	min_len = sizeof(struct cam_isp_context_dump_header) +
-		(CAM_ISP_CTX_DUMP_REQUEST_NUM_WORDS *
-			req_isp->num_fence_map_out *
-			sizeof(uint64_t));
+	min_len =
+		3 * (sizeof(struct cam_common_hw_dump_header) +
+			CAM_ISP_CTX_REQ_MAX * sizeof(uint64_t)) +
+		req_isp->num_fence_map_out *
+			(sizeof(struct cam_common_hw_dump_header) +
+			CAM_ISP_CTX_DUMP_REQUEST_NUM_WORDS * sizeof(uint64_t));
 
 	if (remain_len < min_len) {
-		CAM_WARN(CAM_ISP, "Dump buffer exhaust remain %zu min %u, ctx_idx: %u, link: 0x%x",
+		CAM_WARN(CAM_ISP,
+			"Req info: Dump buffer exhaust remain %zu min %zu, ctx_idx: %u, link: 0x%x",
 			remain_len, min_len, ctx->ctx_id, ctx->link_hdl);
 		return -ENOSPC;
 	}
