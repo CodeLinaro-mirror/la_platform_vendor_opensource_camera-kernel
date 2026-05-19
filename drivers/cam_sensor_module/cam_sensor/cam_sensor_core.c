@@ -898,7 +898,8 @@ static int32_t cam_sensor_update_i2c_info(struct cam_cmd_i2c_info *i2c_info,
 
 static int32_t cam_sensor_i2c_modes_util(
 	struct cam_sensor_ctrl_t *s_ctrl,
-	struct i2c_settings_list *i2c_list)
+	struct i2c_settings_list *i2c_list,
+	struct cam_sensor_power_ctrl_t *ctrl)
 {
 	int32_t rc = 0;
 	uint32_t i, size;
@@ -984,6 +985,16 @@ static int32_t cam_sensor_i2c_modes_util(
 		if (rc < 0) {
 			CAM_ERR(CAM_SENSOR,
 					"i2c Sequential Xfer settings Failed: %d", rc);
+			return rc;
+		}
+	} else if (i2c_list->op_code == CAM_SENSOR_I2C_GPIO_CTL) {
+		rc = camera_sensor_execute_gpio(
+			&(i2c_list->i2c_settings),
+			ctrl);
+		if (rc < 0) {
+			CAM_ERR(CAM_SENSOR,
+				"Failed to write Gpio settings: %d",
+				rc);
 			return rc;
 		}
 	}
@@ -2252,7 +2263,7 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 				&(i2c_set->list_head), list) {
 				if (!s_ctrl->hw_no_ops)
 					rc = cam_sensor_i2c_modes_util(s_ctrl,
-						i2c_list);
+						i2c_list, &s_ctrl->sensordata->power_info);
 				if (rc < 0) {
 					CAM_ERR(CAM_SENSOR,
 						"Failed to apply settings: %d",
@@ -2292,7 +2303,7 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 				&(i2c_set[offset].list_head), list) {
 				if (!s_ctrl->hw_no_ops)
 					rc = cam_sensor_i2c_modes_util(s_ctrl,
-						i2c_list);
+						i2c_list, &s_ctrl->sensordata->power_info);
 				if (rc < 0) {
 					CAM_ERR(CAM_SENSOR,
 						"Failed to apply settings: %d",
