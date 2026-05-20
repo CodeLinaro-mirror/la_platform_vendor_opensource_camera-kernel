@@ -3517,23 +3517,14 @@ static int __cam_isp_ctx_reg_upd_in_applied_state(
 {
 	int rc = 0;
 	struct cam_ctx_request  *req;
-	struct cam_ctx_request  *req_temp;
 	struct cam_context      *ctx = ctx_isp->base;
 	struct cam_isp_ctx_req  *req_isp;
 	uint64_t                 request_id = 0;
 	struct cam_isp_hw_reg_update_event_data  *rup_event_data =
 		(struct cam_isp_hw_reg_update_event_data *)evt_data;
-	bool skip_state_change = true;
 	bool rup_for_applied_req = true;
 
-	if (list_empty(&ctx->active_req_list) && list_empty(&ctx->wait_req_list)) {
-		CAM_ERR(CAM_ISP, "reg_up with no req in active list and waitlist ctx:%d",
-			ctx->ctx_id);
-		return 0;
-	}
-
-	if (ctx_isp->frame_drop)
-		ctx_isp->frame_drop = false;
+	ctx_isp->frame_drop = false;
 
 	rc = __cam_isp_ctx_check_rup_received_for_applied_req(ctx, &rup_for_applied_req);
 	if (rc) {
@@ -3548,106 +3539,28 @@ static int __cam_isp_ctx_reg_upd_in_applied_state(
 		 */
 		CAM_INFO(CAM_ISP, "RUP received without proper req applied ctx: %d",
 			ctx->ctx_id);
-		return 0;
-	}
-
-	if (list_empty(&ctx->active_req_list)) {
-		req = list_first_entry(&ctx->wait_req_list,
-			struct cam_ctx_request, list);
-		req_isp = (struct cam_isp_ctx_req *)req->req_priv;
-
-		if (!req_isp->intermediate_irq_mask.reg_up_irq_mask) {
-			req_isp->intermediate_irq_mask.reg_up_irq_mask |=
-				1 << rup_event_data->res_id;
-			CAM_DBG(CAM_ISP,
-			"reg_up received on res_id:%d ctx:%u waitlist req:%d expected mask:0x%x current mask:0x%x",
-				rup_event_data->res_id, ctx->ctx_id, req->request_id,
-				req_isp->path_irq_mask,
-				req_isp->intermediate_irq_mask.reg_up_irq_mask);
-			if (req_isp->intermediate_irq_mask.reg_up_irq_mask ==
-				req_isp->path_irq_mask)
-				skip_state_change = false;
-		} else {
-			req_isp->intermediate_irq_mask.reg_up_irq_mask |=
-				1 << rup_event_data->res_id;
-			CAM_DBG(CAM_ISP,
-			"reg_up received on res_id:%d ctx:%u waitlist req:%d expected mask:0x%x current mask:0x%x",
-				rup_event_data->res_id, ctx->ctx_id, req->request_id,
-				req_isp->path_irq_mask,
-				req_isp->intermediate_irq_mask.reg_up_irq_mask);
-			if (req_isp->intermediate_irq_mask.reg_up_irq_mask ==
-				req_isp->path_irq_mask) {
-				CAM_DBG(CAM_ISP, "Received all Rup for req:%d ctx:%u",
-					req->request_id, ctx->ctx_id);
-				skip_state_change = false;
-				goto change_state;
-			} else
-				return 0;
-		}
-	} else {
-		list_for_each_entry_safe(req, req_temp, &ctx->active_req_list, list) {
-			req_isp = (struct cam_isp_ctx_req *) req->req_priv;
-			if (req_isp->intermediate_irq_mask.reg_up_irq_mask !=
-				req_isp->path_irq_mask) {
-				req_isp->intermediate_irq_mask.reg_up_irq_mask |=
-					1 << rup_event_data->res_id;
-				CAM_DBG(CAM_ISP,
-				"reg_up received on res_id:%d ctx:%u waitlist req:%d expected mask:0x%x current mask:0x%x",
-					rup_event_data->res_id, ctx->ctx_id, req->request_id,
-					req_isp->path_irq_mask,
-					req_isp->intermediate_irq_mask.reg_up_irq_mask);
-
-				if (req_isp->intermediate_irq_mask.reg_up_irq_mask ==
-					req_isp->path_irq_mask) {
-					skip_state_change = false;
-					goto change_state;
-				} else
-					return 0;
-			}
-		}
-
-		if (!list_empty(&ctx->wait_req_list)) {
-			req = list_first_entry(&ctx->wait_req_list,
-				struct cam_ctx_request, list);
-			req_isp = (struct cam_isp_ctx_req *)req->req_priv;
-
-			if (!req_isp->intermediate_irq_mask.reg_up_irq_mask) {
-				req_isp->intermediate_irq_mask.reg_up_irq_mask |=
-					1 << rup_event_data->res_id;
-				CAM_DBG(CAM_ISP,
-				"reg_up received on res_id:%d ctx:%u waitlist req:%d expected mask:0x%x current mask:0x%x",
-					rup_event_data->res_id, ctx->ctx_id, req->request_id,
-					req_isp->path_irq_mask,
-					req_isp->intermediate_irq_mask.reg_up_irq_mask);
-				if (req_isp->intermediate_irq_mask.reg_up_irq_mask ==
-					req_isp->path_irq_mask)
-					skip_state_change = false;
-			} else {
-				req_isp->intermediate_irq_mask.reg_up_irq_mask |=
-					1 << rup_event_data->res_id;
-				CAM_DBG(CAM_ISP,
-				"reg_up received on res_id:%d ctx:%u waitlist req:%d expected mask:0x%x current mask:0x%x",
-					rup_event_data->res_id, ctx->ctx_id, req->request_id,
-					req_isp->path_irq_mask,
-					req_isp->intermediate_irq_mask.reg_up_irq_mask);
-				if (req_isp->intermediate_irq_mask.reg_up_irq_mask ==
-					req_isp->path_irq_mask) {
-					CAM_DBG(CAM_ISP, "Received all Rup for req:%d ctx:%u",
-						req->request_id, ctx->ctx_id);
-					skip_state_change = false;
-					goto change_state;
-				} else
-					return 0;
-			}
-		}
-	}
-
-	if (list_empty(&ctx->wait_req_list)) {
-		CAM_ERR(CAM_ISP, "Reg upd ack with no waiting request");
 		goto end;
 	}
-	req = list_first_entry(&ctx->wait_req_list,
-			struct cam_ctx_request, list);
+
+	req = list_first_entry_or_null(&ctx->wait_req_list, struct cam_ctx_request, list);
+	if (!req) {
+		CAM_ERR(CAM_ISP, "reg_up with no req in waitlist ctx:%d", ctx->ctx_id);
+		goto end;
+	}
+
+	req_isp = (struct cam_isp_ctx_req *)req->req_priv;
+	req_isp->intermediate_irq_mask.reg_up_irq_mask |= 1 << rup_event_data->res_id;
+	CAM_DBG(CAM_ISP,
+		"reg_up received on res_id:%d ctx:%u waitlist req:%lld expected mask:0x%x current mask:0x%x",
+		rup_event_data->res_id, ctx->ctx_id, req->request_id,
+		req_isp->path_irq_mask,
+		req_isp->intermediate_irq_mask.reg_up_irq_mask);
+
+	if (req_isp->intermediate_irq_mask.reg_up_irq_mask != req_isp->path_irq_mask)
+		goto end;
+
+	CAM_DBG(CAM_ISP, "Received all RUPs for req:%lld ctx:%u", req->request_id, ctx->ctx_id);
+
 	if (!ctx_isp->ul_path_en && ctx_isp->num_primary_ports && (req->request_id > 1)) {
 		rc = cam_isp_context_last_consumed_addr_check(ctx_isp);
 		if (rc) {
@@ -3659,7 +3572,6 @@ static int __cam_isp_ctx_reg_upd_in_applied_state(
 	}
 	list_del_init(&req->list);
 
-	req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 	if (req_isp->num_fence_map_out != 0 && !req_isp->ul_fp_result_posted) {
 		list_add_tail(&req->list, &ctx->active_req_list);
 		/*decrement waitlist count first then increment active req cnt */
@@ -3676,21 +3588,19 @@ static int __cam_isp_ctx_reg_upd_in_applied_state(
 		__cam_isp_ctx_move_req_to_free_list(ctx, req);
 		ctx_isp->waitlist_req_cnt--;
 		CAM_DBG(CAM_ISP,
-			"move active request %lld to free list(cnt = %d), ctx %u",
-			req->request_id, ctx_isp->active_req_cnt, ctx->ctx_id);
+			"move waitlist request %lld to free list, waitlist_cnt = %d active_cnt = %d, ctx %u",
+			req->request_id, ctx_isp->waitlist_req_cnt,
+			ctx_isp->active_req_cnt, ctx->ctx_id);
 	}
 
-change_state:
 	/*
 	 * This function only called directly from applied and bubble applied
 	 * state so change substate here.
 	 */
-	if (!skip_state_change) {
-		ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_EPOCH;
-		CAM_DBG(CAM_ISP, "next Substate[%s]",
-			__cam_isp_ctx_substate_val_to_type(
-			ctx_isp->substate_activated));
-	}
+	ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_EPOCH;
+	CAM_DBG(CAM_ISP, "next Substate[%s]",
+		__cam_isp_ctx_substate_val_to_type(
+		ctx_isp->substate_activated));
 
 	__cam_isp_ctx_update_state_monitor_array(ctx_isp,
 		CAM_ISP_STATE_CHANGE_TRIGGER_REG_UPDATE, request_id);
