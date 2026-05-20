@@ -13036,6 +13036,7 @@ static int cam_isp_preempt_ul(int32_t dev_hdl)
 	int rc = -EINVAL;
 	struct cam_context *cam_ctx = NULL;
 	struct cam_isp_context *isp_ctx = NULL;
+	unsigned long flags;
 
 	cam_ctx = (struct cam_context *)cam_get_device_priv(dev_hdl);
 	if (!cam_ctx) {
@@ -13050,12 +13051,12 @@ static int cam_isp_preempt_ul(int32_t dev_hdl)
 		goto end;
 	}
 
-	spin_lock(&isp_ctx->ul_fp_params.fast_path_lock);
+	spin_lock_irqsave(&isp_ctx->ul_fp_params.fast_path_lock, flags);
 	wr_idx = atomic_read(&isp_ctx->ul_fp_params.write_idx);
 	isp_ctx->ul_fp_results[wr_idx].status = BATCH_PACKET_RESULT_PREEMPT_UL;
 	atomic_set(&isp_ctx->ul_fp_params.write_idx, INC_VAL(wr_idx, 1, MAX_IO_PACKETS));
 	complete(&isp_ctx->ul_fp_params.fast_path_buf_done);
-	spin_unlock(&isp_ctx->ul_fp_params.fast_path_lock);
+	spin_unlock_irqrestore(&isp_ctx->ul_fp_params.fast_path_lock, flags);
 
 	CAM_DBG(CAM_ISP, "Complete success for dev_hdl %x", dev_hdl);
 	rc = 0;
