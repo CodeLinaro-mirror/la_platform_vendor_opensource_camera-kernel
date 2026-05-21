@@ -361,7 +361,7 @@ static void cam_lrme_mgr_util_put_frame_req(
 
 	mutex_lock(lock);
 	if (free_buffer)
-		cam_mem_put_cpu_buf(frame_req->hw_update_entries[0].handle)
+		cam_mem_put_cpu_buf(frame_req->hw_update_entries[0].handle);
 
 	list_add_tail(&frame_req->frame_list, src_list);
 	mutex_unlock(lock);

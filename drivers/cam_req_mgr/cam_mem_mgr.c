@@ -330,6 +330,7 @@ static void cam_mem_put_slot(int32_t idx)
 		mutex_unlock(&tbl.m_lock);
 		return;
 	}
+	clear_bit(idx, tbl.bitmap);
 	mutex_lock(&tbl.bufq[idx].q_lock);
 	spin_lock(&tbl.bufq[idx].idx_lock);
 	tbl.bufq[idx].active = false;
@@ -339,6 +340,7 @@ static void cam_mem_put_slot(int32_t idx)
 	kref_init(&tbl.bufq[idx].krefcount);
 	kref_init(&tbl.bufq[idx].urefcount);
 	mutex_unlock(&tbl.bufq[idx].q_lock);
+	mutex_unlock(&tbl.m_lock);
 }
 
 int cam_mem_get_io_buf(int32_t buf_handle, int32_t mmu_handle,
@@ -1580,7 +1582,6 @@ static void cam_mem_util_unmap(int32_t idx)
 
 	CAM_DBG(CAM_MEM, "Flags = %X idx %d", tbl.bufq[idx].flags, idx);
 
-	mutex_lock(&tbl.m_lock);
 	if ((!tbl.bufq[idx].active) &&
 		(tbl.bufq[idx].iova[0]) == 0) {
 		CAM_WARN(CAM_MEM, "Buffer at idx=%d is already unmapped,",
@@ -1627,8 +1628,6 @@ static void cam_mem_util_unmap(int32_t idx)
 		rc = cam_fastrpc_dev_unmap_dma(&tbl.bufq[idx]);
 	}
 
-	mutex_lock(&tbl.m_lock);
-	mutex_lock(&tbl.bufq[idx].q_lock);
 	tbl.bufq[idx].flags = 0;
 	memset(tbl.bufq[idx].hdls, 0,
 		sizeof(int32_t) * CAM_MEM_MMU_MAX_HANDLE);
@@ -1658,8 +1657,7 @@ static void cam_mem_util_unmap(int32_t idx)
 	memset(&tbl.bufq[idx].timestamp, 0, sizeof(struct timespec64));
 	memset(&tbl.bufq[idx].krefcount, 0, sizeof(struct kref));
 	memset(&tbl.bufq[idx].urefcount, 0, sizeof(struct kref));
-	mutex_unlock(&tbl.bufq[idx].q_lock);
-	mutex_destroy(&tbl.bufq[idx].q_lock);
+	mutex_lock(&tbl.m_lock);
 	if (!tbl.bitmap) {
 		CAM_ERR(CAM_MEM, "crm is closing and mem deinit");
 		mutex_unlock(&tbl.m_lock);
