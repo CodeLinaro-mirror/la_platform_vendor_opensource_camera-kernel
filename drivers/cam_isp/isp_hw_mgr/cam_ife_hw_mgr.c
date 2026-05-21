@@ -1788,7 +1788,7 @@ static int cam_ife_hw_mgr_acquire_csid_hw(
 	bool   try_again;
 	bool   is_rdi = false;
 	int    tries;
-	enum cam_ife_pix_path_res_id rdis[CAM_IFE_CSID_RDI_MAX];
+	enum cam_ife_pix_path_res_id rdis[CAM_IFE_CSID_RDI_MAX] = {CAM_IFE_PIX_PATH_RES_RDI_0};
 
 
 	if (!ife_hw_mgr || !csid_acquire) {
@@ -1871,7 +1871,7 @@ static int cam_ife_mgr_attempt_reuse_cid_res(
 	int try_again = true;
 	bool is_rdi = false;
 	int tries;
-	enum cam_ife_pix_path_res_id rdis[CAM_IFE_CSID_RDI_MAX];
+	enum cam_ife_pix_path_res_id rdis[CAM_IFE_CSID_RDI_MAX] = {CAM_IFE_PIX_PATH_RES_RDI_0};
 
 	in_port = csid_acquire->in_port;
 
