@@ -3294,8 +3294,7 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 
 	if (!data || !priv) {
 		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
-		rc = -EINVAL;
-		goto end;
+		return -EINVAL;
 	}
 	link = (struct cam_req_mgr_core_link *)priv;
 	sched_req  = (struct cam_req_mgr_core_sched_req *)data;
@@ -3325,6 +3324,25 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 		(sched_req->param_mask & CAM_CRM_MISMATCHED_FRAME_MODE_MASK))
 		slot->mismatched_frame_mode = sched_req->params[0];
 
+	slot->trigger_mode = sched_req->trigger_params.mode;
+	switch (slot->trigger_mode) {
+	case CAM_REQ_MGR_TRIGGER_MODE_AUTO:
+		slot->group_id = -1;
+		slot->group_size = 0;
+		slot->group_seq = 0;
+		break;
+	case CAM_REQ_MGR_TRIGGER_MODE_MANUAL:
+		slot->group_id = sched_req->trigger_params.data.manual.id;
+		slot->group_size = sched_req->trigger_params.data.manual.size;
+		slot->group_seq = 0; /* Add logic to maintain sequence! */
+		slot->skip_set = !!sched_req->trigger_params.data.manual.skip;
+		break;
+	default:
+		CAM_ERR(CAM_CRM, "Invalid trigger mode!");
+		rc = -EINVAL;
+		goto end;
+	}
+
 	for (i = 0; i < sched_req->num_links; i++) {
 		if (link->link_hdl != sched_req->link_hdls[i]) {
 			slot->sync_link_hdls[sync_idx] = sched_req->link_hdls[i];
@@ -3352,9 +3370,8 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 		}
 	}
 
-	mutex_unlock(&link->req.lock);
-
 end:
+	mutex_unlock(&link->req.lock);
 	return rc;
 }
 
@@ -3665,6 +3682,22 @@ int cam_req_mgr_process_add_req(void *priv, void *data)
 
 end:
 	return rc;
+}
+
+/**
+ * cam_req_mgr_process_add_req_manual_trigger()
+ *
+ * @brief: This runs in workque thread context. Call core funcs to check
+ *         which peding requests can be processed in case of manual mode.
+ * @priv : link information.
+ * @data : contains information about frame_id, link etc.
+ *
+ * @return: 0 on success.
+ */
+static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
+{
+	CAM_ERR(CAM_CRM, "Manual trigger mode not implemented yet!");
+	return -ENOSYS;
 }
 
 /**
@@ -4071,6 +4104,22 @@ end:
 	return rc;
 }
 
+/**
+ * cam_req_mgr_process_trigger_manual()
+ *
+ * @brief: This runs in workque thread context. Call core funcs to check
+ *         which peding requests can be processed in case of manual trigger.
+ * @priv : link information.
+ * @data : contains information about frame_id, link etc.
+ *
+ * @return: 0 on success.
+ */
+static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
+{
+	CAM_ERR(CAM_CRM, "Manual trigger mode not implemented yet!");
+	return -ENOSYS;
+}
+
 /* Linked devices' Callback section */
 
 /**
@@ -4168,7 +4217,19 @@ static int cam_req_mgr_cb_add_req(struct cam_req_mgr_add_request *add_req)
 		}
 	}
 
-	task->process_cb = &cam_req_mgr_process_add_req;
+	switch (link->req.in_q->slot[idx].trigger_mode) {
+	case CAM_REQ_MGR_TRIGGER_MODE_AUTO:
+		task->process_cb = &cam_req_mgr_process_add_req;
+		break;
+	case CAM_REQ_MGR_TRIGGER_MODE_MANUAL:
+		task->process_cb = &cam_req_mgr_process_add_req_manual_trigger;
+		break;
+	default:
+		CAM_ERR(CAM_CRM, "Invalid trigger mode!");
+		rc = -EINVAL;
+		goto end;
+	}
+
 	rc = cam_req_mgr_workq_enqueue_task(task, link, CRM_TASK_PRIORITY_0);
 	CAM_DBG(CAM_CRM, "X: dev %x dev req %lld on link 0x%x",
 		add_req->dev_hdl, add_req->req_id, link->link_hdl);
@@ -4534,7 +4595,18 @@ static int cam_req_mgr_cb_notify_trigger(
 	notify_trigger->trigger = trigger_data->trigger;
 	notify_trigger->req_id = trigger_data->req_id;
 	notify_trigger->sof_timestamp_val = trigger_data->sof_timestamp_val;
-	task->process_cb = &cam_req_mgr_process_trigger;
+
+	switch (in_q->slot[in_q->rd_idx].trigger_mode) {
+	case CAM_REQ_MGR_TRIGGER_MODE_AUTO:
+		task->process_cb = &cam_req_mgr_process_trigger;
+		break;
+	case CAM_REQ_MGR_TRIGGER_MODE_MANUAL:
+		task->process_cb = &cam_req_mgr_process_trigger_manual;
+		break;
+	default:
+		CAM_ERR(CAM_CRM, "Invalid trigger mode!");
+		return -EINVAL;
+	}
 	rc = cam_req_mgr_workq_enqueue_task(task, link, CRM_TASK_PRIORITY_0);
 
 end:
@@ -5408,6 +5480,7 @@ int cam_req_mgr_schedule_request(
 	sched.sync_mode = sched_req->sync_mode;
 	sched.link_hdl = sched_req->link_hdl;
 	sched.additional_timeout = sched_req->additional_timeout;
+	sched.trigger_params.mode = CAM_REQ_MGR_TRIGGER_MODE_AUTO;
 	if (session->force_err_recovery == AUTO_RECOVERY) {
 		sched.bubble_enable = sched_req->bubble_enable;
 	} else {
@@ -5475,6 +5548,7 @@ int cam_req_mgr_schedule_request_v2(
 	sched.num_valid_params = sched_req->num_valid_params;
 	sched.param_mask = sched_req->param_mask;
 	sched.params = sched_req->params;
+	sched.trigger_params.mode = CAM_REQ_MGR_TRIGGER_MODE_AUTO;
 
 	if (session->force_err_recovery == AUTO_RECOVERY) {
 		sched.bubble_enable = sched_req->bubble_enable;
@@ -5579,6 +5653,7 @@ int cam_req_mgr_schedule_request_v3(
 	sched.num_valid_params = sched_req->num_valid_params;
 	sched.param_mask = sched_req->param_mask;
 	sched.params = sched_req->params;
+	sched.trigger_params.mode = CAM_REQ_MGR_TRIGGER_MODE_AUTO;
 
 	if (session->force_err_recovery == AUTO_RECOVERY) {
 		sched.bubble_enable = sched_req->bubble_enable;
@@ -5588,6 +5663,111 @@ int cam_req_mgr_schedule_request_v3(
 	}
 
 	if (sched_req->sync_mode == CAM_REQ_MGR_SYNC_MODE_SYNC) {
+		if ((sched_req->num_links <= 0) ||
+			(sched_req->num_links > MAXIMUM_LINKS_PER_SESSION)) {
+			CAM_ERR(CAM_CRM, "link:0x%x req:%lld invalid num_links:%d",
+				link->link_hdl, sched_req->req_id, sched_req->num_links);
+			rc = -EINVAL;
+			goto end;
+		}
+
+		for (i = 0; i < sched_req->num_links; i++) {
+			if (!sched_req->link_hdls[i]) {
+				CAM_ERR(CAM_CRM, "link handle %d in sched_req is null", i);
+				rc = -EINVAL;
+				goto end;
+			}
+
+			sync_links[i] = cam_get_link_priv(sched_req->link_hdls[i]);
+			if (!sync_links[i] ||
+				(sync_links[i]->link_hdl != sched_req->link_hdls[i])) {
+				CAM_ERR(CAM_CRM,
+					"Invalid sync link, sync link[%d]: %s sched_req->link_hdl: %x sync_links->link_hdl: 0x%x",
+					i, CAM_IS_NULL_TO_STR(sync_links[i]),
+					sched_req->link_hdls[i],
+					((!sync_links[i]) ? CAM_REQ_MGR_DEFAULT_HDL_VAL :
+					sync_links[i]->link_hdl));
+				rc = -EINVAL;
+				goto end;
+			}
+		}
+		sched.num_links = sched_req->num_links;
+		sched.link_hdls = sched_req->link_hdls;
+	} else
+		sched.num_links = 0;
+
+	rc = cam_req_mgr_process_sched_req(link, &sched);
+
+	CAM_DBG(CAM_REQ, "Open req %lld on link 0x%x with sync_mode %d",
+		sched_req->req_id, sched_req->link_hdl, sched_req->sync_mode);
+end:
+	mutex_unlock(&g_crm_core_dev->crm_lock);
+	return rc;
+}
+
+int cam_req_mgr_schedule_request_v4(
+	struct cam_req_mgr_sched_request_v4 *sched_req)
+{
+	int                                  i = 0;
+	int                                  rc = 0;
+	struct cam_req_mgr_core_link        *link = NULL;
+	struct cam_req_mgr_core_session     *session = NULL;
+	struct cam_req_mgr_core_sched_req    sched;
+	struct cam_req_mgr_core_link        *sync_links[MAXIMUM_LINKS_PER_SESSION];
+
+	mutex_lock(&g_crm_core_dev->crm_lock);
+
+	link = cam_get_link_priv(sched_req->link_hdl);
+	if (!link || (link->link_hdl != sched_req->link_hdl)) {
+		CAM_ERR(CAM_CRM, "link: %s, sched_req->link_hdl:%x, link->link_hdl:%x",
+			CAM_IS_NULL_TO_STR(link), sched_req->link_hdl,
+			(!link) ? CAM_REQ_MGR_DEFAULT_HDL_VAL : link->link_hdl);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	session = (struct cam_req_mgr_core_session *)link->parent;
+	if (!session) {
+		CAM_WARN(CAM_CRM, "session ptr NULL %x", sched_req->link_hdl);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	if (sched_req->req_id <= link->last_flush_id) {
+		CAM_INFO(CAM_CRM,
+			"request %lld is flushed, last_flush_id to flush %d",
+			sched_req->req_id, link->last_flush_id);
+		rc = -EBADR;
+		goto end;
+	}
+
+	if (sched_req->req_id > link->last_flush_id)
+		link->last_flush_id = 0;
+
+	CAM_DBG(CAM_CRM, "link 0x%x req %lld, sync_mode %d num_links %d",
+		sched_req->link_hdl, sched_req->req_id, sched_req->sync_mode,
+		sched_req->num_links);
+
+	memset(&sched, 0, sizeof(sched));
+
+	sched.req_id = sched_req->req_id;
+	sched.sync_mode = sched_req->sync_mode;
+	sched.link_hdl = sched_req->link_hdl;
+	sched.additional_timeout = sched_req->additional_timeout;
+	sched.num_valid_params = sched_req->num_valid_params;
+	sched.param_mask = sched_req->param_mask;
+	sched.params = sched_req->params;
+	sched.trigger_params = sched_req->trigger_params;
+
+	if (session->force_err_recovery == AUTO_RECOVERY) {
+		sched.bubble_enable = sched_req->bubble_enable;
+	} else {
+		sched.bubble_enable =
+		(session->force_err_recovery == FORCE_ENABLE_RECOVERY) ? 1 : 0;
+	}
+
+	if (sched_req->sync_mode == CAM_REQ_MGR_SYNC_MODE_SYNC ||
+		(sched_req->trigger_params.mode == CAM_REQ_MGR_TRIGGER_MODE_MANUAL && sched_req->num_links > 0)) {
 		if ((sched_req->num_links <= 0) ||
 			(sched_req->num_links > MAXIMUM_LINKS_PER_SESSION)) {
 			CAM_ERR(CAM_CRM, "link:0x%x req:%lld invalid num_links:%d",

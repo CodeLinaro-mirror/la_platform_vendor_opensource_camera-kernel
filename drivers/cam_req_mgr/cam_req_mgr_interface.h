@@ -146,6 +146,18 @@ enum cam_modeswitch_delay {
 #define CAM_TRIGGER_POINT_EOF     (1 << 1)
 #define CAM_TRIGGER_MAX_POINTS    2
 
+
+/**
+ * @CAM_REQ_INFO_FLAG_APPLY_IN_IDLE: The request should be applied when
+ *                                  streaming is not active in idle state.
+ * @CAM_REQ_INFO_FLAG_SYNC_GPIO_ALL: The request contains gpio synchronization
+ *                                  for all the sensors.
+ *                                  NOTE: It is not allowed more then one device
+ *                                  in linked link to contain this flag.
+ */
+#define CAM_REQ_INFO_FLAG_APPLY_IN_IDLE  (1 << 0)
+#define CAM_REQ_INFO_FLAG_SYNC_GPIO_ALL  (1 << 1)
+
 /**
  * enum cam_req_status
  * @brief   : enumerator for request status
@@ -332,6 +344,7 @@ struct cam_req_mgr_error_notify {
  * @trigger_eof          : to identify that one of the device at this slot needs
  *                         to be apply at EOF
  * @trigger_skip         : Trigger skip frame if set
+ * @req_info_flags        : Additional information for the request.
  */
 struct cam_req_mgr_add_request {
 	int32_t  link_hdl;
@@ -341,6 +354,7 @@ struct cam_req_mgr_add_request {
 	uint32_t skip_at_eof;
 	bool     trigger_eof;
 	bool     trigger_skip;
+	uint32_t req_info_flags;
 };
 
 /**

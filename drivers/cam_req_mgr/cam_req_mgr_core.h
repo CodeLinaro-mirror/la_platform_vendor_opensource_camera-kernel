@@ -339,6 +339,10 @@ struct cam_req_mgr_req_tbl {
  * of this slot
  * @internal_recovered    : indicate if internal recover is already done for request
  * @skip_set              : Simulate a frame skip on this slot
+ * @trigger_mode          : Trigger mode
+ * @group_id:             : If requests are grouped the id of the group
+ * @group_size            : Number of reuquest in one group
+ * @group_seq             : Sequence number of the request in one group
  */
 struct cam_req_mgr_slot {
 	int32_t               idx;
@@ -356,6 +360,10 @@ struct cam_req_mgr_slot {
 	int32_t               mismatched_frame_mode;
 	bool                  internal_recovered;
 	bool                  skip_set;
+	uint32_t              trigger_mode;
+	int64_t	              group_id;
+	uint32_t              group_size;
+	uint32_t              group_seq;
 };
 
 /**
@@ -714,6 +722,7 @@ struct cam_req_mgr_core_link_mini_dump {
  * @param_mask           : mask to indicate what the parameters are
  * @params               : pointer, point to parameters passed from user space
  * @link_hdls            : pointer, point to Input Param - Array of link handles to be for sync
+ * @trigger_params       : Trigger parameters
  */
 struct cam_req_mgr_core_sched_req {
 	int32_t                     session_hdl;
@@ -729,6 +738,7 @@ struct cam_req_mgr_core_sched_req {
 	int32_t                     param_mask;
 	int32_t                    *params;
 	int32_t                    *link_hdls;
+	struct cam_req_mgr_trigger_params trigger_params;
 };
 
 /**
@@ -803,6 +813,14 @@ int cam_req_mgr_schedule_request_v2(struct cam_req_mgr_sched_request_v2 *sched_r
  * @sched_req: request id, session, link id info, bubble recovery info and sync info
  */
 int cam_req_mgr_schedule_request_v3(struct cam_req_mgr_sched_request_v3 *sched_req);
+
+/**
+ * cam_req_mgr_schedule_request_v4()
+ * @brief: Request is scheduled
+ * @sched_req: request id, session, link id info, bubble recovery info,
+ *             sync info and trigger params
+ */
+int cam_req_mgr_schedule_request_v4(struct cam_req_mgr_sched_request_v4 *sched_req);
 
 /**
  * cam_req_mgr_sync_config()
