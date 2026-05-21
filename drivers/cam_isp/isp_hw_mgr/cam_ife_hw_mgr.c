@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -1806,7 +1806,7 @@ static int cam_ife_hw_mgr_acquire_csid_hw(
 		for (i = CAM_IFE_PIX_PATH_RES_RDI_0;
 			i <= CAM_IFE_PIX_PATH_RES_RDI_3;
 			i++) {
-			if (i != csid_acquire->res_id)
+			if ((tries < CAM_IFE_CSID_RDI_MAX-1) && (i != csid_acquire->res_id))
 				rdis[tries++] = i;
 		}
 	}
@@ -1886,7 +1886,7 @@ static int cam_ife_mgr_attempt_reuse_cid_res(
 		for (i = CAM_IFE_PIX_PATH_RES_RDI_0;
 			i <= CAM_IFE_PIX_PATH_RES_RDI_3;
 			i++) {
-			if (i != csid_acquire->res_id)
+			if ((tries < CAM_IFE_CSID_RDI_MAX-1) && (i != csid_acquire->res_id))
 				rdis[tries++] = i;
 		}
 	}
