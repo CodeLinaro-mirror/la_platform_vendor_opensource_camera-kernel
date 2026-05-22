@@ -140,11 +140,13 @@ enum cam_modeswitch_delay {
 /**
  * @CAM_TRIGGER_POINT_SOF   : Trigger point for Start Of Frame
  * @CAM_TRIGGER_POINT_EOF   : Trigger point for End Of Frame
+ * @CAM_TRIGGER_POINT_IDLE  : Trigger point for Idle
  * @CAM_TRIGGER_MAX_POINTS  : Maximum number of trigger point
  */
-#define CAM_TRIGGER_POINT_SOF     (1 << 0)
-#define CAM_TRIGGER_POINT_EOF     (1 << 1)
-#define CAM_TRIGGER_MAX_POINTS    2
+#define CAM_TRIGGER_POINT_SOF      (1 << 0)
+#define CAM_TRIGGER_POINT_EOF      (1 << 1)
+#define CAM_TRIGGER_POINT_IDLE     (1 << 2)
+#define CAM_TRIGGER_MAX_POINTS      4
 
 
 /**

@@ -290,6 +290,8 @@ struct cam_req_mgr_tbl_slot {
 	uint32_t                               inject_delay_at_sof;
 	uint32_t                               inject_delay_at_eof;
 	struct  crm_tbl_slot_special_ops       ops;
+	uint32_t                               req_apply_in_idle_map;
+	uint32_t                               req_gpio_ctrl_map;
 };
 
 /**
