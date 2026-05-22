@@ -1983,10 +1983,17 @@ static int cam_ope_mgr_process_io_cfg(struct cam_ope_hw_mgr *hw_mgr,
 				}
 			} else {
 				if (io_buf->fence != -1) {
-					prep_arg->out_map_entries[k].sync_id =
-						io_buf->fence;
-					k++;
-					prep_arg->num_out_map_entries++;
+					if (k >= prep_arg->max_out_map_entries) {
+						CAM_ERR(CAM_OPE,
+							"out_map limit reached and would overflow: k=%d max=%d",
+							k,
+							prep_arg->max_out_map_entries);
+					} else {
+						prep_arg->out_map_entries[k].sync_id =
+							io_buf->fence;
+						k++;
+						prep_arg->num_out_map_entries++;
+					}
 				} else {
 					if (io_buf->resource_type
 						!= OPE_OUT_RES_STATS_LTM) {

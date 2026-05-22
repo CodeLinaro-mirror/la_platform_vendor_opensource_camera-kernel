@@ -246,10 +246,11 @@ static int cam_vfe_bus_ver3_config_ubwc_regs(
 	struct cam_vfe_bus_ver3_wm_ubwc_cfg_data *ubwc_cfg_data);
 
 static int cam_vfe_bus_ver3_set_rd_ctxt_sel(
-	struct cam_vfe_bus_ver3_priv *bus_priv, uint32_t rd_ctxt);
+	struct cam_vfe_bus_ver3_priv *bus_priv, uint32_t rd_ctxt,
+	uint32_t restore_ctxt_sel_val);
 
-static void cam_vfe_bus_ver3_get_rd_ctxt_sel(
-	struct cam_vfe_bus_ver3_priv *bus_priv, uint32_t *rd_ctxt);
+static int cam_vfe_bus_ver3_get_rd_ctxt_sel(
+	struct cam_vfe_bus_ver3_priv *bus_priv);
 
 
 void cam_vfe_bus_ver3_debug_handler(
@@ -3051,21 +3052,70 @@ static int cam_vfe_bus_ver3_deinit_vfe_out_resource(
 	return 0;
 }
 
+static void cam_vfe_bus_ver3_print_wm_info_util(
+	struct cam_vfe_bus_ver3_wm_resource_data  *wm_data,
+	struct cam_vfe_bus_ver3_common_data  *common_data,
+	uint8_t *wm_name,
+	uint32_t ctxt)
+{
+	uint32_t addr_status0, addr_status1, addr_status2, addr_status3, limiter;
+
+	void __iomem                        *reg_base;
+	struct cam_vfe_bus_ver3_wm_cfg_data *cfg;
+
+	reg_base =  common_data->mem_base + wm_data->client_base;
+
+	addr_status0 = cam_io_r_mb(reg_base + wm_data->hw_regs->addr_status_0);
+	addr_status1 = cam_io_r_mb(reg_base + wm_data->hw_regs->addr_status_1);
+	addr_status2 = cam_io_r_mb(reg_base + wm_data->hw_regs->addr_status_2);
+	addr_status3 = cam_io_r_mb(reg_base + wm_data->hw_regs->addr_status_3);
+	limiter = cam_io_r_mb(reg_base + wm_data->hw_regs->bw_limiter_addr);
+
+	if (wm_data->out_rsrc_data->mc_based)
+		cfg = &wm_data->mc_data[ctxt].cfg;
+	else
+		cfg = &wm_data->cfg;
+
+	CAM_INFO(CAM_ISP,
+		"VFE:%u WM:%d context:%u wm_name:%s width:%u height:%u stride:%u x_init:%u en_cfg:%u acquired width:%u height:%u",
+		wm_data->common_data->core_index, wm_data->index, ctxt, wm_name,
+		cfg->width,
+		cfg->height,
+		cfg->stride,
+		cfg->h_init,
+		cfg->en_cfg,
+		wm_data->acquired_width,
+		wm_data->acquired_height);
+	CAM_INFO(CAM_ISP,
+		"VFE:%u WM:%u context:%u last consumed address:0x%x last frame addr:0x%x fifo cnt:0x%x current client address:0x%x limiter: 0x%x",
+		common_data->hw_intf->hw_idx, wm_data->index, ctxt,
+		addr_status0, addr_status1, addr_status2, addr_status3, limiter);
+}
+
 static void cam_vfe_bus_ver3_print_wm_info(
-	struct cam_vfe_bus_ver3_wm_resource_data *wm_data,
-	struct cam_vfe_bus_ver3_common_data *common_data,
+	struct cam_vfe_bus_ver3_wm_resource_data  *wm_data,
 	struct cam_vfe_bus_ver3_priv *bus_priv,
 	uint8_t *wm_name)
 {
-	uint32_t addr_status0, addr_status1, addr_status2, addr_status3, limiter;
-	void __iomem *reg_base;
-	uint32_t rd_context, original_rd_context = 0;
-	uint32_t context_to_print, max_contexts = 1;
-	uint32_t reg_addr = 0;
-	bool print_all_contexts_info = false;
+	struct cam_vfe_bus_ver3_common_data *common_data = NULL;
+	uint32_t rd_ctxt = 0;
+	uint32_t restore_ctxt_sel_val = 0;
+	int      i = 0;
 
-	reg_base = common_data->mem_base + wm_data->client_base;
+	common_data = &bus_priv->common_data;
+	/*
+	 * For non-multi-context based WMs, print WM info directly.
+	 */
+	if (!wm_data->out_rsrc_data->mc_based) {
+		cam_vfe_bus_ver3_print_wm_info_util(wm_data, common_data,
+			wm_name, rd_ctxt);
+		return;
+	}
 
+	/* Save current context selection value for restoration later */
+	restore_ctxt_sel_val = cam_vfe_bus_ver3_get_rd_ctxt_sel(bus_priv);
+
+	rd_ctxt = restore_ctxt_sel_val >> common_data->common_reg->mc_read_sel_shift;
 	/*
 	 * We dump all contexts if per-request reg dump is NOT enabled,
 	 * as it might interfere with per-request reg dump. Otherwise, we
@@ -3074,44 +3124,20 @@ static void cam_vfe_bus_ver3_print_wm_info(
 	 */
 	if ((common_data->common_reg->capabilities & CAM_VFE_COMMON_CAP_SPLIT_CTXT_RD_WR_SEL) &&
 		(!(common_data->is_per_req_reg_dump_enabled))) {
-
-		print_all_contexts_info = true;
-		max_contexts = CAM_ISP_MULTI_CTXT_MAX;
-		reg_addr = common_data->common_reg->rd_ctxt_sel;
-
-		cam_vfe_bus_ver3_get_rd_ctxt_sel(bus_priv, &original_rd_context);
-		CAM_DBG(CAM_ISP, "Captured original read rd_context: %u (reg: 0x%x)",
-			original_rd_context, reg_addr);
-	}
-	CAM_INFO(CAM_ISP,
-		"VFE:%u WM:%d wm_name:%s width:%u height:%u stride:%u x_init:%u en_cfg:%u acquired width:%u height:%u",
-		wm_data->common_data->core_index, wm_data->index, wm_name,
-		wm_data->cfg.width, wm_data->cfg.height,
-		wm_data->cfg.stride, wm_data->cfg.h_init,
-		wm_data->cfg.en_cfg,
-		wm_data->acquired_width, wm_data->acquired_height);
-
-	for (rd_context = 0; rd_context < max_contexts; rd_context++) {
-		if (print_all_contexts_info)
-			cam_vfe_bus_ver3_set_rd_ctxt_sel(bus_priv, rd_context);
-
-		context_to_print = print_all_contexts_info ? rd_context : original_rd_context;
-		addr_status0 = cam_io_r_mb(reg_base + wm_data->hw_regs->addr_status_0);
-		addr_status1 = cam_io_r_mb(reg_base + wm_data->hw_regs->addr_status_1);
-		addr_status2 = cam_io_r_mb(reg_base + wm_data->hw_regs->addr_status_2);
-		addr_status3 = cam_io_r_mb(reg_base + wm_data->hw_regs->addr_status_3);
-		limiter = cam_io_r_mb(reg_base + wm_data->hw_regs->bw_limiter_addr);
-		CAM_INFO(CAM_ISP,
-			"VFE:%u WM:%u Context:%u last consumed address:0x%x last frame addr:0x%x fifo cnt:0x%x current client address:0x%x limiter: 0x%x",
-			common_data->hw_intf->hw_idx, wm_data->index, context_to_print,
-			addr_status0, addr_status1, addr_status2, addr_status3, limiter);
+		cam_vfe_bus_ver3_print_wm_info_util(wm_data, common_data,
+			wm_name, rd_ctxt);
+		return;
 	}
 
-	/* Restore the original context only if we changed it earlier */
-	if (print_all_contexts_info) {
-		cam_vfe_bus_ver3_set_rd_ctxt_sel(bus_priv, original_rd_context);
-		CAM_DBG(CAM_ISP, "Restored original read rd_context: %u", original_rd_context);
+	/* Print WM info for each context */
+	for (i = 0; i < CAM_ISP_MULTI_CTXT_MAX; i++) {
+		cam_vfe_bus_ver3_set_rd_ctxt_sel(bus_priv, i, restore_ctxt_sel_val);
+		cam_vfe_bus_ver3_print_wm_info_util(wm_data, common_data,
+			wm_name, i);
 	}
+
+	/* Restore original state of context selection for hardware */
+	cam_vfe_bus_ver3_set_rd_ctxt_sel(bus_priv, rd_ctxt, restore_ctxt_sel_val);
 }
 
 static int cam_vfe_bus_ver3_print_dimensions(
@@ -3158,7 +3184,7 @@ static int cam_vfe_bus_ver3_print_dimensions(
 		wm_data = rsrc_data->wm_res[i]->res_priv;
 		wm_name = rsrc_data->wm_res[i]->res_name;
 		common_data = rsrc_data->common_data;
-		cam_vfe_bus_ver3_print_wm_info(wm_data, common_data, bus_priv, wm_name);
+		cam_vfe_bus_ver3_print_wm_info(wm_data, bus_priv, wm_name);
 	}
 	return 0;
 }
@@ -3409,7 +3435,6 @@ static void cam_vfe_bus_ver3_handle_output_resource_violation(
 	struct cam_isp_resource_node *rsrc_node = NULL;
 	struct cam_vfe_bus_ver3_vfe_out_data *rsrc_data = NULL;
 	struct cam_vfe_bus_ver3_wm_resource_data *wm_data = NULL;
-	struct cam_vfe_bus_ver3_common_data *common_data = NULL;
 	uint8_t *wm_name = NULL;
 
 	rsrc_node = &bus_priv->vfe_out[vfe_out_type];
@@ -3422,12 +3447,11 @@ static void cam_vfe_bus_ver3_handle_output_resource_violation(
 
 	for (int j = 0; j < rsrc_data->num_wm; j++) {
 		wm_data = rsrc_data->wm_res[j]->res_priv;
-		common_data = rsrc_data->common_data;
 		wm_name = rsrc_data->wm_res[j]->res_name;
 
 		if (status & BIT_ULL(wm_data->index)) {
 			cam_vfe_bus_ver3_print_wm_info(wm_data,
-					common_data, bus_priv, wm_name);
+				bus_priv, wm_name);
 			*out_port |= BIT_ULL(rsrc_node->res_id & 0xFF);
 
 			/* check what type of violation it is*/
@@ -5081,21 +5105,27 @@ add_reg_pair:
 }
 
 static int cam_vfe_bus_ver3_set_rd_ctxt_sel(
-	struct cam_vfe_bus_ver3_priv *bus_priv, uint32_t rd_ctxt)
+	struct cam_vfe_bus_ver3_priv *bus_priv, uint32_t rd_ctxt, uint32_t restore_ctxt_sel_val)
 {
 	struct cam_vfe_bus_ver3_reg_offset_common *common_reg;
-	uint32_t reg_addr, reg_val;
+	uint32_t                                   reg_val = 0;
+	uint32_t                                   reg_addr = 0;
 
 	common_reg = bus_priv->common_data.common_reg;
 
-	/* Skip if hardware doesn't support separate RD/WR */
+	/* register for read and write context is not separate */
 	if (!(common_reg->capabilities & CAM_VFE_COMMON_CAP_SPLIT_CTXT_RD_WR_SEL)) {
-		CAM_DBG(CAM_ISP, "Skipping read select for old hardware");
-		return 0;
-	}
+		reg_addr = bus_priv->common_data.bus_wr_base + common_reg->ctxt_sel;
 
-	reg_addr = bus_priv->common_data.bus_wr_base + common_reg->rd_ctxt_sel;
-	reg_val = (rd_ctxt << common_reg->mc_read_sel_shift);
+		/* Update only the read context selection*/
+		reg_val = restore_ctxt_sel_val &
+			((1 << bus_priv->common_data.common_reg->mc_read_sel_shift) - 1);
+		reg_val = (rd_ctxt << bus_priv->common_data.common_reg->mc_read_sel_shift) |
+			reg_val;
+	} else {
+		reg_addr = bus_priv->common_data.bus_wr_base + common_reg->rd_ctxt_sel;
+		reg_val = (rd_ctxt << common_reg->mc_read_sel_shift);
+	}
 
 	CAM_DBG(CAM_ISP,
 		"AHB write for RD ctxt: %u, reg: 0x%x, val: 0x%x, VFE: %u",
@@ -5104,33 +5134,33 @@ static int cam_vfe_bus_ver3_set_rd_ctxt_sel(
 	return cam_io_w_mb(reg_val, bus_priv->common_data.mem_base + reg_addr);
 }
 
-static void cam_vfe_bus_ver3_get_rd_ctxt_sel(
-	struct cam_vfe_bus_ver3_priv *bus_priv, uint32_t *rd_ctxt)
+static int cam_vfe_bus_ver3_get_rd_ctxt_sel(
+	struct cam_vfe_bus_ver3_priv *bus_priv)
 {
 
 	struct cam_vfe_bus_ver3_reg_offset_common *common_reg;
 	uint32_t reg_addr, reg_val;
+	uint32_t rd_ctxt = 0;
 
 	common_reg = bus_priv->common_data.common_reg;
 
-	// Skip if hardware does not support separate RD/WR select
+	/* If hardware does not support separate RD/WR select*/
 	if (!(common_reg->capabilities & CAM_VFE_COMMON_CAP_SPLIT_CTXT_RD_WR_SEL)) {
-
-		CAM_DBG(CAM_ISP, "Skipping read select read: separate RD/WR not supported");
-		*rd_ctxt = 0; // default to 0 for unsupported hardware
-
-		return;
+		reg_addr = bus_priv->common_data.bus_wr_base + common_reg->ctxt_sel;
+		reg_val = cam_io_r_mb(bus_priv->common_data.mem_base + reg_addr);
+	} else {
+		reg_addr = bus_priv->common_data.bus_wr_base + common_reg->rd_ctxt_sel;
+		reg_val = cam_io_r_mb(bus_priv->common_data.mem_base + reg_addr);
 	}
 
-	reg_addr = bus_priv->common_data.bus_wr_base + common_reg->rd_ctxt_sel;
-	reg_val = cam_io_r_mb(bus_priv->common_data.mem_base + reg_addr);
-	*rd_ctxt = reg_val >> common_reg->mc_read_sel_shift;
+	rd_ctxt = reg_val >> common_reg->mc_read_sel_shift;
 
 	CAM_DBG(CAM_ISP,
 		"Read SEL Register: reg=0x%x, val=0x%x, RD ctxt=%u, VFE=%u, mem_base=0x%pK",
-		reg_addr, reg_val, *rd_ctxt,
+		reg_addr, reg_val, rd_ctxt,
 		bus_priv->common_data.hw_intf->hw_idx,
 		bus_priv->common_data.mem_base);
+	return reg_val;
 }
 
 static int cam_vfe_bus_ver3_mc_ctxt_sel(
@@ -5351,6 +5381,16 @@ static int cam_vfe_bus_ver3_deinit_hw(void *hw_priv,
 	return rc;
 }
 
+/**
+ * cam_vfe_bus_ver3_dump_wm_mid_info - Dump Write Master (WM) information based on MID
+ * @bus_priv: Pointer to the VFE bus private data structure
+ * @get_res: Pointer to structure containing resource information for a MID
+ *
+ * This function searches for a Write Master (WM) that matches the given MID
+ * and PID, and then prints detailed information about it.
+ *
+ * Return: 0 on success, EINVAL error code on failure
+ */
 static int cam_vfe_bus_ver3_dump_wm_mid_info(
 	struct cam_vfe_bus_ver3_priv *bus_priv,
 	struct cam_isp_hw_get_res_for_mid *get_res)
@@ -5363,58 +5403,98 @@ static int cam_vfe_bus_ver3_dump_wm_mid_info(
 	uint32_t                                       num_wm = 0;
 	uint32_t                                       valid_wm_mask = 0;
 	uint32_t                                       i = 0, j = 0;
+	uint32_t                                       vfe_out_index = 0;
 
+	/* Get the valid write master mask from hardware info */
 	valid_wm_mask = bus_priv->bus_hw_info->valid_wm_mask;
+
 	while (valid_wm_mask) {
-		if (valid_wm_mask & 0x1) {
-			c_reg = &bus_priv->bus_hw_info->bus_client_reg[i];
-
-			if (c_reg->pid_mask && (!(BIT_ULL(get_res->pid) & c_reg->pid_mask))) {
-				valid_wm_mask >>= 1;
-				i++;
-				continue;
-			}
-
-			for (j = 0; j < c_reg->num_mid; j++) {
-				meta_mid = c_reg->mid[j] >> 16;
-				img_mid = c_reg->mid[j] & 0xffff;
-				if (img_mid == get_res->mid || meta_mid == get_res->mid)
-					goto found;
-			}
+		/* Skip if current bit is not set in the mask */
+		if (!(valid_wm_mask & 0x1)) {
+			i++;
+			valid_wm_mask >>= 1;
+			continue;
 		}
-		valid_wm_mask >>= 1;
+
+		/* Get client register for current write master */
+		c_reg = &bus_priv->bus_hw_info->bus_client_reg[i];
+		/* Skip if PID doesn't match with the client's PID mask */
+		if (c_reg->pid_mask && (!(BIT_ULL(get_res->pid) & c_reg->pid_mask))) {
+			valid_wm_mask >>= 1;
+			i++;
+			continue;
+		}
+
+		/* Check all MIDs associated with this client to find a match */
+		for (j = 0; j < c_reg->num_mid; j++) {
+			/* Extract meta MID (upper 16 bits) and image MID (lower 16 bits) */
+			meta_mid = c_reg->mid[j] >> 16;
+			img_mid = c_reg->mid[j] & 0xffff;
+
+			if (img_mid == get_res->mid || meta_mid == get_res->mid)
+				break;
+		}
+
+		if (j != c_reg->num_mid)
+			break;
+
 		i++;
+		valid_wm_mask >>= 1;
 	}
-	if (valid_wm_mask == 0) {
-		CAM_INFO(CAM_ISP, "no valid client found for mid: %d pid:%d", get_res->mid,
-			get_res->pid);
+
+	if (!valid_wm_mask) {
+		CAM_ERR(CAM_ISP, "WM is not found for pid %d and, mid %d",
+			get_res->pid, get_res->mid);
 		return -EINVAL;
 	}
 
-found:
-	out_rsrc_data = (struct cam_vfe_bus_ver3_vfe_out_data *)bus_priv->vfe_out[i].res_priv;
-	if (!out_rsrc_data) {
-		CAM_ERR(CAM_ISP, "Invalid vfe bus resource private, client reg index: %d.", i);
+	CAM_INFO(CAM_ISP,
+		"Found WM %d with pid_mask 0x%x, and mid[%d] 0x%x with out_type %d",
+		i, c_reg->pid_mask, j, c_reg->mid[j], c_reg->out_type);
+
+	/* Get VFE output index from the output type map */
+	vfe_out_index = bus_priv->vfe_out_map_outtype[c_reg->out_type];
+	if (vfe_out_index >= CAM_VFE_BUS_VER3_VFE_OUT_MAX) {
+		CAM_ERR(CAM_ISP,
+			"vfe_out_index %d is out of bounds for client_reg %d out_type 0x%x",
+			vfe_out_index, i, c_reg->out_type);
 		return -EINVAL;
 	}
 
-	get_res->out_res_id = bus_priv->vfe_out[i].res_id;
+	/* Get output resource data for the found VFE output index */
+	out_rsrc_data =
+		(struct cam_vfe_bus_ver3_vfe_out_data *)bus_priv->vfe_out[vfe_out_index].res_priv;
+	if (out_rsrc_data == NULL) {
+		CAM_ERR(CAM_ISP, "Out index 0x%x is wrongly populated for WM %i",
+			vfe_out_index, i);
+		return -EINVAL;
+	}
+
+	get_res->out_res_id = bus_priv->vfe_out[vfe_out_index].res_id;
+	/* Iterate through all write masters in the output resource */
 	for (num_wm = 0; num_wm < out_rsrc_data->num_wm; num_wm++) {
 		wm_data = out_rsrc_data->wm_res[num_wm]->res_priv;
 
-		if (!wm_data)
+		if (wm_data == NULL) {
+			CAM_ERR(CAM_ISP, "WM:%d data is NULL at %d", i, num_wm);
 			continue;
-
-		if (wm_data->index == i) {
-			CAM_INFO(CAM_ISP, "MID:%d PID:%d pid_mask:0x%lx match for WM[%u: %s] ctxt:%d is_meta %s",
-				get_res->mid, get_res->pid, c_reg->pid_mask, i, c_reg->name, j,
-				meta_mid == get_res->mid ? "YES" : "NO");
-
-			cam_vfe_bus_ver3_print_wm_info(wm_data, &bus_priv->common_data,
-				bus_priv, c_reg->name);
-			break;
 		}
+
+		if (wm_data->index == i)
+			break;
 	}
+
+	if (num_wm == out_rsrc_data->num_wm) {
+		CAM_ERR(CAM_ISP, "out_rsrc_data wrongly populated for WM: %d", i);
+		return -EINVAL;
+	}
+
+	CAM_INFO(CAM_ISP,
+		"MID:%d PID:%d pid_mask:0x%lx match for WM[%u: %s] ctxt:%d is_meta %s",
+		get_res->mid, get_res->pid, c_reg->pid_mask, i, c_reg->name, j,
+		meta_mid == get_res->mid ? "YES" : "NO");
+
+	cam_vfe_bus_ver3_print_wm_info(wm_data, bus_priv, c_reg->name);
 
 	return 0;
 }
