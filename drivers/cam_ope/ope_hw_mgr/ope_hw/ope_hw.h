@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef CAM_OPE_HW_H
@@ -53,6 +54,8 @@
 #define OPE_WAIT_COMP_GEN_IRQ 0x8
 
 #define OPE_MAX_DEBUG_REGISTER 30
+
+#define CAM_OPE_HW_MAX_NUM_PID 2
 
 struct cam_ope_pid_mid_info {
 	int cam_ope_res_type;

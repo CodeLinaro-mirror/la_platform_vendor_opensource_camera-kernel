@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef CAM_OPE_CORE_H
@@ -17,8 +17,6 @@
 #include "cam_cpas_api.h"
 #include "ope_hw.h"
 #include "ope_dev_intf.h"
-
-#define CAM_OPE_HW_MAX_NUM_PID 2
 
 /**
  * struct cam_ope_cpas_vote

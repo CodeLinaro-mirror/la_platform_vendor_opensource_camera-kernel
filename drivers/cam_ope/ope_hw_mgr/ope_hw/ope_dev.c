@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -245,6 +245,14 @@ static int cam_ope_component_bind(struct device *dev,
 	soc_private = ope_dev->soc_info.soc_private;
 	cam_ope_dev_list[ope_dev_intf->hw_idx].num_hw_pid =
 		soc_private->num_pid;
+
+	if (soc_private->num_pid > CAM_OPE_HW_MAX_NUM_PID) {
+		CAM_ERR(CAM_OPE,
+			"hw_idx %u invalid num_hw_pid %u max %u",
+			ope_dev_intf->hw_idx, soc_private->num_pid, CAM_OPE_HW_MAX_NUM_PID);
+		rc = -EINVAL;
+		goto init_hw_failure;
+	}
 
 	for (i = 0; i < soc_private->num_pid; i++)
 		cam_ope_dev_list[ope_dev_intf->hw_idx].hw_pid[i] =

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_ISP_HW_MGR_INTF_H_
@@ -13,6 +13,7 @@
 #include <media/cam_isp.h>
 #include "cam_hw_mgr_intf.h"
 #include "cam_packet_util.h"
+#include "cam_worker_wrapper.h"
 
 /* MAX IFE instance */
 #define CAM_IFE_HW_NUM_MAX   7
@@ -265,6 +266,7 @@ enum cam_isp_ctx_type {
  * @ctx_type:              RDI_ONLY, PIX and RDI, or FS2
  * @packet_op_code:        Packet opcode
  * @last_cdm_done:         Last cdm done request
+ * @worker_type:           Gives info about context worker type
  */
 struct cam_isp_hw_cmd_args {
 	uint32_t                          cmd_type;
@@ -274,6 +276,7 @@ struct cam_isp_hw_cmd_args {
 		uint32_t                      ctx_type;
 		uint32_t                      packet_op_code;
 		uint64_t                      last_cdm_done;
+		enum cam_worker_wrapper_type  worker_type;
 	} u;
 };
 

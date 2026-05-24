@@ -26,7 +26,6 @@
 #define OPE_CTX_MAX               32
 #define CAM_FRAME_CMD_MAX         20
 
-
 #define OPE_WORKER_NUM_TASK        100
 #define OPE_WORKER_TASK_CMD_TYPE   1
 #define OPE_WORKER_TASK_MSG_TYPE   2
@@ -492,7 +491,7 @@ struct cam_ope_ctx {
 struct cam_ope_hw_intf_data {
 	struct cam_hw_intf  *hw_intf;
 	uint32_t             num_hw_pid;
-	uint32_t             hw_pid[OPE_DEV_MAX];
+	uint32_t             hw_pid[CAM_OPE_HW_MAX_NUM_PID];
 };
 
 /**
