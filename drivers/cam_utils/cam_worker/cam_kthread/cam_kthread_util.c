@@ -112,6 +112,11 @@ inline void cam_kthread_flush(struct cam_core_kthread *kthread)
 
 static void cam_kthread_process_task(struct cam_kthread_task *task)
 {
+	if (!task->process_cb) {
+		CAM_ERR(CAM_ISP, "FATAL: process_cb is NULL, dropping task");
+		cam_kthread_put_task(task);
+		return;
+	}
 	task->process_cb(task->priv, task->payload);
 	cam_kthread_put_task(task);
 }
@@ -156,10 +161,14 @@ void cam_kthread_process(struct kthread_work *w)
 			atomic_sub(1, &worker_kthread->task.pending_cnt);
 			list_del_init(&task->entry);
 			KTHREAD_RELEASE_LOCK(worker_kthread, flags);
-			if (unlikely(atomic_read(&worker_kthread->flush_in_process)))
+			if (unlikely(atomic_read(&worker_kthread->flush_in_process))) {
 				CAM_WARN(CAM_ISP,
-				"Kthread process called during flush, worker name: %s",
-				worker_kthread->worker_name);
+					"Dropping Task as Kthread process called during flush, worker name: %s",
+					worker_kthread->worker_name);
+				cam_kthread_put_task(task);
+				KTHREAD_ACQUIRE_LOCK(worker_kthread, flags);
+				continue;
+			}
 			cam_kthread_process_task(task);
 			cam_common_util_thread_switch_delay_detect(
 				worker_kthread->worker_name, "kthread execution", cb,
@@ -247,6 +256,18 @@ int cam_kthread_enqueue_task(struct cam_kthread_task *task,
 	if (!kthread) {
 		CAM_DBG(CAM_ISP, "Invalid kthread pointer, suspect mem corruption");
 		return -EINVAL;
+	}
+
+	if (!task->process_cb) {
+		CAM_ERR(CAM_ISP, "process_cb not set before enqueue, worker name: %s",
+			kthread->worker_name);
+		cam_kthread_put_task(task);
+		return -EINVAL;
+	}
+
+	if (task->cancel == 1 || atomic_read(&kthread->flush_in_process)) {
+		rc = 0;
+		goto abort;
 	}
 
 	task->priv = priv;
