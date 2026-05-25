@@ -21809,6 +21809,131 @@ void cam_ife_hw_mgr_send_ipcc_region_info(struct cam_ife_hw_mgr *ife_hw_mgr,
 	}
 }
 
+
+#if IS_REACHABLE(CONFIG_CAM_ENABLE_SOCCP)
+int cam_ife_hw_mgr_init_hw_fence_sessions(void)
+{
+	int i, j, rc = 0;
+	size_t len;
+	dma_addr_t iova, iova_queue;
+	struct cam_vfe_bus_ipcc_config hwfenceinfo;
+	struct cam_hw_intf *hw_intf;
+	struct cam_sync_hwfence_session_initialize_params init_params;
+	uint32_t num_ipcc_clients = 0;
+
+	if (!g_ife_hw_mgr.isp_bus_caps.ipcc_en)
+		return 0;
+
+	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
+		if (!g_ife_hw_mgr.ife_devices[i])
+			continue;
+		rc = 0;
+		iova_queue = 0;
+
+		init_params.client_core = CAM_SYNC_HW_FENCE_CLIENT_IFE0_CTX0 + i;
+		init_params.fencing_protocol = true;
+
+		hw_intf = g_ife_hw_mgr.ife_devices[i]->hw_intf;
+		if (hw_intf && hw_intf->hw_ops.process_cmd) {
+			hw_intf->hw_ops.process_cmd(
+				hw_intf->hw_priv, CAM_ISP_HW_CMD_GET_NUM_IPCC_CLIENTS,
+				&num_ipcc_clients, sizeof(uint32_t));
+			CAM_DBG(CAM_ISP, "num_ipcc_clients: %u", num_ipcc_clients);
+		}
+
+		for (j = 0; j < num_ipcc_clients; j++) {
+			init_params.signal_id = j;
+			snprintf(init_params.name, sizeof(init_params.name),
+				"Camera_HWFence_Synx_Session_IFE_%d",
+				init_params.client_core + init_params.signal_id);
+
+			rc = cam_sync_initialize_hw_fence_session(&init_params);
+			if (rc)
+				goto hw_fence_session_cleanup;
+			rc = cam_smmu_map_phy_mem_in_fence_queue_region(
+				g_ife_hw_mgr.mgr_common.img_iommu_hdl,
+				init_params.fenceq_dev_addr, init_params.len, &iova_queue);
+			if (rc) {
+				CAM_ERR(CAM_ISP, "Failed to map in fence queue region");
+				goto hw_fence_session_cleanup;
+			}
+
+			hwfenceinfo.client_id = init_params.client_core;
+			hwfenceinfo.ipcc_reg_iova = iova_queue + init_params.offset;
+			hwfenceinfo.len = init_params.len - init_params.offset;
+			hwfenceinfo.ipcc_signal_id = init_params.signal_id;
+			hwfenceinfo.session_cookie = init_params.session_cookie;
+
+			if (hw_intf && hw_intf->hw_ops.process_cmd) {
+				rc = hw_intf->hw_ops.process_cmd(hw_intf->hw_priv,
+					CAM_ISP_HW_CMD_HWFENCE_CONFIG, &hwfenceinfo,
+					sizeof(struct cam_vfe_bus_ipcc_config));
+				if (rc)
+					CAM_WARN(CAM_ISP,
+						"Failed to send hw fence config to IFE: %u",
+						hw_intf->hw_idx);
+			}
+
+			memset(&hwfenceinfo, 0, sizeof(hwfenceinfo));
+		}
+
+		memset(&init_params, 0, sizeof(init_params));
+	}
+	if (num_ipcc_clients) {
+		rc = cam_smmu_map_phy_mem_region(g_ife_hw_mgr.mgr_common.img_iommu_hdl,
+			CAM_SMMU_REGION_DEVICE, 0, &iova, &len);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "Failed to map Device region mem, rc: %u", rc);
+			goto hw_fence_session_cleanup;
+		}
+
+		CAM_DBG(CAM_ISP, "Device region found, sending info to bus");
+		cam_ife_hw_mgr_send_ipcc_region_info(&g_ife_hw_mgr, iova, len);
+	}
+
+	return 0;
+
+hw_fence_session_cleanup:
+	cam_sync_hw_fence_session_cleanup();
+	return rc;
+}
+
+int cam_ife_clean_hw_fence_sessions(void)
+{
+	int rc = 0;
+
+	if (g_ife_hw_mgr.isp_bus_caps.ipcc_en) {
+		rc = cam_sync_hw_fence_session_cleanup();
+		if (rc)
+			CAM_ERR(CAM_ISP, "Failed to clean up hwfence sessions, rc: %d", rc);
+
+		cam_smmu_unmap_phy_mem_in_fence_queue_region(
+			g_ife_hw_mgr.mgr_common.img_iommu_hdl);
+		cam_smmu_unmap_phy_mem_region(g_ife_hw_mgr.mgr_common.img_iommu_hdl,
+			CAM_SMMU_REGION_DEVICE, 0);
+	}
+	return rc;
+}
+
+int cam_ife_hw_mgr_deinit_hw_fence_sessions(void)
+{
+	return cam_ife_clean_hw_fence_sessions();
+}
+#else
+int cam_ife_clean_hw_fence_sessions(void)
+{
+	return 0;
+}
+int cam_ife_hw_mgr_init_hw_fence_sessions(void)
+{
+	return 0;
+}
+int cam_ife_hw_mgr_deinit_hw_fence_sessions(void)
+{
+	return 0;
+}
+#endif
+
 int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 {
 	int rc = -EFAULT;
@@ -21819,14 +21944,6 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 	struct cam_isp_hw_bus_cap isp_bus_cap = {0};
 	struct cam_isp_hw_path_port_map path_port_map;
 	struct cam_isp_hw_mgr_res *res_list_sfe_out;
-#if IS_REACHABLE(CONFIG_CAM_ENABLE_SOCCP)
-	size_t len;
-	dma_addr_t iova, iova_queue;
-	struct cam_vfe_bus_ipcc_config hwfenceinfo;
-	struct cam_hw_intf *hw_intf;
-	struct cam_sync_hwfence_session_initialize_params init_params;
-	uint32_t num_ipcc_clients;
-#endif
 	char str[10];
 
 	memset(&g_ife_hw_mgr, 0, sizeof(g_ife_hw_mgr));
@@ -22128,83 +22245,15 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 	cam_common_register_mini_dump_cb(cam_ife_hw_mgr_mini_dump_cb,
 		"CAM_ISP");
 
-#if IS_REACHABLE(CONFIG_CAM_ENABLE_SOCCP)
-
-	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
-		if (!g_ife_hw_mgr.ife_devices[i])
-			continue;
-		rc = 0;
-		iova_queue = 0;
-
-		init_params.client_core = CAM_SYNC_HW_FENCE_CLIENT_IFE0_CTX0 + i;
-		init_params.fencing_protocol = true;
-
-		hw_intf = g_ife_hw_mgr.ife_devices[i]->hw_intf;
-		if (hw_intf && hw_intf->hw_ops.process_cmd) {
-			hw_intf->hw_ops.process_cmd(
-				hw_intf->hw_priv, CAM_ISP_HW_CMD_GET_NUM_IPCC_CLIENTS,
-				&num_ipcc_clients, sizeof(uint32_t));
-			CAM_DBG(CAM_ISP, "num_ipcc_clients: %u", num_ipcc_clients);
-		}
-
-		for (j = 0; j < num_ipcc_clients; j++) {
-			init_params.signal_id = j;
-			snprintf(init_params.name, sizeof(init_params.name),
-				"Camera_HWFence_Synx_Session_IFE_%d",
-				init_params.client_core + init_params.signal_id);
-
-			rc = cam_sync_initialize_hw_fence_session(&init_params);
-			if (rc)
-				goto hw_fence_session_cleanup;
-			rc  = cam_smmu_map_phy_mem_in_fence_queue_region(
-				g_ife_hw_mgr.mgr_common.img_iommu_hdl,
-				init_params.fenceq_dev_addr, init_params.len, &iova_queue);
-			if (rc) {
-				CAM_ERR(CAM_ISP, "Failed to map in fence queue region");
-				goto hw_fence_session_cleanup;
-			}
-
-			hwfenceinfo.client_id = init_params.client_core;
-			hwfenceinfo.ipcc_reg_iova = iova_queue + init_params.offset;
-			hwfenceinfo.len = init_params.len - init_params.offset;
-			hwfenceinfo.ipcc_signal_id = init_params.signal_id;
-			hwfenceinfo.session_cookie = init_params.session_cookie;
-
-			if (hw_intf && hw_intf->hw_ops.process_cmd) {
-				rc = hw_intf->hw_ops.process_cmd(hw_intf->hw_priv,
-					CAM_ISP_HW_CMD_HWFENCE_CONFIG, &hwfenceinfo,
-					sizeof(struct cam_vfe_bus_ipcc_config));
-				if (rc)
-					CAM_WARN(CAM_ISP,
-						"Failed to send hw fence config to IFE: %u",
-						hw_intf->hw_idx);
-			}
-
-			memset(&hwfenceinfo, 0, sizeof(hwfenceinfo));
-		}
-
-		memset(&init_params, 0, sizeof(init_params));
+	rc = cam_ife_hw_mgr_init_hw_fence_sessions();
+	if (rc) {
+		CAM_ERR(CAM_ISP, "HW fence session init failed rc: %d", rc);
+		goto end;
 	}
-	if (num_ipcc_clients) {
-		rc = cam_smmu_map_phy_mem_region(g_ife_hw_mgr.mgr_common.img_iommu_hdl,
-			CAM_SMMU_REGION_DEVICE, 0, &iova, &len);
-		if (rc) {
-			CAM_ERR(CAM_ISP, "Failed to map Device region mem, rc: %u", rc);
-			goto hw_fence_session_cleanup;
-		}
 
-		CAM_DBG(CAM_ISP, "Device region found, sending info to bus");
-		cam_ife_hw_mgr_send_ipcc_region_info(&g_ife_hw_mgr, iova, len);
-	}
-#endif
 	CAM_DBG(CAM_ISP, "Exit");
-
 	return 0;
 
-#if IS_REACHABLE(CONFIG_CAM_ENABLE_SOCCP)
-hw_fence_session_cleanup:
-	cam_sync_hw_fence_session_cleanup();
-#endif
 end:
 	if (rc) {
 		for (i = 0; i < CAM_IFE_CTX_MAX; i++) {
@@ -22229,11 +22278,7 @@ void cam_ife_hw_mgr_deinit(void)
 {
 	int i = 0;
 
-	if (g_ife_hw_mgr.isp_bus_caps.ipcc_en) {
-		cam_sync_hw_fence_session_cleanup();
-		cam_smmu_unmap_phy_mem_region(g_ife_hw_mgr.mgr_common.img_iommu_hdl,
-			CAM_SMMU_REGION_DEVICE, 0);
-	}
+	cam_ife_clean_hw_fence_sessions();
 
 	cam_req_mgr_worker_destroy(&g_ife_hw_mgr.worker);
 	debugfs_remove_recursive(g_ife_hw_mgr.debug_cfg.dentry);

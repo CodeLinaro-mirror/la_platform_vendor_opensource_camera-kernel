@@ -783,4 +783,24 @@ int cam_isp_hw_mgr_init(const char    *device_name_str,
 
 void cam_isp_hw_mgr_deinit(const char *device_name_str);
 
+/**
+ * cam_isp_hw_mgr_init_hw_fence_sessions()
+ *
+ * @brief:              Re-initialize synx HW fence sessions for all IFE
+ *                      clients. Used during PM restore after hibernation.
+ *
+ * @device_name_str:    Device name string (e.g. "ife" or "tfe")
+ */
+int cam_isp_hw_mgr_init_hw_fence_sessions(const char *device_name_str);
+
+/**
+ * cam_isp_hw_mgr_deinit_hw_fence_sessions()
+ *
+ * @brief:              Deinitialize synx HW fence sessions for all IFE
+ *                      clients. Used during PM freeze before hibernation.
+ *
+ * @device_name_str:    Device name string (e.g. "ife" or "tfe")
+ */
+int cam_isp_hw_mgr_deinit_hw_fence_sessions(const char *device_name_str);
+
 #endif /* __CAM_ISP_HW_MGR_INTF_H__ */
