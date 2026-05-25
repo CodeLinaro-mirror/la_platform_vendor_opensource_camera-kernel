@@ -418,8 +418,10 @@ static int cam_flash_init_subdev(struct cam_flash_ctrl *fctrl)
 	fctrl->v4l2_dev_str.token = fctrl;
 
 	rc = cam_register_subdev(&(fctrl->v4l2_dev_str));
-	if (rc)
+	if (rc) {
 		CAM_ERR(CAM_FLASH, "Fail to create subdev with %d", rc);
+		return rc;
+	}
 
 	return rc;
 }

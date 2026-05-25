@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_FLASH_DEV_H_
@@ -25,6 +25,7 @@
 #elif IS_REACHABLE(CONFIG_LEDS_QTI_FLASH)
 #include <linux/leds-qti-flash.h>
 #endif
+#include <linux/hrtimer.h>
 
 #include "cam_req_mgr_util.h"
 #include "cam_req_mgr_interface.h"
@@ -37,6 +38,7 @@
 #include "cam_sensor_io.h"
 #include "cam_flash_core.h"
 #include "cam_context.h"
+#include "cam_req_mgr_workq.h"
 
 #define CAMX_FLASH_DEV_NAME "cam-flash-dev"
 
@@ -48,6 +50,10 @@
 #define CAM_FLASH_PACKET_OPCODE_SET_OPS              1
 #define CAM_FLASH_PACKET_OPCODE_NON_REALTIME_SET_OPS 2
 #define CAM_FLASH_PACKET_OPCODE_STREAM_OFF           3
+#define CAM_FLASH_PACKET_OPCODE_INIT_FIRE            4
+#define CAM_FLASH_WORKQ_NUM_TASK                     1
+
+#define CAM_FLASH_WQ_NAME_SIZE  32
 
 struct cam_flash_ctrl;
 
@@ -67,6 +73,13 @@ enum cam_flash_flush_type {
 	FLUSH_ALL = 0,
 	FLUSH_REQ,
 	FLUSH_MAX,
+};
+
+enum hrtimer_state {
+	TIMER_STATE_INVALID = 0,
+	TIMER_STATE_INIT,
+	TIMER_STATE_DEINIT,
+	TIMER_STATE_MAX,
 };
 
 /**
@@ -155,6 +168,26 @@ struct cam_flash_private_soc {
 	uint32_t     flash_type;
 };
 
+/**
+ *  struct precise_flash_ctrl_t
+ * @on_timer            : Flash ON HR Timer
+ * @off_timer           : Flash OFF HR Timer
+ * @on_time_ms          : Flash ON Time in ms
+ * @off_time_ms         : Flash OFF Time in ms
+ * @enabled             : Precise Flash enable/disable flag
+ * @timer_state         : HR Timer State: INIT/DEINIT
+ * @timer_workq         : Start Timer WorkQ
+ */
+struct precise_flash_ctrl_t {
+	struct hrtimer                       on_timer;
+	struct hrtimer                       off_timer;
+	u64                                  on_time_ms;
+	u64                                  off_time_ms;
+	bool                                 enabled;
+	enum hrtimer_state                   timer_state;
+	struct cam_req_mgr_core_workq        *timer_workq;
+};
+
 struct cam_flash_func_tbl {
 	int (*parser)(struct cam_flash_ctrl *fctrl, void *arg);
 	int (*apply_setting)(struct cam_flash_ctrl *fctrl, uint64_t req_id);
@@ -177,7 +210,7 @@ struct cam_flash_func_tbl {
  * @switch_trigger      : Switch trigger ptr
  * @flash_num_sources   : Number of flash sources
  * @torch_num_source    : Number of torch sources
- * @flash_mutex         : Mutex for flash operations
+ * @flash_mutex          : spin lock for flash operations
  * @flash_state         : Current flash state (LOW/OFF/ON/INIT)
  * @flash_type          : Flash types (PMIC/I2C/GPIO)
  * @is_regulator_enable : Regulator disable/enable notifier
@@ -192,6 +225,10 @@ struct cam_flash_func_tbl {
  * @last_flush_req      : last request to flush
  * @streamoff_count     : Count to hold the number of times stream off called
  * @apply_streamoff     : variable to store when to apply stream off
+ * @led_cldev_en        : LED Class Device Available
+ * @pmic_lcdev          : handle to led class device
+ * @pmic_flcdev         : handle to led class device flash
+ * @precise_flash       : Precision Flash ctrl Settings
  */
 struct cam_flash_ctrl {
 	char device_name[CAM_CTX_DEV_NAME_MAX_LENGTH];
@@ -222,6 +259,10 @@ struct cam_flash_ctrl {
 	uint32_t                            last_flush_req;
 	uint32_t                            streamoff_count;
 	int32_t                             apply_streamoff;
+	uint32_t                            led_cldev_en;
+	struct led_classdev                *pmic_lcdev[CAM_FLASH_MAX_LED_TRIGGERS];
+	struct led_classdev_flash          *pmic_flcdev[CAM_FLASH_MAX_LED_TRIGGERS];
+	struct precise_flash_ctrl_t         precise_flash;
 };
 
 int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg);
