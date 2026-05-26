@@ -6928,14 +6928,10 @@ static int cam_icp_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 		rc = cam_icp_mgr_icp_resume(hw_mgr);
 
 	if (!atomic_read(&hw_mgr->recovery) && release_hw->active_req) {
-		mutex_unlock(&hw_mgr->hw_mgr_mutex);
 		cam_icp_mgr_abort_handle(ctx_data);
 		cam_icp_mgr_send_abort_status(ctx_data);
-	} else {
-		mutex_unlock(&hw_mgr->hw_mgr_mutex);
 	}
 
-	mutex_lock(&hw_mgr->hw_mgr_mutex);
 	rc = cam_icp_mgr_release_ctx(hw_mgr, ctx_id);
 	if (!hw_mgr->ctxt_cnt) {
 		CAM_DBG(CAM_ICP, "Last Release");
@@ -7352,6 +7348,15 @@ static int cam_icp_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 		hw_mgr->icp_clock_cfg_cnt = 0;
 	}
 
+	/* For handling situations where Thread 1 has called for power collapse
+	 * in hw_stop and Thread 2 is in acquire_hw stage. In such scenarios it is
+	 * observed that Thread 2 skips  ICP resume call.
+	 */
+	if (hw_mgr->ctxt_cnt && !hw_mgr->icp_clock_cfg_cnt && !hw_mgr->icp_resumed) {
+		rc = cam_icp_mgr_icp_resume(hw_mgr);
+		if (rc)
+			goto get_io_buf_failed;
+	}
 
 	rc = cam_icp_mgr_ipe_bps_resume(hw_mgr, ctx_data);
 	if (rc)
