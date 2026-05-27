@@ -84,6 +84,177 @@ static const char *__cam_isp_evt_val_to_type(
 	}
 }
 
+/**
+ * cam_isp_context_apply_req_immediate()
+ *
+ * @brief: Main entry point for immediate request application from CRM
+ *        This function applies requests immediately without SOF sync.
+ *
+ *        Flow:
+ *        1. config_dev is called -> request goes to PENDING list
+ *        2. This function is called from CRM -> applies immediately
+ *        3. Request moves from PENDING -> ACTIVE list
+ *        4. hw_config is called with init_packet=1 (bypass SOF sync)
+ *
+ * @ctx:       Camera context
+ * @apply:     Apply request parameters from CRM
+ *
+ * @return: 0 on success, negative error code on failure
+ */
+static int cam_isp_context_apply_req_immediate(struct cam_context *ctx,
+	struct cam_req_mgr_apply_request *apply)
+{
+	int                       rc = 0;
+	int                       index;
+	bool                      found = false;
+	struct cam_isp_context   *ctx_isp = (struct cam_isp_context *)ctx->ctx_priv;
+	struct cam_ctx_request   *req = NULL;
+	struct cam_isp_ctx_req   *req_isp = NULL;
+	struct cam_hw_config_args cfg;
+
+	CAM_DBG(CAM_ISP,
+		"Immediate apply req %llu, state=%d, substate=%d, hw_acquired=%d",
+		apply->request_id, ctx->state, ctx_isp->substate_activated,
+		ctx_isp->hw_acquired);
+
+	spin_lock_bh(&ctx->lock);
+
+	if (!ctx_isp->hw_acquired) {
+		CAM_ERR(CAM_ISP, "HW not acquired for immediate apply req %llu",
+			apply->request_id);
+		rc = -EINVAL;
+		goto end;
+	}
+
+    if (ctx->state != CAM_CTX_ACTIVATED) {
+		CAM_ERR(CAM_ISP, "Context not activated for immediate apply, state=%d",
+			ctx->state);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	/* Find the request in PENDING list (not wait list!) */
+	if (list_empty(&ctx->pending_req_list)) {
+		CAM_ERR(CAM_ISP, "Pending list is empty for req %llu",
+			apply->request_id);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	/* Search for the specific request in pending list */
+	list_for_each_entry(req, &ctx->pending_req_list, list) {
+		if (req->request_id == apply->request_id) {
+			found = true;
+			break;
+		}
+	}
+
+	if (!found) {
+		CAM_ERR(CAM_ISP,
+			"Request %llu not found in pending list",
+			apply->request_id);
+		rc = -ENOENT;
+		goto end;
+	}
+
+	req_isp = (struct cam_isp_ctx_req *)req->req_priv;
+
+	/*
+	 * Move request from pending to active list
+	 * We apply immediately without waiting for SOF/RUP
+	 */
+	list_del_init(&req->list);
+
+	/* Record apply event timestamp */
+	req_isp->event_timestamp[CAM_ISP_CTX_EVENT_APPLY] = ktime_get();
+
+	spin_unlock_bh(&ctx->lock);
+
+	/* Prepare hardware config - treat as init packet */
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.ctxt_to_hw_map = ctx_isp->hw_ctx;
+	cfg.request_id = req->request_id;
+	cfg.hw_update_entries = req_isp->cfg;
+	cfg.num_hw_update_entries = req_isp->num_cfg;
+	cfg.priv = &req_isp->hw_update_data;
+	cfg.init_packet = 1;  /* KEY: Mark as init packet for immediate apply */
+	cfg.reapply_type = CAM_CONFIG_REAPPLY_NONE;
+
+	CAM_INFO(CAM_ISP,
+		"Applying req %llu from PENDING list (init_packet=1), num_cfg=%d",
+		req->request_id, req_isp->num_cfg);
+
+	/* Apply to hardware immediately - no SOF sync needed */
+	rc = ctx->hw_mgr_intf->hw_config(ctx->hw_mgr_intf->hw_mgr_priv, &cfg);
+	if (rc) {
+		CAM_ERR(CAM_ISP,
+			"Immediate apply failed req %llu, rc=%d",
+			req->request_id, rc);
+
+		/* Move back to pending list on failure */
+		spin_lock_bh(&ctx->lock);
+		list_del_init(&req->list);
+		list_add(&req->list, &ctx->pending_req_list);
+		spin_unlock_bh(&ctx->lock);
+		return rc;
+	} else {
+		/* Move to active list in case of success */
+		spin_lock_bh(&ctx->lock);
+		list_add_tail(&req->list, &ctx->active_req_list);
+		ctx_isp->active_req_cnt++;
+		spin_unlock_bh(&ctx->lock);
+		CAM_INFO(CAM_ISP,
+			"Successfully applied req %llu immediately",
+			apply->request_id);
+	}
+
+	spin_lock_bh(&ctx->lock);
+
+	/* Update last applied request ID */
+	ctx_isp->last_applied_req_id = req->request_id;
+	ctx_isp->last_applied_jiffies = jiffies;
+
+	/* Update state monitor for debugging */
+	index = atomic64_inc_return(
+		&ctx_isp->dbg_monitors.state_monitor_head) %
+		CAM_ISP_CTX_STATE_MONITOR_MAX_ENTRIES;
+
+	ctx_isp->dbg_monitors.state_monitor[index].curr_state =
+		ctx_isp->substate_activated;
+	ctx_isp->dbg_monitors.state_monitor[index].trigger =
+		CAM_ISP_STATE_CHANGE_TRIGGER_APPLIED;
+	ctx_isp->dbg_monitors.state_monitor[index].req_id =
+		req->request_id;
+	ctx_isp->dbg_monitors.state_monitor[index].frame_id =
+		ctx_isp->frame_id;
+	ktime_get_real_ts64(
+		&ctx_isp->dbg_monitors.state_monitor[index].evt_time_stamp);
+
+	/* Update event record */
+	index = atomic64_inc_return(
+		&ctx_isp->dbg_monitors.event_record_head[CAM_ISP_CTX_EVENT_APPLY]) %
+		CAM_ISP_CTX_EVENT_RECORD_MAX_ENTRIES;
+
+	ctx_isp->dbg_monitors.event_record[CAM_ISP_CTX_EVENT_APPLY][index].req_id =
+		req->request_id;
+	ctx_isp->dbg_monitors.event_record[CAM_ISP_CTX_EVENT_APPLY][index].timestamp =
+		ktime_get();
+	ctx_isp->dbg_monitors.event_record[CAM_ISP_CTX_EVENT_APPLY][index].event_type =
+		CAM_ISP_CTX_EVENT_APPLY;
+
+	CAM_INFO(CAM_ISP,
+		"Applied req %llu in READY mode from PENDING list, state=%d, active_cnt=%d",
+		req->request_id, ctx->state, ctx_isp->active_req_cnt);
+
+	spin_unlock_bh(&ctx->lock);
+
+	return 0;
+
+end:
+	spin_unlock_bh(&ctx->lock);
+	return rc;
+}
+
 static void __cam_isp_ctx_update_event_record(
 	struct cam_isp_context *ctx_isp,
 	enum cam_isp_ctx_event  event,
@@ -5731,8 +5902,14 @@ static int __cam_isp_ctx_apply_req_in_sof(
 	CAM_DBG(CAM_ISP, "current Substate[%s], ctx %u, link: 0x%x",
 		__cam_isp_ctx_substate_val_to_type(
 		ctx_isp->substate_activated), ctx->ctx_id, ctx->link_hdl);
-	rc = __cam_isp_ctx_apply_req_in_activated_state(ctx, apply,
+
+	if (apply->trigger_point == CAM_TRIGGER_POINT_IDLE) {
+		rc = cam_isp_context_apply_req_immediate(ctx, apply);
+	} else {
+		rc = __cam_isp_ctx_apply_req_in_activated_state(ctx, apply,
 		CAM_ISP_CTX_ACTIVATED_APPLIED);
+	}
+
 	CAM_DBG(CAM_ISP, "new Substate[%s], ctx %u, link: 0x%x",
 		__cam_isp_ctx_substate_val_to_type(
 		ctx_isp->substate_activated), ctx->ctx_id, ctx->link_hdl);
@@ -5755,8 +5932,14 @@ static int __cam_isp_ctx_apply_req_in_epoch(
 	CAM_DBG(CAM_ISP, "current Substate[%s], ctx %u, link: 0x%x",
 		__cam_isp_ctx_substate_val_to_type(
 		ctx_isp->substate_activated), ctx->ctx_id, ctx->link_hdl);
-	rc = __cam_isp_ctx_apply_req_in_activated_state(ctx, apply,
+
+	if (apply->trigger_point == CAM_TRIGGER_POINT_IDLE) {
+		rc = cam_isp_context_apply_req_immediate(ctx, apply);
+	} else {
+		rc = __cam_isp_ctx_apply_req_in_activated_state(ctx, apply,
 		CAM_ISP_CTX_ACTIVATED_APPLIED);
+	}
+
 	CAM_DBG(CAM_ISP, "new Substate[%s], ctx %u, link: 0x%x",
 		__cam_isp_ctx_substate_val_to_type(
 		ctx_isp->substate_activated), ctx->ctx_id, ctx->link_hdl);
