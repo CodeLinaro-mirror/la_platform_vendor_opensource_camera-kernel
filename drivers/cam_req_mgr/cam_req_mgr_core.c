@@ -4704,8 +4704,155 @@ end:
  */
 static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 {
-	CAM_ERR(CAM_CRM, "Manual trigger mode not implemented yet!");
-	return -ENOSYS;
+	int                                  rc = 0;
+	int32_t                              idx = -1;
+	struct cam_req_mgr_trigger_notify   *trigger_data = NULL;
+	struct cam_req_mgr_core_link        *link = NULL;
+	struct cam_req_mgr_req_queue        *in_q = NULL;
+	struct crm_task_payload             *task_data = NULL;
+	int                                  reset_step = 0;
+	int                                  i = 0;
+	struct cam_req_mgr_state_monitor     state;
+	bool                                 all_links_slots_ready;
+	int64_t                              current_group_id;
+
+	if (!data || !priv) {
+		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	link = (struct cam_req_mgr_core_link *)priv;
+	task_data = (struct crm_task_payload *)data;
+	trigger_data = (struct cam_req_mgr_trigger_notify *)&task_data->u;
+
+	CAM_DBG(CAM_REQ, "link_hdl %x frame_id %lld, trigger %x\n",
+		trigger_data->link_hdl,
+		trigger_data->frame_id,
+		trigger_data->trigger);
+
+	in_q = link->req.in_q;
+
+	state.req_state = CAM_CRM_PROCESS_TRIGGER;
+	state.req_id = in_q->slot[in_q->rd_idx].req_id;
+	state.dev_hdl = -1;
+	state.frame_id = trigger_data->frame_id;
+	__cam_req_mgr_update_state_monitor_array(link, &state);
+
+	mutex_lock(&link->req.lock);
+
+	if (trigger_data->trigger == CAM_TRIGGER_POINT_SOF) {
+		idx = __cam_req_mgr_find_slot_for_req(in_q,
+			trigger_data->req_id);
+		if (idx >= 0) {
+			if (idx == in_q->last_applied_idx)
+				in_q->last_applied_idx = -1;
+			if (idx == in_q->rd_idx)
+				__cam_req_mgr_dec_idx(&idx, 1, in_q->num_slots);
+
+			reset_step = link->max_delay;
+			for (i = 0; i < link->num_sync_links; i++) {
+				if (link->sync_link[i]) {
+					if ((link->in_msync_mode) &&
+						(link->sync_link[i]->max_delay >
+							reset_step))
+						reset_step =
+						link->sync_link[i]->max_delay;
+				}
+			}
+
+			__cam_req_mgr_dec_idx(
+				&idx, reset_step + 1,
+				in_q->num_slots);
+
+			__cam_req_mgr_reset_req_slot(link, idx);
+		}
+	} else if (trigger_data->trigger == CAM_TRIGGER_POINT_EOF) {
+		if (link->properties_mask & CAM_LINK_PROPERTY_SENSOR_STANDBY_AFTER_EOF) {
+			rc = __cam_req_mgr_send_evt(0, CAM_REQ_MGR_LINK_EVT_EOF,
+				CRM_KMD_ERR_MAX, link);
+			if (!rc)
+				CAM_DBG(CAM_CRM, "Notify EOF event done on link:0x%x",
+					link->link_hdl);
+		}
+	}
+
+	/*
+	 * Check if current read index is in applied state, if yes make it free
+	 *    and increment read index to next slot.
+	 */
+	CAM_DBG(CAM_CRM, "link_hdl %x curent idx %d req_status %d",
+		link->link_hdl, in_q->rd_idx, in_q->slot[in_q->rd_idx].status);
+
+	spin_lock_bh(&link->link_state_spin_lock);
+
+	if (link->state < CAM_CRM_LINK_STATE_READY) {
+		CAM_WARN(CAM_CRM, "invalid link state:%d for link 0x%x",
+			link->state, link->link_hdl);
+		spin_unlock_bh(&link->link_state_spin_lock);
+		rc = -EPERM;
+		goto release_lock;
+	}
+
+	if (link->state == CAM_CRM_LINK_STATE_ERR)
+		CAM_WARN_RATE_LIMIT(CAM_CRM, "Error recovery idx %d status %d",
+			in_q->rd_idx,
+			in_q->slot[in_q->rd_idx].status);
+
+	spin_unlock_bh(&link->link_state_spin_lock);
+
+	current_group_id = in_q->slot[in_q->rd_idx].group_id;
+	/*
+	 * Move to next req at SOF only in case
+	 * the rd_idx is updated at EOF.
+	 */
+	if ((trigger_data->trigger == CAM_TRIGGER_POINT_SOF) &&
+		(in_q->slot[in_q->rd_idx].status == CRM_SLOT_STATUS_REQ_APPLIED)) {
+		/*
+		 * Do NOT reset req q slot data here, it can not be done
+		 * here because we need to preserve the data to handle bubble.
+		 *
+		 * Check if any new req is pending in slot, if not finish the
+		 * lower pipeline delay device with available req ids.
+		 */
+		CAM_DBG(CAM_CRM, "link[%x] Req[%lld] invalidating slot",
+			link->link_hdl, in_q->slot[in_q->rd_idx].req_id);
+		rc = __cam_req_mgr_move_to_next_req_slot(link);
+		if (rc) {
+			CAM_DBG(CAM_REQ,
+				"No pending req to apply to lower pd devices");
+			rc = 0;
+			__cam_req_mgr_notify_frame_skip(link, trigger_data->trigger);
+			goto release_lock;
+		}
+	}
+
+	/* Do not apply start sequence index on SOF. It is already applied on add request */
+	if (trigger_data->trigger == CAM_TRIGGER_POINT_SOF &&
+		in_q->slot[in_q->rd_idx].group_id != current_group_id) {
+		goto release_lock;
+	}
+
+	rc = __cam_req_mgr_process_req(link, trigger_data);
+
+	if (trigger_data->trigger == CAM_TRIGGER_POINT_EOF) {
+		idx = __cam_req_mgr_find_slot_for_req(in_q, trigger_data->req_id);
+		all_links_slots_ready = __cam_req_mgr_mtrigger_check_sequence_ready(idx, link);
+
+		if (all_links_slots_ready) {
+			rc = __cam_req_mgr_mtrigger_apply_sequence(idx, link);
+			if (rc < 0) {
+				CAM_ERR(CAM_CRM, "Not able to apply sequence for group id: %lld",
+					link->req.in_q->slot[idx].group_id);
+			}
+		}
+	}
+
+
+release_lock:
+	mutex_unlock(&link->req.lock);
+end:
+	return rc;
 }
 
 /* Linked devices' Callback section */
