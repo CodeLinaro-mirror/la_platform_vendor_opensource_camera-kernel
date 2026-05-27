@@ -199,6 +199,7 @@ static int cam_isp_context_apply_req_immediate(struct cam_context *ctx,
 		return rc;
 	} else {
 		/* Move to active list in case of success */
+		req->is_triggered_in_idle = true;
 		spin_lock_bh(&ctx->lock);
 		list_add_tail(&req->list, &ctx->active_req_list);
 		ctx_isp->active_req_cnt++;
@@ -3732,6 +3733,7 @@ static int __cam_isp_ctx_notify_sof_in_activated_state(
 	uint64_t last_cdm_done_req = 0;
 	struct cam_isp_hw_epoch_event_data *epoch_done_event_data =
 			(struct cam_isp_hw_epoch_event_data *)evt_data;
+	struct cam_ctx_request *last_req = NULL;
 
 	if (!evt_data) {
 		CAM_ERR(CAM_ISP, "invalid event data");
@@ -3831,6 +3833,7 @@ notify_only:
 
 		list_for_each_entry(req, &ctx->active_req_list, list) {
 			req_isp = (struct cam_isp_ctx_req *) req->req_priv;
+			last_req = req;
 			if ((!req_isp->bubble_detected) &&
 				(req->request_id > ctx_isp->reported_req_id)) {
 				request_id = req->request_id;
@@ -3846,9 +3849,13 @@ notify_only:
 		if (request_id != 0)
 			ctx_isp->reported_req_id = request_id;
 
-		if (request_id == 0)
+		if (request_id == 0 ||
+			(last_req != NULL && last_req->is_triggered_in_idle == true)) {
 			__cam_isp_ctx_send_sof_timestamp(ctx_isp, request_id,
 				CAM_REQ_MGR_SOF_EVENT_SUCCESS);
+			if (last_req != NULL)
+				last_req->is_triggered_in_idle = false;
+		}
 
 		__cam_isp_ctx_update_state_monitor_array(ctx_isp,
 			CAM_ISP_STATE_CHANGE_TRIGGER_EPOCH,
@@ -8101,6 +8108,12 @@ static int __cam_isp_ctx_config_dev_in_top_state(
 
 	req->request_id = packet->header.request_id;
 	req->status = 1;
+	/* For each request mtriger point is set to false.
+	 * CRM can change this value if request should be
+	 * applied manually, based on schedule request
+	 * parameters.
+	 */
+	req->is_triggered_in_idle = false;
 
 	if (req_isp->hw_update_data.packet_opcode_type ==
 		CAM_ISP_PACKET_INIT_DEV) {
