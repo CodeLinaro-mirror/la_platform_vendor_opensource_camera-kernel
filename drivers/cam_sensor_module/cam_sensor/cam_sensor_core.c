@@ -622,6 +622,26 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 				"Failed in adding request to req_mgr");
 		break;
 	}
+	case CAM_SENSOR_PACKET_OPCODE_SENSOR_IMMEDIATE: {
+		i2c_reg_settings = &(i2c_data->immediate_settings);
+		i2c_reg_settings->request_id = 0;
+		i2c_reg_settings->is_settings_valid = 1;
+
+		if (csl_packet->num_io_configs > 0) {
+			io_cfg = (struct cam_buf_io_cfg *) ((uint8_t *)
+				&csl_packet->payload_flex +
+				csl_packet->io_configs_offset);
+
+			if (io_cfg == NULL) {
+				CAM_ERR(CAM_SENSOR, "I/O config is set (%d), but buffer is NULL", 
+				csl_packet->num_io_configs);
+				goto end;
+			}
+
+			is_sensor_read = true;
+		}
+		break;
+	}
 	default:
 		CAM_ERR(CAM_SENSOR, "Invalid Packet Header opcode: %d",
 			csl_packet->header.op_code & 0xFFFFFF);
@@ -1947,6 +1967,27 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			}
 		}
 
+		if (s_ctrl->i2c_data.immediate_settings.is_settings_valid) {
+			if (!s_ctrl->hw_no_ops)
+			rc = cam_sensor_apply_settings(s_ctrl, 0,
+				CAM_SENSOR_PACKET_OPCODE_SENSOR_IMMEDIATE);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR,
+					"cannot apply read settings");
+				delete_request(
+					&s_ctrl->i2c_data.immediate_settings);
+				goto release_mutex;
+			}
+			rc = delete_request(
+				&s_ctrl->i2c_data.immediate_settings);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR,
+					"%s: Fail in deleting the read settings",
+					s_ctrl->sensor_name);
+				goto release_mutex;
+			}
+		}
+
 		if ((s_ctrl->stream_off_on_flush) && (s_ctrl->sensor_state == CAM_SENSOR_CONFIG)) {
 			rc = cam_sensor_notify_msg_req_mgr(
 				CAM_REQ_MGR_MSG_NOTIFY_FOR_SYNCED_RESUME, s_ctrl);
@@ -2259,6 +2300,10 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 		}
 		case CAM_SENSOR_PACKET_OPCODE_SENSOR_READ: {
 			i2c_set = &s_ctrl->i2c_data.read_settings;
+			break;
+		}
+		case CAM_SENSOR_PACKET_OPCODE_SENSOR_IMMEDIATE: {
+			i2c_set = &s_ctrl->i2c_data.immediate_settings;
 			break;
 		}
 		case CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE:
