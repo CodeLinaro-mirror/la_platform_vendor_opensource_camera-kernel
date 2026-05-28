@@ -952,6 +952,9 @@ static void __cam_req_mgr_flush_req_slot(
 		slot->sync_mode = CAM_REQ_MGR_SYNC_MODE_NO_SYNC;
 		slot->status = CRM_SLOT_STATUS_NO_REQ;
 		slot->num_sync_links = 0;
+		slot->group_id = -1;
+		slot->group_seq = 0;
+		slot->group_size = 0;
 		for (i = 0; i < MAXIMUM_LINKS_PER_SESSION - 1; i++)
 			slot->sync_link_hdls[i] = 0;
 
@@ -2677,6 +2680,9 @@ static int  __cam_req_mgr_setup_in_q(struct cam_req_mgr_req_data *req)
 		in_q->slot[i].req_id = -1;
 		in_q->slot[i].skip_idx = 0;
 		in_q->slot[i].status = CRM_SLOT_STATUS_NO_REQ;
+		in_q->slot[i].group_id = -1;
+		in_q->slot[i].group_seq = 0;
+		in_q->slot[i].group_size = 0;
 	}
 
 	in_q->wr_idx = 0;
@@ -3295,10 +3301,12 @@ int cam_req_mgr_process_flush_req(void *priv, void *data)
 int cam_req_mgr_process_sched_req(void *priv, void *data)
 {
 	int                                  rc = 0, i, sync_idx = 0;
+	int32_t                              prev_slot_idx = 0;
 	struct cam_req_mgr_core_sched_req   *sched_req = NULL;
 	struct cam_req_mgr_core_link        *link = NULL;
 	struct cam_req_mgr_req_queue        *in_q = NULL;
 	struct cam_req_mgr_slot             *slot = NULL;
+	struct cam_req_mgr_slot             *prev_slot = NULL;
 
 	if (!data || !priv) {
 		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
@@ -3317,6 +3325,10 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 
 	mutex_lock(&link->req.lock);
 	slot = &in_q->slot[in_q->wr_idx];
+
+	prev_slot_idx = in_q->wr_idx;
+	__cam_req_mgr_dec_idx(&prev_slot_idx, 1, link->req.in_q->num_slots);
+	prev_slot = &in_q->slot[prev_slot_idx];
 
 	if (slot->status != CRM_SLOT_STATUS_NO_REQ &&
 		slot->status != CRM_SLOT_STATUS_REQ_APPLIED)
@@ -3342,7 +3354,10 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 	case CAM_REQ_MGR_TRIGGER_MODE_MANUAL:
 		slot->group_id = sched_req->trigger_params.data.manual.id;
 		slot->group_size = sched_req->trigger_params.data.manual.size;
-		slot->group_seq = 0; /* Add logic to maintain sequence! */
+		slot->group_seq = 0;
+		if (slot->group_id == prev_slot->group_id)
+			slot->group_seq = prev_slot->group_seq + 1;
+
 		slot->skip_set = !!sched_req->trigger_params.data.manual.skip;
 		break;
 	default:
