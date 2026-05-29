@@ -1901,7 +1901,7 @@ static int32_t cam_cci_read_bytes(struct v4l2_subdev *sd,
 		CAM_ERR(CAM_CCI, "Invalid I2C master addr");
 		return -EINVAL;
 	}
-
+	read_cfg->num_byte = 0;
 	master = c_ctrl->cci_info->cci_i2c_master;
 	read_cfg = &c_ctrl->cfg.cci_i2c_read_cfg;
 	if (!read_cfg->num_byte) {
@@ -1979,9 +1979,13 @@ static int32_t cam_cci_i2c_set_sync_prms(struct v4l2_subdev *sd,
 		rc = -EINVAL;
 		return rc;
 	}
-	cci_dev->cci_wait_sync_cfg = c_ctrl->cfg.cci_wait_sync_cfg;
-	cci_dev->valid_sync = cci_dev->cci_wait_sync_cfg.csid < 0 ? 0 : 1;
-
+	if (c_ctrl->cfg.cci_wait_sync_cfg.csid < 0) {
+		CAM_WARN(CAM_CCI, "Invalid sync config: csid = %d", c_ctrl->cfg.cci_wait_sync_cfg.csid);
+		cci_dev->valid_sync = 0;
+       } else {
+		cci_dev->cci_wait_sync_cfg = c_ctrl->cfg.cci_wait_sync_cfg;
+		cci_dev->valid_sync = 1;
+      }
 	return rc;
 }
 

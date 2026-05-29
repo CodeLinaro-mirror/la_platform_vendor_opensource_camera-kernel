@@ -163,8 +163,8 @@ static int cam_cpastop_get_hw_info(struct cam_hw_info *cpas_hw,
 static int cam_cpastop_setup_regbase_indices(struct cam_hw_soc_info *soc_info,
 	int32_t regbase_index[], int32_t num_reg_map)
 {
-	uint32_t index;
-	int rc;
+	uint32_t index = 0;
+	int rc = 0;
 
 	if (num_reg_map > CAM_CPAS_REG_MAX) {
 		CAM_ERR(CAM_CPAS, "invalid num_reg_map=%d", num_reg_map);

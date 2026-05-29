@@ -37,8 +37,8 @@ static int cam_fd_hw_soc_util_setup_regbase_indices(
 {
 	struct cam_fd_soc_private *soc_private =
 		(struct cam_fd_soc_private *)soc_info->soc_private;
-	uint32_t index;
-	int rc, i;
+	uint32_t index = 0;
+	int rc = 0, i = 0;
 
 	for (i = 0; i < CAM_FD_REG_MAX; i++)
 		soc_private->regbase_index[i] = -1;
