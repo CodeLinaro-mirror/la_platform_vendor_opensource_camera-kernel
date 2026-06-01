@@ -515,6 +515,15 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 					return rc;
 				}
 
+				/*Regular Flash Scenario*/
+				rc = led_set_flash_strobe(flash_ctrl->pmic_flcdev[i], true);
+				if (rc) {
+					CAM_ERR(CAM_FLASH,
+							"LED_Flash[%d]: set flash strobe failed, rc=%d",
+							i, rc);
+					return rc;
+				}
+
 			} else {
 
 				CAM_DBG(CAM_FLASH, "LED_Flash[%d]: Current: %d",
