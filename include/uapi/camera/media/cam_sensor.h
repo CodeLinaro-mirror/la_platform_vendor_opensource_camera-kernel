@@ -47,6 +47,7 @@
 /* SENSOR blob types */
 #define CAM_SENSOR_GENERIC_BLOB_RES_INFO           0
 #define CAM_SENSOR_GENERIC_BLOB_FRAME_INFO         1
+#define CAM_SENSOR_GENERIC_BLOB_MODESWITCHPD_INFO  2
 
 enum camera_sensor_cmd_type {
 	CAMERA_SENSOR_CMD_TYPE_INVALID,
@@ -420,6 +421,10 @@ struct cam_sensor_frame_info {
 	__u32 num_valid_params;
 	__u32 valid_param_mask;
 	__u64 params[4];
+} __attribute__((packed));
+
+struct cam_sensor_modeswitch_pd_info {
+	__u32 modeswitch_delay;
 } __attribute__((packed));
 
 /**
