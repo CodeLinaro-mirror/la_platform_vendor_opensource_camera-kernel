@@ -3734,6 +3734,7 @@ static int __cam_isp_ctx_notify_sof_in_activated_state(
 	struct cam_isp_hw_epoch_event_data *epoch_done_event_data =
 			(struct cam_isp_hw_epoch_event_data *)evt_data;
 	struct cam_ctx_request *last_req = NULL;
+	bool send_sof_timestamp = false;
 
 	if (!evt_data) {
 		CAM_ERR(CAM_ISP, "invalid event data");
@@ -3843,19 +3844,40 @@ notify_only:
 			}
 		}
 
-		if (ctx_isp->substate_activated == CAM_ISP_CTX_ACTIVATED_BUBBLE)
+		if (request_id == 0)
+			send_sof_timestamp = true;
+
+		if (ctx_isp->substate_activated == CAM_ISP_CTX_ACTIVATED_BUBBLE) {
+			send_sof_timestamp = true;
 			request_id = 0;
+		} else if (last_req != NULL) {
+			if (last_req->is_triggered_in_idle) {
+				/*
+				* Manual trigger mode: first SOF after a request was
+				* applied in idle. Send SOF timestamp once and clear
+				* the flag so subsequent SOFs with request_id == 0
+				* do not trigger spurious notifications.
+				*/
+				last_req->is_triggered_in_idle = false;
+				send_sof_timestamp = true;
+			} else if (last_req->request_id == ctx_isp->reported_req_id) {
+				/*
+				* When last request is processed the userspace
+				* is notified during reg_update. No need to print
+				* warnings in send __cam_isp_ctx_send_sof_timestamp.
+				* In manual trigger mode it is normal case during the
+				* processing of the last frame.
+				*/
+				send_sof_timestamp = false;
+			}
+		}
 
 		if (request_id != 0)
 			ctx_isp->reported_req_id = request_id;
 
-		if (request_id == 0 ||
-			(last_req != NULL && last_req->is_triggered_in_idle == true)) {
+		if (send_sof_timestamp)
 			__cam_isp_ctx_send_sof_timestamp(ctx_isp, request_id,
 				CAM_REQ_MGR_SOF_EVENT_SUCCESS);
-			if (last_req != NULL)
-				last_req->is_triggered_in_idle = false;
-		}
 
 		__cam_isp_ctx_update_state_monitor_array(ctx_isp,
 			CAM_ISP_STATE_CHANGE_TRIGGER_EPOCH,
