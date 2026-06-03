@@ -658,6 +658,18 @@ struct cam_isp_in_port_info_v3 {
 	__u32                            num_contexts;
 	__u32                            feature_mask;
 	__u32                            num_out_res;
+	union {
+		struct cam_isp_out_port_info_v3  data[1];
+		__DECLARE_FLEX_ARRAY(struct cam_isp_out_port_info_v3, data_flex);
+	};
+};
+
+struct cam_isp_in_port_info_v4 {
+	struct cam_isp_in_port_csid_info csid_info;
+	struct cam_isp_in_port_phy_info  phy_info;
+	__u32                            num_contexts;
+	__u32                            feature_mask;
+	__u32                            num_out_res;
 	__u32                            sensor_id;
 	union {
 		struct cam_isp_out_port_info_v3  data[1];

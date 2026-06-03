@@ -911,7 +911,7 @@ static int cam_isp_io_buf_get_entries_util(
 		map_entries->resource_handle = res_type;
 		map_entries->sync_id = io_cfg->fence;
 		map_entries->early_sync_id = io_cfg->early_fence;
-		if (buf_info->major_version == 3)
+		if ((buf_info->major_version == 3) || (buf_info->major_version == 4))
 			map_entries->hw_ctxt_id = io_cfg->flag;
 		else
 			map_entries->hw_ctxt_id = 0x0;
@@ -1243,7 +1243,7 @@ int cam_isp_add_io_buffers(struct cam_isp_io_buf_info   *io_info)
 	max_out_res = io_info->out_max & 0xFF;
 	major_version = io_info->major_version;
 
-	if (major_version == 3) {
+	if ((major_version == 3) || (major_version == 4)) {
 		if (max_out_res == 0) {
 			CAM_ERR(CAM_ISP, "Invalid max_out_res: 0");
 			return -EINVAL;
@@ -1258,7 +1258,7 @@ int cam_isp_add_io_buffers(struct cam_isp_io_buf_info   *io_info)
 
 	for (i = 0; i < io_info->prepare->packet->num_io_configs; i++) {
 
-		if (major_version == 3) {
+		if ((major_version == 3) || (major_version == 4)) {
 			if ((io_cfg[i].flag < CAM_ISP_MULTI_CTXT0_MASK) ||
 				(io_cfg[i].flag > CAM_ISP_MULTI_CTXT2_MASK)) {
 				CAM_ERR(CAM_ISP, "Invalid hw context id: 0x%x for io cfg: %d",
@@ -1316,7 +1316,7 @@ int cam_isp_add_io_buffers(struct cam_isp_io_buf_info   *io_info)
 		}
 	}
 
-	if (major_version == 3) {
+	if ((major_version == 3) || (major_version == 4)) {
 		for (i = 0; i < CAM_ISP_MULTI_CTXT_MAX; i++) {
 			if (!num_ports[i])
 				continue;

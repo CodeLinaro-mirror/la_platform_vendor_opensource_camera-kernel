@@ -4188,7 +4188,8 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_pixel(
 		 * hw context id). We find the existing resource instead of adding duplicate
 		 * entries of resource for each hw context.
 		 */
-		if ((in_port->major_ver == 3) && (ife_src_res->res_id == CAM_ISP_HW_VFE_IN_CAMIF)) {
+		if (((in_port->major_ver == 3) || (in_port->major_ver == 4)) &&
+			(ife_src_res->res_id == CAM_ISP_HW_VFE_IN_CAMIF)) {
 			vfe_acquire.vfe_out.use_hw_ctxt = true;
 			if (ife_ctx->vfe_out_map[k] != 0xff) {
 				if (per_port_acquire)
@@ -4281,7 +4282,8 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_pixel(
 				comp_grp->res_id[comp_grp->num_res] =
 					ife_out_res->hw_res[j]->res_id;
 
-				if ((in_port->major_ver == 3) && vfe_acquire.vfe_out.use_hw_ctxt)
+				if (((in_port->major_ver == 3) || (in_port->major_ver == 4)) &&
+					vfe_acquire.vfe_out.use_hw_ctxt)
 					comp_grp->hw_ctxt_id[comp_grp->num_res] =
 						vfe_acquire.vfe_out.out_port_info->hw_context_id;
 				else
@@ -4587,7 +4589,8 @@ static int cam_ife_hw_mgr_acquire_res_ife_out(
 	}
 
 	list_for_each_entry(ife_src_res, ife_src_list_head, list) {
-		if (!((in_port->major_ver == 3) && ife_src_res->hw_ctxt_id_mask) &&
+		if (!(((in_port->major_ver == 3) || (in_port->major_ver == 4)) &&
+			ife_src_res->hw_ctxt_id_mask) &&
 			ife_src_res->num_children)
 			continue;
 
@@ -5456,7 +5459,8 @@ static int cam_ife_hw_mgr_acquire_res_ife_src(
 		 * hw context id). We find the existing resource instead of adding duplicate
 		 * entries of resource for each hw context.
 		 */
-		if ((in_port->major_ver == 3) && ((csid_res->res_id == CAM_IFE_PIX_PATH_RES_IPP) ||
+		if (((in_port->major_ver == 3) || (in_port->major_ver == 4)) &&
+			((csid_res->res_id == CAM_IFE_PIX_PATH_RES_IPP) ||
 			(csid_res->res_id == CAM_IFE_PIX_PATH_RES_IPP_1) ||
 			(csid_res->res_id == CAM_IFE_PIX_PATH_RES_IPP_2))) {
 			list_for_each_entry(ife_src_res, ife_src_list_head, list) {
@@ -5975,7 +5979,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_csid_pxl(
 	bool                                      per_port_acquire = false;
 
 	if (is_ipp) {
-		if (in_port->major_ver == 3) {
+		if ((in_port->major_ver == 3) || (in_port->major_ver == 4)) {
 			rc = cam_ife_mgr_util_process_csid_path_res(in_port->path_id, &path_res_id);
 			if (rc) {
 				CAM_ERR(CAM_ISP, "Error in processing csid path resource rc:%d",
@@ -6725,6 +6729,7 @@ static int cam_ife_mgr_check_and_update_fe(
 		return cam_ife_mgr_check_and_update_fe_v2(
 			ife_ctx, acquire_hw_info, acquire_info_size);
 	case 3:
+	case 4:
 		CAM_DBG(CAM_ISP, "FE updates not applicable");
 		break;
 	default:
@@ -6791,7 +6796,8 @@ static int cam_ife_hw_mgr_preprocess_port(
 		else {
 			CAM_DBG(CAM_ISP, "out_res_type 0x%x, ife_ctx_idx: %u",
 				out_port->res_type, ife_ctx->ctx_index);
-			if ((in_port->major_ver == 3) && (in_port->path_id &
+			if (((in_port->major_ver == 3) || (in_port->major_ver == 4)) &&
+				(in_port->path_id &
 				(CAM_ISP_PXL_PATH | CAM_ISP_PXL1_PATH | CAM_ISP_PXL2_PATH))) {
 				CAM_DBG(CAM_ISP,
 					"preprocess csid path resource: 0x%x, ipp_dst_hw_ctxt_mask: 0x%x, outport ctxt_id: %d",
@@ -7857,6 +7863,16 @@ static inline void cam_ife_mgr_acquire_get_feature_flag_params_v3(
 	in_port->dynamic_hdr_switch_en    = in->feature_mask & CAM_ISP_HDR_MODE_DYNAMIC_SWITCH_EN;
 }
 
+static inline void cam_ife_mgr_acquire_get_feature_flag_params_v4(
+	struct cam_isp_in_port_info_v4      *in,
+	struct cam_isp_in_port_generic_info *in_port)
+{
+	in_port->dynamic_sensor_switch_en = in->feature_mask & CAM_ISP_DYNAMIC_SENOR_SWITCH_EN;
+	in_port->can_use_lite             = in->feature_mask & CAM_ISP_CAN_USE_LITE_MODE;
+	in_port->aeb_mode                 = in->feature_mask & CAM_ISP_AEB_MODE_EN;
+	in_port->dynamic_hdr_switch_en    = in->feature_mask & CAM_ISP_HDR_MODE_DYNAMIC_SWITCH_EN;
+}
+
 static inline void cam_ife_mgr_acquire_get_feature_flag_params(
 	struct cam_isp_in_port_info_v2      *in,
 	struct cam_isp_in_port_generic_info *in_port)
@@ -7943,9 +7959,123 @@ static int cam_ife_mgr_acquire_get_unified_structure_v3(
 	in_port->left_width               =  in->csid_info.width;
 	in_port->height                   =  in->csid_info.height;
 	in_port->num_out_res              =  in->num_out_res;
-	in_port->sensor_id                =  in->sensor_id;
+	in_port->sensor_id                =  CAM_ISP_IN_SENSOR_ID_UNKNOWN;
 
 	cam_ife_mgr_acquire_get_feature_flag_params_v3(in, in_port);
+
+	in_port->data = CAM_MEM_ZALLOC_ARRAY(in->num_out_res,
+				sizeof(struct cam_isp_out_port_generic_info),
+				GFP_KERNEL);
+	if (in_port->data == NULL) {
+		rc = -ENOMEM;
+		goto err;
+	}
+
+	for (i = 0; i < in_port->num_out_res; i++) {
+		if ((in->data_flex[i].context_id < CAM_ISP_MULTI_CTXT0_MASK) ||
+			(in->data_flex[i].context_id > CAM_ISP_MULTI_CTXT2_MASK)) {
+			CAM_ERR(CAM_ISP, "Invalid hw context id: 0x%x for acquire i: %d",
+				in->data_flex[i].context_id, i);
+			rc = -EINVAL;
+			goto err;
+		}
+
+		in_port->data[i].res_type     = in->data_flex[i].res_type;
+		in_port->data[i].acquired_res_type = in->data_flex[i].res_type;
+		in_port->data[i].format       = in->data_flex[i].format;
+		in_port->data[i].width        = in->data_flex[i].width;
+		in_port->data[i].height       = in->data_flex[i].height;
+		in_port->data[i].comp_grp_id  = in->data_flex[i].comp_grp_id;
+		in_port->data[i].split_point  = in->data_flex[i].split_point;
+		in_port->data[i].secure_mode  = in->data_flex[i].secure_mode;
+		in_port->data[i].wm_mode      = in->data_flex[i].wm_mode;
+		in_port->data[i].hw_context_id   = in->data_flex[i].context_id;
+		in_port->data[i].rcs_en       = in->data_flex[i].param_mask & CAM_IFE_WM_RCS_EN;
+		in_port->data[i].use_wm_pack  = in->data_flex[i].param_mask & CAM_IFE_USE_WM_PACK;
+	}
+
+	return 0;
+
+err:
+	return rc;
+}
+
+static int cam_ife_mgr_acquire_get_unified_structure_v4(
+	struct cam_isp_acquire_hw_info *acquire_hw_info,
+	uint32_t offset, uint32_t *input_size,
+	struct cam_isp_in_port_generic_info *in_port)
+{
+	struct cam_isp_in_port_info_v4 *in = NULL;
+	uint32_t in_port_length = 0;
+	int32_t rc = 0, i;
+	size_t len = 0;
+	uint8_t log_buf[200];
+
+	in = (struct cam_isp_in_port_info_v4 *)
+		((uint8_t *)&acquire_hw_info->data +
+		 acquire_hw_info->input_info_offset + *input_size);
+
+	in_port_length = sizeof(struct cam_isp_in_port_info_v4) +
+		(in->num_out_res - 1) *
+		sizeof(struct cam_isp_out_port_info_v3);
+
+	*input_size += in_port_length;
+
+	if (!in_port || ((*input_size) > acquire_hw_info->input_info_size)) {
+		CAM_ERR(CAM_ISP, "Input is not proper");
+		rc = -EINVAL;
+		goto err;
+	}
+
+	in_port->major_ver       = (acquire_hw_info->input_info_version >> 8) & 0xFFFF;
+	in_port->minor_ver       = acquire_hw_info->input_info_version & 0xFFFF;
+	in_port->res_type        =  in->phy_info.res_type;
+	in_port->lane_type       =  in->phy_info.lane_type;
+	in_port->lane_num        =  in->phy_info.lane_num;
+	in_port->lane_cfg        =  in->phy_info.lane_cfg;
+	in_port->num_valid_vc_dt =  in->csid_info.num_valid_vc_dt;
+	in_port->epd_supported   =  in->csid_info.param_mask & CAM_IFE_CSID_EPD_MODE_EN;
+
+	if (in_port->num_valid_vc_dt == 0 || in_port->num_valid_vc_dt >= CAM_ISP_VC_DT_CFG ||
+		in_port->num_valid_vc_dt > g_ife_hw_mgr.isp_caps.max_dt_supported) {
+		CAM_ERR(CAM_ISP,
+			"Invalid i/p arg invalid vc-dt: %d, arr size %u, max supported by HW: %u",
+			in_port->num_valid_vc_dt, CAM_ISP_VC_DT_CFG,
+			g_ife_hw_mgr.isp_caps.max_dt_supported);
+		rc = -EINVAL;
+		goto err;
+	}
+
+	for (i = 0; i < in_port->num_valid_vc_dt; i++) {
+		if ((i >= CAM_IFE_CSID_MAX_VALID_VC_NUM) &&
+			(in->csid_info.vc[i] != CAM_ISP_INVALID_VC_VALUE))
+			rc = -EINVAL;
+
+		in_port->vc[i]        =  in->csid_info.vc[i];
+		in_port->dt[i]        =  in->csid_info.dt[i];
+
+		CAM_INFO_BUF(CAM_ISP, log_buf, 200, &len, "VC%d: 0x%x, DT%d: 0x%x ",
+			i, in_port->vc[i], i, in_port->dt[i]);
+	}
+
+	if (rc) {
+		CAM_ERR(CAM_ISP, "Invalid VC/DT args, printing given %d args: %s",
+			in_port->num_valid_vc_dt, log_buf);
+		goto err;
+	}
+
+	for (i = 0; i < in_port->num_valid_vc_dt; i++) {
+		in_port->format[i] = (in->csid_info.format >> (i * CAM_IFE_DECODE_FORMAT_SHIFT_VAL))
+			& CAM_IFE_DECODE_FORMAT_MASK;
+	}
+
+	in_port->path_id                  =  in->csid_info.path_id;
+	in_port->left_width               =  in->csid_info.width;
+	in_port->height                   =  in->csid_info.height;
+	in_port->num_out_res              =  in->num_out_res;
+	in_port->sensor_id                =  in->sensor_id;
+
+	cam_ife_mgr_acquire_get_feature_flag_params_v4(in, in_port);
 
 	in_port->data = CAM_MEM_ZALLOC_ARRAY(in->num_out_res,
 				sizeof(struct cam_isp_out_port_generic_info),
@@ -8208,6 +8338,9 @@ static int cam_ife_mgr_acquire_get_unified_structure(
 	case 3:
 		return cam_ife_mgr_acquire_get_unified_structure_v3(
 			acquire_hw_info, offset, input_size, in_port);
+	case 4:
+		return cam_ife_mgr_acquire_get_unified_structure_v4(
+			acquire_hw_info, offset, input_size, in_port);
 	default:
 		CAM_ERR(CAM_ISP, "Invalid ver of i/p port info from user. minor %u, major %u",
 			minor_ver, major_ver);
@@ -8415,7 +8548,8 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 		total_lite_port += in_port[i].lite_path_count;
 		total_sfe_ports += in_port[i].sfe_port_count;
 
-		if ((in_port[i].major_ver == 3) && in_port[i].ipp_count)
+		if (((in_port[i].major_ver == 3) || (in_port[i].major_ver == 4)) &&
+			in_port[i].ipp_count)
 			ife_ctx->is_hw_ctx_acq = true;
 	}
 
@@ -8498,7 +8632,8 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 			in_port[i].sfe_ife_enable, ife_ctx->flags.per_port_en);
 
 		/* For multi-context acquire cases*/
-		if ((in_port[i].major_ver == 3) && in_port[i].ipp_count &&
+		if (((in_port[i].major_ver == 3) || (in_port[i].major_ver == 4)) &&
+			in_port[i].ipp_count &&
 			in_port[i].ipp_dst_hw_ctxt_mask)
 			cam_ife_mgr_populate_hw_ctxt_map(ife_ctx, &in_port[i]);
 
