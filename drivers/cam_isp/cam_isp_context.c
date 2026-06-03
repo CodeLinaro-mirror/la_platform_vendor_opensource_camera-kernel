@@ -2718,6 +2718,8 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 	const char *handle_type;
 	struct cam_isp_hw_done_event_data   unhandled_done = {0};
 	struct cam_isp_context_comp_record *comp_grp = NULL;
+	struct cam_ctx_request  *wait_req;
+	struct cam_isp_ctx_req  *wait_req_isp;
 
 	trace_cam_buf_done("ISP", ctx, req);
 
@@ -2728,8 +2730,22 @@ static int __cam_isp_ctx_handle_buf_done_for_request_verify_addr(
 
 	unhandled_done.timestamp = done->timestamp;
 
-	if (__cam_isp_check_if_comp_grp_for_req_is_done(req_isp, done))
+	if (__cam_isp_check_if_comp_grp_for_req_is_done(req_isp, done)) {
+		/*
+		 * Handling bufdone of a port for req in wait list with deferred buf done logic
+		 * when fence of a port in active req is signaled.
+		 */
+		if (!list_empty(&ctx->wait_req_list)) {
+			wait_req = list_first_entry(&ctx->wait_req_list, struct cam_ctx_request,
+				list);
+			wait_req_isp = (struct cam_isp_ctx_req *) wait_req->req_priv;
+			if (__cam_isp_ctx_check_buf_done_match_for_request(ctx_isp,
+				wait_req_isp, done, ctx_isp->frmhdr_verify_buf_done))
+				rc = __cam_isp_ctx_check_deferred_buf_done(ctx_isp, done,
+					bubble_state);
+		}
 		return rc;
+	}
 
 	if (verify_consumed_addr)
 		not_found = !__cam_isp_ctx_check_buf_done_match_for_request(ctx_isp,

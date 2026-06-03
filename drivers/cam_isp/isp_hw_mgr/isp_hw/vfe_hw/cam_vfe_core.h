@@ -30,7 +30,6 @@
 #define CAM_VFE_HW_CORE_TYPE_BUS           1
 
 struct cam_vfe_irq_hw_info {
-	int                                   reset_irq_handle;
 	uint32_t                              reset_mask;
 	struct cam_irq_controller_reg_info   *top_irq_reg;
 	uint32_t                              supported_irq;

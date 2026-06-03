@@ -245,10 +245,9 @@ int cam_vfe_reset(void *hw_priv, void *reset_core_args, uint32_t arg_size)
 	struct cam_vfe_hw_core_info *core_info;
 	struct cam_vfe_irq_hw_info  *irq_info;
 	uint32_t top_reset_irq_reg_mask[CAM_IFE_IRQ_REGISTERS_MAX];
-	int rc = 0;
+	int rc = 0, reset_irq_handle = 0;
 
 	CAM_DBG(CAM_ISP, "Enter");
-
 
 	if (!hw_priv) {
 		CAM_ERR(CAM_ISP, "Invalid input arguments");
@@ -265,7 +264,7 @@ int cam_vfe_reset(void *hw_priv, void *reset_core_args, uint32_t arg_size)
 	top_reset_irq_reg_mask[CAM_IFE_IRQ_CAMIF_REG_STATUS0] =
 				irq_info->reset_mask;
 
-	irq_info->reset_irq_handle = cam_irq_controller_subscribe_irq(
+	reset_irq_handle = cam_irq_controller_subscribe_irq(
 		core_info->vfe_irq_controller,
 		CAM_IRQ_PRIORITY_0,
 		top_reset_irq_reg_mask,
@@ -273,15 +272,16 @@ int cam_vfe_reset(void *hw_priv, void *reset_core_args, uint32_t arg_size)
 		cam_vfe_reset_irq_top_half,
 		NULL, NULL, CAM_IRQ_EVT_GROUP_0);
 
-	if (irq_info->reset_irq_handle < 1) {
-		CAM_ERR(CAM_ISP, "subscribe irq controller failed");
-		irq_info->reset_irq_handle = 0;
-		return -EFAULT;
+	if (reset_irq_handle < 1) {
+		CAM_ERR(CAM_ISP, "subscribe irq controller failed for VFE:%u handle:%d",
+			vfe_hw->soc_info.index, reset_irq_handle);
+		rc = -EFAULT;
+		goto skip_reset;
 	}
 
 	reinit_completion(&vfe_hw->hw_complete);
 
-	CAM_DBG(CAM_ISP, "Calling RESET on VFE");
+	CAM_DBG(CAM_ISP, "Calling RESET on VFE:%u", vfe_hw->soc_info.index);
 
 	core_info->vfe_top->hw_ops.reset(core_info->vfe_top->top_priv,
 		reset_core_args, arg_size);
@@ -290,17 +290,22 @@ int cam_vfe_reset(void *hw_priv, void *reset_core_args, uint32_t arg_size)
 	rc = cam_common_wait_for_completion_timeout(
 			&vfe_hw->hw_complete, 500);
 
-	if (!rc)
-		CAM_ERR(CAM_ISP, "Reset Timeout");
-	else
-		CAM_DBG(CAM_ISP, "Reset complete (%d)", rc);
+	if (!rc) {
+		CAM_ERR(CAM_ISP, "Reset Timeout for VFE:%u", vfe_hw->soc_info.index);
+		rc = -ETIMEDOUT;
+	} else {
+		CAM_DBG(CAM_ISP, "Reset complete VFE:%u", vfe_hw->soc_info.index);
+		rc = 0;
+	}
 
-	rc = cam_irq_controller_unsubscribe_irq(
+	if (cam_irq_controller_unsubscribe_irq(
 			core_info->vfe_irq_controller,
-			irq_info->reset_irq_handle);
-	if (rc)
-		CAM_ERR(CAM_ISP, "Error. Unsubscribe failed");
-	irq_info->reset_irq_handle = 0;
+			reset_irq_handle)) {
+		CAM_ERR(CAM_ISP, "Error. Unsubscribe failed for VFE:%u handle:%d",
+			vfe_hw->soc_info.index, reset_irq_handle);
+		if (!rc)
+			rc = -EFAULT;
+	}
 
 skip_reset:
 	CAM_DBG(CAM_ISP, "Exit");
@@ -445,7 +450,6 @@ int cam_vfe_start(void *hw_priv, void *start_args, uint32_t arg_size)
 int cam_vfe_stop(void *hw_priv, void *stop_args, uint32_t arg_size)
 {
 	struct cam_vfe_hw_core_info       *core_info = NULL;
-	struct cam_vfe_irq_hw_info        *irq_info = NULL;
 	struct cam_hw_info                *vfe_hw  = hw_priv;
 	struct cam_isp_resource_node      *isp_res;
 	int rc = -EINVAL;
@@ -458,7 +462,6 @@ int cam_vfe_stop(void *hw_priv, void *stop_args, uint32_t arg_size)
 
 	core_info = (struct cam_vfe_hw_core_info *)vfe_hw->core_info;
 	isp_res = (struct cam_isp_resource_node  *)stop_args;
-	irq_info = core_info->vfe_hw_info->irq_hw_info;
 
 	mutex_lock(&vfe_hw->hw_mutex);
 	if (isp_res->res_type == CAM_ISP_RESOURCE_VFE_IN) {
@@ -473,13 +476,6 @@ int cam_vfe_stop(void *hw_priv, void *stop_args, uint32_t arg_size)
 				NULL, 0);
 	} else {
 		CAM_ERR(CAM_ISP, "Invalid res type:%d", isp_res->res_type);
-	}
-
-	if (irq_info->reset_irq_handle > 0) {
-		cam_irq_controller_unsubscribe_irq(
-			core_info->vfe_irq_controller,
-			irq_info->reset_irq_handle);
-		irq_info->reset_irq_handle = 0;
 	}
 
 	mutex_unlock(&vfe_hw->hw_mutex);
