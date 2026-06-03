@@ -10945,13 +10945,15 @@ end:
 		ctx->num_reg_dump_buf = 0;
 	}
 
-	if (ctx->flags.fast_crop_en)
+	if (!stop_isp->is_internal_stop && ctx->flags.fast_crop_en) {
 		cam_mem_put_cpu_buf(ctx->fast_crop_shared_buf_info.mem_hdl);
+		ctx->fast_crop_shared_buf_kmdvaddr = 0;
+		ctx->flags.fast_crop_en = false;
+	}
 
 	ctx->flags.skip_reg_dump_buf_put = false;
 	ctx->flags.dump_on_error = false;
 	ctx->flags.dump_on_flush = false;
-	ctx->flags.fast_crop_en = false;
 	return rc;
 }
 
