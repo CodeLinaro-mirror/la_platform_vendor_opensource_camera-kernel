@@ -68,7 +68,9 @@ static uint32_t blob_type_hw_cmd_map[CAM_ISP_GENERIC_BLOB_TYPE_MAX] = {
 
 static struct cam_ife_hw_mgr g_ife_hw_mgr;
 static struct cam_ife_hw_mgr_sensor_grp_cfg  g_ife_sns_grp_cfg;
-static uint32_t g_num_ife, g_num_ife_lite, g_num_ife_virt, g_max_ife_idx;
+static uint32_t g_num_ife_virt, g_max_ife_idx;
+static uint32_t g_num_ife_available, g_num_ife_lite_available;
+static uint32_t g_num_ife_functional, g_num_ife_lite_functional;
 static uint32_t max_ife_out_res;
 
 static int cam_isp_blob_ife_clock_update(
@@ -430,9 +432,33 @@ static inline void cam_ife_mgr_free_cdm_cmd(
 	*cdm_cmd = NULL;
 }
 
+static inline void cam_ife_mgr_count_functional_ife(void)
+{
+	int i;
+
+	g_num_ife_virt = 0;
+	g_num_ife_functional = 0;
+	g_num_ife_lite_functional = 0;
+
+	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
+		if (g_ife_hw_mgr.ife_devices[i]) {
+			if (g_max_ife_idx < i)
+				g_max_ife_idx = i;
+			if (g_ife_hw_mgr.ife_dev_caps[i].is_lite)
+				g_num_ife_lite_functional++;
+			else if (g_ife_hw_mgr.ife_dev_caps[i].is_virtual)
+				g_num_ife_virt++;
+			else
+				g_num_ife_functional++;
+		}
+	}
+	CAM_DBG(CAM_ISP, "counted functional %d IFE and %d IFE lite", g_num_ife_functional,
+		g_num_ife_lite_functional);
+}
+
 static int cam_convert_hw_idx_to_ife_hw_num(int hw_idx)
 {
-	if (hw_idx < g_num_ife) {
+	if (hw_idx < g_num_ife_available) {
 		switch (hw_idx) {
 		case 0: return CAM_ISP_IFE0_HW;
 		case 1: return CAM_ISP_IFE1_HW;
@@ -440,7 +466,7 @@ static int cam_convert_hw_idx_to_ife_hw_num(int hw_idx)
 		default: return -1;
 		}
 	} else if (hw_idx) {
-		switch (hw_idx - g_num_ife) {
+		switch (hw_idx - g_num_ife_available) {
 		case 0: return CAM_ISP_IFE0_LITE_HW;
 		case 1: return CAM_ISP_IFE1_LITE_HW;
 		case 2: return CAM_ISP_IFE2_LITE_HW;
@@ -4355,29 +4381,6 @@ err:
 	return rc;
 }
 
-static inline void cam_ife_mgr_count_ife(void)
-{
-	int i;
-
-	g_num_ife = 0;
-	g_num_ife_lite = 0;
-
-	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
-		if (g_ife_hw_mgr.ife_devices[i]) {
-			if (g_max_ife_idx < i)
-				g_max_ife_idx = i;
-			if (g_ife_hw_mgr.ife_dev_caps[i].is_lite)
-				g_num_ife_lite++;
-			else if (g_ife_hw_mgr.ife_dev_caps[i].is_virtual)
-				g_num_ife_virt++;
-			else
-				g_num_ife++;
-		}
-	}
-	CAM_DBG(CAM_ISP, "counted %d IFE and %d IFE lite %d VIFE max ife %d",
-		g_num_ife, g_num_ife_lite, g_num_ife_virt, g_max_ife_idx);
-}
-
 static int cam_convert_rdi_out_res_id_to_src(int res_id)
 {
 	if (res_id == CAM_ISP_IFE_OUT_RES_RDI_0)
@@ -7633,10 +7636,10 @@ end:
 
 static int cam_get_ife_hw_idx(int hw_idx)
 {
-	if (hw_idx < g_num_ife)
+	if (hw_idx < g_num_ife_available)
 		return hw_idx;
 	else if (hw_idx <= g_max_ife_idx)
-		return (hw_idx - g_num_ife);
+		return (hw_idx - g_num_ife_available);
 
 	CAM_ERR(CAM_ISP, "hw idx %d out-of-bounds g_max_ife_idx %d",
 		hw_idx, g_max_ife_idx);
@@ -7655,7 +7658,7 @@ static int cam_ife_hw_mgr_set_secure_port_info(
 	phy_id = cam_ife_mgr_get_phy_id(ife_ctx->res_list_ife_in.res_id);
 	hw_id = cam_get_ife_hw_idx(ife_ctx->left_hw_idx);
 	ife_hw_type = cam_convert_hw_idx_to_ife_hw_type(
-			ife_ctx->left_hw_idx, g_num_ife, g_max_ife_idx);
+			ife_ctx->left_hw_idx, g_num_ife_available, g_max_ife_idx);
 	hw_type = cam_convert_hw_id_to_secure_cam_hw_type(ife_hw_type);
 
 	if (cam_ife_mgr_is_tpg(ife_ctx->res_list_ife_in.res_id)) {
@@ -22124,7 +22127,21 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 		*iommu_hdl = g_ife_hw_mgr.mgr_common.img_iommu_hdl;
 
 	cam_ife_hw_mgr_debug_register();
-	cam_ife_mgr_count_ife();
+
+	cam_ife_mgr_count_functional_ife();
+
+	cam_vfe_get_num_ifes(&g_num_ife_available);
+	rc = cam_cpas_prepare_subpart_info(CAM_IFE_HW_IDX, g_num_ife_available,
+		g_num_ife_functional);
+	if (rc)
+		CAM_ERR(CAM_ISP, "Failed to populate num_ifes, rc: %d", rc);
+
+	cam_vfe_get_num_ife_lites(&g_num_ife_lite_available);
+	rc = cam_cpas_prepare_subpart_info(CAM_IFE_LITE_HW_IDX, g_num_ife_lite_available,
+		g_num_ife_lite_functional);
+	if (rc)
+		CAM_ERR(CAM_ISP, "Failed to populate num_ife_lites, rc: %d", rc);
+
 	cam_common_register_mini_dump_cb(cam_ife_hw_mgr_mini_dump_cb,
 		"CAM_ISP");
 
