@@ -116,6 +116,8 @@ static int ais_tfe_dev_component_bind(struct device *dev,
 	// ais_tfe_init_hw(vfe_hw, NULL, 0);
 	// ais_tfe_deinit_hw(vfe_hw, NULL, 0);
 
+	ais_tfe_debugfs_register(vfe_hw);
+
 	CAM_DBG(CAM_ISP, "TFE%d component bound successfully", vfe_hw_intf->hw_idx);
 
 	return rc;
@@ -196,8 +198,6 @@ int ais_tfe_hw_init(struct cam_hw_intf **vfe_hw,
 	if (ais_tfe_hw_list[init->hw_idx]) {
 		struct cam_hw_info          *vfe_hw_info = NULL;
 		struct ais_vfe_hw_core_info *core_info = NULL;
-		//struct cam_hw_info  *csid_hw_info = NULL;
-		//struct ais_tfe_csid_ver2_hw *csid_core = NULL;
 
 		vfe_hw_info = ais_tfe_hw_list[init->hw_idx]->hw_priv;
 		core_info =
@@ -209,12 +209,6 @@ int ais_tfe_hw_init(struct cam_hw_intf **vfe_hw,
 		core_info->event_cb_priv = init->event_cb_priv;
 		core_info->iommu_hdl = init->iommu_hdl;
 		core_info->iommu_hdl_secure = init->iommu_hdl_secure;
-
-		/* add csid irq event callback */
-		//csid_hw_info = (struct cam_hw_info*)csid_hw->hw_priv;
-		//csid_core = (struct ais_tfe_csid_ver2_hw*)(csid_hw_info->core_info);
-		//csid_core->vfe_event_cb = ais_tfe_csid_irq_event_callback;
-		//csid_core->vfe_hw_info = (void*)vfe_hw_info;
 
 		*vfe_hw = ais_tfe_hw_list[init->hw_idx];
 		rc = 0;

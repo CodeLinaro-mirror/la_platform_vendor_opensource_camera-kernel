@@ -502,6 +502,7 @@ static struct ais_tfe_bus_ver2_hw_info tfe665_bus_hw_info = {
 	.comp_buf_done_mask = 0xFFF00,
 	.comp_rup_done_mask = 0xF,
 	.max_fifo_num = 2,
+	.violation_mask = 0xD0000000,
 };
 
 static struct ais_vfe_hw_info ais_tfe665_hw_info = {

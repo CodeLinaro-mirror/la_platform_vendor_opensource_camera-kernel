@@ -276,6 +276,7 @@ struct ais_tfe_bus_ver2_hw_info {
 	uint32_t comp_buf_done_mask;
 	uint32_t comp_rup_done_mask;
 	uint32_t max_fifo_num;
+	uint32_t violation_mask;
 };
 
 #endif /* _AIS_TFE_BUS_VER2_H_ */
