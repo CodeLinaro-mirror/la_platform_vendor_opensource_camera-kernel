@@ -134,12 +134,14 @@ int cam_ife_notify_safe_lut_scm(bool safe_trigger)
 }
 
 int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
-	bool protect, int32_t offset, bool is_shutdown)
+	bool protect, int32_t offset, bool __maybe_unused is_shutdown)
 {
 	int rc = 0;
 
 #if defined CONFIG_SECURE_CAMERA_V3 || defined CONFIG_TZ_DCP_API_VER_2
+#if !IS_ENABLED(CONFIG_QCOM_SI_CORE)
 	if (!is_shutdown) {
+#endif
 		struct smci_object client_env, sc_object;
 		struct tc_driver_sensor_info params = {0};
 
@@ -188,6 +190,7 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 			rc = -EINVAL;
 			return rc;
 		}
+#if !IS_ENABLED(CONFIG_QCOM_SI_CORE)
 	} else {
 		if (offset >= csiphy_dev->session_max_device_support) {
 			CAM_ERR(CAM_CSIPHY, "Invalid CSIPHY offset");
@@ -201,6 +204,7 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 		CAM_INFO(CAM_CSIPHY,
 			"Legacy scm call shutdown %d", is_shutdown);
 	}
+#endif
 #else
 	if (offset >= csiphy_dev->session_max_device_support) {
 		CAM_ERR(CAM_CSIPHY, "Invalid CSIPHY offset");
@@ -457,7 +461,7 @@ int cam_ife_notify_safe_lut_scm(bool safe_trigger)
 }
 
 int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
-	bool protect, int32_t offset)
+	bool protect, int32_t offset, bool __always_unused is_shutdown)
 {
 	int rc = 0;
 	struct scm_desc description = {
