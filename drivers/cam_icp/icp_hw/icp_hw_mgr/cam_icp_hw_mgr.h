@@ -568,7 +568,7 @@ struct cam_icp_hw_mgr {
 	uint64_t icp_svs_clk;
 	atomic_t frame_in_process;
 	int frame_in_process_ctx_id;
-	atomic_t abort_in_process;
+	atomic_t abort_in_process[CAM_ICP_HW_MAX];
 	uint32_t hw_cap_mask;
 	uint32_t num_pid;
 	uint32_t pid[CAM_ICP_PID_NUM_MAX];
