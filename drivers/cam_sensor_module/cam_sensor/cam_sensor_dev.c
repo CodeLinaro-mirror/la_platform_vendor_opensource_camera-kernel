@@ -434,6 +434,8 @@ static const struct of_device_id cam_sensor_driver_dt_match[] = {
 	{.compatible = "qcom,cam-sensor"},
 	{.compatible = "lt,lt6911gxc"},
 	{.compatible = "lt,lt7911uxc"},
+	{.compatible = "lt,lt6911uxe"},
+	{.compatible = "lt,lt7911d"},
 	{}
 };
 
@@ -445,6 +447,8 @@ static const struct of_device_id cam_sensor_driver_platform_dt_match[] = {
 static const struct of_device_id cam_sensor_driver_i2c_dt_match[] = {
 	{.compatible = "lt,lt6911gxc"},
 	{.compatible = "lt,lt7911uxc"},
+	{.compatible = "lt,lt6911uxe"},
+	{.compatible = "lt,lt7911d"},
 	{}
 };
 
