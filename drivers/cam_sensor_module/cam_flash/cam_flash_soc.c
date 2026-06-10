@@ -375,7 +375,6 @@ int cam_flash_get_dt_data(struct cam_flash_ctrl *fctrl,
 	struct cam_hw_soc_info *soc_info)
 {
 	int32_t rc = 0;
-	int flash_type;
 	struct device_node *of_node = NULL;
 
 	if (!fctrl) {
@@ -404,13 +403,13 @@ int cam_flash_get_dt_data(struct cam_flash_ctrl *fctrl,
 		goto free_soc_private;
 	}
 	rc = of_property_read_u32(of_node,
-			"flash-type", &flash_type);
+			"flash-type", &(fctrl->flash_type));
 		if (rc) {
 			CAM_ERR(CAM_FLASH, "flash-type read failed rc=%d", rc);
-			flash_type = CAM_FLASH_TYPE_PMIC;
+			fctrl->flash_type = CAM_FLASH_TYPE_PMIC;
 		}
 
-	if (flash_type == CAM_FLASH_TYPE_I2C) {
+	if (fctrl->flash_type == CAM_FLASH_TYPE_I2C) {
 		rc = cam_get_source_node_info(of_node, fctrl, soc_info->soc_private);
 		if (rc) {
 			CAM_ERR(CAM_FLASH,
