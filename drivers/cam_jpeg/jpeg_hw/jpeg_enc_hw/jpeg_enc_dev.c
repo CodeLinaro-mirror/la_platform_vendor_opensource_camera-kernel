@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -219,10 +220,9 @@ const static struct component_ops cam_jpeg_enc_component_ops = {
 	.unbind = cam_jpeg_enc_component_unbind,
 };
 
-static int cam_jpeg_enc_remove(struct platform_device *pdev)
+static void cam_jpeg_enc_remove(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &cam_jpeg_enc_component_ops);
-	return 0;
 }
 
 static int cam_jpeg_enc_probe(struct platform_device *pdev)
