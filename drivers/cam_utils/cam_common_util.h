@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_COMMON_UTIL_H_
@@ -32,6 +32,26 @@
 			(ts_end.tv_sec - ts_start.tv_sec - 1) * 1000 * 1000;   \
 	}                                                                      \
 })
+
+/*
+ * manage locking between process context and tasklets.
+ * use appropriate api based on current context.
+ */
+#define _SPIN_LOCK_PROCESS_TO_BH(lock)          \
+({                                              \
+		if (in_task())			\
+			spin_lock_bh(lock);	\
+		else				\
+			spin_lock(lock);	\
+})                                              \
+
+#define _SPIN_UNLOCK_PROCESS_TO_BH(lock)        \
+({                                              \
+		if (in_task())			\
+			spin_unlock_bh(lock);	\
+		else				\
+			spin_unlock(lock);	\
+})                                              \
 
 
 /**
