@@ -5,6 +5,10 @@ load(":project_defconfig.bzl", "get_project_defconfig")
 
 def _define_module(target, variant):
     tv = "{}_{}".format(target, variant)
+
+    soc_target = "waipio" if target == "taro" else target
+    soc_tv = "{}_{}".format(soc_target, variant)
+
     sun_deps = []
     base_deps = []
     deps = []
@@ -13,18 +17,18 @@ def _define_module(target, variant):
             ":camera_headers",
             ":camera_banner",
             "//soc-repo:all_headers",
-            "//soc-repo:{}/drivers/firmware/qcom/qcom-scm".format(tv),
-            "//soc-repo:{}/drivers/iommu/qcom_iommu_util".format(tv),
-            "//soc-repo:{}/drivers/soc/qcom/mem_buf/mem_buf_dev".format(tv),
-            "//soc-repo:{}/drivers/soc/qcom/crm-v2".format(tv),
-            "//soc-repo:{}/drivers/clk/qcom/clk-qcom".format(tv),
-            "//soc-repo:{}/drivers/soc/qcom/qcom_rpmh".format(tv),
-            "//soc-repo:{}/drivers/soc/qcom/socinfo".format(tv),
-            "//soc-repo:{}/drivers/soc/qcom/llcc-qcom".format(tv),
-            "//soc-repo:{}/drivers/soc/qcom/mdt_loader".format(tv),
-            "//soc-repo:{}/drivers/soc/qcom/qcom_va_minidump".format(tv),
-            "//soc-repo:{}/drivers/leds/flash/leds-qcom-flash".format(tv),
-	    "//soc-repo:{}/drivers/video/backlight/qcom-spmi-wled".format(tv),
+            "//soc-repo:{}/drivers/firmware/qcom/qcom-scm".format(soc_tv),
+            "//soc-repo:{}/drivers/iommu/qcom_iommu_util".format(soc_tv),
+            "//soc-repo:{}/drivers/soc/qcom/mem_buf/mem_buf_dev".format(soc_tv),
+            "//soc-repo:{}/drivers/soc/qcom/crm-v2".format(soc_tv),
+            "//soc-repo:{}/drivers/clk/qcom/clk-qcom".format(soc_tv),
+            "//soc-repo:{}/drivers/soc/qcom/qcom_rpmh".format(soc_tv),
+            "//soc-repo:{}/drivers/soc/qcom/socinfo".format(soc_tv),
+            "//soc-repo:{}/drivers/soc/qcom/llcc-qcom".format(soc_tv),
+            "//soc-repo:{}/drivers/soc/qcom/mdt_loader".format(soc_tv),
+            "//soc-repo:{}/drivers/soc/qcom/qcom_va_minidump".format(soc_tv),
+            "//soc-repo:{}/drivers/leds/flash/leds-qcom-flash".format(soc_tv),
+            "//soc-repo:{}/drivers/video/backlight/qcom-spmi-wled".format(soc_tv),
         ],
         "//build/kernel/kleaf:socrepo_false": [
             ":camera_headers",
@@ -34,7 +38,7 @@ def _define_module(target, variant):
     })
 
     kernel_build = select({
-        "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_base_kernel".format(tv),
+        "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_base_kernel".format(soc_tv),
         "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}".format(tv),
     })
 
@@ -63,6 +67,7 @@ def _define_module(target, variant):
         ])
 
     if target == "parrot": deps.extend([])
+
     ddk_module(
         name = "{}_camera".format(tv),
         out = "camera.ko",
@@ -277,7 +282,7 @@ def _define_module(target, variant):
 	    },
         },
         copts = [
-        "-D__NO_FORTIFY",
+        "-D__NO_FORTIFY","-fstrict-flex-arrays=0",
         "-include", "$(location :camera_banner)"],
         deps = base_deps + sun_deps +deps,
         kconfig = "Kconfig",

@@ -177,6 +177,10 @@ config_setting(
     flag_values = {":project_name": "canoe"},
 )
 config_setting(
+    name = "taro",
+    flag_values = {":project_name": "taro"},
+)
+config_setting(
     name = "sun",
     flag_values = {":project_name": "sun"},
 )

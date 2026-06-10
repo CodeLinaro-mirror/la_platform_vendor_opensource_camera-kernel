@@ -23,6 +23,10 @@ project_configs = select({
 	"CONFIG_SPECTRA_TFE=y",
 	"CONFIG_SPECTRA_CRE=y",
     ],
+    ":taro": [
+        "CONFIG_SPECTRA_JPEG=y",
+        "CONFIG_SPECTRA_CUSTOM=y",
+    ],
 })
 
 """
