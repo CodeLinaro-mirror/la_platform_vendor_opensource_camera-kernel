@@ -214,23 +214,29 @@ struct cam_mem_buf_queue {
 	spinlock_t idx_lock;
 };
 
+/* Buffer queue chunk allocation - currently starts with two chunk */
+#define CAM_BUFQ_CHUNK_SIZE   1024
+#define CAM_BUFQ_MAX_CHUNKS   ((CAM_MEM_BUFQ_MAX) / (CAM_BUFQ_CHUNK_SIZE))
+
 /**
  * struct cam_mem_table
  *
  * @m_lock: mutex lock for table
  * @bitmap: bitmap of the mem mgr utility
- * @bits: max bits of the utility
- * @bufq: array of buffers
+ * @bufq: array of chunk pointers; each chunk is allocated on demand
+ * @buf_smmu_hdls: Slab cache for per-slot hdls_info arrays
+ * @bufq_capacity: current total number of buffer queue slots allocated
  * @dbg_buf_idx: debug buffer index to get usecases info
+ * @max_hdls_info_size: Size of the hdls array allocated per buffer,
+ *                      computed value to be used in driver
+ * @chunk_slot_cnt: active slot count per chunk; chunk freed when it hits zero
  * @max_hdls_supported: Maximum number of SMMU device handles supported
  *                      A buffer can only be mapped for these number of
  *                      device context banks
- * @max_hdls_info_size: Size of the hdls array allocated per buffer,
- *                      computed value to be used in driver
+ * @csf_version: Camera security framework version
  * @force_cache_allocs: Force all internal buffer allocations with cache
  * @need_shared_buffer_padding: Whether padding is needed for shared buffer
  *                              allocations.
- * @csf_version: Camera security framework version
  * @system_heap: Handle to system heap
  * @system_movable_heap: Handle to system movable heap
  * @system_uncached_heap: Handle to system uncached heap
@@ -239,27 +245,29 @@ struct cam_mem_buf_queue {
  * @secure_display_heap: Handle to secure display heap
  * @ubwc_p_heap: Handle to ubwc-p heap
  * @ubwc_p_movable_heap: Handle to ubwc-p movable heap
- * @cam_device_heap:     Handle of svm device heap
- * @cam_session_heap:    Handle of svm session heap
- * @cam_device_mem_pool_handle:  Handle of device memory pool
+ * @cam_device_heap: Handle of svm device heap
+ * @cam_session_heap: Handle of svm session heap
+ * @cam_device_mem_pool_handle: Handle of device memory pool
  * @cam_session_mem_pool_handle: Handle of session memory pool
- * @device_heap_alloc_cnt:       Buffer count alloc from device heap
- * @session_heap_alloc_cnt:      Buffer count alloc from session heap
- * @device_heap_size:            Device pool size
- * @session_heap_size:           Session pool size
+ * @device_heap_alloc_cnt: Buffer count alloc from device heap
+ * @session_heap_alloc_cnt: Buffer count alloc from session heap
+ * @device_heap_size: Device pool size
+ * @session_heap_size: Session pool size
  *
  */
 struct cam_mem_table {
 	struct mutex m_lock;
 	void *bitmap;
-	size_t bits;
-	struct cam_mem_buf_queue bufq[CAM_MEM_BUFQ_MAX];
+	struct cam_mem_buf_queue *bufq[CAM_BUFQ_MAX_CHUNKS];
+	struct kmem_cache *buf_smmu_hdls;
+	size_t bufq_capacity;
 	size_t dbg_buf_idx;
-	int32_t max_hdls_supported;
 	size_t max_hdls_info_size;
+	atomic_t chunk_slot_cnt[CAM_BUFQ_MAX_CHUNKS];
+	int32_t max_hdls_supported;
+	struct cam_csf_version csf_version;
 	bool force_cache_allocs;
 	bool need_shared_buffer_padding;
-	struct cam_csf_version csf_version;
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
 	struct dma_heap *system_heap;
 	struct dma_heap *system_movable_heap;
@@ -280,7 +288,6 @@ struct cam_mem_table {
 	uint32_t session_heap_size;
 #endif
 #endif
-
 };
 
 /**

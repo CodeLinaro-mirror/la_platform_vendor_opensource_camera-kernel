@@ -90,6 +90,71 @@ extern bool mem_trace_en;
 	memdup_user(src, len))
 
 /**
+ * Slab cache allocation helpers
+ *
+ * These macros wrap the kernel kmem_cache_*() API. Use them instead of
+ * kmalloc/kfree when the same fixed-size object is allocated and freed
+ * repeatedly on a hot path. Benefits over kmalloc:
+ *
+ *   - No size round-up: the slab allocator serves objects at their exact size,
+ *     avoiding the power-of-two waste of the general-purpose heap.
+ *   - Faster alloc/free: a per-CPU magazine of pre-allocated objects avoids
+ *     the global heap lock on the common case.
+ *   - Reduced fragmentation: objects of the same size are grouped together.
+ *
+ * NOTE: For variable-size or infrequent allocations use CAM_MEM_ALLOC instead.
+ */
+
+/**
+ * CAM_MEM_KMEM_CACHE_CREATE - Create a slab cache.
+ *
+ * Wraps kmem_cache_create().
+ *
+ * @_name  : name string for the cache (used in /proc/slabinfo)
+ * @_size  : size of each object in the cache
+ * @_align : required alignment for objects (0 = default)
+ * @_flags : SLAB_* flags (e.g. SLAB_CONSISTENCY_CHECKS)
+ * @_ctor  : optional object constructor callback, or NULL
+ *
+ * Returns a struct kmem_cache * on success, or NULL on failure.
+ */
+#define CAM_MEM_KMEM_CACHE_CREATE(_name, _size, _align, _flags, _ctor) \
+	kmem_cache_create((_name), (_size), (_align), (_flags), (_ctor))
+
+/**
+ * CAM_MEM_KMEM_CACHE_ZALLOC - Allocate a zeroed object from a slab cache.
+ *
+ * Wraps kmem_cache_zalloc() with GFP_KERNEL.
+ *
+ * @_cache : struct kmem_cache * to allocate from
+ *
+ * Returns a pointer to the allocated object, or NULL on failure.
+ */
+#define CAM_MEM_KMEM_CACHE_ZALLOC(_cache, _flags) \
+	kmem_cache_zalloc((_cache), (_flags))
+
+/**
+ * CAM_MEM_KMEM_CACHE_FREE - Return an object to its slab cache.
+ *
+ * Wraps kmem_cache_free().
+ *
+ * @_cache : struct kmem_cache * the object was allocated from
+ * @_obj   : pointer to the object to free
+ */
+#define CAM_MEM_KMEM_CACHE_FREE(_cache, _obj) \
+	kmem_cache_free((_cache), (_obj))
+
+/**
+ * CAM_MEM_KMEM_CACHE_DESTROY - Destroy a slab cache.
+ *
+ * Wraps kmem_cache_destroy().
+ *
+ * @_cache : struct kmem_cache * to destroy
+ */
+#define CAM_MEM_KMEM_CACHE_DESTROY(_cache) \
+	kmem_cache_destroy((_cache))
+
+/**
  * struct cam_mem_mgr_request_desc
  *
  * @size    : Size of memory requested for allocation
