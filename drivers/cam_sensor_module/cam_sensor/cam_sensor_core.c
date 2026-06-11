@@ -879,6 +879,9 @@ static int32_t cam_sensor_update_i2c_info(struct cam_cmd_i2c_info *i2c_info,
 	case SPI_MASTER:
 		break;
 
+	case I3C_MASTER:
+		break;
+
 	default:
 		CAM_ERR(CAM_SENSOR, "Invalid master type: %d",
 			s_ctrl->io_master_info.master_type);
