@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -17,6 +18,7 @@
 #include "cam_cdm.h"
 #include "cam_cdm_soc.h"
 #include "cam_cdm_core_common.h"
+#include "cam_worker_wrapper_api.h"
 
 static void cam_cdm_get_client_refcount(struct cam_cdm_client *client)
 {
@@ -701,7 +703,7 @@ int cam_cdm_process_cmd(void *hw_priv,
 	}
 	case CAM_CDM_HW_INTF_CMD_FLUSH_HW: {
 		uint32_t *handle = cmd_args;
-		int idx;
+		int idx, i;
 		struct cam_cdm_client *client;
 
 		if (sizeof(uint32_t) != arg_size) {
@@ -740,6 +742,13 @@ int cam_cdm_process_cmd(void *hw_priv,
 				*handle);
 		}
 		mutex_unlock(&cdm_hw->hw_mutex);
+
+		/* Flush bl_fifo's worker which is not yet schduled */
+		for (i = 0; i < core->offsets->reg_data->num_bl_fifo; i++) {
+			if (core->bl_fifo[i].worker_ctx)
+				cam_worker_wrapper_flush(core->bl_fifo[i].worker_ctx);
+		}
+
 		break;
 	}
 	case CAM_CDM_HW_INTF_CMD_HANDLE_ERROR: {

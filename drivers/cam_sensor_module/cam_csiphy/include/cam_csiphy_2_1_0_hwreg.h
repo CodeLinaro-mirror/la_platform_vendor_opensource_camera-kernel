@@ -10,6 +10,8 @@
 
 struct csiphy_reg_parms_t csiphy_v2_1_0 = {
 	.mipi_csiphy_interrupt_status0_addr = 0x10B0,
+	.status_reg_params = NULL,
+	.size_offset_betn_lanes = 0x400,
 	.mipi_csiphy_interrupt_clear0_addr = 0x1058,
 	.mipi_csiphy_glbl_irq_cmd_addr = 0x1028,
 	.csiphy_common_array_size = 6,
