@@ -139,6 +139,7 @@ static int32_t cam_sensor_i2c_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 	uintptr_t generic_ptr;
 	struct cam_control *ioctl_ctrl = NULL;
 	struct cam_packet *csl_packet = NULL;
+	struct cam_packet *csl_packet_u = NULL;
 	struct cam_cmd_buf_desc *cmd_desc = NULL;
 	struct cam_buf_io_cfg *io_cfg = NULL;
 	struct i2c_settings_array *i2c_reg_settings = NULL;
@@ -177,18 +178,17 @@ static int32_t cam_sensor_i2c_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 			"Inval cam_packet strut size: %zu, len_of_buff: %zu",
 			 sizeof(struct cam_packet), len_of_buff);
 		rc = -EINVAL;
-		goto end;
+		goto put_ref;
 	}
 
 	remain_len -= (size_t)config.offset;
-	csl_packet = (struct cam_packet *)(generic_ptr +
+	csl_packet_u = (struct cam_packet *)(generic_ptr +
 		(uint32_t)config.offset);
 
-	if (cam_packet_util_validate_packet(csl_packet,
-		remain_len)) {
-		CAM_ERR(CAM_SENSOR, "Invalid packet params");
-		rc = -EINVAL;
-		goto end;
+	rc = cam_packet_util_copy_pkt_to_kmd(csl_packet_u, &csl_packet, remain_len);
+	if (rc) {
+		CAM_ERR(CAM_SENSOR, "Copying packet to KMD failed");
+		goto put_ref;
 	}
 
 	if ((csl_packet->header.op_code & 0xFFFFFF) !=
@@ -366,6 +366,8 @@ static int32_t cam_sensor_i2c_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 	}
 
 end:
+	cam_common_mem_free(csl_packet);
+put_ref:
 	cam_mem_put_cpu_buf(config.packet_handle);
 	return rc;
 }
@@ -618,6 +620,7 @@ static int32_t cam_handle_mem_ptr(uint64_t handle, struct cam_sensor_ctrl_t *s_c
 	void *ptr;
 	size_t len;
 	struct cam_packet *pkt = NULL;
+	struct cam_packet *pkt_u = NULL;
 	struct cam_cmd_buf_desc *cmd_desc = NULL;
 	uintptr_t cmd_buf1 = 0;
 	uintptr_t packet = 0;
@@ -630,11 +633,17 @@ static int32_t cam_handle_mem_ptr(uint64_t handle, struct cam_sensor_ctrl_t *s_c
 		return -EINVAL;
 	}
 
-	pkt = (struct cam_packet *)packet;
-	if (pkt == NULL) {
+	pkt_u = (struct cam_packet *)packet;
+	if (pkt_u == NULL) {
 		CAM_ERR(CAM_SENSOR, "packet pos is invalid");
 		rc = -EINVAL;
-		goto end;
+		goto put_ref;
+	}
+
+	rc = cam_packet_util_copy_pkt_to_kmd(pkt_u, &pkt, len);
+	if (rc) {
+		CAM_ERR(CAM_SENSOR, "Copying packet to KMD failed");
+		goto put_ref;
 	}
 
 	if ((len < sizeof(struct cam_packet)) ||
@@ -703,6 +712,8 @@ static int32_t cam_handle_mem_ptr(uint64_t handle, struct cam_sensor_ctrl_t *s_c
 	}
 
 end:
+	cam_common_mem_free(pkt);
+put_ref:
 	cam_mem_put_cpu_buf(handle);
 	return rc;
 }
@@ -826,6 +837,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 	int rc = 0, pkt_opcode = 0;
 	struct cam_control *cmd = (struct cam_control *)arg;
 	struct cam_sensor_power_ctrl_t *power_info = NULL;
+	const char *client_name = NULL;
 	if (!s_ctrl || !arg) {
 		CAM_ERR(CAM_SENSOR, "s_ctrl is NULL");
 		return -EINVAL;
@@ -894,11 +906,16 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			CAM_ERR(CAM_SENSOR, "power up failed");
 			goto free_power_settings;
 		}
+		if (s_ctrl->io_master_info.client) {
+			client_name = s_ctrl->io_master_info.client->name;
+		}
 		if (s_ctrl->i2c_data.poweron_reg_settings.is_settings_valid) {
 			rc = cam_sensor_apply_settings(s_ctrl, 0,
 				CAM_SENSOR_PACKET_OPCODE_SENSOR_POWERON_REG);
 			if (rc < 0) {
-				if(strcmp(DP_SENSOR_LT7911D_NAME,s_ctrl->io_master_info.client->name) && strcmp(HDMI_BDG_LT6911UXE_NAME,s_ctrl->io_master_info.client->name)){
+				if (!client_name ||
+					(strcmp(DP_SENSOR_LT7911D_NAME, s_ctrl->io_master_info.client->name) &&
+					strcmp(HDMI_BDG_LT6911UXE_NAME, s_ctrl->io_master_info.client->name))) {
 					CAM_ERR(CAM_SENSOR, "PowerOn REG_WR failed");
 					cam_sensor_power_down(s_ctrl);
 					goto free_power_settings;
