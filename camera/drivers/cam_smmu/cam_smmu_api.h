@@ -587,4 +587,9 @@ void cam_smmu_buffer_tracker_buffer_putref(struct cam_smmu_buffer_tracker *entry
 int cam_smmu_add_buf_to_track_list(int ion_fd, unsigned long inode,
 	struct kref **ref_count, struct list_head *buf_tracker, int idx);
 
+/**
+ * @brief : API to get CSF version in use that's received from SMMU proxy driver
+ */
+void cam_smmu_get_csf_version(struct cam_csf_version *csf_ver);
+
 #endif /* _CAM_SMMU_API_H_ */
