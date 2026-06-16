@@ -281,6 +281,7 @@ struct crm_tbl_slot_special_ops {
  *                        skip_next frame: in case of applying one device
  *                        and skip others
  *                        apply_at_eof: device that needs to apply at EOF
+ * @extern_trigger_map  : Map which hold device responsible to triggering if any
  */
 struct cam_req_mgr_tbl_slot {
 	int32_t                                idx;
@@ -290,8 +291,7 @@ struct cam_req_mgr_tbl_slot {
 	uint32_t                               inject_delay_at_sof;
 	uint32_t                               inject_delay_at_eof;
 	struct  crm_tbl_slot_special_ops       ops;
-	uint32_t                               req_apply_in_idle_map;
-	uint32_t                               req_gpio_ctrl_map;
+	uint32_t                               extern_trigger_map;
 };
 
 /**
@@ -448,6 +448,19 @@ struct cam_req_mgr_connected_device {
 	struct cam_req_mgr_device_info  dev_info;
 	struct cam_req_mgr_kmd_ops     *ops;
 	void                           *parent;
+};
+
+/**
+ * struct cam_req_mgr_external_trigger_info
+ * - List of inforamation
+ * @link_hdl : Handle of the link on which device is connected
+ * @req_id   : Request id which have external trigger device bit set
+ * @dev      : External trigger device
+ */
+struct cam_req_mgr_external_trigger_info {
+	int32_t                              link_hdl;
+	int64_t                              req_id;
+	struct cam_req_mgr_connected_device *dev;
 };
 
 /**

@@ -24,6 +24,7 @@ struct cam_req_mgr_flush_request;
 struct cam_req_mgr_link_evt_data;
 struct cam_req_mgr_dump_info;
 struct cam_req_mgr_notify_msg;
+struct cam_req_mgr_extern_trigger;
 
 /* Request Manager -- camera device driver interface */
 /**
@@ -54,6 +55,7 @@ typedef int (*cam_req_mgr_notify_msg)(struct cam_req_mgr_notify_msg *);
  * @cam_req_mgr_flush_req        : Flush or cancel request
  * cam_req_mgr_process_evt       : generic events
  * @cam_req_mgr_dump_req         : dump request
+ * @cam_req_mgr_external_trigger : Trigger external trigger capturing
  */
 typedef int (*cam_req_mgr_get_dev_info) (struct cam_req_mgr_device_info *);
 typedef int (*cam_req_mgr_link_setup)(struct cam_req_mgr_core_dev_link_setup *);
@@ -63,36 +65,38 @@ typedef int (*cam_req_mgr_notify_frame_skip)(
 typedef int (*cam_req_mgr_flush_req)(struct cam_req_mgr_flush_request *);
 typedef int (*cam_req_mgr_process_evt)(struct cam_req_mgr_link_evt_data *);
 typedef int (*cam_req_mgr_dump_req)(struct cam_req_mgr_dump_info *);
+typedef int (*cam_req_mgr_external_trigger)(struct cam_req_mgr_extern_trigger *);
 
 /**
- * @brief          : cam_req_mgr_crm_cb - func table
+ * @brief            : cam_req_mgr_crm_cb - func table
  *
- * @notify_trigger : payload for trigger indication event
- * @notify_err     : payload for different error occurred at device
- * @add_req        : payload to inform which device and what request is received
- * @notify_timer   : payload for timer start event
- * @notify_stop    : payload to inform stop event
- * @notify_msg     : payload to inform a message
+ * @notify_trigger   : payload for trigger indication event
+ * @notify_err       : payload for different error occurred at device
+ * @add_req          : payload to inform which device and what request is received
+ * @notify_timer     : payload for timer start event
+ * @notify_stop      : payload to inform stop event
+ * @notify_msg       : payload to inform a message
  */
 struct cam_req_mgr_crm_cb {
-	cam_req_mgr_notify_trigger  notify_trigger;
-	cam_req_mgr_notify_err      notify_err;
-	cam_req_mgr_add_req         add_req;
-	cam_req_mgr_notify_timer    notify_timer;
-	cam_req_mgr_notify_stop     notify_stop;
-	cam_req_mgr_notify_msg      notify_msg;
+	cam_req_mgr_notify_trigger   notify_trigger;
+	cam_req_mgr_notify_err       notify_err;
+	cam_req_mgr_add_req          add_req;
+	cam_req_mgr_notify_timer     notify_timer;
+	cam_req_mgr_notify_stop      notify_stop;
+	cam_req_mgr_notify_msg       notify_msg;
 };
 
 /**
  * @brief        : cam_req_mgr_kmd_ops - func table
  *
- * @get_dev_info     : payload to fetch device details
- * @link_setup       : payload to establish link with device
- * @apply_req        : payload to apply request id on a device linked
- * @notify_frame_skip: payload to notify frame skip
- * @flush_req        : payload to flush request
- * @process_evt      : payload to generic event
- * @dump_req         : payload to dump request
+ * @get_dev_info      : payload to fetch device details
+ * @link_setup        : payload to establish link with device
+ * @apply_req         : payload to apply request id on a device linked
+ * @notify_frame_skip : payload to notify frame skip
+ * @flush_req         : payload to flush request
+ * @process_evt       : payload to generic event
+ * @dump_req          : payload to dump request
+ * @external_trigger  : payload to apply external trigger
  */
 struct cam_req_mgr_kmd_ops {
 	cam_req_mgr_get_dev_info      get_dev_info;
@@ -102,6 +106,7 @@ struct cam_req_mgr_kmd_ops {
 	cam_req_mgr_flush_req         flush_req;
 	cam_req_mgr_process_evt       process_evt;
 	cam_req_mgr_dump_req          dump_req;
+	cam_req_mgr_external_trigger  external_trigger;
 };
 
 /**
@@ -267,10 +272,10 @@ enum cam_req_mgr_link_evt_type {
 
 /**
  * enum cam_req_mgr_msg_type
- * @CAM_REQ_MGR_MSG_SENSOR_FRAME_INFO  : sensor frame info message type
- * @CAM_REQ_MGR_MSG_UPDATE_DEVICE_INFO : Update device specific info
- * @CAM_REQ_MGR_MSG_MAX                : invalid msg type
- * @CAM_REQ_MGR_MSG_CHECK_FOR_RESUME   : Check for synced resume post flush
+ * @CAM_REQ_MGR_MSG_SENSOR_FRAME_INFO      : sensor frame info message type
+ * @CAM_REQ_MGR_MSG_UPDATE_DEVICE_INFO     : Update device specific info
+ * @CAM_REQ_MGR_MSG_NOTIFY_FOR_SYNCED_RESUME: Check for synced resume post flush
+ * @CAM_REQ_MGR_MSG_MAX                    : invalid msg type
  */
 enum cam_req_mgr_msg_type {
 	CAM_REQ_MGR_MSG_SENSOR_FRAME_INFO,
@@ -346,7 +351,9 @@ struct cam_req_mgr_error_notify {
  * @trigger_eof          : to identify that one of the device at this slot needs
  *                         to be apply at EOF
  * @trigger_skip         : Trigger skip frame if set
- * @req_info_flags        : Additional information for the request.
+ * @external_trigger     : This request contain external trigger. For this
+ *                         request apply_external_trigger will be called in a
+ *                         ddition of apply request
  */
 struct cam_req_mgr_add_request {
 	int32_t  link_hdl;
@@ -356,7 +363,7 @@ struct cam_req_mgr_add_request {
 	uint32_t skip_at_eof;
 	bool     trigger_eof;
 	bool     trigger_skip;
-	uint32_t req_info_flags;
+	bool     external_trigger;
 };
 
 /**
@@ -550,5 +557,17 @@ struct cam_req_mgr_dump_info {
 	uint32_t    buf_handle;
 	int32_t     link_hdl;
 	int32_t     dev_hdl;
+};
+
+/**
+ * struct cam_req_mgr_gpio_sync_request
+ * @link_hdl  : link identifier
+ * @dev_hdl   : device handle of the requesting sensor
+ * @req_id    : request id this gpio sync corresponds to
+ */
+struct cam_req_mgr_extern_trigger {
+	int32_t  link_hdl;
+	int32_t  dev_hdl;
+	uint64_t req_id;
 };
 #endif

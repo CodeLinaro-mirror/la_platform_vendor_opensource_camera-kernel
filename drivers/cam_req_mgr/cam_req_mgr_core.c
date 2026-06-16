@@ -969,8 +969,7 @@ static void __cam_req_mgr_flush_req_slot(
 			for (i = 0; i < MAX_DEV_FOR_SPECIAL_OPS; i++)
 				tbl->slot[idx].ops.dev_hdl[i] = -1;
 			tbl->slot[idx].ops.num_dev = 0;
-			tbl->slot[idx].req_apply_in_idle_map = 0;
-			tbl->slot[idx].req_gpio_ctrl_map = 0;
+			tbl->slot[idx].extern_trigger_map = 0;
 			tbl = tbl->next;
 		}
 	}
@@ -1049,8 +1048,7 @@ static void __cam_req_mgr_reset_req_slot(struct cam_req_mgr_core_link *link,
 		for (i = 0; i < MAX_DEV_FOR_SPECIAL_OPS; i++)
 			tbl->slot[idx].ops.dev_hdl[i] = -1;
 		tbl->slot[idx].ops.num_dev = 0;
-		tbl->slot[idx].req_apply_in_idle_map = 0;
-		tbl->slot[idx].req_gpio_ctrl_map = 0;
+		tbl->slot[idx].extern_trigger_map = 0;
 		tbl = tbl->next;
 	}
 }
@@ -3710,16 +3708,18 @@ end:
 /**
  * __cam_req_mgr_mtrigger_check_slots_ready()
  *
- * @brief      : Go over all devices PDS and check if all the (add_request)
- *               are received.
- * @idx        : Current slot index
- * @link       : Link on which to chekc the slots
+ * @brief            : Go over all devices PDS and check if all the
+ *                     (add_request) are received.
+ * @idx              : Current slot index
+ * @link             : Link on which to chekc the slots
+ * @ext_trigger_info : Found external trigger information
  *
  * @return: true on success.
  */
 static bool __cam_req_mgr_mtrigger_check_slots_ready(
 	int idx,
-	struct cam_req_mgr_core_link *link)
+	struct cam_req_mgr_core_link *link,
+	struct cam_req_mgr_external_trigger_info *ext_trigger_info)
 {
 	int                      seq = 0;
 	int                      i = 0;
@@ -3751,6 +3751,7 @@ static bool __cam_req_mgr_mtrigger_check_slots_ready(
 		struct cam_req_mgr_connected_device *rdev = &link->l_dev[i];
 
 		int pd_idx = mtrigger_idx;
+		int slot_idx = mtrigger_idx;
 		for (seq = 0; seq < group_size; seq++) {
 			if (rdev->pd_tbl->slot[pd_idx].state != CRM_REQ_STATE_READY) {
 				CAM_DBG(CAM_CRM,
@@ -3765,7 +3766,23 @@ static bool __cam_req_mgr_mtrigger_check_slots_ready(
 					rdev->dev_info.name, rdev->pd_tbl->slot[pd_idx].idx,
 					rdev->pd_tbl->id, rdev->pd_tbl->slot[pd_idx].state,
 					rdev->pd_tbl);
+				/* In case that ready device is marked as external trigger,
+				 * return this information to the caller
+				*/
+				if (rdev->pd_tbl->slot[pd_idx].extern_trigger_map &
+				    BIT(rdev->dev_bit)) {
+					if (ext_trigger_info->dev == NULL) {
+					    ext_trigger_info->dev = rdev;
+					    ext_trigger_info->link_hdl = link->link_hdl;
+					    ext_trigger_info->req_id =
+					    link->req.in_q->slot[slot_idx].req_id;
+					} else {
+						CAM_ERR(CAM_CRM, "More than one external triggers");
+						return false;
+					}
+				}
 			}
+
 			__cam_req_mgr_inc_idx(&pd_idx, 1, rdev->pd_tbl->num_slots);
 		}
 	}
@@ -3784,7 +3801,8 @@ static bool __cam_req_mgr_mtrigger_check_slots_ready(
  */
 static bool __cam_req_mgr_mtrigger_check_sequence_ready(
 	int idx,
-	struct cam_req_mgr_core_link *link)
+	struct cam_req_mgr_core_link *link,
+	struct cam_req_mgr_external_trigger_info *ext_trigger_info)
 {
 	int i = 0;
 	bool ready = false;
@@ -3793,7 +3811,7 @@ static bool __cam_req_mgr_mtrigger_check_sequence_ready(
 	struct cam_req_mgr_slot *link_slot = &link->req.in_q->slot[idx];
 
 	/* 1. Check for current link */
-	ready = __cam_req_mgr_mtrigger_check_slots_ready(idx, link);
+	ready = __cam_req_mgr_mtrigger_check_slots_ready(idx, link, ext_trigger_info);
 	if (!ready) {
 		return false;
 	}
@@ -3816,7 +3834,7 @@ static bool __cam_req_mgr_mtrigger_check_sequence_ready(
 			break;
 		}
 
-		ready = __cam_req_mgr_mtrigger_check_slots_ready(idx, sync_link);
+		ready = __cam_req_mgr_mtrigger_check_slots_ready(idx, sync_link, ext_trigger_info);
 		if  (ready) {
 			CAM_DBG(CAM_CRM, "All slots ready on link: 0x%x",
 				sync_link->link_hdl);
@@ -3897,159 +3915,79 @@ end:
 }
 
 /**
- * __cam_req_mgr_mtrigger_set_apply_flags()
- *
- * @brief    : Set CAM_REQ_INFO_FLAG_APPLY_IN_IDLE on the current slot for the
- *             reporting device. This is a temporary CRM-side workaround until
- *             each device reports its own apply flags directly.
- *             Rules:
- *               - Sensor devices: set the flag on every slot in the sequence.
- *               - ISP devices: set the flag only on the seq 0 slot
- *                              (link_slot->group_seq == 0).
- *             Existing flags (e.g. CAM_REQ_INFO_FLAG_SYNC_GPIO_ALL) are
- *             preserved via |=.
- * @link_slot : The in-queue slot for the current request.
- * @device    : The device reporting the request.
- * @req_info_flags: Request flags
- */
-static void __cam_req_mgr_mtrigger_set_apply_flags(
-	struct cam_req_mgr_slot             *link_slot,
-	struct cam_req_mgr_tbl_slot         *tbl_slot,
-	struct cam_req_mgr_connected_device *device,
-	uint32_t req_info_flags)
-{
-
-	if (req_info_flags & CAM_REQ_INFO_FLAG_APPLY_IN_IDLE)
-		tbl_slot->req_apply_in_idle_map |= BIT(device->dev_bit);
-
-	if (req_info_flags & CAM_REQ_INFO_FLAG_SYNC_GPIO_ALL)
-		tbl_slot->req_gpio_ctrl_map |= BIT(device->dev_bit);
-
-	/* Until all devices send proper req info flags update them here */
-	if (device->dev_info.dev_id == CAM_REQ_MGR_DEVICE_SENSOR) {
-		tbl_slot->req_apply_in_idle_map |= BIT(device->dev_bit);
-	} else {
-		if (link_slot->group_seq == 0)
-			tbl_slot->req_apply_in_idle_map |= BIT(device->dev_bit);
-	}
-
-}
-
-/**
  * __cam_req_mgr_mtrigger_apply_req_in_idle()
  *
- * @brief              : Apply requests for all devices on a link.
- *                       Applies any slot that has CAM_REQ_INFO_FLAG_APPLY_IN_IDLE
- *                       set, except those matching req_info_last_mask which are
- *                       deferred and applied last. Returns -EINVAL if more than
- *                       one slot matches req_info_last_mask.
+ * @brief              : Apply first requests in the sequence for all devices
+ *                       on a link.
  * @idx                : Current slot index
  * @link               : Link on which to apply the slots
- * @gpio_last_slot_idx : return last found gpio slot index.
  *
- * @return             : negative in case of error or number of gpio control
- *                       indexes
+ * @return             : negative in case of error
  */
 static int __cam_req_mgr_mtrigger_apply_req_in_idle(
-	int                           idx,
-	struct cam_req_mgr_core_link *link,
-	int                          *gpio_last_slot_idx)
-{
-	int                                  i = 0;
-	int                                  j = 0;
-	int                                  rc = 0;
-	int                                  pd_idx = 0;
-	int                                  group_size = 0;
-	int                                  mtrigger_idx = idx;
-	unsigned                             gpio_slot_cnt = 0;
-	struct cam_req_mgr_connected_device *dev = NULL;
-	struct cam_req_mgr_slot             *link_slot = NULL;
-	struct cam_req_mgr_tbl_slot         *pd_tbl_slot = NULL;
-
-	group_size = link->req.in_q->slot[idx].group_size;
-
-	/* Get first request from the sequence. */
-	link_slot = &link->req.in_q->slot[idx];
-	__cam_req_mgr_dec_idx(&mtrigger_idx, link_slot->group_seq, link->req.in_q->num_slots);
-
-	/* Apply all devices — use CAM_REQ_INFO_FLAG_APPLY_IN_IDLE to decide per slot */
-	for (i = 0; i < link->num_devs; i++) {
-		dev = &link->l_dev[i];
-		if (!dev->ops || !dev->ops->apply_req)
-			continue;
-
-		pd_idx = mtrigger_idx;
-		for (j = 0; j < group_size; j++) {
-			link_slot   = &link->req.in_q->slot[pd_idx];
-			pd_tbl_slot = &dev->pd_tbl->slot[pd_idx];
-
-			if (link_slot->skip_set) {
-				__cam_req_mgr_inc_idx(&pd_idx, 1, dev->pd_tbl->num_slots);
-				continue;
-			}
-
-			if (pd_tbl_slot->req_gpio_ctrl_map & BIT(dev->dev_bit)) {
-				if (gpio_last_slot_idx)
-					*gpio_last_slot_idx = pd_idx;
-
-				gpio_slot_cnt++;
-				__cam_req_mgr_inc_idx(&pd_idx, 1, dev->pd_tbl->num_slots);
-				continue;
-			}
-
-			/* Skip slots not marked for idle apply */
-			if (!(pd_tbl_slot->req_apply_in_idle_map & BIT(dev->dev_bit))) {
-				__cam_req_mgr_inc_idx(&pd_idx, 1, dev->pd_tbl->num_slots);
-				continue;
-			}
-
-			rc = __cam_req_mgr_mtrigger_do_apply_in_idle(dev, link, link_slot,
-				pd_tbl_slot);
-			if (rc < 0)
-				return rc;
-
-			__cam_req_mgr_inc_idx(&pd_idx, 1, dev->pd_tbl->num_slots);
-		}
-	}
-
-	return gpio_slot_cnt;
-}
-
-/**
- * __cam_req_mgr_mtrigger_apply_req_gpio_sync()
- *
- * @brief              : Apply request marked as gpio sync
- * @idx                : Current slot index
- * @link               : Link on which to apply the slots
- *
- * @return             : 0 on success
- */
-static int __cam_req_mgr_mtrigger_apply_req_gpio_sync(
 	int                           idx,
 	struct cam_req_mgr_core_link *link)
 {
 	int                                  i = 0;
 	int                                  rc = 0;
+	int                                  mtrigger_idx = idx;
 	struct cam_req_mgr_connected_device *dev = NULL;
 	struct cam_req_mgr_slot             *link_slot = NULL;
 	struct cam_req_mgr_tbl_slot         *pd_tbl_slot = NULL;
 
+
 	/* Get first request from the sequence. */
 	link_slot = &link->req.in_q->slot[idx];
+	__cam_req_mgr_dec_idx(&mtrigger_idx, link_slot->group_seq, link->req.in_q->num_slots);
+
+	link_slot   = &link->req.in_q->slot[mtrigger_idx];
+	/* Apply first request in the sequence */
 	for (i = 0; i < link->num_devs; i++) {
 		dev = &link->l_dev[i];
 		if (!dev->ops || !dev->ops->apply_req)
 			continue;
 
-		pd_tbl_slot = &dev->pd_tbl->slot[idx];
-		if (pd_tbl_slot->req_gpio_ctrl_map & BIT(dev->dev_bit)) {
-			rc = __cam_req_mgr_mtrigger_do_apply_in_idle(dev, link, link_slot,
-				pd_tbl_slot);
-			if (rc < 0)
-				return rc;
+		pd_tbl_slot = &dev->pd_tbl->slot[mtrigger_idx];
 
-			break;
-		}
+		rc = __cam_req_mgr_mtrigger_do_apply_in_idle(dev, link, link_slot,
+			pd_tbl_slot);
+		if (rc < 0)
+			return rc;
+
+	}
+
+	return 0;
+}
+
+/**
+ * __cam_req_mgr_mtrigger_external_trigger_send()
+ *
+ * @brief              : Call external trigger callback to the specific device
+ * @idx                : Current slot index
+ * @link               : Link on which to apply the slots
+ *
+ * @return             : 0 on success
+ */
+static int __cam_req_mgr_mtrigger_external_trigger_send(
+	struct cam_req_mgr_external_trigger_info *external_trigger_info)
+{
+	int                                  rc = 0;
+	struct cam_req_mgr_connected_device *dev = external_trigger_info->dev;
+	struct cam_req_mgr_extern_trigger    external_trigger;
+
+	if (!dev || !dev->ops || !dev->ops->external_trigger)
+		return -EINVAL;
+
+	external_trigger.dev_hdl = dev->dev_hdl;
+	external_trigger.link_hdl = external_trigger_info->link_hdl;
+	external_trigger.req_id = external_trigger_info->req_id;
+
+	/* Fill data from external trigger */
+	rc = dev->ops->external_trigger(&external_trigger);
+	if (rc < 0) {
+		CAM_ERR(CAM_CRM, "Apply gpio sync failed for dev: %s on link 0x%x",
+			dev->dev_info.name, external_trigger_info->link_hdl);
+		return rc;
 	}
 
 	return 0;
@@ -4059,8 +3997,6 @@ static int __cam_req_mgr_mtrigger_apply_req_gpio_sync(
  * __cam_req_mgr_mtrigger_apply_sequence()
  *
  * @brief      : Apply ready sequence on the current link and all synced links.
- *               Slot which have GPIO_SYNC_ALL is applied last
- *               Returns -EINVAL if more than one link has gpio_sync_present set.
  * @idx        : Current slot index
  * @link       : Link on which to apply the slots
  *
@@ -4073,27 +4009,17 @@ static int __cam_req_mgr_mtrigger_apply_sequence(
 	int                           rc = 0, i = 0;
 	int64_t                       req_id = link->req.in_q->slot[idx].req_id;
 	struct cam_req_mgr_core_link *sync_link = NULL;
-	struct cam_req_mgr_core_link *gpio_link = NULL;
-	int                           gpio_idx = 0;
 	int                           sync_idx = 0;
-	int                           gpio_slot_idx = 0;
 	struct cam_req_mgr_slot      *link_slot = &link->req.in_q->slot[idx];
 
-	rc = __cam_req_mgr_mtrigger_apply_req_in_idle(idx, link, &gpio_slot_idx);
+	rc = __cam_req_mgr_mtrigger_apply_req_in_idle(idx, link);
 	if (rc < 0) {
 		CAM_ERR(CAM_REQ, "Failed to apply manual trigger request on link 0x%x",
 			link->link_hdl);
 		return rc;
-	} else if (rc > 1) {
-		CAM_ERR(CAM_REQ, "Double gpio ctrls detected on link 0x%x",
-			link->link_hdl);
-		return -EINVAL;
-	} else if (rc == 1) {
-		gpio_idx = gpio_slot_idx;
-		gpio_link = link;
 	}
 
-	/* Apply all synced links — defer any with gpio_sync_present */
+	/* Apply all synced links */
 	for (i = 0; i < link_slot->num_sync_links; i++) {
 		sync_link = cam_get_link_priv(link_slot->sync_link_hdls[i]);
 		if (!sync_link) {
@@ -4109,29 +4035,11 @@ static int __cam_req_mgr_mtrigger_apply_sequence(
 			return -EBADSLT;
 		}
 
-		rc = __cam_req_mgr_mtrigger_apply_req_in_idle(sync_idx, sync_link,
-			&gpio_slot_idx);
+		rc = __cam_req_mgr_mtrigger_apply_req_in_idle(sync_idx, sync_link);
 		if (rc < 0) {
 			CAM_ERR(CAM_REQ,
 				"Failed to apply manual trigger request on link 0x%x",
 				link->link_hdl);
-			return rc;
-		} else if ((rc > 1) || (gpio_link != NULL)) {
-			CAM_ERR(CAM_REQ, "Double gpio ctrls detected on link 0x%x",
-				sync_link->link_hdl);
-			return -EINVAL;
-		} else if (rc == 1) {
-			gpio_idx = gpio_slot_idx;
-			gpio_link = sync_link;
-		}
-	}
-
-	/* Apply the GPIO sync last */
-	if (gpio_link != NULL) {
-		rc = __cam_req_mgr_mtrigger_apply_req_gpio_sync(gpio_idx, gpio_link);
-		if (rc < 0) {
-			CAM_ERR(CAM_REQ, "Failed to apply GPIO sync request on link 0x%x",
-				gpio_link->link_hdl);
 			return rc;
 		}
 	}
@@ -4184,6 +4092,42 @@ static int __cam_req_mgr_validate_manual_trigger_req(
 	return 0;
 }
 
+static int cam_req_mgr_mtrigger_try_to_start(
+	int idx,
+	struct cam_req_mgr_core_link *link)
+{
+	int                                       rc = 0;
+	bool                                      all_links_slots_ready = true;
+	struct cam_req_mgr_external_trigger_info  extern_trigger_info;
+
+	extern_trigger_info.dev = NULL;
+	extern_trigger_info.link_hdl = -1;
+	extern_trigger_info.req_id = -1;
+
+	all_links_slots_ready =
+		__cam_req_mgr_mtrigger_check_sequence_ready(idx,
+							    link,
+							    &extern_trigger_info);
+
+	if (all_links_slots_ready) {
+		rc = __cam_req_mgr_mtrigger_apply_sequence(idx, link);
+		if (rc < 0) {
+			CAM_ERR(CAM_CRM, "Not able to apply sequence for group id: %lld",
+				link->req.in_q->slot[idx].group_id);
+		}
+
+		/* Send external trigger info to the correct device */
+		rc = __cam_req_mgr_mtrigger_external_trigger_send(&extern_trigger_info);
+		if (rc < 0) {
+			CAM_ERR(CAM_REQ, "Failed to send external trigger info on link 0x%x",
+				extern_trigger_info.link_hdl);
+			return rc;
+		}
+	}
+
+	return rc;
+}
+
 /**
  * cam_req_mgr_process_add_req_manual_trigger()
  *
@@ -4198,17 +4142,16 @@ static int __cam_req_mgr_validate_manual_trigger_req(
  */
 static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 {
-	int                                  rc = 0, i = 0;
-	int                                  idx;
-	struct cam_req_mgr_add_request      *add_req = NULL;
-	struct cam_req_mgr_core_link        *link = NULL;
-	struct cam_req_mgr_connected_device *device = NULL;
-	struct cam_req_mgr_req_tbl          *tbl = NULL;
-	struct cam_req_mgr_tbl_slot         *slot = NULL;
-	struct crm_task_payload             *task_data = NULL;
-	struct cam_req_mgr_slot             *link_slot = NULL;
-	struct cam_req_mgr_state_monitor     state;
-	bool                                 all_links_slots_ready = true;
+	int                                       rc = 0, i = 0;
+	int                                       idx;
+	struct cam_req_mgr_add_request           *add_req = NULL;
+	struct cam_req_mgr_core_link             *link = NULL;
+	struct cam_req_mgr_connected_device      *device = NULL;
+	struct cam_req_mgr_req_tbl               *tbl = NULL;
+	struct cam_req_mgr_tbl_slot              *slot = NULL;
+	struct crm_task_payload                  *task_data = NULL;
+	struct cam_req_mgr_slot                  *link_slot = NULL;
+	struct cam_req_mgr_state_monitor          state;
 
 	if (!data || !priv) {
 		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
@@ -4248,12 +4191,14 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 	link_slot = &link->req.in_q->slot[idx];
 	slot = &tbl->slot[idx];
 
+	WARN_ON(tbl->num_slots != link->req.in_q->num_slots);
+
 	rc = __cam_req_mgr_validate_manual_trigger_req(add_req, link);
 	if (rc)
 		goto end_unlock;
 
-	__cam_req_mgr_mtrigger_set_apply_flags(link_slot, slot, device,
-		add_req->req_info_flags);
+	if (add_req->external_trigger)
+		slot->extern_trigger_map |=  BIT(device->dev_bit);
 
 	if (slot->state != CRM_REQ_STATE_PENDING &&
 		slot->state != CRM_REQ_STATE_EMPTY) {
@@ -4286,16 +4231,7 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 		__cam_req_mgr_update_state_monitor_array(link, &state);
 	}
 
-	all_links_slots_ready =
-	__cam_req_mgr_mtrigger_check_sequence_ready(idx, link);
-
-	if (all_links_slots_ready) {
-		rc = __cam_req_mgr_mtrigger_apply_sequence(idx, link);
-		if (rc < 0) {
-			CAM_ERR(CAM_CRM, "Not able to apply sequence for group id: %lld",
-				link->req.in_q->slot[idx].group_id);
-		}
-	}
+	rc = cam_req_mgr_mtrigger_try_to_start(idx, link);
 
 end_unlock:
 	mutex_unlock(&link->req.lock);
@@ -4719,17 +4655,16 @@ end:
  */
 static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 {
-	int                                  rc = 0;
-	int32_t                              idx = -1;
-	struct cam_req_mgr_trigger_notify   *trigger_data = NULL;
-	struct cam_req_mgr_core_link        *link = NULL;
-	struct cam_req_mgr_req_queue        *in_q = NULL;
-	struct crm_task_payload             *task_data = NULL;
-	int                                  reset_step = 0;
-	int                                  i = 0;
-	struct cam_req_mgr_state_monitor     state;
-	bool                                 all_links_slots_ready;
-	int64_t                              current_group_id;
+	int                                       rc = 0;
+	int32_t                                   idx = -1;
+	struct cam_req_mgr_trigger_notify        *trigger_data = NULL;
+	struct cam_req_mgr_core_link             *link = NULL;
+	struct cam_req_mgr_req_queue             *in_q = NULL;
+	struct crm_task_payload                  *task_data = NULL;
+	int                                       reset_step = 0;
+	int                                       i = 0;
+	struct cam_req_mgr_state_monitor          state;
+	int64_t                                   current_group_id;
 
 	if (!data || !priv) {
 		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
@@ -4852,17 +4787,8 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 
 	if (trigger_data->trigger == CAM_TRIGGER_POINT_EOF) {
 		idx = __cam_req_mgr_find_slot_for_req(in_q, trigger_data->req_id);
-		all_links_slots_ready = __cam_req_mgr_mtrigger_check_sequence_ready(idx, link);
-
-		if (all_links_slots_ready) {
-			rc = __cam_req_mgr_mtrigger_apply_sequence(idx, link);
-			if (rc < 0) {
-				CAM_ERR(CAM_CRM, "Not able to apply sequence for group id: %lld",
-					link->req.in_q->slot[idx].group_id);
-			}
-		}
+		rc = cam_req_mgr_mtrigger_try_to_start(idx, link);
 	}
-
 
 release_lock:
 	mutex_unlock(&link->req.lock);
@@ -4952,7 +4878,7 @@ static int cam_req_mgr_cb_add_req(struct cam_req_mgr_add_request *add_req)
 	dev_req->skip_at_sof = add_req->skip_at_sof;
 	dev_req->skip_at_eof = add_req->skip_at_eof;
 	dev_req->trigger_skip = add_req->trigger_skip;
-	dev_req->req_info_flags = add_req->req_info_flags;
+	dev_req->external_trigger = add_req->external_trigger;
 	if (dev_req->trigger_eof) {
 		atomic_inc(&link->eof_event_cnt);
 		CAM_DBG(CAM_REQ, "Req_id: %llu, eof_event_cnt: %d, link 0x%x",
