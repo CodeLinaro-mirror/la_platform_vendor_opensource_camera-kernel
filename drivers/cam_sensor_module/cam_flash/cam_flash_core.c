@@ -12,6 +12,16 @@
 #include "cam_res_mgr_api.h"
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
+#include <dt-bindings/msm-camera.h>
+#include "cam_mem_mgr_api.h"
+#include <linux/leds.h>
+#include <linux/led-class-flash.h>
+#if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
+#include <linux/soc/qcom/leds-qcom-flash.h>
+#endif
+
+#define LED_CURRENT_TO_BRIGHTNESS(current, max_current) \
+	(((max_current) > 0) ? (int)((current) * LED_FULL)/(max_current) : LED_OFF)
 
 int cam_flash_led_prepare(struct led_trigger *trigger, int options,
 	int *max_current, bool is_wled)
@@ -368,12 +378,91 @@ end:
 	return rc;
 }
 
+static uint32_t cam_flash_get_max_current(
+	struct led_classdev   *pmic_lcdev,
+	uint32_t     static_max_current)
+{
+	int  max_query_current_ma = 0;
+	uint32_t max_current_ma;
+#if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
+	int rc = 0;
+
+	/* Query the Dynamic max Current from Battery */
+	rc = qcom_flash_led_get_max_avail_current(
+		pmic_lcdev, &max_query_current_ma);
+	if (rc) {
+		CAM_ERR(CAM_FLASH, "Query Current Failed rc: %d", rc);
+		return 0;
+	}
+#else
+	max_query_current_ma = static_max_current / UA_PER_MA;
+#endif
+	/* Derive static max current from DT in mA */
+	max_current_ma = static_max_current / UA_PER_MA;
+	if (max_query_current_ma < max_current_ma) {
+		max_current_ma = max_query_current_ma;
+		CAM_WARN(CAM_FLASH,
+			"static_curr: %d mA > qcurr: %d mA",
+			max_current_ma, max_query_current_ma);
+	}
+
+	return max_current_ma;
+}
+
+static void cam_flash_set_brightness(struct cam_flash_ctrl *flash_ctrl,
+	struct cam_flash_frame_setting *flash_data)
+{
+	struct cam_flash_private_soc *soc_private = NULL;
+	enum led_brightness brightness = LED_OFF;
+	uint32_t curr = 0, max_current = 0;
+	int  i;
+
+	soc_private = (struct cam_flash_private_soc *)
+		flash_ctrl->soc_info.soc_private;
+
+	for (i = 0; i < flash_ctrl->torch_num_sources; i++) {
+		if (flash_ctrl->torch_trigger[i]) {
+			max_current = soc_private->torch_max_current[i];
+			if (flash_data->led_current_ma[i] <=
+				max_current)
+				curr = flash_data->led_current_ma[i];
+			else
+				curr = max_current;
+		}
+		CAM_DBG(CAM_FLASH, "Led_Torch[%d]: Current: %d",
+			i, curr);
+		cam_res_mgr_led_trigger_event(
+			flash_ctrl->torch_trigger[i], curr);
+	}
+	if (flash_ctrl->led_cldev_en == 1) {
+		for (i = 0; (i < flash_ctrl->flash_num_sources) &&
+			(flash_ctrl->pmic_lcdev[i] != NULL); i++) {
+			max_current = cam_flash_get_max_current(flash_ctrl->pmic_lcdev[i],
+				soc_private->torch_max_current[i]);
+			if ((flash_data->led_current_ma[i]) <=
+				max_current)
+				curr = flash_data->led_current_ma[i];
+			else
+				curr = max_current;
+
+			brightness =
+				LED_CURRENT_TO_BRIGHTNESS(
+					curr, (uint32_t)max_current);
+			CAM_DBG(CAM_FLASH,
+				"Led_Torch[%d]: Current: %d max_curr: %d brightness: %d",
+				i, curr, max_current, brightness);
+			led_set_brightness(flash_ctrl->pmic_lcdev[i], brightness);
+		}
+	}
+}
+
 static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 	struct cam_flash_frame_setting *flash_data, enum camera_flash_opcode op)
 {
 	uint32_t curr = 0, max_current = 0;
 	struct cam_flash_private_soc *soc_private = NULL;
 	int i = 0;
+	int rc = 0;
 
 	if (!flash_ctrl || !flash_data) {
 		CAM_ERR(CAM_FLASH, "Fctrl or Data NULL");
@@ -383,21 +472,9 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 	soc_private = (struct cam_flash_private_soc *)
 		flash_ctrl->soc_info.soc_private;
 
+	CAM_DBG(CAM_FLASH, "op: %d (1:OFF 2:LOW 3:HIGH 4:DURATION)", op);
 	if (op == CAMERA_SENSOR_FLASH_OP_FIRELOW) {
-		for (i = 0; i < flash_ctrl->torch_num_sources; i++) {
-			if (flash_ctrl->torch_trigger[i]) {
-				max_current = soc_private->torch_max_current[i];
-				if (flash_data->led_current_ma[i] <=
-					max_current)
-					curr = flash_data->led_current_ma[i];
-				else
-					curr = max_current;
-			}
-			CAM_DBG(CAM_FLASH, "Led_Torch[%d]: Current: %d",
-				i, curr);
-			cam_res_mgr_led_trigger_event(
-				flash_ctrl->torch_trigger[i], curr);
-		}
+		cam_flash_set_brightness(flash_ctrl, flash_data);
 	} else if (op == CAMERA_SENSOR_FLASH_OP_FIREHIGH) {
 		for (i = 0; i < flash_ctrl->flash_num_sources; i++) {
 			if (flash_ctrl->flash_trigger[i]) {
@@ -408,11 +485,45 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 				else
 					curr = max_current;
 			}
-			CAM_DBG(CAM_FLASH, "LED_Flash[%d]: Current: %d",
-				i, curr);
-			cam_res_mgr_led_trigger_event(
-				flash_ctrl->flash_trigger[i], curr);
+			if ((flash_ctrl->led_cldev_en == 1) &&
+				(flash_ctrl->pmic_lcdev[i] != NULL)) {
+				/*flash_max_current[i] is in micro amp*/
+				max_current =
+					cam_flash_get_max_current(flash_ctrl->pmic_lcdev[i],
+					soc_private->flash_max_current[i]);
+				if (flash_data->led_current_ma[i] <=
+					max_current)
+					curr = flash_data->led_current_ma[i];
+				else
+					curr = max_current;
+
+				CAM_DBG(CAM_FLASH, "Led_Flash[%d]: Current: %d mA max_curr: %d mA",
+					i, curr, max_current);
+				curr = curr * UA_PER_MA;
+				rc = led_set_flash_brightness(flash_ctrl->pmic_flcdev[i], curr);
+				if (rc) {
+					CAM_ERR(CAM_FLASH,
+						"LED_Flash[%d]:curr:%d uA set brightness failed, rc=%d",
+						i, curr, rc);
+					return rc;
+				}
+				rc = led_set_flash_timeout(flash_ctrl->pmic_flcdev[i], 500000);
+				if (rc) {
+					CAM_ERR(CAM_FLASH,
+						"LED_Flash[%d]: set flash timeout failed, rc=%d",
+						i, rc);
+					return rc;
+				}
+
+			} else {
+
+				CAM_DBG(CAM_FLASH, "LED_Flash[%d]: Current: %d",
+					i, curr);
+				cam_res_mgr_led_trigger_event(
+					flash_ctrl->flash_trigger[i], curr);
+			}
 		}
+
 	} else {
 		CAM_ERR(CAM_FLASH, "Wrong Operation: %d", op);
 		return -EINVAL;
@@ -428,6 +539,7 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 
 int cam_flash_off(struct cam_flash_ctrl *flash_ctrl)
 {
+	int i = 0;
 	int rc = 0;
 
 	if (!flash_ctrl) {
@@ -435,24 +547,35 @@ int cam_flash_off(struct cam_flash_ctrl *flash_ctrl)
 		return -EINVAL;
 	}
 
+	CAM_DBG(CAM_FLASH, "Flash OFF Triggered");
+
 	if (flash_ctrl->switch_trigger)
 		cam_res_mgr_led_trigger_event(flash_ctrl->switch_trigger,
 			(enum led_brightness)LED_SWITCH_OFF);
 
-	flash_ctrl->flash_state = CAM_FLASH_STATE_START;
-
-	if ((flash_ctrl->i2c_data.streamoff_settings.is_settings_valid) &&
-		(flash_ctrl->i2c_data.streamoff_settings.request_id == 0)) {
-		flash_ctrl->apply_streamoff = true;
-		rc = cam_flash_i2c_apply_setting(flash_ctrl, 0);
-		if (rc < 0) {
-			CAM_ERR(CAM_SENSOR,
-			"cannot apply streamoff settings");
+	if (flash_ctrl->flash_type == CAM_FLASH_TYPE_PMIC) {
+		if (flash_ctrl->led_cldev_en == 1) {
+			for (i = 0; i < flash_ctrl->flash_num_sources; i++) {
+				if (flash_ctrl->pmic_lcdev[i] != NULL) {
+					CAM_DBG(CAM_FLASH,
+						"Led_Torch[%d]: brightness: 0 (LED_OFF)", i);
+					led_set_brightness_sync(
+						flash_ctrl->pmic_lcdev[i], LED_OFF);
+				}
+			}
 		}
-		flash_ctrl->flash_state = CAM_FLASH_STATE_CONFIG;
+	} else if (flash_ctrl->flash_type == CAM_FLASH_TYPE_I2C) {
+		if (flash_ctrl->i2c_data.streamoff_settings.is_settings_valid &&
+			flash_ctrl->i2c_data.streamoff_settings.request_id == 0) {
+			flash_ctrl->apply_streamoff = true;
+			rc = cam_flash_i2c_apply_setting(flash_ctrl, 0);
+			if (rc < 0)
+				CAM_ERR(CAM_SENSOR,
+					"cannot apply streamoff settings");
+		}
 	}
 
-	return 0;
+	return rc;
 }
 
 static int cam_flash_low(
@@ -466,11 +589,13 @@ static int cam_flash_low(
 		return -EINVAL;
 	}
 
-	for (i = 0; i < flash_ctrl->flash_num_sources; i++)
-		if (flash_ctrl->flash_trigger[i])
+	for (i = 0; i < flash_ctrl->flash_num_sources; i++) {
+		if (flash_ctrl->flash_trigger[i]) {
 			cam_res_mgr_led_trigger_event(
 				flash_ctrl->flash_trigger[i],
 				LED_OFF);
+		}
+	}
 
 	rc = cam_flash_ops(flash_ctrl, flash_data,
 		CAMERA_SENSOR_FLASH_OP_FIRELOW);
@@ -496,6 +621,15 @@ static int cam_flash_high(
 			cam_res_mgr_led_trigger_event(
 				flash_ctrl->torch_trigger[i],
 				LED_OFF);
+	if (flash_ctrl->led_cldev_en == 1) {
+		for (i = 0; i < flash_ctrl->flash_num_sources; i++) {
+			if (flash_ctrl->pmic_lcdev[i] != NULL) {
+				CAM_DBG(CAM_FLASH,
+					"Led_Torch[%d]: brightness: 0 (LED_OFF)", i);
+				led_set_brightness_sync(flash_ctrl->pmic_lcdev[i], LED_OFF);
+			}
+		}
+	}
 
 	rc = cam_flash_ops(flash_ctrl, flash_data,
 		CAMERA_SENSOR_FLASH_OP_FIREHIGH);
@@ -1339,6 +1473,30 @@ update_req_mgr:
 	return rc;
 }
 
+static int cam_flash_pmic_query_current(struct cam_flash_ctrl *fctrl,
+	struct cam_flash_query_curr *flash_query_info,
+	struct cam_flash_private_soc *soc_private)
+{
+	int query_curr_ma = 0, rc = 0;
+
+#if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
+	if (fctrl->pmic_lcdev[0] != NULL) {
+		rc = qcom_flash_led_get_max_avail_current(
+			fctrl->pmic_lcdev[0], &query_curr_ma);
+	}
+#elif __or(IS_REACHABLE(CONFIG_LEDS_QPNP_FLASH_V2), \
+			IS_REACHABLE(CONFIG_LEDS_QTI_FLASH))
+	rc = cam_flash_led_prepare(fctrl->switch_trigger,
+		QUERY_MAX_AVAIL_CURRENT, &query_curr_ma,
+		soc_private->is_wled_flash);
+#else
+	rc = -EOPNOTSUPP;
+#endif
+	CAM_DBG(CAM_FLASH, "query_curr_ma = %d", query_curr_ma);
+	flash_query_info->query_current_ma = query_curr_ma;
+	return rc;
+}
+
 int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 {
 	int rc = 0, i = 0;
@@ -1782,8 +1940,6 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 			return rc;
 		}
 		case CAMERA_SENSOR_FLASH_CMD_TYPE_QUERYCURR: {
-			int query_curr_ma = 0;
-
 			if (remain_len < sizeof(struct cam_flash_query_curr)) {
 				CAM_ERR(CAM_FLASH, "Not enough buffer");
 				rc = -EINVAL;
@@ -1793,13 +1949,8 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 			}
 			flash_query_info =
 				(struct cam_flash_query_curr *)cmd_buf;
-
-			rc = cam_flash_led_prepare(fctrl->switch_trigger,
-				QUERY_MAX_AVAIL_CURRENT, &query_curr_ma,
-				soc_private->is_wled_flash);
-
-			CAM_DBG(CAM_FLASH, "query_curr_ma = %d",
-				query_curr_ma);
+			rc = cam_flash_pmic_query_current(fctrl,
+				flash_query_info, soc_private);
 			if (rc) {
 				CAM_ERR(CAM_FLASH,
 				"Query current failed with rc=%d", rc);
@@ -1807,7 +1958,6 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 				cam_mem_put_cpu_buf(config.packet_handle);
 				return rc;
 			}
-			flash_query_info->query_current_ma = query_curr_ma;
 			break;
 		}
 		case CAMERA_SENSOR_FLASH_CMD_TYPE_RER: {

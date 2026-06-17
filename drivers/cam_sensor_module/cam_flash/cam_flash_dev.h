@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_FLASH_DEV_H_
@@ -48,6 +48,7 @@
 #define CAM_FLASH_PACKET_OPCODE_SET_OPS              1
 #define CAM_FLASH_PACKET_OPCODE_NON_REALTIME_SET_OPS 2
 #define CAM_FLASH_PACKET_OPCODE_STREAM_OFF           3
+#define CAM_FLASH_PACKET_OPCODE_INIT_FIRE            4
 
 struct cam_flash_ctrl;
 
@@ -177,7 +178,7 @@ struct cam_flash_func_tbl {
  * @switch_trigger      : Switch trigger ptr
  * @flash_num_sources   : Number of flash sources
  * @torch_num_source    : Number of torch sources
- * @flash_mutex         : Mutex for flash operations
+ * @flash_mutex          : spin lock for flash operations
  * @flash_state         : Current flash state (LOW/OFF/ON/INIT)
  * @flash_type          : Flash types (PMIC/I2C/GPIO)
  * @is_regulator_enable : Regulator disable/enable notifier
@@ -192,6 +193,9 @@ struct cam_flash_func_tbl {
  * @last_flush_req      : last request to flush
  * @streamoff_count     : Count to hold the number of times stream off called
  * @apply_streamoff     : variable to store when to apply stream off
+ * @led_cldev_en        : LED Class Device Available
+ * @pmic_lcdev          : handle to led class device
+ * @pmic_flcdev         : handle to led class device flash
  */
 struct cam_flash_ctrl {
 	char device_name[CAM_CTX_DEV_NAME_MAX_LENGTH];
@@ -222,6 +226,9 @@ struct cam_flash_ctrl {
 	uint32_t                            last_flush_req;
 	uint32_t                            streamoff_count;
 	int32_t                             apply_streamoff;
+	uint32_t                            led_cldev_en;
+	struct led_classdev                *pmic_lcdev[CAM_FLASH_MAX_LED_TRIGGERS];
+	struct led_classdev_flash          *pmic_flcdev[CAM_FLASH_MAX_LED_TRIGGERS];
 };
 
 int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg);
