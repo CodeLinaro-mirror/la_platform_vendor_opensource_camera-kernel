@@ -509,6 +509,16 @@ static int cam_csiphy_update_secure_info(struct csiphy_device *csiphy_dev, int32
 	}
 
 	switch (cpas_version) {
+	case CAM_CPAS_TITAN_520_V100:
+		/*
+		 * CPAS_SEC_LANE_CP_CTRL register bit layout for Titan 520:
+		 * PHY0: bits [0-6]   - 3 CPHY lanes (T0-T2) + 4 DPHY lanes (L0-L3)
+		 *       bits [0-2]   - CPHY0 T0, T1, T2 (content protection enable)
+		 *       bits [3-6]   - DPHY0 L0, L1, L2, L3 (content protection enable)
+		 * PHY1: bits [8-14]  - 3 CPHY lanes (T0-T2) + 4 DPHY lanes (L0-L3)
+		 *       bits [8-10]  - CPHY1 T0, T1, T2 (content protection enable)
+		 *       bits [11-14] - DPHY1 L0, L1, L2, L3 (content protection enable)
+		 */
 	case CAM_CPAS_TITAN_640_V200:
 	case CAM_CPAS_TITAN_665_V100:
 	case CAM_CPAS_TITAN_770_V100:
@@ -1317,7 +1327,7 @@ static int __cam_csiphy_prgm_bist_reg(struct csiphy_device *csiphy_dev, bool is_
 
 #ifdef CONFIG_SECURE_CAMERA
 static int cam_csiphy_program_secure_mode(struct csiphy_device *csiphy_dev,
-	bool protect, int32_t offset)
+	bool protect, int32_t offset, bool is_shutdown)
 {
 	int rc = 0;
 
@@ -1337,7 +1347,7 @@ static int cam_csiphy_program_secure_mode(struct csiphy_device *csiphy_dev,
 		}
 	}
 
-	rc = cam_csiphy_notify_secure_mode(csiphy_dev, protect, offset);
+	rc = cam_csiphy_notify_secure_mode(csiphy_dev, protect, offset, is_shutdown);
 
 	if (csiphy_dev->domain_id_security) {
 		if (cam_cpas_enable_clks_for_domain_id(false))
@@ -1525,7 +1535,7 @@ void cam_csiphy_shutdown(struct csiphy_device *csiphy_dev)
 #ifdef CONFIG_SECURE_CAMERA
 			if (param->secure_mode)
 				cam_csiphy_program_secure_mode(csiphy_dev,
-					CAM_SECURE_MODE_NON_SECURE, i);
+					CAM_SECURE_MODE_NON_SECURE, i, true);
 #endif
 			param->secure_mode = CAM_SECURE_MODE_NON_SECURE;
 
@@ -2386,7 +2396,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 #ifdef CONFIG_SECURE_CAMERA
 			if (param->secure_mode)
 				cam_csiphy_program_secure_mode(csiphy_dev,
-					CAM_SECURE_MODE_NON_SECURE, offset);
+					CAM_SECURE_MODE_NON_SECURE, offset, false);
 #endif
 			param->secure_mode = CAM_SECURE_MODE_NON_SECURE;
 			param->csiphy_cpas_cp_reg_mask = 0;
@@ -2422,7 +2432,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 #ifdef CONFIG_SECURE_CAMERA
 		if (param->secure_mode)
 			cam_csiphy_program_secure_mode(csiphy_dev, CAM_SECURE_MODE_NON_SECURE,
-				offset);
+				offset, false);
 #endif
 		param->secure_mode = CAM_SECURE_MODE_NON_SECURE;
 		param->csiphy_cpas_cp_reg_mask = 0x0;
@@ -2493,7 +2503,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 		if (csiphy_dev->csiphy_info[offset].secure_mode)
 			cam_csiphy_program_secure_mode(
 				csiphy_dev,
-				CAM_SECURE_MODE_NON_SECURE, offset);
+				CAM_SECURE_MODE_NON_SECURE, offset, false);
 #endif
 		csiphy_dev->csiphy_info[offset].secure_mode =
 			CAM_SECURE_MODE_NON_SECURE;
@@ -2713,7 +2723,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 				}
 
 				rc = cam_csiphy_program_secure_mode(csiphy_dev,
-					CAM_SECURE_MODE_SECURE, offset);
+					CAM_SECURE_MODE_SECURE, offset, false);
 				if (rc) {
 					csiphy_dev->csiphy_info[offset]
 						.secure_mode =
@@ -2786,7 +2796,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 
 			rc = cam_csiphy_program_secure_mode(
 				csiphy_dev,
-				CAM_SECURE_MODE_SECURE, offset);
+				CAM_SECURE_MODE_SECURE, offset, false);
 			if (rc) {
 				csiphy_dev->csiphy_info[offset].secure_mode =
 					CAM_SECURE_MODE_NON_SECURE;

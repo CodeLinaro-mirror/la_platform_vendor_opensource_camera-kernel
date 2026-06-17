@@ -33,7 +33,9 @@ MODULE_IMPORT_NS("DMA_BUF");
 MODULE_IMPORT_NS(DMA_BUF);
 #endif
 
-#ifdef CONFIG_DOMAIN_ID_SECURE_CAMERA
+#ifdef CONFIG_SPECTRA_SECURE
+#include <smmu-proxy/linux/qti-smmu-proxy.h>
+#include <linux/qcom-dma-mapping.h>
 #include <linux/IClientEnv.h>
 #include <linux/ITrustedCameraDriver.h>
 #include <linux/CTrustedCameraDriver.h>
@@ -137,8 +139,14 @@ int camera_i2c_compare_dev(struct device *dev, const void *data);
 #ifdef CONFIG_SPECTRA_SECURE
 void cam_cpastop_scm_write(struct cam_cpas_hw_errata_wa *errata_wa);
 int cam_ife_notify_safe_lut_scm(bool safe_trigger);
+#endif
+
+#ifdef CONFIG_SPECTRA_SECURE
 int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
-	bool protect, int32_t offset);
+	bool protect, int32_t offset, bool is_shutdown);
+#else
+int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
+	bool protect, int32_t offset, bool __always_unused is_shutdown);
 #endif /* CONFIG_SPECTRA_SECURE */
 
 void qcom_clk_dump(struct clk *clk, void *regulator,

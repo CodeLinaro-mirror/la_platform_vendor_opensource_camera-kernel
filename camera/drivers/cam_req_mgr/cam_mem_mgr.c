@@ -287,6 +287,9 @@ int cam_mem_mgr_init(void)
 	atomic_set(&cam_mem_mgr_state, CAM_MEM_MGR_INITIALIZED);
 
 	cam_mem_mgr_create_debug_fs();
+
+	cam_smmu_get_csf_version(&tbl.csf_version);
+
 	cam_common_register_mini_dump_cb(cam_mem_mgr_mini_dump_cb,
 		"cam_mem", NULL);
 

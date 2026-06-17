@@ -5,7 +5,7 @@ targets = [
 
 le_variants = [
     # keep sorted
-    "perf-defconfig",
+    "perf",
     "debug-defconfig",
     "consolidate",
 ]
