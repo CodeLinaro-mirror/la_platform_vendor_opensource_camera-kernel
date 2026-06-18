@@ -124,28 +124,25 @@ int32_t cam_csiphy_status_dmp(struct csiphy_device *csiphy_dev)
 	return rc;
 }
 
-
-
-enum cam_vote_level get_clk_vote_default(struct csiphy_device *csiphy_dev)
+enum cam_vote_level get_clk_vote_default(struct csiphy_device *csiphy_dev,
+	int32_t index)
 {
 	CAM_DBG(CAM_CSIPHY, "voting for SVS");
 	return CAM_SVS_VOTE;
 }
 
-enum cam_vote_level get_clk_voting_dynamic(struct csiphy_device *csiphy_dev)
+enum cam_vote_level get_clk_voting_dynamic(
+	struct csiphy_device *csiphy_dev, int32_t index)
 {
 	uint32_t cam_vote_level = 0;
 	uint32_t last_valid_vote = 0;
 	struct cam_hw_soc_info *soc_info;
-	uint64_t phy_data_rate = csiphy_dev->csiphy_info.data_rate;
+	uint64_t phy_data_rate = csiphy_dev->csiphy_info[index].data_rate;
 
 	soc_info = &csiphy_dev->soc_info;
+	phy_data_rate = max(phy_data_rate, csiphy_dev->current_data_rate);
 
-	if (csiphy_dev->is_acquired_dev_combo_mode)
-		phy_data_rate = max(phy_data_rate,
-			csiphy_dev->csiphy_info.data_rate_combo_sensor);
-
-	if (csiphy_dev->csiphy_info.csiphy_3phase) {
+	if (csiphy_dev->csiphy_info[index].csiphy_3phase) {
 		if (csiphy_dev->is_divisor_32_comp)
 			do_div(phy_data_rate, CSIPHY_DIVISOR_32);
 		else
@@ -156,6 +153,7 @@ enum cam_vote_level get_clk_voting_dynamic(struct csiphy_device *csiphy_dev)
 
 	 /* round off to next integer */
 	phy_data_rate += 1;
+	csiphy_dev->current_data_rate = phy_data_rate;
 
 	for (cam_vote_level = 0;
 			cam_vote_level < CAM_MAX_VOTE; cam_vote_level++) {
@@ -177,7 +175,7 @@ enum cam_vote_level get_clk_voting_dynamic(struct csiphy_device *csiphy_dev)
 	return last_valid_vote;
 }
 
-int32_t cam_csiphy_enable_hw(struct csiphy_device *csiphy_dev)
+int32_t cam_csiphy_enable_hw(struct csiphy_device *csiphy_dev, int32_t index)
 {
 	int32_t rc = 0;
 	struct cam_hw_soc_info   *soc_info;
@@ -191,7 +189,7 @@ int32_t cam_csiphy_enable_hw(struct csiphy_device *csiphy_dev)
 		return rc;
 	}
 
-	vote_level = csiphy_dev->ctrl_reg->getclockvoting(csiphy_dev);
+	vote_level = csiphy_dev->ctrl_reg->getclockvoting(csiphy_dev, index);
 	rc = cam_soc_util_enable_platform_resource(soc_info, true,
 		vote_level, ENABLE_IRQ);
 	if (rc < 0) {
