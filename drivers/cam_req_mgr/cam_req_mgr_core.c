@@ -3706,6 +3706,52 @@ end:
 }
 
 /**
+ * __cam_req_mgr_mtrigger_move_to_next_req_slot()
+ *
+ * @brief : Advance rd_idx to the next non-skipped slot within the same group.
+ *          Starting from rd_idx+1, steps over slots with skip_set==true.
+ *          Stops without advancing if the next slot belongs to a different
+ *          group (group_id changed) or has no request scheduled yet.
+ *          Bounded by group_size iterations to guard against inconsistent state.
+ * @link  : Link whose input queue rd_idx is to be advanced
+ *
+ * @return: 0 if rd_idx was advanced or end of group reached,
+ *          -EAGAIN if no eligible slot found or group_size exceeded.
+ */
+static int __cam_req_mgr_mtrigger_move_to_next_req_slot(
+	struct cam_req_mgr_core_link *link)
+{
+	struct cam_req_mgr_req_queue *in_q = link->req.in_q;
+	int64_t  current_group_id = in_q->slot[in_q->rd_idx].group_id;
+	uint32_t group_size = in_q->slot[in_q->rd_idx].group_size;
+	int32_t  idx = in_q->rd_idx;
+	uint32_t steps;
+
+	for (steps = 0; steps < group_size; steps++) {
+		__cam_req_mgr_inc_idx(&idx, 1, in_q->num_slots);
+
+		if (!in_q->slot[idx].skip_set ||
+		    in_q->slot[idx].group_id != current_group_id) {
+			CAM_DBG(CAM_CRM,
+				"link[%x] advancing rd_idx %d -> %d req %lld",
+				link->link_hdl, in_q->rd_idx, idx,
+				in_q->slot[idx].req_id);
+			in_q->rd_idx = idx;
+			return 0;
+		}
+
+		CAM_DBG(CAM_CRM,
+			"link[%x] skipping idx %d req %lld (skip_set)",
+			link->link_hdl, idx, in_q->slot[idx].req_id);
+	}
+
+	CAM_WARN(CAM_CRM,
+		"link[%x] group %lld exhausted all %u slots without finding non-skipped req",
+		link->link_hdl, current_group_id, group_size);
+	return -EAGAIN;
+}
+
+/**
  * __cam_req_mgr_mtrigger_check_slots_ready()
  *
  * @brief            : Go over all devices PDS and check if all the
@@ -3940,7 +3986,24 @@ static int __cam_req_mgr_mtrigger_apply_req_in_idle(
 	link_slot = &link->req.in_q->slot[idx];
 	__cam_req_mgr_dec_idx(&mtrigger_idx, link_slot->group_seq, link->req.in_q->num_slots);
 
-	link_slot   = &link->req.in_q->slot[mtrigger_idx];
+	link_slot  = &link->req.in_q->slot[mtrigger_idx];
+	if (link_slot->skip_idx) {
+		rc = __cam_req_mgr_mtrigger_move_to_next_req_slot(link);
+		if (rc < 0) {
+			CAM_ERR(CAM_CRM, "Error problem to move to next slot!");
+			return rc;
+		}
+
+		/* If we have advanced in new group in idle is an issue */
+		if (link_slot->group_id !=
+		    link->req.in_q->slot[link->req.in_q->rd_idx].group_id) {
+			CAM_ERR(CAM_CRM, "Error move to next sequence on idle!");
+			return -EINVAL;
+		}
+
+		mtrigger_idx = link->req.in_q->rd_idx;
+	}
+
 	/* Apply first request in the sequence */
 	for (i = 0; i < link->num_devs; i++) {
 		dev = &link->l_dev[i];
@@ -4665,6 +4728,7 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 	int                                       i = 0;
 	struct cam_req_mgr_state_monitor          state;
 	int64_t                                   current_group_id;
+	uint32_t                                  gr_size;
 
 	if (!data || !priv) {
 		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
@@ -4762,17 +4826,16 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 		 * Do NOT reset req q slot data here, it can not be done
 		 * here because we need to preserve the data to handle bubble.
 		 *
-		 * Check if any new req is pending in slot, if not finish the
-		 * lower pipeline delay device with available req ids.
+		 * Advance rd_idx to the next non-skipped slot within the same
+		 * group. Does not cross group boundaries or lower-pd logic.
 		 */
 		CAM_DBG(CAM_CRM, "link[%x] Req[%lld] invalidating slot",
 			link->link_hdl, in_q->slot[in_q->rd_idx].req_id);
-		rc = __cam_req_mgr_move_to_next_req_slot(link);
+		rc = __cam_req_mgr_mtrigger_move_to_next_req_slot(link);
 		if (rc) {
 			CAM_DBG(CAM_REQ,
-				"No pending req to apply to lower pd devices");
+				"No pending req in group to advance to");
 			rc = 0;
-			__cam_req_mgr_notify_frame_skip(link, trigger_data->trigger);
 			goto release_lock;
 		}
 	}
@@ -4787,7 +4850,26 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 
 	if (trigger_data->trigger == CAM_TRIGGER_POINT_EOF) {
 		idx = __cam_req_mgr_find_slot_for_req(in_q, trigger_data->req_id);
-		rc = cam_req_mgr_mtrigger_try_to_start(idx, link);
+
+		if (in_q->slot[in_q->rd_idx].group_id !=
+		    in_q->slot[idx].group_id) {
+
+			/* Reset all slots for the sequence which is done */
+			gr_size = in_q->slot[idx].group_size;
+			__cam_req_mgr_dec_idx(&idx, in_q->slot[idx].group_seq,
+					      link->req.in_q->num_slots);
+			for (i = 0; i < gr_size; i++) {
+				__cam_req_mgr_reset_req_slot(link, idx);
+				__cam_req_mgr_inc_idx(&idx, 1, link->req.in_q->num_slots);
+			}
+
+			/* Try to start next group */
+			rc = cam_req_mgr_mtrigger_try_to_start(in_q->rd_idx, link);
+			if (rc < 0) {
+				CAM_DBG(CAM_REQ,
+					"Error can't start new sequence");
+			}
+		}
 	}
 
 release_lock:
