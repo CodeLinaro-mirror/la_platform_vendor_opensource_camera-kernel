@@ -237,8 +237,11 @@ struct cam_isp_context_event_record {
  * @sof_timestamp_val:         Captured time stamp value at sof hw event
  * @last_sof_timestamp:        Time stamp value for last SOF event
  * @boot_timestamp:            Boot time stamp for a given req_id
+ * @eof_timestamp_val:         Captured time stamp value at eof hw event
+ * @eof_boot_timestamp:        eof boot time stamp for a given req_id
  * @active_req_cnt:            Counter for the active request
  * @reported_req_id:           Last reported request id
+ * @eof_reported_req_id:       Last reported request id of eof event
  * @subscribe_event:           The irq event mask that CRM subscribes to, IFE
  *                             will invoke CRM cb at those event.
  * @last_applied_req_id:       Last applied request id
@@ -274,8 +277,11 @@ struct cam_isp_context {
 	uint64_t                         sof_timestamp_val;
 	uint64_t                         last_sof_timestamp;
 	uint64_t                         boot_timestamp;
+	uint64_t                         eof_timestamp_val;
+	uint64_t                         eof_boot_timestamp;
 	int32_t                          active_req_cnt;
 	int64_t                          reported_req_id;
+	int64_t                          eof_reported_req_id;
 	uint32_t                         subscribe_event;
 	int64_t                          last_applied_req_id;
 	atomic64_t                       state_monitor_head;
