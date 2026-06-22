@@ -27,33 +27,6 @@
 #define AIS_TFE_HW_RESET_HW_AND_REG_VAL       0x1
 #define AIS_TFE_HW_RESET_HW_VAL               0x10000
 
-#define AIS_VFE_IRQ_MASK0 0x5C
-#define AIS_VFE_IRQ_MASK1 0x60
-#define AIS_VFE_IRQ_CLEAR0 0x64
-#define AIS_VFE_IRQ_CLEAR1 0x68
-#define AIS_VFE_IRQ_STATUS0 0x6C
-#define AIS_VFE_IRQ_STATUS1 0x70
-
-#define AIS_VFE_STATUS0_RDI_SOF_IRQ_SHFT 27
-#define AIS_VFE_STATUS0_RDI_SOF_IRQ_MSK  0xF
-#define AIS_VFE_STATUS0_RDI_REGUP_IRQ_SHFT 5
-#define AIS_VFE_STATUS0_RDI_REGUP_IRQ_MSK  0xF
-#define AIS_VFE_STATUS1_RDI_OVERFLOW_IRQ_SHFT 2
-#define AIS_VFE_STATUS1_RDI_OVERFLOW_IRQ_MSK  0xF
-
-#define AIS_VFE_MASK0_RDI 0x780001E0
-#define AIS_VFE_MASK1_RDI 0x000000BC
-
-#define AIS_VFE_MASK1_RDI_OVERFLOW_SHT 2
-
-#define AIS_VFE_STATUS0_BUS_WR_IRQ  (1 << 9)
-#define AIS_VFE_STATUS0_RDI_OVERFLOW_IRQ  \
-	(0xF << AIS_VFE_STATUS1_RDI_OVERFLOW_IRQ_SHFT)
-#define AIS_VFE_STATUS0_RESET_ACK_IRQ  (1 << 31)
-#define AIS_VFE_GLOBAL_RESET_CMD_RDI_0_RESET_SHFT (10)
-
-#define AIS_VFE_REGUP_RDI_SHIFT 1
-#define AIS_VFE_REGUP_RDI_ALL 0x1E
 
 /*TFE BUS DEFINITIONS*/
 #define AIS_VFE_BUS_STATUS0_ERROR_MASK AIS_VFE_BUS_STATUS0_VIOLATION
@@ -76,6 +49,78 @@
 
 #define AIS_TFE_BUS_IRQ_REG0            0
 #define AIS_TFE_BUS_IRQ_REG1            1
+
+static int ais_tfe_dump_reg(struct cam_hw_info *vfe_hw)
+{
+	uint32_t i = 0;
+	int rc = 0;
+	struct cam_hw_soc_info             *soc_info = NULL;
+	struct ais_vfe_hw_core_info        *core_info = NULL;
+	struct ais_irq_controller_reg_info *top_irq_reg = NULL;
+	struct ais_irq_controller_reg_info *bus_irq_reg = NULL;
+	struct ais_tfe_rdi_ver2_hw_info    *rdi_hw_info = NULL;
+	struct ais_tfe_top_ver2_hw_info    *top_hw_info = NULL;
+	struct ais_tfe_bus_ver2_hw_info    *bus_hw_info = NULL;
+	uint32_t ife_status[3] = {};
+	uint32_t bus_status[2] = {};
+	uint32_t ccif_violation = 0;
+	uint32_t overflow_status = 0;
+	uint32_t image_sz_violation = 0;
+	unsigned long max_clk_rate = 0;
+
+	soc_info = &vfe_hw->soc_info;
+	core_info = (struct ais_vfe_hw_core_info *)vfe_hw->core_info;
+	top_hw_info = core_info->vfe_hw_info->top_hw_info;
+	top_irq_reg = core_info->vfe_hw_info->irq_reg_info;
+	bus_hw_info = core_info->vfe_hw_info->bus_hw_info;
+	bus_irq_reg = &bus_hw_info->common_reg.irq_reg_info;
+	rdi_hw_info = &top_hw_info->rdi_hw_info;
+
+	if (vfe_hw->hw_state != CAM_HW_STATE_POWER_UP) {
+		/* Turn ON Regulators, Clocks and other SOC resources */
+		rc = ais_tfe_enable_soc_resources(soc_info, max_clk_rate);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "Enable SOC failed");
+			return -EFAULT;
+		}
+	}
+
+	for (i = 0; i < top_irq_reg->num_registers; i++) {
+
+		ife_status[i] = cam_io_r_mb(core_info->mem_base +
+				top_irq_reg->irq_reg_set[i].status_reg_offset);
+
+		CAM_INFO(CAM_ISP, "TOP REG[0x%x]: 0x%x",
+				top_irq_reg->irq_reg_set[i].status_reg_offset,
+				ife_status[i]);
+	}
+
+	for (i = 0; i < bus_irq_reg->num_registers; i++) {
+
+		bus_status[i] = cam_io_r_mb(core_info->mem_base +
+							bus_irq_reg->irq_reg_set[i].status_reg_offset);
+
+		CAM_INFO(CAM_ISP, "BUS REG[0x%x]: 0x%x",
+				bus_irq_reg->irq_reg_set[i].status_reg_offset,
+				bus_status[i]);
+	}
+
+	ccif_violation = cam_io_r_mb(core_info->mem_base +
+						bus_hw_info->common_reg.bus_violation_reg);
+	overflow_status = cam_io_r_mb(core_info->mem_base +
+						bus_hw_info->common_reg.bus_overflow_reg);
+	image_sz_violation = cam_io_r_mb(core_info->mem_base +
+						bus_hw_info->common_reg.bus_image_size_vilation_reg);
+
+	CAM_INFO(CAM_ISP, "ccif_violation = 0x%x, overflow_status = 0x%x, image_zs = 0x%x",
+					ccif_violation, overflow_status, image_sz_violation);
+
+	if (vfe_hw->hw_state != CAM_HW_STATE_POWER_UP)
+		ais_tfe_disable_soc_resources(soc_info);
+
+	return 0;
+}
+
 
 int ais_tfe_irq_config(struct ais_vfe_hw_core_info *core_info,
 		uint32_t  *irq_mask, uint32_t num_reg, bool enable)
@@ -165,18 +210,6 @@ static int ais_tfe_bus_hw_init(struct ais_vfe_hw_core_info *core_info)
 				core_info->mem_base + bus_hw_irq_regs[0].mask_reg_offset);
 
 #if 0  //[TODO] for ais: need to remove??
-	/*set IRQ mask for BUS WR*/
-	core_info->irq_mask0 |= AIS_VFE_STATUS0_BUS_WR_IRQ;
-	cam_io_w_mb(core_info->irq_mask0,
-		core_info->mem_base + AIS_VFE_IRQ_MASK0);
-
-	cam_io_w_mb(0x7801,
-		core_info->mem_base + bus_hw_irq_regs[0].mask_reg_offset);
-	cam_io_w_mb(0x0,
-		core_info->mem_base + bus_hw_irq_regs[1].mask_reg_offset);
-	cam_io_w_mb(0x0,
-		core_info->mem_base + bus_hw_irq_regs[2].mask_reg_offset);
-
 	/*Set Debug Registers*/
 	cam_io_w_mb(AIS_VFE_BUS_SET_DEBUG_REG, core_info->mem_base +
 		bus_hw_info->common_reg.debug_status_cfg);
@@ -338,7 +371,7 @@ static int ais_tfe_reset(void *hw_priv,
 	return rc;
 }
 
-
+#if 0
 static void ais_tfe_reset_rdi(void *hw_priv,
 	enum ais_ife_output_path_id path)
 {
@@ -379,6 +412,7 @@ static void ais_tfe_reset_rdi(void *hw_priv,
 	core_info->irq_mask0 = 0x0;
 	cam_io_w_mb(0x0, core_info->mem_base + AIS_VFE_IRQ_MASK0);
 }
+#endif
 
 int ais_tfe_init_hw(void *hw_priv, void *init_hw_args, uint32_t arg_size)
 {
@@ -884,6 +918,10 @@ int ais_tfe_stop(void *hw_priv, void *stop_args, uint32_t arg_size)
 	ais_clear_rdi_path(rdi_path);
 	spin_unlock(&rdi_path->buffer_lock);
 
+	val = cam_io_r_mb(core_info->mem_base + rdi_reg->rdi_module_config);
+	val &= ~(0x1 << rdi_reg_data->rdi_out_enable_shift);
+	cam_io_w_mb(val, core_info->mem_base + rdi_reg->rdi_module_config);
+
 	/* Disable WM and reg-update*/
 	val = cam_io_r_mb(core_info->mem_base + rdi_reg->reg_update_cmd);
 	val &= ~rdi_reg_data->reg_update_cmd_data;
@@ -929,6 +967,7 @@ int ais_tfe_stop(void *hw_priv, void *stop_args, uint32_t arg_size)
 		CAM_WARN(CAM_ISP, "Reset Bus WR timeout");
 	}
 
+#if 0
 	/*
 	 * For now just when ERROR state do reset_rdi to clear IFE overflow error.
 	 * TBD: If INIT/AVAILABLE state do reset_rdi, in multi-stream start/stop
@@ -936,6 +975,7 @@ int ais_tfe_stop(void *hw_priv, void *stop_args, uint32_t arg_size)
 	 */
 	if (rdi_path->state == AIS_ISP_RESOURCE_STATE_ERROR)
 		ais_tfe_reset_rdi(vfe_hw, stop_cmd->path);
+#endif
 
 	rdi_path->state = AIS_ISP_RESOURCE_STATE_INIT_HW;
 
@@ -1278,7 +1318,7 @@ static int ais_tfe_q_sof(struct ais_vfe_hw_core_info *core_info,
 
 
 static void ais_tfe_handle_sof_rdi(struct ais_vfe_hw_core_info *core_info,
-		struct ais_vfe_hw_work_data *work_data,
+		struct ais_tfe_hw_work_data *work_data,
 		enum ais_ife_output_path_id path)
 {
 	struct ais_tfe_rdi_output *p_rdi = &core_info->rdi_out[path];
@@ -1417,7 +1457,7 @@ static void ais_tfe_handle_sof_rdi(struct ais_vfe_hw_core_info *core_info,
 
 static int ais_tfe_handle_sof(
 	struct ais_vfe_hw_core_info *core_info,
-	struct ais_vfe_hw_work_data *work_data)
+	struct ais_tfe_hw_work_data *work_data)
 {
 	struct ais_tfe_rdi_output *p_rdi;
 	int path =  0;
@@ -1451,7 +1491,7 @@ static int ais_tfe_handle_sof(
 
 static int ais_tfe_handle_error(
 	struct ais_vfe_hw_core_info *core_info,
-	struct ais_vfe_hw_work_data *work_data)
+	struct ais_tfe_hw_work_data *work_data)
 {
 	struct ais_tfe_top_ver2_hw_info   *top_hw_info = NULL;
 	struct ais_tfe_bus_ver2_hw_info   *bus_hw_info = NULL;
@@ -1479,6 +1519,10 @@ static int ais_tfe_handle_error(
 	bus_hw_info = core_info->vfe_hw_info->bus_hw_info;
 	rdi_hw_info = &top_hw_info->rdi_hw_info;
 	bus_hw_irq_regs = bus_hw_info->common_reg.irq_reg_info.irq_reg_set;
+
+	CAM_INFO(CAM_ISP, "ccif_violation = 0x%x, overflow_status = 0x%x, image_zs = 0x%x",
+					work_data->ccif_violation, work_data->overflow_status,
+					work_data->image_sz_violation);
 
 	for (path = 0; path < top_irq_reg->num_registers; path++) {
 
@@ -1719,7 +1763,7 @@ static void ais_tfe_bus_handle_client_frame_done(
 
 static int ais_tfe_bus_handle_frame_done(
 	struct ais_vfe_hw_core_info *core_info,
-	struct ais_vfe_hw_work_data *work_data)
+	struct ais_tfe_hw_work_data *work_data)
 {
 	struct ais_tfe_bus_ver2_hw_info   *bus_hw_info = NULL;
 	struct ais_tfe_rdi_output *p_rdi = &core_info->rdi_out[0];
@@ -1758,7 +1802,7 @@ static int ais_tfe_bus_handle_frame_done(
 
 static int ais_tfe_irq_fill_bus_wr_status(
 	struct ais_vfe_hw_core_info *core_info,
-	struct ais_vfe_hw_work_data *work_data)
+	struct ais_tfe_hw_work_data *work_data)
 {
 	struct ais_tfe_bus_ver2_hw_info   *bus_hw_info = NULL;
 	struct ais_irq_register_set       *bus_hw_irq_regs = NULL;
@@ -1793,7 +1837,7 @@ static int ais_tfe_irq_fill_bus_wr_status(
 
 static int ais_tfe_handle_bus_wr_irq(struct cam_hw_info *vfe_hw,
 	struct ais_vfe_hw_core_info *core_info,
-	struct ais_vfe_hw_work_data *work_data)
+	struct ais_tfe_hw_work_data *work_data)
 {
 	int rc = 0;
 	struct ais_tfe_bus_ver2_hw_info   *bus_hw_info = NULL;
@@ -1816,14 +1860,14 @@ static int ais_tfe_handle_bus_wr_irq(struct cam_hw_info *vfe_hw,
 		//AIS_ATRACE_END("FD_%d", core_info->vfe_idx);
 	}
 
-#if 0
-	if (work_data->bus_wr_status[0] & AIS_VFE_BUS_STATUS0_VIOLATION) {
+
+	if (work_data->bus_wr_status[0] & bus_hw_info->violation_mask) {
 		CAM_ERR(CAM_ISP, "TFE%d: WR BUS violation status = 0x%x",
 			core_info->vfe_idx, work_data->bus_wr_status[0]);
 		work_data->path = 0xF;
 		rc = ais_tfe_handle_error(core_info, work_data);
 	}
-
+#if 0
 	if (work_data->bus_wr_status[0] & 0x1) {
 		CAM_DBG(CAM_ISP, "TFE%d: WR BUS reset completed",
 			core_info->vfe_idx);
@@ -1836,7 +1880,7 @@ static int ais_tfe_handle_bus_wr_irq(struct cam_hw_info *vfe_hw,
 
 static int ais_tfe_process_irq_bh(void *priv, void *data)
 {
-	struct ais_vfe_hw_work_data   *work_data;
+	struct ais_tfe_hw_work_data   *work_data;
 	struct cam_hw_info            *vfe_hw;
 	struct ais_vfe_hw_core_info   *core_info;
 	int rc = 0;
@@ -1854,7 +1898,7 @@ static int ais_tfe_process_irq_bh(void *priv, void *data)
 		return -EINVAL;
 	}
 
-	work_data = (struct ais_vfe_hw_work_data *)data;
+	work_data = (struct ais_tfe_hw_work_data *)data;
 
 	//trace_ais_isp_irq_process(core_info->vfe_idx, work_data->evt_type, 1);
 	CAM_DBG(CAM_ISP, "TFE[%d] event %d",
@@ -1888,7 +1932,7 @@ static int ais_tfe_process_irq_bh(void *priv, void *data)
 
 static bool ais_tfe_irq_cancel_task_filter(void *priv, void *data)
 {
-	struct ais_vfe_hw_work_data   *work_data;
+	struct ais_tfe_hw_work_data   *work_data;
 	struct cam_hw_info            *vfe_hw;
 	struct ais_vfe_hw_core_info   *core_info;
 	bool is_discard = false;
@@ -1901,7 +1945,7 @@ static bool ais_tfe_irq_cancel_task_filter(void *priv, void *data)
 	if (!core_info)
 		return true;
 
-	work_data = (struct ais_vfe_hw_work_data *)data;
+	work_data = (struct ais_tfe_hw_work_data *)data;
 	if (work_data->evt_type == AIS_VFE_HW_IRQ_EVENT_SOF)
 		is_discard = true;
 
@@ -1909,10 +1953,10 @@ static bool ais_tfe_irq_cancel_task_filter(void *priv, void *data)
 }
 
 static int ais_tfe_dispatch_irq(struct cam_hw_info *vfe_hw,
-		struct ais_vfe_hw_work_data *p_work)
+		struct ais_tfe_hw_work_data *p_work)
 {
 	struct ais_vfe_hw_core_info *core_info;
-	struct ais_vfe_hw_work_data *work_data;
+	struct ais_tfe_hw_work_data *work_data;
 	struct crm_workq_task *task;
 	int rc = 0;
 
@@ -1939,7 +1983,7 @@ static int ais_tfe_dispatch_irq(struct cam_hw_info *vfe_hw,
 			return -ENOMEM;
 		}
 	}
-	work_data = (struct ais_vfe_hw_work_data *)task->payload;
+	work_data = (struct ais_tfe_hw_work_data *)task->payload;
 	*work_data = *p_work;
 
 	//trace_ais_isp_irq_process(core_info->vfe_idx, p_work->evt_type, 0);
@@ -1953,7 +1997,9 @@ static int ais_tfe_dispatch_irq(struct cam_hw_info *vfe_hw,
 
 static int ais_tfe_check_top_irq_error(
 		struct cam_hw_info *vfe_hw,
-		uint32_t *top_irq_status, uint32_t *bus_irq_status)
+		uint32_t *top_irq_status, uint32_t *bus_irq_status,
+		uint32_t ccif_violation, uint32_t overflow_status,
+		uint32_t image_sz_violation)
 {
 	struct ais_vfe_hw_core_info   *core_info;
 	struct ais_tfe_top_ver2_hw_info    *top_hw_info = NULL;
@@ -1961,7 +2007,7 @@ static int ais_tfe_check_top_irq_error(
 	struct ais_irq_controller_reg_info *top_irq_reg = NULL;
 	struct ais_vfe_rdi_reg_data        *rdi_reg_data = NULL;
 	struct ais_tfe_rdi_ver2_hw_info    *rdi_hw_info = NULL;
-	struct ais_vfe_hw_work_data work_data;
+	struct ais_tfe_hw_work_data work_data;
 	struct timespec64 ts;
 	uint32_t path = 0;
 
@@ -1970,10 +2016,6 @@ static int ais_tfe_check_top_irq_error(
 	bus_hw_info = core_info->vfe_hw_info->bus_hw_info;
 	top_irq_reg = core_info->vfe_hw_info->irq_reg_info;
 	rdi_hw_info = &top_hw_info->rdi_hw_info;
-
-	ktime_get_boottime_ts64(&ts);
-	work_data.ts =
-		(uint64_t)((ts.tv_sec * 1000000000) + ts.tv_nsec);
 
 	if ((top_irq_status[0] & top_hw_info->error_irq_mask[0]) ||
 		(top_irq_status[2] & top_hw_info->error_irq_mask[2]) ||
@@ -1985,6 +2027,14 @@ static int ais_tfe_check_top_irq_error(
 		CAM_ERR(CAM_ISP,
 			"Encountered Error: tfe:%d:BUS Irq_status0=0x%x",
 			core_info->vfe_idx, bus_irq_status[0]);
+
+		ktime_get_boottime_ts64(&ts);
+		work_data.ts =
+			(uint64_t)((ts.tv_sec * 1000000000) + ts.tv_nsec);
+
+		work_data.ccif_violation = ccif_violation;
+		work_data.overflow_status = overflow_status;
+		work_data.image_sz_violation = image_sz_violation;
 
 		if (top_irq_status[0] & top_hw_info->rdi_overflow_mask) {
 			work_data.path = (top_irq_status[0] &
@@ -2013,9 +2063,9 @@ static int ais_tfe_check_top_irq_error(
 
 			CAM_ERR_RATE_LIMIT(CAM_ISP, "IFE%d Overflow 0x%x",
 					core_info->vfe_idx, work_data.path);
-			work_data.evt_type = AIS_VFE_HW_IRQ_EVENT_ERROR;
-			ais_tfe_dispatch_irq(vfe_hw, &work_data);
 		}
+		work_data.evt_type = AIS_VFE_HW_IRQ_EVENT_ERROR;
+		ais_tfe_dispatch_irq(vfe_hw, &work_data);
 	}
 
 	return 0;
@@ -2102,7 +2152,7 @@ irqreturn_t ais_tfe_irq(int irq_num, void *data)
 		return IRQ_HANDLED;
 	} else {
 		struct ais_ife_rdi_get_timestamp_args get_ts;
-		struct ais_vfe_hw_work_data work_data;
+		struct ais_tfe_hw_work_data work_data;
 		struct timespec64 ts;
 		int i;
 
@@ -2137,6 +2187,11 @@ irqreturn_t ais_tfe_irq(int irq_num, void *data)
 
 		if (ife_status[0] & top_hw_info->wr_bus_mask) {
 			int rc = 0;
+
+			work_data.ccif_violation = ccif_violation;
+			work_data.overflow_status = overflow_status;
+			work_data.image_sz_violation = image_sz_violation;
+
 			for (i = 0; i < bus_irq_reg->num_registers; i++)
 				work_data.bus_wr_status[i] = bus_status[i];
 
@@ -2147,7 +2202,8 @@ irqreturn_t ais_tfe_irq(int irq_num, void *data)
 				ais_tfe_dispatch_irq(vfe_hw, &work_data);
 		}
 
-		ais_tfe_check_top_irq_error(vfe_hw, ife_status, bus_status);
+		ais_tfe_check_top_irq_error(vfe_hw, ife_status, bus_status,
+				ccif_violation, overflow_status, image_sz_violation);
 
 	}
 
@@ -2186,7 +2242,7 @@ int ais_tfe_core_init(struct ais_vfe_hw_core_info  *core_info,
 
 
 	scnprintf(worker_name, sizeof(worker_name),
-		"vfe%u_worker", core_info->vfe_idx);
+		"tfe%u_worker", core_info->vfe_idx);
 	CAM_DBG(CAM_ISP, "Create TFE worker %s", worker_name);
 	rc = cam_req_mgr_workq_create(worker_name,
 		AIS_VFE_WORKQ_NUM_TASK,
@@ -2226,4 +2282,96 @@ int ais_tfe_core_deinit(struct ais_vfe_hw_core_info  *core_info,
 	spin_unlock_irqrestore(&core_info->spin_lock, flags);
 
 	return rc;
+}
+
+static int ais_tfe_debugfs_open(struct inode *inode, struct file *file)
+{
+	file->private_data = inode->i_private;
+	return 0;
+}
+
+static ssize_t ais_tfe_debugfs_write(struct file *file,
+		const char *ubuf, size_t size, loff_t *loff_t)
+{
+	struct cam_hw_info *vfe_hw = NULL;
+	struct ais_vfe_hw_core_info *core_info = NULL;
+	struct ais_tfe_dbgfs *tfe_dbgfs = NULL;
+	char *kbuf = NULL;
+	ssize_t rc = 0;
+	/*
+	ssize_t i = 0;
+	uint32_t debug_val = 0;
+	uint8_t tmp_val = 0;
+	*/
+
+	if (!file->private_data)
+		return -1;
+
+	/*
+	if (size <= 3 || size > 11)
+		return -EINVAL;
+	*/
+
+	vfe_hw = (struct cam_hw_info *)file->private_data;
+	core_info = (struct ais_vfe_hw_core_info *)vfe_hw->core_info;
+	tfe_dbgfs = &core_info->tfe_dbgfs;
+
+	kbuf = kzalloc(sizeof(char) * size, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+
+	if (copy_from_user(kbuf, ubuf, size)) {
+		rc = -EFAULT;
+		goto end;
+	}
+	if ((strlen(kbuf) >= strlen("dump")) &&
+			(!strncmp(kbuf, "dump", strlen("dump")))) {
+		ais_tfe_dump_reg(vfe_hw);
+	}
+
+	rc = size;
+end:
+	kfree(kbuf);
+	return rc;
+}
+
+static const struct file_operations ais_tfe_debugfs_ops = {
+	.open = ais_tfe_debugfs_open,
+	.write = ais_tfe_debugfs_write,
+};
+
+int ais_tfe_debugfs_register(struct cam_hw_info *vfe_hw)
+{
+	int rc = 0;
+	struct ais_vfe_hw_core_info *core_info = NULL;
+	struct dentry *dbgfileptr = NULL;
+	struct ais_tfe_dbgfs *tfe_dbgfs = NULL;
+	char subdir_name[11] = {0};
+
+	if (!cam_debugfs_available())
+		return 0;
+
+	core_info = (struct ais_vfe_hw_core_info *)vfe_hw->core_info;
+
+	snprintf(subdir_name, sizeof(subdir_name), "ais_tfe%d", core_info->vfe_idx);
+	rc = cam_debugfs_create_subdir(subdir_name, &dbgfileptr);
+	if (rc) {
+		CAM_ERR(CAM_ISP, "DebugFS could not create directory!");
+		return rc;
+	}
+
+	tfe_dbgfs = &core_info->tfe_dbgfs;
+
+	/* Store parent inode for cleanup in caller */
+	tfe_dbgfs->dentry = dbgfileptr;
+
+	debugfs_create_file("debug", 0644, tfe_dbgfs->dentry,
+			vfe_hw, &ais_tfe_debugfs_ops);
+
+	/*
+	debugfs_create_u32("test_set_val", 0644, tfe_dbgfs->dentry,
+			&tfe_dbgfs->test_set_val);
+	*/
+
+	return 0;
 }

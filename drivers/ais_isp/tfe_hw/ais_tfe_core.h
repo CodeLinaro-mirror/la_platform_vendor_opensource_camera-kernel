@@ -38,13 +38,16 @@ enum ais_vfe_hw_irq_event {
  * @irq_status : IRQ Status register
  *
  */
-struct ais_vfe_hw_work_data {
+struct ais_tfe_hw_work_data {
 	enum ais_vfe_hw_irq_event evt_type;
 	uint32_t           path;
 	uint64_t           ts;
 	uint32_t           bus_wr_status[3];
 	uint32_t           last_addr[AIS_IFE_PATH_MAX];
 	struct ais_ife_rdi_timestamps ts_hw[AIS_IFE_PATH_MAX];
+	uint32_t           ccif_violation;
+	uint32_t           overflow_status;
+	uint32_t           image_sz_violation;
 };
 
 struct ais_vfe_hw_info {
@@ -130,6 +133,10 @@ struct ais_tfe_rdi_output {
 	struct ais_ife_batch_frame_info       batchFrameInfo[4];
 };
 
+struct ais_tfe_dbgfs {
+	struct dentry  *dentry;
+};
+
 struct ais_vfe_hw_core_info {
 	struct ais_vfe_hw_info             *vfe_hw_info;
 	uint32_t                            vfe_idx;
@@ -153,12 +160,14 @@ struct ais_vfe_hw_core_info {
 	spinlock_t                          spin_lock;
 
 	struct cam_req_mgr_core_workq      *workq;
-	struct ais_vfe_hw_work_data         work_data[AIS_VFE_WORKQ_NUM_TASK];
+	struct ais_tfe_hw_work_data         work_data[AIS_VFE_WORKQ_NUM_TASK];
 
 	struct cam_hw_intf                 *csid_hw;
 	struct ais_ife_event_data           event;
 	void                               *event_cb_priv;
 	ais_ife_event_cb_func               event_cb;
+
+	struct ais_tfe_dbgfs                tfe_dbgfs;
 };
 
 int ais_tfe_get_hw_caps(void *device_priv,
@@ -195,5 +204,7 @@ int ais_tfe_core_init(struct ais_vfe_hw_core_info *core_info,
 
 int ais_tfe_core_deinit(struct ais_vfe_hw_core_info *core_info,
 	struct ais_vfe_hw_info             *vfe_hw_info);
+
+int ais_tfe_debugfs_register(struct cam_hw_info *vfe_hw);
 
 #endif /* _AIS_TFE_CORE_H_ */
