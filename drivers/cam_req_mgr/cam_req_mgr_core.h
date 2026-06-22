@@ -345,6 +345,9 @@ struct cam_req_mgr_req_tbl {
  * @group_id:             : If requests are grouped the id of the group
  * @group_size            : Number of reuquest in one group
  * @group_seq             : Sequence number of the request in one group
+ * @group_ready           : Set on the seq-0 slot when all devices have all
+ *                          their group slots ready. Enables O(1) sequence-ready
+ *                          check without scanning pd tables on every add_request.
  */
 struct cam_req_mgr_slot {
 	int32_t               idx;
@@ -363,9 +366,10 @@ struct cam_req_mgr_slot {
 	bool                  internal_recovered;
 	bool                  skip_set;
 	uint32_t              trigger_mode;
-	int64_t	              group_id;
+	int64_t               group_id;
 	uint32_t              group_size;
 	uint32_t              group_seq;
+	bool                  group_ready;
 };
 
 /**

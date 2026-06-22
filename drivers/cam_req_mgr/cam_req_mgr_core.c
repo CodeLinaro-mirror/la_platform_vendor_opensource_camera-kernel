@@ -1032,6 +1032,7 @@ static void __cam_req_mgr_reset_req_slot(struct cam_req_mgr_core_link *link,
 	slot->num_sync_links = 0;
 	slot->skip_set = false;
 	slot->frame_sync_shift = 0;
+	slot->group_ready = false;
 	for (i = 0; i < MAXIMUM_LINKS_PER_SESSION - 1; i++)
 		slot->sync_link_hdls[i] = 0;
 
@@ -3767,68 +3768,58 @@ static bool __cam_req_mgr_mtrigger_check_slots_ready(
 	struct cam_req_mgr_core_link *link,
 	struct cam_req_mgr_external_trigger_info *ext_trigger_info)
 {
-	int                      seq = 0;
-	int                      i = 0;
-	int                      mtrigger_idx = idx;
+	int                      group_start_idx = idx;
 	int                      prev_idx = 0;
+	int                      i, seq;
 	struct cam_req_mgr_slot *prev_link_slot = NULL;
 	struct cam_req_mgr_slot *link_slot = &link->req.in_q->slot[idx];
-	uint32_t                 group_size = link_slot->group_size;
+	struct cam_req_mgr_slot *group_start_slot = NULL;
 
-	CAM_DBG(CAM_CRM, "mtrigger_idx: %d", mtrigger_idx);
-	/*
-	 * First get the request id from which the trigger has been started,
-	 * and start the search.
-	 */
-	__cam_req_mgr_dec_idx(&mtrigger_idx, link_slot->group_seq,
+	__cam_req_mgr_dec_idx(&group_start_idx, link_slot->group_seq,
 		link->req.in_q->num_slots);
 
-	prev_idx = mtrigger_idx;
+	group_start_slot = &link->req.in_q->slot[group_start_idx];
+
+	prev_idx = group_start_idx;
 	__cam_req_mgr_dec_idx(&prev_idx, 1, link->req.in_q->num_slots);
 	prev_link_slot = &link->req.in_q->slot[prev_idx];
 
-	/* There are still pending requests do not trigger next sequence */
+	/* There are still pending requests, do not trigger next sequence */
 	if (!(prev_link_slot->status == CRM_SLOT_STATUS_NO_REQ ||
 		prev_link_slot->status == CRM_SLOT_STATUS_REQ_APPLIED)) {
 		return false;
 	}
 
+	/*
+	 * group_ready is set on the seq-0 slot by
+	 * __cam_req_mgr_mtrigger_update_group_ready once all devices have all
+	 * their pd_tbl slots for the group in READY state.
+	 */
+	if (!group_start_slot->group_ready) {
+		CAM_DBG(CAM_CRM,
+			"link 0x%x group not ready",
+			link->link_hdl);
+		return false;
+	}
+
+	/* Group is ready — scan to populate ext_trigger_info */
 	for (i = 0; i < link->num_devs; i++) {
 		struct cam_req_mgr_connected_device *rdev = &link->l_dev[i];
+		int pd_idx = group_start_idx;
 
-		int pd_idx = mtrigger_idx;
-		int slot_idx = mtrigger_idx;
-		for (seq = 0; seq < group_size; seq++) {
-			if (rdev->pd_tbl->slot[pd_idx].state != CRM_REQ_STATE_READY) {
-				CAM_DBG(CAM_CRM,
-					"Dev %s not ready idx %d id %d, state: %d, pd_tbl addr: %p",
-					rdev->dev_info.name, rdev->pd_tbl->slot[pd_idx].idx,
-					rdev->pd_tbl->id, rdev->pd_tbl->slot[pd_idx].state,
-					rdev->pd_tbl);
-				return false;
-			} else {
-				CAM_DBG(CAM_CRM,
-					"Dev %s ready idx %d id %d, state: %d, pd_tbl addr: %p",
-					rdev->dev_info.name, rdev->pd_tbl->slot[pd_idx].idx,
-					rdev->pd_tbl->id, rdev->pd_tbl->slot[pd_idx].state,
-					rdev->pd_tbl);
-				/* In case that ready device is marked as external trigger,
-				 * return this information to the caller
-				*/
-				if (rdev->pd_tbl->slot[pd_idx].extern_trigger_map &
-				    BIT(rdev->dev_bit)) {
-					if (ext_trigger_info->dev == NULL) {
-					    ext_trigger_info->dev = rdev;
-					    ext_trigger_info->link_hdl = link->link_hdl;
-					    ext_trigger_info->req_id =
-					    link->req.in_q->slot[slot_idx].req_id;
-					} else {
-						CAM_ERR(CAM_CRM, "More than one external triggers");
-						return false;
-					}
+		for (seq = 0; seq < link_slot->group_size; seq++) {
+			if (rdev->pd_tbl->slot[pd_idx].extern_trigger_map &
+			    BIT(rdev->dev_bit)) {
+				if (ext_trigger_info->dev == NULL) {
+					ext_trigger_info->dev = rdev;
+					ext_trigger_info->link_hdl = link->link_hdl;
+					ext_trigger_info->req_id =
+						link->req.in_q->slot[group_start_idx].req_id;
+				} else {
+					CAM_ERR(CAM_CRM, "More than one external triggers");
+					return false;
 				}
 			}
-
 			__cam_req_mgr_inc_idx(&pd_idx, 1, rdev->pd_tbl->num_slots);
 		}
 	}
@@ -4192,6 +4183,52 @@ static int cam_req_mgr_mtrigger_try_to_start(
 }
 
 /**
+ * __cam_req_mgr_mtrigger_update_group_ready()
+ *
+ * @brief : When a pd_tbl slot becomes READY, check if all slots in the group
+ *          for all devices are ready. If so, set group_ready=true on the seq-0
+ *          in_q slot. The full scan runs only once — when the last device
+ *          completes — avoiding repeated scans on every add_request.
+ * @idx       : Current in_q slot index (slot that just became ready)
+ * @link_slot : In_q slot pointer for @idx
+ * @tbl       : Pd table for the device
+ * @device    : Device whose slot just became ready
+ * @link      : Link pointer
+ */
+static void __cam_req_mgr_mtrigger_update_group_ready(
+	int idx,
+	struct cam_req_mgr_slot *link_slot,
+	struct cam_req_mgr_core_link *link)
+{
+	int group_start_idx = idx;
+	int check_idx;
+	int i, seq;
+	struct cam_req_mgr_slot *group_start_slot;
+
+	__cam_req_mgr_dec_idx(&group_start_idx, link_slot->group_seq,
+		link->req.in_q->num_slots);
+
+	group_start_slot = &link->req.in_q->slot[group_start_idx];
+
+	/* Scan all devices × group slots — runs only when last device completes */
+	for (i = 0; i < link->num_devs; i++) {
+		struct cam_req_mgr_req_tbl *dev_tbl = link->l_dev[i].pd_tbl;
+
+		check_idx = group_start_idx;
+		for (seq = 0; seq < link_slot->group_size; seq++) {
+			if (dev_tbl->slot[check_idx].state != CRM_REQ_STATE_READY)
+				return;
+			__cam_req_mgr_inc_idx(&check_idx, 1, dev_tbl->num_slots);
+		}
+	}
+
+	group_start_slot->group_ready = true;
+	CAM_DBG(CAM_CRM,
+		"link 0x%x group %lld all devices ready",
+		link->link_hdl, group_start_slot->group_id);
+}
+
+/**
  * cam_req_mgr_process_add_req_manual_trigger()
  *
  * @brief: This runs in workqueue thread context. Adds the device request to
@@ -4292,6 +4329,8 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 		state.dev_hdl = -1;
 		state.frame_id = -1;
 		__cam_req_mgr_update_state_monitor_array(link, &state);
+
+		__cam_req_mgr_mtrigger_update_group_ready(idx, link_slot, link);
 	}
 
 	rc = cam_req_mgr_mtrigger_try_to_start(idx, link);
