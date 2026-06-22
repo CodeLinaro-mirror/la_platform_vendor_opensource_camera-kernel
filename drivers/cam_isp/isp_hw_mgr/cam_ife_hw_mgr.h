@@ -30,8 +30,9 @@ enum cam_ife_ctx_master_type {
 };
 
 /* IFE resource constants */
-#define CAM_IFE_HW_IN_RES_MAX            (CAM_ISP_IFE_IN_RES_MAX & 0xFF)
-#define CAM_IFE_HW_RES_POOL_MAX          64
+#define CAM_IFE_HW_IN_RES_MAX                 (CAM_ISP_IFE_IN_RES_MAX & 0xFF)
+#define CAM_IFE_HW_RES_POOL_MAX               64
+#define CAM_IFE_HW_STREAM_GRP_RES_POOL_MAX    32
 
 /* IFE_HW_MGR ctx config */
 #define CAM_IFE_CTX_CFG_FRAME_HEADER_TS   BIT(0)
@@ -65,6 +66,9 @@ enum cam_ife_ctx_master_type {
 
 /* Trigger single out of sync debugfs */
 #define CAM_IFE_CTX_TRIGGER_SINGLE_OUT_OF_SYNC_CFG 1
+
+/* Number of stream group cfg to allocate once */
+#define CAM_ISP_STREAM_GROUP_CFG_NUM   1
 
 /**
  * struct cam_ife_hw_mgr_debug - contain the debug information
@@ -247,6 +251,7 @@ struct cam_ife_hw_mgr_ctx_scratch_buf_info {
  *                         only rdi and PD resource without PIX port.
  * @dynamic_drv_supported: Indicate if the dynamic drv is supported
  * @skip_reg_dump_buf_put: Set if put_cpu_buf for reg dump buf is already called
+ * @per_port_en:             Indicates if per port feature is enabled or not
  *
  */
 struct cam_ife_hw_mgr_ctx_flags {
@@ -271,6 +276,7 @@ struct cam_ife_hw_mgr_ctx_flags {
 	bool   rdi_pd_context;
 	bool   dynamic_drv_supported;
 	bool   skip_reg_dump_buf_put;
+	bool   per_port_en;
 };
 
 /**
@@ -326,6 +332,18 @@ struct cam_isp_comp_record_query {
 struct cam_cmd_buf_desc_addr_len {
 	uintptr_t cpu_addr;
 	size_t    buf_size;
+};
+
+/** struct cam_ife_virtual_rdi_mapping - mapping table between UMd and KMD RDI resources
+ *
+ * @rdi_path_count           : indicates how many rdi paths are acquired for this sensor
+ * @virtual_rdi              : requested virtual RDI port by UMD
+ * @acquired_rdi             : acquired RDI port by KMD
+ */
+struct cam_ife_virtual_rdi_mapping {
+	uint32_t   rdi_path_count;
+	uint32_t   virtual_rdi[CAM_ISP_STREAM_CFG_MAX];
+	uint32_t   acquired_rdi[CAM_ISP_STREAM_CFG_MAX];
 };
 
 /**
@@ -389,6 +407,7 @@ struct cam_cmd_buf_desc_addr_len {
  * @recovery_req_id:        The request id on which overflow recovery happens
  * @drv_path_idle_en:       Path idle enable value for DRV
  * @major_version:          Major version for acquire
+ * @sensor_id:              Sensor id for context
  * @vfe_bus_comp_grp:       VFE composite group placeholder
  * @sfe_bus_comp_grp:       SFE composite group placeholder
  * @cdm_done_ts:            CDM callback done timestamp
@@ -397,6 +416,7 @@ struct cam_cmd_buf_desc_addr_len {
  * @pri_rdi_out_res:         Primary RDI res for RDI only cases
  * @drv_info:                Array to include the per request drv info
  * @is_init_drv_cfg_received: Indicate if init drv config has received
+ * @mapping_table:          mapping between virtual rdi and acquired rdi
  */
 struct cam_ife_hw_mgr_ctx {
 	struct list_head                           list;
@@ -460,6 +480,7 @@ struct cam_ife_hw_mgr_ctx {
 	uint64_t                                   recovery_req_id;
 	uint32_t                                   drv_path_idle_en;
 	uint32_t                                   major_version;
+	uint32_t                                   sensor_id;
 	struct cam_isp_context_comp_record        *vfe_bus_comp_grp;
 	struct cam_isp_context_comp_record        *sfe_bus_comp_grp;
 	struct timespec64                          cdm_done_ts;
@@ -469,6 +490,7 @@ struct cam_ife_hw_mgr_ctx {
 	struct cam_isp_hw_per_req_info             per_req_info[MAX_DRV_REQUEST_DEPTH];
 	uint8_t                                    wr_per_req_index;
 	bool                                       is_init_drv_cfg_received;
+	struct cam_ife_virtual_rdi_mapping         mapping_table;
 };
 
 /**
@@ -649,6 +671,109 @@ struct cam_ife_hw_mgr {
 	bool                             csid_camif_irq_support;
 	bool                             cam_ddr_drv_support;
 	bool                             cam_clk_drv_support;
+};
+
+/**
+ * struct cam_ife_hw_mgr_sensor_stream_config  -  camera sensor stream configurations
+ *
+ * @priv                        : Context data
+ * @sensor_id                   : camera sensor unique index
+ * @num_valid_vc_dt_pxl         : valid vc and dt for pxl path
+ * @num_valid_vc_dt_rdi         : valid vc and dt in array for rdi path
+ * @pxl_vc                      : input virtual channel number for pxl path
+ * @pxl_dt                      : input data type number for pxl path
+ * @ppp_vc                      : input virtual channel number for ppp path
+ * @ppp_dt                      : input data type number for ppp path
+ * @lcr_vc                      : input virtual channel number for lcr path
+ * @lcr_dt                      : input data type number for lcr path
+ * @rdi_vc                      : input virtual channel number for rdi path
+ * @rdi_dt                      : input data type number for rdi path
+ * @decode_format               : input data format
+ * @rdi_vc_dt_updated           : Indicates count of rdi vc-dt associated to any hw res
+ * @pxl_vc_dt_updated           : Indicates if pxl vc-dt is associated to any hw res
+ * @lcr_vc_dt_updated           : Indicates if lcr vc-dt associated to any hw res
+ * @ppp_vc_dt_updated           : Indicates if ppp vc-dt is associated to any hw res
+ * @acquired                    : indicates whether acquire is done for this sensor id
+ * @is_streamon                 : indicates whether streamon is done for this sensor id
+ */
+struct cam_ife_hw_mgr_sensor_stream_config {
+	void                                      *priv;
+	uint32_t                                   sensor_id;
+	uint32_t                                   num_valid_vc_dt_pxl;
+	uint32_t                                   num_valid_vc_dt_rdi;
+	uint32_t                                   num_valid_vc_dt_ppp;
+	uint32_t                                   num_valid_vc_dt_lcr;
+	uint32_t                                   pxl_vc;
+	uint32_t                                   pxl_dt;
+	uint32_t                                   ppp_vc;
+	uint32_t                                   ppp_dt;
+	uint32_t                                   lcr_vc;
+	uint32_t                                   lcr_dt;
+	uint32_t                                   rdi_vc[CAM_ISP_VC_DT_CFG];
+	uint32_t                                   rdi_dt[CAM_ISP_VC_DT_CFG];
+	uint32_t                                   decode_format;
+	uint32_t                                   rdi_vc_dt_updated;
+	bool                                       pxl_vc_dt_updated;
+	uint32_t                                   lcr_vc_dt_updated;
+	bool                                       ppp_vc_dt_updated;
+	bool                                       acquired;
+	bool                                       is_streamon;
+};
+
+
+/**
+ * struct cam_ife_hw_mgr_stream_grp_config  -  camera sensor stream group configurations
+ *
+ * @res_type                    : input resource type
+ * @lane_type                   : lane type: c-phy or d-phy.
+ * @lane_num                    : active lane number
+ * @lane_cfg                    : lane configurations: 4 bits per lane
+ * @feature_mask                : feature flag
+ * @acquire_cnt                 : count of number of acquire calls
+ * @stream_cfg_cnt              : number of sensor configurations for pxl and rdi paths
+ * @rdi_stream_cfg_cnt          : number of sensor configurations for only rdi path
+ * @hw_ctx_cnt                  : count of number of hw ctx
+ * @stream_on_cnt               : count of number of streamon calls for this ife device
+ * @res_ife_csid_list           : CSID resource list
+ * @res_ife_src_list            : IFE input resource list
+ * @res_list_ife_out            : IFE output resources array
+ * @lock                        : mutex lock
+ * @free_res_list               : Free resources list for the branch node
+ * @acquired_hw_idx             : Index of acquired HW
+ * @res_pool                    : memory storage for the free resource list
+ * @mapping_table               : mapping table between UMd and KMD RDI resources
+ * @stream_cfg                  : stream config data
+ */
+struct cam_ife_hw_mgr_stream_grp_config {
+	uint32_t                                      res_type;
+	uint32_t                                      lane_type;
+	uint32_t                                      lane_num;
+	uint32_t                                      lane_cfg;
+	uint32_t                                      feature_mask;
+	uint32_t                                      acquire_cnt;
+	uint32_t                                      stream_cfg_cnt;
+	uint32_t                                      rdi_stream_cfg_cnt;
+	uint32_t                                      hw_ctx_cnt;
+	uint32_t                                      stream_on_cnt;
+	struct list_head                              res_ife_csid_list;
+	struct list_head                              res_ife_src_list;
+	struct cam_isp_hw_mgr_res                    *res_list_ife_out;
+	struct mutex                                  lock;
+	struct list_head                              free_res_list;
+	uint32_t                                      acquired_hw_idx;
+	struct cam_isp_hw_mgr_res                     res_pool[CAM_IFE_HW_STREAM_GRP_RES_POOL_MAX];
+	struct cam_ife_hw_mgr_sensor_stream_config    stream_cfg[CAM_ISP_STREAM_CFG_MAX];
+};
+
+/**
+ * struct cam_ife_hw_mgr_sensor_grp_cfg  -  sensor group configurations
+ *
+ * @num_grp_cfg                 : count of total active group configs
+ * @grp_cfg                     : stream group data
+ */
+struct cam_ife_hw_mgr_sensor_grp_cfg {
+	uint32_t                                  num_grp_cfg;
+	struct cam_ife_hw_mgr_stream_grp_config  *grp_cfg[CAM_ISP_STREAM_GROUP_CFG_MAX];
 };
 
 /**

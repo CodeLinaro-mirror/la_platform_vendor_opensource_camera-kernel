@@ -6507,6 +6507,128 @@ static inline void __cam_isp_ctx_reset_fcg_tracker(
 		ctx->ctx_id, ctx->link_hdl);
 }
 
+static int cam_isp_ctx_flush_affected_ctx_req_list(
+	struct cam_context               *ctx,
+	struct cam_req_mgr_flush_request *flush_req)
+{
+	int rc;
+	struct cam_isp_context           *ctx_isp =
+		(struct cam_isp_context *) ctx->ctx_priv;
+	struct cam_ctx_request            *req;
+	struct cam_req_mgr_timer_notify   timer;
+
+	CAM_DBG(CAM_ISP, "Flush pending list");
+	mutex_lock(&ctx_isp->isp_mutex);
+	rc = __cam_isp_ctx_flush_req(ctx, &ctx->pending_req_list, flush_req);
+
+	__cam_isp_ctx_trigger_reg_dump(CAM_HW_MGR_CMD_REG_DUMP_ON_FLUSH, ctx, NULL);
+
+	if (ctx->ctx_crm_intf && ctx->ctx_crm_intf->notify_timer) {
+		timer.link_hdl = ctx->link_hdl;
+		timer.dev_hdl = ctx->dev_hdl;
+		timer.state = false;
+		ctx->ctx_crm_intf->notify_timer(&timer);
+	}
+
+	if (!list_empty(&ctx->wait_req_list)) {
+		req = list_first_entry(&ctx->wait_req_list, struct cam_ctx_request, list);
+		ctx->last_flush_req = req->request_id;
+		rc = __cam_isp_ctx_flush_req(ctx, &ctx->wait_req_list,
+			flush_req);
+	}
+
+	if (!list_empty(&ctx->active_req_list)) {
+		if (!ctx->last_flush_req) {
+			req = list_last_entry(&ctx->active_req_list, struct cam_ctx_request, list);
+			ctx->last_flush_req = req->request_id;
+		}
+		rc = __cam_isp_ctx_flush_req(ctx, &ctx->active_req_list,
+			flush_req);
+	}
+
+	CAM_DBG(CAM_ISP, "Last request id to flush is %lld, ctx_id: %d",
+		flush_req->req_id, ctx->ctx_id);
+
+	ctx_isp->active_req_cnt = 0;
+	ctx_isp->waitlist_req_cnt = 0;
+	ctx_isp->bubble_frame_cnt = 0;
+	mutex_unlock(&ctx_isp->isp_mutex);
+
+	atomic_set(&ctx_isp->process_bubble, 0);
+	atomic_set(&ctx_isp->rxd_epoch, 0);
+	atomic_set(&ctx_isp->internal_recovery_set, 0);
+	atomic_set(&ctx_isp->flush_in_progress, 0);
+
+	return rc;
+}
+
+static int cam_isp_ctx_flush_all_affected_ctx_stream_grp(
+	struct cam_context               *ctx,
+	struct cam_req_mgr_flush_request *flush_req,
+	enum cam_isp_ctx_flush_event      cmd_type)
+{
+	uint32_t                          rc = 0;
+	struct cam_context               *active_ctx = NULL;
+	struct cam_isp_context           *ctx_isp = NULL;
+	struct cam_hw_cmd_args            hw_cmd_args;
+	struct cam_isp_hw_cmd_args        isp_hw_cmd_args;
+	int                               stream_grp_cfg_index;
+	struct cam_isp_hw_active_hw_ctx   active_hw_ctx;
+	int active_hw_ctx_cnt;
+	int i;
+
+	hw_cmd_args.ctxt_to_hw_map = ctx->ctxt_to_hw_map;
+	hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+	isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_GET_ACTIVE_HW_CTX_CNT;
+	isp_hw_cmd_args.u.active_hw_ctx.hw_ctx_cnt = 0;
+
+	hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+	ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
+		&hw_cmd_args);
+
+	active_hw_ctx_cnt = isp_hw_cmd_args.u.active_hw_ctx.hw_ctx_cnt;
+	stream_grp_cfg_index = isp_hw_cmd_args.u.active_hw_ctx.stream_grp_cfg_index;
+	CAM_DBG(CAM_ISP, "active hw context count :%d stream_grp_cfg_index :%u",
+		active_hw_ctx_cnt, stream_grp_cfg_index);
+
+	active_hw_ctx.stream_grp_cfg_index = stream_grp_cfg_index;
+	active_hw_ctx.index = 0;
+
+	hw_cmd_args.ctxt_to_hw_map = ctx->ctxt_to_hw_map;
+	hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
+	isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_GET_HW_CTX;
+	isp_hw_cmd_args.cmd_data = &active_hw_ctx;
+
+	for (i = 0; i < active_hw_ctx_cnt; i++) {
+		hw_cmd_args.u.internal_args = (void *)&isp_hw_cmd_args;
+		ctx->hw_mgr_intf->hw_cmd(ctx->hw_mgr_intf->hw_mgr_priv,
+			&hw_cmd_args);
+
+		active_ctx = (struct cam_context *)isp_hw_cmd_args.u.ptr;
+
+		if (active_ctx->ctx_id == ctx->ctx_id)
+			continue;
+
+		ctx_isp = (struct cam_isp_context *)active_ctx->ctx_priv;
+
+		switch (cmd_type) {
+		case CAM_ISP_CTX_FLUSH_AFFECTED_CTX_SET_FLUSH_IN_PROGRESS:
+			atomic_set(&ctx_isp->flush_in_progress, 1);
+			break;
+		case CAM_ISP_CTX_FLUSH_AFFECTED_CTX_REQ_LIST:
+			rc = cam_isp_ctx_flush_affected_ctx_req_list(active_ctx, flush_req);
+			if (rc)
+				return rc;
+			break;
+		default:
+			CAM_ERR(CAM_ISP, "invalid flush event cmd type: %d", cmd_type);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
 static int __cam_isp_ctx_flush_req_in_top_state(
 	struct cam_context               *ctx,
 	struct cam_req_mgr_flush_request *flush_req)
@@ -6534,6 +6656,9 @@ static int __cam_isp_ctx_flush_req_in_top_state(
 		ctx->state = CAM_CTX_FLUSHED;
 		ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_HALT;
 		spin_unlock_bh(&ctx->lock);
+		atomic_set(&ctx_isp->flush_in_progress, 1);
+		cam_isp_ctx_flush_all_affected_ctx_stream_grp(ctx, flush_req,
+			CAM_ISP_CTX_FLUSH_AFFECTED_CTX_SET_FLUSH_IN_PROGRESS);
 
 		CAM_INFO(CAM_ISP, "Last request id to flush is %lld, ctx_id:%u link: 0x%x",
 			flush_req->req_id, ctx->ctx_id, ctx->link_hdl);
@@ -6577,6 +6702,11 @@ static int __cam_isp_ctx_flush_req_in_top_state(
 		ctx_isp->active_req_cnt = 0;
 		spin_unlock_bh(&ctx->lock);
 
+		rc = cam_isp_ctx_flush_all_affected_ctx_stream_grp(ctx, flush_req,
+			CAM_ISP_CTX_FLUSH_AFFECTED_CTX_REQ_LIST);
+		if (rc)
+			CAM_ERR(CAM_ISP, "Failed to flush other active HW ctx rc: %d", rc);
+
 		reset_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
 		rc = ctx->hw_mgr_intf->hw_reset(ctx->hw_mgr_intf->hw_mgr_priv,
 			&reset_args);
@@ -6606,6 +6736,7 @@ end:
 	atomic_set(&ctx_isp->process_bubble, 0);
 	atomic_set(&ctx_isp->rxd_epoch, 0);
 	atomic_set(&ctx_isp->internal_recovery_set, 0);
+	atomic_set(&ctx_isp->flush_in_progress, 0);
 	return rc;
 }
 
@@ -6764,6 +6895,12 @@ static int __cam_isp_ctx_rdi_only_sof_in_top_state(
 	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx, ctx_idx: %u, link: 0x%x",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val, ctx->ctx_id, ctx->link_hdl);
 
+	if (list_empty(&ctx->active_req_list))
+		ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_SOF;
+	else
+		CAM_DBG(CAM_ISP, "ctx:%d Still need to wait for the buf done",
+			ctx->ctx_id);
+
 	/*
 	 * notify reqmgr with sof signal. Note, due to scheduling delay
 	 * we can run into situation that two active requests has already
@@ -6811,21 +6948,23 @@ static int __cam_isp_ctx_rdi_only_sof_in_applied_state(
 	struct cam_isp_context *ctx_isp, void *evt_data)
 {
 	struct cam_isp_hw_sof_event_data      *sof_event_data = evt_data;
+	struct cam_context                    *ctx = ctx_isp->base;
 
 	if (!evt_data) {
-		CAM_ERR(CAM_ISP, "in valid sof event data");
+		CAM_ERR(CAM_ISP, "ctx:%d in valid sof event data", ctx->ctx_id);
 		return -EINVAL;
 	}
 
 	__cam_isp_ctx_update_sof_ts_util(sof_event_data, ctx_isp);
 
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
-		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
+	CAM_DBG(CAM_ISP, "ctx:%d frame id: %lld time stamp:0x%llx",
+		ctx->ctx_id, ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 
 	ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_BUBBLE_APPLIED;
-	CAM_DBG(CAM_ISP, "next Substate[%s]",
+	CAM_DBG(CAM_ISP, "ctx:%d next Substate[%s]",
+		ctx->ctx_id,
 		__cam_isp_ctx_substate_val_to_type(
-		ctx_isp->substate_activated));
+			ctx_isp->substate_activated));
 
 	return 0;
 }
@@ -6852,15 +6991,17 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_applied(
 	 * the previous sof time stamp that got captured in the
 	 * sof in applied state.
 	 */
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx, ctx_idx: %u, link: 0x%x",
-		ctx_isp->frame_id, ctx_isp->sof_timestamp_val, ctx->ctx_id, ctx->link_hdl);
+	CAM_DBG(CAM_ISP, "ctx:%d frame id: %lld time stamp:0x%llx, ctx_idx: %u, link: 0x%x",
+		ctx->ctx_id, ctx_isp->frame_id, ctx_isp->sof_timestamp_val,
+		ctx->ctx_id, ctx->link_hdl);
 	__cam_isp_ctx_send_sof_timestamp(ctx_isp, request_id,
 		CAM_REQ_MGR_SOF_EVENT_SUCCESS);
 
 	__cam_isp_ctx_update_sof_ts_util(sof_event_data, ctx_isp);
 
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx, ctx_idx: %u, link: 0x%x",
-		ctx_isp->frame_id, ctx_isp->sof_timestamp_val, ctx->ctx_id, ctx->link_hdl);
+	CAM_DBG(CAM_ISP, "ctx:%d frame id: %lld time stamp:0x%llx, ctx_idx: %u, link: 0x%x",
+		ctx->ctx_id, ctx_isp->frame_id, ctx_isp->sof_timestamp_val,
+		ctx->ctx_id, ctx->link_hdl);
 
 	if (list_empty(&ctx->wait_req_list)) {
 		/*
@@ -9082,6 +9223,7 @@ static inline void __cam_isp_context_reset_ctx_params(
 	atomic_set(&ctx_isp->process_bubble, 0);
 	atomic_set(&ctx_isp->rxd_epoch, 0);
 	atomic_set(&ctx_isp->internal_recovery_set, 0);
+	atomic_set(&ctx_isp->flush_in_progress, 0);
 	ctx_isp->frame_id = 0;
 	ctx_isp->sof_timestamp_val = 0;
 	ctx_isp->boot_timestamp = 0;
