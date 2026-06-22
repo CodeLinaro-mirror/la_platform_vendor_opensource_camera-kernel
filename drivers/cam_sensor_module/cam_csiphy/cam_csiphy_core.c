@@ -2575,6 +2575,12 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			csiphy_dev->session_max_device_support =
 				CSIPHY_MAX_INSTANCES_PER_AGGREG_RX_PHY;
 
+		if (csiphy_dev->session_max_device_support == 0) {
+			csiphy_dev->session_max_device_support = 1;
+			CAM_DBG(CAM_CSIPHY,
+				"session_max_device_support was zero, now set default to 1");
+		}
+
 		bridge_params.ops = NULL;
 		bridge_params.session_hdl = csiphy_acq_dev.session_handle;
 		bridge_params.v4l2_sub_dev_flag = 0;

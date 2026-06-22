@@ -110,7 +110,8 @@ static inline void __cam_isp_ctx_move_req_to_free_list(
 		"Free req id: %lld, ctx_idx: %u, link: 0x%x",
 		req->request_id, ctx->ctx_id, ctx->link_hdl);
 
-	if (!ctx_isp->ul_path_en && req->packet)
+	if (req->packet && (!ctx_isp->ul_path_en ||
+		req_isp->hw_update_data.packet_opcode_type == CAM_ISP_PACKET_INIT_DEV))
 		cam_mem_put_kref(kmd_cmd_buff_info->handle);
 
 	if (req->packet) {
@@ -2010,7 +2011,6 @@ static void __cam_isp_ctx_handle_req_reset_util(
 	struct cam_context *ctx = ctx_isp->base;
 
 	list_del_init(&req->list);
-	__cam_isp_ctx_move_req_to_free_list(ctx, req);
 	req_isp->reapply_type = CAM_CONFIG_REAPPLY_NONE;
 	req_isp->cdm_reset_before_apply = false;
 	req_isp->num_acked = 0;
@@ -2041,6 +2041,8 @@ static void __cam_isp_ctx_handle_req_reset_util(
 	ctx_isp->last_bufdone_err_apply_req_id = 0;
 	req_isp->sensor_req_id = 0;
 	req_isp->applied_crop_req_id = 0;
+
+	__cam_isp_ctx_move_req_to_free_list(ctx, req);
 }
 
 static int cam_isp_schedule_fence_release_for_req(struct cam_isp_context *ctx_isp,

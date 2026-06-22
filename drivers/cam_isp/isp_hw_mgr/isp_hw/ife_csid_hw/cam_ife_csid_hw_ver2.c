@@ -6425,6 +6425,13 @@ static int cam_ife_csid_get_csid_hw_num(uint32_t csid_hw_index)
 			((csid_hw_index <= 7) ? (csid_hw_index - 2) : (csid_hw_index - 4)));
 	}
 
+	if (cpas_version == CAM_CPAS_TITAN_634_V110)
+		/* For Titan 634_110:
+		 * - Index 0 remain unchanged
+		 * - Indices 1-2 are mapped to 2-3 (add 1)
+		 */
+		return ((csid_hw_index == 0) ? csid_hw_index : (csid_hw_index + 1));
+
 	return csid_hw_index;
 }
 
