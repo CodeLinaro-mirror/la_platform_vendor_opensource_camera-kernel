@@ -38,9 +38,14 @@ struct kmem_cache *g_cam_req_mgr_timer_cachep;
 static struct list_head cam_req_mgr_ordered_sd_list;
 
 DECLARE_RWSEM(rwsem_lock);
+ssize_t cam_event_ctrl_sysfs_node_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count);
 
 static struct device_attribute camera_debug_sysfs_attr =
 	__ATTR(debug_node, 0600, NULL, cam_debug_sysfs_node_store);
+
+static struct device_attribute camera_event_ctrl_sysfs_attr =
+	__ATTR(event_ctrl, 0600, NULL,  cam_event_ctrl_sysfs_node_store);
 
 static const struct of_device_id cam_sensor_module_dt_match[] = {
 	{.compatible = "qcom,cam-sensor"},
@@ -1034,6 +1039,13 @@ static int cam_req_mgr_component_master_bind(struct device *dev)
 	if (rc < 0) {
 		CAM_ERR(CAM_CPAS,
 			"Failed to create debug attribute, rc=%d\n", rc);
+		goto req_mgr_device_deinit;
+	}
+
+	rc = sysfs_create_file(&dev->kobj, &camera_event_ctrl_sysfs_attr.attr);
+	if (rc < 0) {
+		CAM_ERR(CAM_CPAS,
+			"Failed to create event_ctrl attribute, rc=%d\n", rc);
 		goto sysfs_fail;
 	}
 
@@ -1065,6 +1077,7 @@ static void cam_req_mgr_component_master_unbind(struct device *dev)
 
 	/* Now proceed with unbinding master */
 	sysfs_remove_file(&dev->kobj, &camera_debug_sysfs_attr.attr);
+	sysfs_remove_file(&dev->kobj, &camera_event_ctrl_sysfs_attr.attr);
 	cam_req_mgr_core_device_deinit();
 	cam_req_mgr_util_deinit();
 	cam_media_device_cleanup();
@@ -1181,6 +1194,32 @@ static int cam_pm_resume(struct device *pdev)
 	CAM_INFO(CAM_CRM, "Queue LPM resume event");
 	v4l2_event_queue(g_dev.video, &event);
 	return 0;
+}
+ssize_t cam_event_ctrl_sysfs_node_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	char *local_buf = NULL;
+	struct v4l2_event event;
+	CAM_INFO(CAM_UTIL, "name:[%s] buf:[%s] bytes:[%d]", attr->attr.name, buf, count);
+	local_buf = kmemdup(buf, (count + sizeof(char)), GFP_KERNEL);
+
+	if (!local_buf)
+		return -ENOMEM;
+
+	if (count == 2 && local_buf[0] == '1') {
+		event.id = V4L_EVENT_CAM_REQ_MGR_S2R_SUSPEND;
+		event.type = V4L_EVENT_CAM_REQ_MGR_EVENT;
+		CAM_INFO(CAM_CRM, "Queue LPM suspend event(event_ctrl)");
+		v4l2_event_queue(g_dev.video, &event);
+	}
+	if (count == 2 && local_buf[0] == '0') {
+		event.id = V4L_EVENT_CAM_REQ_MGR_S2R_RESUME;
+		event.type = V4L_EVENT_CAM_REQ_MGR_EVENT;
+		CAM_INFO(CAM_CRM, "Queue LPM resume event(event_ctrl)");
+		v4l2_event_queue(g_dev.video, &event);
+	}
+	kfree(local_buf);
+	return count;
 }
 
 static const struct dev_pm_ops cam_pm_ops = {
