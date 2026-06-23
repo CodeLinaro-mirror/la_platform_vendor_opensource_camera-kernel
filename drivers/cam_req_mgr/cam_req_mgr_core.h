@@ -14,6 +14,7 @@
 
 #define CAM_REQ_MGR_MAX_LINKED_DEV     16
 #define MAX_REQ_SLOTS                  48
+#define MAX_GROUP_SLOTS                8
 #define MAX_REQ_STATE_MONITOR_NUM      108
 #define MAX_DEV_FOR_SPECIAL_OPS        4
 
@@ -342,12 +343,7 @@ struct cam_req_mgr_req_tbl {
  * @internal_recovered    : indicate if internal recover is already done for request
  * @skip_set              : Simulate a frame skip on this slot
  * @trigger_mode          : Trigger mode
- * @group_id:             : If requests are grouped the id of the group
- * @group_size            : Number of reuquest in one group
- * @group_seq             : Sequence number of the request in one group
- * @group_ready           : Set on the seq-0 slot when all devices have all
- *                          their group slots ready. Enables O(1) sequence-ready
- *                          check without scanning pd tables on every add_request.
+ * @group_id              : If requests are grouped the id of the group
  */
 struct cam_req_mgr_slot {
 	int32_t               idx;
@@ -367,9 +363,27 @@ struct cam_req_mgr_slot {
 	bool                  skip_set;
 	uint32_t              trigger_mode;
 	int64_t               group_id;
-	uint32_t              group_size;
-	uint32_t              group_seq;
-	bool                  group_ready;
+};
+
+/**
+ * struct cam_req_mgr_group_slot
+ * @id                  : group_id (-1 = empty/unused)
+ * @size                : number of requests in this group
+ * @start_link_slot_idx : in_q slot index of the first (seq-0) request
+ * @ready               : true when all devices have all group slots ready
+ * @external_trigger    : cached external trigger info (dev == NULL if none)
+ */
+struct cam_req_mgr_connected_device;
+struct cam_req_mgr_group_slot {
+	int64_t   id;
+	uint32_t  size;
+	int32_t   start_link_slot_idx;
+	bool      ready;
+	struct {
+		int32_t                              link_hdl;
+		int64_t                              req_id;
+		struct cam_req_mgr_connected_device *dev;
+	} external_trigger;
 };
 
 /**
@@ -379,13 +393,15 @@ struct cam_req_mgr_slot {
  * @rd_idx      : indicates slot index currently in process.
  * @wr_idx      : indicates slot index to hold new upcoming req.
  * @last_applied_idx : indicates slot index last applied successfully.
+ * @group_slot  : per-group metadata indexed by group_id % MAX_GROUP_SLOTS.
  */
 struct cam_req_mgr_req_queue {
-	int32_t                     num_slots;
-	struct cam_req_mgr_slot     slot[MAX_REQ_SLOTS];
-	int32_t                     rd_idx;
-	int32_t                     wr_idx;
-	int32_t                     last_applied_idx;
+	int32_t                        num_slots;
+	struct cam_req_mgr_slot        slot[MAX_REQ_SLOTS];
+	int32_t                        rd_idx;
+	int32_t                        wr_idx;
+	int32_t                        last_applied_idx;
+	struct cam_req_mgr_group_slot  group_slot[MAX_GROUP_SLOTS];
 };
 
 /**
@@ -452,19 +468,6 @@ struct cam_req_mgr_connected_device {
 	struct cam_req_mgr_device_info  dev_info;
 	struct cam_req_mgr_kmd_ops     *ops;
 	void                           *parent;
-};
-
-/**
- * struct cam_req_mgr_external_trigger_info
- * - List of inforamation
- * @link_hdl : Handle of the link on which device is connected
- * @req_id   : Request id which have external trigger device bit set
- * @dev      : External trigger device
- */
-struct cam_req_mgr_external_trigger_info {
-	int32_t                              link_hdl;
-	int64_t                              req_id;
-	struct cam_req_mgr_connected_device *dev;
 };
 
 /**

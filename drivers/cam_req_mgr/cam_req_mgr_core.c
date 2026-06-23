@@ -25,6 +25,28 @@
 static struct cam_req_mgr_core_device *g_crm_core_dev;
 static struct cam_req_mgr_core_link g_links[MAXIMUM_LINKS_CAPACITY];
 
+static struct cam_req_mgr_group_slot *__cam_req_mgr_get_group_slot(
+	struct cam_req_mgr_req_queue *in_q, int64_t group_id);
+static void __cam_req_mgr_alloc_group_slot(
+	struct cam_req_mgr_req_queue *in_q, int64_t group_id, uint32_t size,
+	int32_t start_link_slot_idx);
+
+	/**
+ * __cam_req_mgr_reset_group_slot() - Clear a single group_slot entry to the
+ *     empty/unused state.
+ * @gs : Group slot to reset
+ */
+static void __cam_req_mgr_reset_group_slot(struct cam_req_mgr_group_slot *gs)
+{
+	gs->id                   = -1;
+	gs->size                 = 0;
+	gs->start_link_slot_idx  = -1;
+	gs->ready                = false;
+	gs->external_trigger.link_hdl = -1;
+	gs->external_trigger.req_id   = -1;
+	gs->external_trigger.dev      = NULL;
+}
+
 static void __cam_req_mgr_reset_apply_data(struct cam_req_mgr_core_link *link)
 {
 	int pd;
@@ -953,8 +975,6 @@ static void __cam_req_mgr_flush_req_slot(
 		slot->status = CRM_SLOT_STATUS_NO_REQ;
 		slot->num_sync_links = 0;
 		slot->group_id = -1;
-		slot->group_seq = 0;
-		slot->group_size = 0;
 		for (i = 0; i < MAXIMUM_LINKS_PER_SESSION - 1; i++)
 			slot->sync_link_hdls[i] = 0;
 
@@ -977,6 +997,9 @@ static void __cam_req_mgr_flush_req_slot(
 	atomic_set(&link->eof_event_cnt, 0);
 	in_q->wr_idx = 0;
 	in_q->rd_idx = 0;
+
+	for (idx = 0; idx < MAX_GROUP_SLOTS; idx++)
+		__cam_req_mgr_reset_group_slot(&in_q->group_slot[idx]);
 
 	link->trigger_cnt[0][CAM_TRIGGER_POINT_SOF] = 0;
 	link->trigger_cnt[0][CAM_TRIGGER_POINT_EOF] = 0;
@@ -1032,7 +1055,8 @@ static void __cam_req_mgr_reset_req_slot(struct cam_req_mgr_core_link *link,
 	slot->num_sync_links = 0;
 	slot->skip_set = false;
 	slot->frame_sync_shift = 0;
-	slot->group_ready = false;
+	slot->group_id = -1;
+
 	for (i = 0; i < MAXIMUM_LINKS_PER_SESSION - 1; i++)
 		slot->sync_link_hdls[i] = 0;
 
@@ -2680,9 +2704,10 @@ static int  __cam_req_mgr_setup_in_q(struct cam_req_mgr_req_data *req)
 		in_q->slot[i].skip_idx = 0;
 		in_q->slot[i].status = CRM_SLOT_STATUS_NO_REQ;
 		in_q->slot[i].group_id = -1;
-		in_q->slot[i].group_seq = 0;
-		in_q->slot[i].group_size = 0;
 	}
+
+	for (i = 0; i < MAX_GROUP_SLOTS; i++)
+		__cam_req_mgr_reset_group_slot(&in_q->group_slot[i]);
 
 	in_q->wr_idx = 0;
 	in_q->rd_idx = 0;
@@ -3347,18 +3372,17 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 	switch (slot->trigger_mode) {
 	case CAM_REQ_MGR_TRIGGER_MODE_AUTO:
 		slot->group_id = -1;
-		slot->group_size = 0;
-		slot->group_seq = 0;
 		break;
-	case CAM_REQ_MGR_TRIGGER_MODE_MANUAL:
-		slot->group_id = sched_req->trigger_params.data.manual.id;
-		slot->group_size = sched_req->trigger_params.data.manual.size;
-		slot->group_seq = 0;
-		if (slot->group_id == prev_slot->group_id)
-			slot->group_seq = prev_slot->group_seq + 1;
+	case CAM_REQ_MGR_TRIGGER_MODE_MANUAL: {
+		int64_t  gid = sched_req->trigger_params.data.manual.id;
+		uint32_t gsz = sched_req->trigger_params.data.manual.size;
 
+		slot->group_id = gid;
 		slot->skip_set = !!sched_req->trigger_params.data.manual.skip;
+
+		__cam_req_mgr_alloc_group_slot(in_q, gid, gsz, in_q->wr_idx);
 		break;
+	}
 	default:
 		CAM_ERR(CAM_CRM, "Invalid trigger mode!");
 		rc = -EINVAL;
@@ -3707,6 +3731,67 @@ end:
 }
 
 /**
+ * __cam_req_mgr_get_group_slot() - Look up the group_slot entry for a given
+ *     group_id using a simple hash: group_id % MAX_GROUP_SLOTS.
+ * @in_q     : Input request queue
+ * @group_id : Group identifier
+ *
+ * @return   : Pointer to the matching cam_req_mgr_group_slot, or NULL if the
+ *             slot at that index belongs to a different group (id mismatch).
+ */
+static struct cam_req_mgr_group_slot *__cam_req_mgr_get_group_slot(
+	struct cam_req_mgr_req_queue *in_q, int64_t group_id)
+{
+	struct cam_req_mgr_group_slot *gs;
+
+	if (group_id < 0) {
+		return NULL;
+	}
+
+	gs = &in_q->group_slot[group_id % MAX_GROUP_SLOTS];
+
+	if (gs->id != group_id)
+		return NULL;
+
+	return gs;
+}
+
+/**
+ * __cam_req_mgr_alloc_group_slot() - Find or allocate a group_slot entry.
+ * @in_q                : Input request queue
+ * @group_id            : Group identifier
+ * @size                : Number of requests in the group
+ * @start_link_slot_idx : in_q slot index of the first request in the group
+ *
+ * @return   : none
+ */
+static void __cam_req_mgr_alloc_group_slot(
+	struct cam_req_mgr_req_queue *in_q, int64_t group_id, uint32_t size,
+	int32_t start_link_slot_idx)
+{
+	struct cam_req_mgr_group_slot *gs =
+		&in_q->group_slot[group_id % MAX_GROUP_SLOTS];
+
+	if (gs->id == group_id)
+		return;
+
+	/* Slot holds a different group at the same hash position. This should
+	 * not happen in normal operation — the previous group's last EOF should
+	 * have reset this slot already.
+	 */
+	if (gs->id != -1)
+		CAM_WARN(CAM_CRM,
+			"group_slot hash collision: overwriting group %lld with %lld",
+			gs->id, group_id);
+
+	__cam_req_mgr_reset_group_slot(gs);
+	gs->id                  = group_id;
+	gs->size                = size;
+	gs->start_link_slot_idx = start_link_slot_idx;
+	return;
+}
+
+/**
  * __cam_req_mgr_mtrigger_move_to_next_req_slot()
  *
  * @brief : Advance rd_idx to the next non-skipped slot within the same group.
@@ -3722,11 +3807,21 @@ end:
 static int __cam_req_mgr_mtrigger_move_to_next_req_slot(
 	struct cam_req_mgr_core_link *link)
 {
-	struct cam_req_mgr_req_queue *in_q = link->req.in_q;
+	struct cam_req_mgr_req_queue  *in_q = link->req.in_q;
 	int64_t  current_group_id = in_q->slot[in_q->rd_idx].group_id;
-	uint32_t group_size = in_q->slot[in_q->rd_idx].group_size;
+	struct cam_req_mgr_group_slot *gs;
+	uint32_t group_size;
 	int32_t  idx = in_q->rd_idx;
 	uint32_t steps;
+
+	gs = __cam_req_mgr_get_group_slot(in_q, current_group_id);
+	if (!gs) {
+		CAM_WARN(CAM_CRM,
+			"link[%x] no group_slot for group %lld at rd_idx %d",
+			link->link_hdl, current_group_id, in_q->rd_idx);
+		return -EAGAIN;
+	}
+	group_size = gs->size;
 
 	for (steps = 0; steps < group_size; steps++) {
 		__cam_req_mgr_inc_idx(&idx, 1, in_q->num_slots);
@@ -3755,30 +3850,30 @@ static int __cam_req_mgr_mtrigger_move_to_next_req_slot(
 /**
  * __cam_req_mgr_mtrigger_check_slots_ready()
  *
- * @brief            : Go over all devices PDS and check if all the
- *                     (add_request) are received.
- * @idx              : Current slot index
- * @link             : Link on which to chekc the slots
- * @ext_trigger_info : Found external trigger information
+ * @brief : Check if all devices have their group slots ready for the group
+ *          that contains the slot at @idx.
+ * @idx   : Current slot index
+ * @link  : Link on which to check the slots
  *
- * @return: true on success.
+ * @return: true if group is ready.
  */
 static bool __cam_req_mgr_mtrigger_check_slots_ready(
 	int idx,
-	struct cam_req_mgr_core_link *link,
-	struct cam_req_mgr_external_trigger_info *ext_trigger_info)
+	struct cam_req_mgr_core_link *link)
 {
-	int                      group_start_idx = idx;
-	int                      prev_idx = 0;
-	int                      i, seq;
-	struct cam_req_mgr_slot *prev_link_slot = NULL;
-	struct cam_req_mgr_slot *link_slot = &link->req.in_q->slot[idx];
-	struct cam_req_mgr_slot *group_start_slot = NULL;
+	int                            group_start_idx;
+	int                            prev_idx = 0;
+	struct cam_req_mgr_slot       *prev_link_slot = NULL;
+	struct cam_req_mgr_slot       *link_slot = &link->req.in_q->slot[idx];
+	struct cam_req_mgr_group_slot *gs;
 
-	__cam_req_mgr_dec_idx(&group_start_idx, link_slot->group_seq,
-		link->req.in_q->num_slots);
+	gs = __cam_req_mgr_get_group_slot(link->req.in_q, link_slot->group_id);
+	if (!gs || !gs->ready) {
+		CAM_DBG(CAM_CRM, "link 0x%x group not ready", link->link_hdl);
+		return false;
+	}
 
-	group_start_slot = &link->req.in_q->slot[group_start_idx];
+	group_start_idx = gs->start_link_slot_idx;
 
 	prev_idx = group_start_idx;
 	__cam_req_mgr_dec_idx(&prev_idx, 1, link->req.in_q->num_slots);
@@ -3788,40 +3883,6 @@ static bool __cam_req_mgr_mtrigger_check_slots_ready(
 	if (prev_link_slot->status != CRM_SLOT_STATUS_NO_REQ)
 		return false;
 
-	/*
-	 * group_ready is set on the seq-0 slot by
-	 * __cam_req_mgr_mtrigger_update_group_ready once all devices have all
-	 * their pd_tbl slots for the group in READY state.
-	 */
-	if (!group_start_slot->group_ready) {
-		CAM_DBG(CAM_CRM,
-			"link 0x%x group not ready",
-			link->link_hdl);
-		return false;
-	}
-
-	/* Group is ready — scan to populate ext_trigger_info */
-	for (i = 0; i < link->num_devs; i++) {
-		struct cam_req_mgr_connected_device *rdev = &link->l_dev[i];
-		int pd_idx = group_start_idx;
-
-		for (seq = 0; seq < link_slot->group_size; seq++) {
-			if (rdev->pd_tbl->slot[pd_idx].extern_trigger_map &
-			    BIT(rdev->dev_bit)) {
-				if (ext_trigger_info->dev == NULL) {
-					ext_trigger_info->dev = rdev;
-					ext_trigger_info->link_hdl = link->link_hdl;
-					ext_trigger_info->req_id =
-						link->req.in_q->slot[pd_idx].req_id;
-				} else {
-					CAM_ERR(CAM_CRM, "More than one external triggers");
-					return false;
-				}
-			}
-			__cam_req_mgr_inc_idx(&pd_idx, 1, rdev->pd_tbl->num_slots);
-		}
-	}
-
 	return true;
 }
 
@@ -3830,14 +3891,13 @@ static bool __cam_req_mgr_mtrigger_check_slots_ready(
  *
  * @brief      : Check if current link and all synced links are ready.
  * @idx        : Current slot index
- * @link       : Link on which to chekc the slots
+ * @link       : Link on which to check the slots
  *
  * @return: true on success.
  */
 static bool __cam_req_mgr_mtrigger_check_sequence_ready(
 	int idx,
-	struct cam_req_mgr_core_link *link,
-	struct cam_req_mgr_external_trigger_info *ext_trigger_info)
+	struct cam_req_mgr_core_link *link)
 {
 	int i = 0;
 	bool ready = false;
@@ -3846,10 +3906,9 @@ static bool __cam_req_mgr_mtrigger_check_sequence_ready(
 	struct cam_req_mgr_slot *link_slot = &link->req.in_q->slot[idx];
 
 	/* 1. Check for current link */
-	ready = __cam_req_mgr_mtrigger_check_slots_ready(idx, link, ext_trigger_info);
-	if (!ready) {
+	ready = __cam_req_mgr_mtrigger_check_slots_ready(idx, link);
+	if (!ready)
 		return false;
-	}
 
 	/* 2. Check for synced links if any */
 	for (i = 0; i < link_slot->num_sync_links; i++) {
@@ -3869,7 +3928,7 @@ static bool __cam_req_mgr_mtrigger_check_sequence_ready(
 			break;
 		}
 
-		ready = __cam_req_mgr_mtrigger_check_slots_ready(idx, sync_link, ext_trigger_info);
+		ready = __cam_req_mgr_mtrigger_check_slots_ready(idx, sync_link);
 		if  (ready) {
 			CAM_DBG(CAM_CRM, "All slots ready on link: 0x%x",
 				sync_link->link_hdl);
@@ -3965,16 +4024,22 @@ static int __cam_req_mgr_mtrigger_apply_req_in_idle(
 {
 	int                                  i = 0;
 	int                                  rc = 0;
-	int                                  mtrigger_idx = idx;
+	int                                  mtrigger_idx;
 	struct cam_req_mgr_connected_device *dev = NULL;
 	struct cam_req_mgr_slot             *link_slot = NULL;
 	struct cam_req_mgr_tbl_slot         *pd_tbl_slot = NULL;
+	struct cam_req_mgr_group_slot       *gs;
 
+	link_slot = &link->req.in_q->slot[idx];
+	gs = __cam_req_mgr_get_group_slot(link->req.in_q, link_slot->group_id);
+	if (!gs) {
+		CAM_ERR(CAM_CRM, "link 0x%x no group_slot for group %lld",
+			link->link_hdl, link_slot->group_id);
+		return -EINVAL;
+	}
 
 	/* Get first request from the sequence. */
-	link_slot = &link->req.in_q->slot[idx];
-	__cam_req_mgr_dec_idx(&mtrigger_idx, link_slot->group_seq, link->req.in_q->num_slots);
-
+	mtrigger_idx = gs->start_link_slot_idx;
 	link_slot  = &link->req.in_q->slot[mtrigger_idx];
 	if (link_slot->skip_idx) {
 		rc = __cam_req_mgr_mtrigger_move_to_next_req_slot(link);
@@ -4015,62 +4080,72 @@ static int __cam_req_mgr_mtrigger_apply_req_in_idle(
 /**
  * __cam_req_mgr_mtrigger_external_trigger_send()
  *
- * @brief              : Call external trigger callback to the specific device
- * @idx                : Current slot index
- * @link               : Link on which to apply the slots
+ * @brief : Call external trigger callback to the specific device using
+ *          the cached external trigger info from the group_slot.
+ * @gs    : Group slot containing the external trigger info
  *
- * @return             : 0 on success
+ * @return: 0 on success, -EINVAL if no external trigger registered.
  */
 static int __cam_req_mgr_mtrigger_external_trigger_send(
-	struct cam_req_mgr_external_trigger_info *external_trigger_info)
+	struct cam_req_mgr_group_slot *gs)
 {
 	int                                  rc = 0;
-	struct cam_req_mgr_connected_device *dev = external_trigger_info->dev;
+	struct cam_req_mgr_connected_device *dev;
 	struct cam_req_mgr_extern_trigger    external_trigger;
 
-	if (!dev || !dev->ops || !dev->ops->external_trigger)
+	if (!gs || !gs->external_trigger.dev)
+		return 0;
+
+	dev = gs->external_trigger.dev;
+	if (!dev->ops || !dev->ops->external_trigger)
 		return -EINVAL;
 
-	external_trigger.dev_hdl = dev->dev_hdl;
-	external_trigger.link_hdl = external_trigger_info->link_hdl;
-	external_trigger.req_id = external_trigger_info->req_id;
+	external_trigger.dev_hdl  = dev->dev_hdl;
+	external_trigger.link_hdl = gs->external_trigger.link_hdl;
+	external_trigger.req_id   = gs->external_trigger.req_id;
 
-	/* Fill data from external trigger */
 	rc = dev->ops->external_trigger(&external_trigger);
 	if (rc < 0) {
 		CAM_ERR(CAM_CRM, "Apply gpio sync failed for dev: %s on link 0x%x",
-			dev->dev_info.name, external_trigger_info->link_hdl);
-		return rc;
+			dev->dev_info.name, gs->external_trigger.link_hdl);
 	}
 
-	return 0;
+	return rc;
 }
 
 /**
  * __cam_req_mgr_mtrigger_apply_sequence()
  *
- * @brief      : Apply ready sequence on the current link and all synced links.
- * @idx        : Current slot index
- * @link       : Link on which to apply the slots
+ * @brief : Apply ready sequence on the current link and all synced links.
+ *          Scans all links for the external trigger group_slot.
+ * @idx   : Current slot index
+ * @link  : Link on which to apply the slots
  *
- * @return: 0 on success.
+ * @return: Pointer to the group_slot that holds the external trigger device
+ *          (NULL if none found), or ERR_PTR on failure.
  */
-static int __cam_req_mgr_mtrigger_apply_sequence(
+static struct cam_req_mgr_group_slot *__cam_req_mgr_mtrigger_apply_sequence(
 	int idx,
 	struct cam_req_mgr_core_link *link)
 {
-	int                           rc = 0, i = 0;
-	int64_t                       req_id = link->req.in_q->slot[idx].req_id;
-	struct cam_req_mgr_core_link *sync_link = NULL;
-	int                           sync_idx = 0;
-	struct cam_req_mgr_slot      *link_slot = &link->req.in_q->slot[idx];
+	int                            rc = 0, i = 0;
+	int64_t                        req_id = link->req.in_q->slot[idx].req_id;
+	struct cam_req_mgr_core_link  *sync_link = NULL;
+	int                            sync_idx = 0;
+	struct cam_req_mgr_slot       *link_slot = &link->req.in_q->slot[idx];
+	struct cam_req_mgr_group_slot *gs;
+	struct cam_req_mgr_group_slot *ext_trigger_gs = NULL;
 
 	rc = __cam_req_mgr_mtrigger_apply_req_in_idle(idx, link);
 	if (rc < 0) {
 		CAM_ERR(CAM_REQ, "Failed to apply manual trigger request on link 0x%x",
 			link->link_hdl);
-		return rc;
+		return ERR_PTR(rc);
 	}
+
+	gs = __cam_req_mgr_get_group_slot(link->req.in_q, link_slot->group_id);
+	if (gs && gs->external_trigger.dev)
+		ext_trigger_gs = gs;
 
 	/* Apply all synced links */
 	for (i = 0; i < link_slot->num_sync_links; i++) {
@@ -4078,26 +4153,37 @@ static int __cam_req_mgr_mtrigger_apply_sequence(
 		if (!sync_link) {
 			CAM_ERR(CAM_CRM, "null sync_link: %d on link: 0x%x", i,
 				link->link_hdl);
-			return -EINVAL;
+			return ERR_PTR(-EINVAL);
 		}
 
 		sync_idx = __cam_req_mgr_find_slot_for_req(sync_link->req.in_q, req_id);
 		if (sync_idx < 0) {
 			CAM_DBG(CAM_CRM, "req_id: %lld missing on link: 0x%x",
 				req_id, sync_link->link_hdl);
-			return -EBADSLT;
+			return ERR_PTR(-EBADSLT);
 		}
 
 		rc = __cam_req_mgr_mtrigger_apply_req_in_idle(sync_idx, sync_link);
 		if (rc < 0) {
 			CAM_ERR(CAM_REQ,
 				"Failed to apply manual trigger request on link 0x%x",
-				link->link_hdl);
-			return rc;
+				sync_link->link_hdl);
+			return ERR_PTR(rc);
+		}
+
+		gs = __cam_req_mgr_get_group_slot(sync_link->req.in_q,
+			sync_link->req.in_q->slot[sync_idx].group_id);
+		if (gs && gs->external_trigger.dev) {
+			if (ext_trigger_gs) {
+				CAM_WARN(CAM_CRM,
+					"multiple external triggers across links, using first");
+			} else {
+				ext_trigger_gs = gs;
+			}
 		}
 	}
 
-	return rc;
+	return ext_trigger_gs;
 }
 
 /**
@@ -4149,34 +4235,28 @@ static int cam_req_mgr_mtrigger_try_to_start(
 	int idx,
 	struct cam_req_mgr_core_link *link)
 {
-	int                                       rc = 0;
-	bool                                      all_links_slots_ready = true;
-	struct cam_req_mgr_external_trigger_info  extern_trigger_info;
-
-	extern_trigger_info.dev = NULL;
-	extern_trigger_info.link_hdl = -1;
-	extern_trigger_info.req_id = -1;
+	int                            rc = 0;
+	bool                           all_links_slots_ready;
+	struct cam_req_mgr_group_slot *ext_trigger_gs;
 
 	all_links_slots_ready =
-		__cam_req_mgr_mtrigger_check_sequence_ready(idx,
-							    link,
-							    &extern_trigger_info);
+		__cam_req_mgr_mtrigger_check_sequence_ready(idx, link);
 
-	if (all_links_slots_ready) {
-		rc = __cam_req_mgr_mtrigger_apply_sequence(idx, link);
-		if (rc < 0) {
-			CAM_ERR(CAM_CRM, "Not able to apply sequence for group id: %lld",
-				link->req.in_q->slot[idx].group_id);
-		}
+	if (!all_links_slots_ready)
+		return 0;
 
-		/* Send external trigger info to the correct device */
-		rc = __cam_req_mgr_mtrigger_external_trigger_send(&extern_trigger_info);
-		if (rc < 0) {
-			CAM_ERR(CAM_REQ, "Failed to send external trigger info on link 0x%x",
-				extern_trigger_info.link_hdl);
-			return rc;
-		}
+	ext_trigger_gs = __cam_req_mgr_mtrigger_apply_sequence(idx, link);
+	if (IS_ERR(ext_trigger_gs)) {
+		rc = PTR_ERR(ext_trigger_gs);
+		CAM_ERR(CAM_CRM, "Failed to apply sequence for group id: %lld rc: %d",
+			link->req.in_q->slot[idx].group_id, rc);
+		return rc;
 	}
+
+	rc = __cam_req_mgr_mtrigger_external_trigger_send(ext_trigger_gs);
+	if (rc < 0)
+		CAM_ERR(CAM_REQ, "Failed to send external trigger on link 0x%x",
+			link->link_hdl);
 
 	return rc;
 }
@@ -4199,32 +4279,37 @@ static void __cam_req_mgr_mtrigger_update_group_ready(
 	struct cam_req_mgr_slot *link_slot,
 	struct cam_req_mgr_core_link *link)
 {
-	int group_start_idx = idx;
+	int group_start_idx;
 	int check_idx;
 	int i, seq;
-	struct cam_req_mgr_slot *group_start_slot;
+	struct cam_req_mgr_group_slot *gs;
 
-	__cam_req_mgr_dec_idx(&group_start_idx, link_slot->group_seq,
-		link->req.in_q->num_slots);
+	gs = __cam_req_mgr_get_group_slot(link->req.in_q, link_slot->group_id);
+	if (!gs) {
+		CAM_ERR(CAM_CRM,
+			"link 0x%x no group_slot for group %lld",
+			link->link_hdl, link_slot->group_id);
+		return;
+	}
 
-	group_start_slot = &link->req.in_q->slot[group_start_idx];
+	group_start_idx = gs->start_link_slot_idx;
 
 	/* Scan all devices × group slots — runs only when last device completes */
 	for (i = 0; i < link->num_devs; i++) {
 		struct cam_req_mgr_req_tbl *dev_tbl = link->l_dev[i].pd_tbl;
 
 		check_idx = group_start_idx;
-		for (seq = 0; seq < link_slot->group_size; seq++) {
+		for (seq = 0; seq < gs->size; seq++) {
 			if (dev_tbl->slot[check_idx].state != CRM_REQ_STATE_READY)
 				return;
 			__cam_req_mgr_inc_idx(&check_idx, 1, dev_tbl->num_slots);
 		}
 	}
 
-	group_start_slot->group_ready = true;
+	gs->ready = true;
 	CAM_DBG(CAM_CRM,
 		"link 0x%x group %lld all devices ready",
-		link->link_hdl, group_start_slot->group_id);
+		link->link_hdl, link_slot->group_id);
 }
 
 /**
@@ -4296,8 +4381,23 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 	if (rc)
 		goto end_unlock;
 
-	if (add_req->external_trigger)
-		slot->extern_trigger_map |=  BIT(device->dev_bit);
+	if (add_req->external_trigger) {
+		struct cam_req_mgr_group_slot *gs;
+
+		slot->extern_trigger_map |= BIT(device->dev_bit);
+		gs = __cam_req_mgr_get_group_slot(link->req.in_q, link_slot->group_id);
+		if (gs) {
+			if (!gs->external_trigger.dev) {
+				gs->external_trigger.link_hdl = link->link_hdl;
+				gs->external_trigger.req_id   = add_req->req_id;
+				gs->external_trigger.dev      = device;
+			} else {
+				CAM_ERR(CAM_CRM,
+					"link 0x%x more than one external trigger in group %lld",
+					link->link_hdl, link_slot->group_id);
+			}
+		}
+	}
 
 	if (slot->state != CRM_REQ_STATE_PENDING &&
 		slot->state != CRM_REQ_STATE_EMPTY) {
@@ -4830,16 +4930,31 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 		*/
 		if (in_q->slot[in_q->rd_idx].group_id !=
 		    in_q->slot[idx].group_id) {
+			struct cam_req_mgr_group_slot *gs;
+			int64_t                       gr_id;
 
 			/* Reset all slots for the sequence which is done */
-			gr_size = in_q->slot[idx].group_size;
-			__cam_req_mgr_dec_idx(&idx, in_q->slot[idx].group_seq,
-					      link->req.in_q->num_slots);
+			gs = __cam_req_mgr_get_group_slot(in_q,
+				in_q->slot[idx].group_id);
+			if (!gs) {
+				CAM_DBG(CAM_REQ,
+					"Error can't find group slot");
+				goto release_lock;
+			}
+			gr_id = in_q->slot[idx].group_id;
+
+			gr_size = gs->size;
+			idx = gs->start_link_slot_idx;
 			in_q->last_applied_idx = -1;
 			for (i = 0; i < gr_size; i++) {
 				__cam_req_mgr_reset_req_slot(link, idx);
 				__cam_req_mgr_inc_idx(&idx, 1, link->req.in_q->num_slots);
 			}
+
+			CAM_DBG(CAM_CRM,
+				"link[%x] group %lld done, resetting group_slot",
+				link->link_hdl, gr_id);
+			__cam_req_mgr_reset_group_slot(gs);
 
 			/* Try to start next group */
 			rc = cam_req_mgr_mtrigger_try_to_start(in_q->rd_idx, link);
@@ -4847,6 +4962,7 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 				CAM_DBG(CAM_REQ,
 					"Error can't start new sequence");
 			}
+
 		}
 		goto release_lock;
 	} else {
