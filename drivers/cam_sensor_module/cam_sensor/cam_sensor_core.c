@@ -295,6 +295,37 @@ static int cam_sensor_handle_frame_info(struct cam_sensor_ctrl_t *s_ctrl,
 	return rc;
 }
 
+static int cam_sensor_handle_modeswitch_pd_info(struct cam_sensor_ctrl_t *s_ctrl,
+	struct cam_sensor_modeswitch_pd_info *modeswitch_pd_info)
+{
+
+	CAM_DBG(CAM_SENSOR,
+		"sensor:%d current modeswitch_delay: %d,input  modeswitch_delay: %d",
+		s_ctrl->soc_info.index,
+		s_ctrl->modeswitch_delay, modeswitch_pd_info->modeswitch_delay);
+
+	if ((modeswitch_pd_info->modeswitch_delay >= 1 &&
+		 modeswitch_pd_info->modeswitch_delay <= 2) &&
+		(modeswitch_pd_info->modeswitch_delay <= s_ctrl->pipeline_delay) &&
+		(modeswitch_pd_info->modeswitch_delay != s_ctrl->modeswitch_delay)) {
+		CAM_INFO(CAM_SENSOR,
+			"sensor:%d req:%llu update modeswitch_delay from %d to %d",
+			s_ctrl->soc_info.index, s_ctrl->last_updated_req,
+			s_ctrl->modeswitch_delay, modeswitch_pd_info->modeswitch_delay);
+		s_ctrl->modeswitch_delay = modeswitch_pd_info->modeswitch_delay;
+	}
+
+	if (s_ctrl->modeswitch_delay != modeswitch_pd_info->modeswitch_delay) {
+		CAM_ERR(CAM_SENSOR, "Invalid pipeline delay info, pipeline_delay:%d current modeswitch_delay:%d input modeswitch_delay:%d",
+			s_ctrl->pipeline_delay,
+			s_ctrl->modeswitch_delay,
+			modeswitch_pd_info->modeswitch_delay);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static int32_t cam_sensor_generic_blob_handler(void *user_data,
 	uint32_t blob_type, uint32_t blob_size, uint8_t *blob_data)
 {
@@ -333,6 +364,19 @@ static int32_t cam_sensor_generic_blob_handler(void *user_data,
 		}
 
 		rc = cam_sensor_handle_frame_info(s_ctrl, frame_info);
+		break;
+	}
+	case CAM_SENSOR_GENERIC_BLOB_MODESWITCHPD_INFO: {
+		struct cam_sensor_modeswitch_pd_info *modeswitch_pd_info =
+			(struct cam_sensor_modeswitch_pd_info *) blob_data;
+
+		if (blob_size < sizeof(struct cam_sensor_modeswitch_pd_info)) {
+			CAM_ERR(CAM_SENSOR, "MODESWITCHPD_INFO: Invalid blob size expected: 0x%x actual: 0x%x",
+				sizeof(struct cam_sensor_modeswitch_pd_info), blob_size);
+			return -EINVAL;
+		}
+
+		rc = cam_sensor_handle_modeswitch_pd_info(s_ctrl, modeswitch_pd_info);
 		break;
 	}
 	default:
@@ -1856,8 +1900,8 @@ int cam_sensor_publish_dev_info(struct cam_req_mgr_device_info *info)
 	info->trigger = CAM_TRIGGER_POINT_SOF;
 	info->resume_sync_on = true;
 
-	CAM_DBG(CAM_REQ, "num batched frames %d p_delay is %d",
-		s_ctrl->num_batched_frames, info->p_delay);
+	CAM_DBG(CAM_REQ, "num batched frames %d p_delay is %d m_delay is %d",
+		s_ctrl->num_batched_frames, info->p_delay, info->m_delay);
 
 	return rc;
 }
