@@ -8,6 +8,7 @@
 #include <cam_sensor_cmn_header.h>
 #include "cam_sensor_core.h"
 #include "cam_sensor_util.h"
+#include "cam_sensor_fsync.h"
 #include "cam_soc_util.h"
 #include "cam_trace.h"
 #include "cam_common_util.h"
@@ -379,6 +380,15 @@ static int32_t cam_sensor_generic_blob_handler(void *user_data,
 		rc = cam_sensor_handle_modeswitch_pd_info(s_ctrl, modeswitch_pd_info);
 		break;
 	}
+	case CAM_SENSOR_GENERIC_BLOB_SYNC_INFO: {
+		rc = cam_sensor_fsync_handle_blob(blob_data, blob_size, s_ctrl);
+		if (rc < 0) {
+			CAM_ERR(CAM_SENSOR, "SYNC_INFO: Invalid blob data rc=%d", rc);
+			return rc;
+		}
+
+		break;
+	}
 	default:
 		CAM_WARN(CAM_SENSOR, "Invalid blob type %d", blob_type);
 		break;
@@ -552,6 +562,26 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 		i2c_reg_settings =
 			&i2c_data->per_frame[csl_packet->header.request_id %
 				MAX_PER_FRAME_ARRAY];
+
+		/* NEW: reset sync config flags at the start of each update
+		 * packet so that a frame without a SYNC_INFO blob does not
+		 * accidentally re-trigger gpio_sync_cfg at the next
+		 * CAM_START_DEV (e.g. after a flush/restart). The blob
+		 * handler will re-arm them if the blob is present. */
+
+		if (s_ctrl->per_frame_sync_info) {
+			uint32_t idx = csl_packet->header.request_id % MAX_PER_FRAME_ARRAY;
+			s_ctrl->per_frame_sync_info[idx].is_settings_valid = 0;
+			s_ctrl->per_frame_sync_info[idx].request_id = 0;
+		}
+
+		if (s_ctrl->per_frame_cmd_buf) {
+			uint32_t idx = csl_packet->header.request_id % MAX_PER_FRAME_ARRAY;
+			s_ctrl->per_frame_cmd_buf[idx].cmd_buf_ready = false;
+			s_ctrl->per_frame_cmd_buf[idx].cmd_count = 0;
+		}
+
+		s_ctrl->fsync_blob_ready = false;
 		CAM_DBG(CAM_SENSOR, "Received Packet: %lld req: %lld",
 			csl_packet->header.request_id % MAX_PER_FRAME_ARRAY,
 			csl_packet->header.request_id);
@@ -1390,6 +1420,8 @@ void cam_sensor_shutdown(struct cam_sensor_ctrl_t *s_ctrl)
 	s_ctrl->is_probe_succeed = 0;
 	s_ctrl->last_flush_req = 0;
 	s_ctrl->sensor_state = CAM_SENSOR_INIT;
+	s_ctrl->fsync_blob_ready = false;
+	s_ctrl->is_fsync_active = false;
 }
 
 int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
@@ -1723,6 +1755,8 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		s_ctrl->last_applied_done_timestamp = 0;
 		s_ctrl->stream_off_on_flush = false;
 		s_ctrl->is_stream_off_pkt_updated = false;
+		s_ctrl->fsync_blob_ready = false;
+		s_ctrl->is_fsync_active = false;
 		memset(s_ctrl->sensor_res, 0, sizeof(s_ctrl->sensor_res));
 		CAM_INFO(CAM_SENSOR,
 			"CAM_ACQUIRE_DEV Success for %s sensor_id:0x%x,sensor_slave_addr:0x%x",
@@ -1749,6 +1783,13 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 				s_ctrl->bridge_intf.link_hdl);
 			rc = -EAGAIN;
 			goto release_mutex;
+		}
+
+		if (s_ctrl->is_fsync_active && s_ctrl->io_master_info.master_type == CCI_MASTER) {
+			rc = camera_io_gpio_halt(&(s_ctrl->io_master_info));
+			if (rc < 0)
+				CAM_ERR(CAM_SENSOR, "[%s] GPIO queue halt failed rc=%d",
+					s_ctrl->sensor_name, rc);
 		}
 
 		rc = cam_sensor_power_down(s_ctrl);
@@ -1794,6 +1835,8 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		s_ctrl->last_applied_done_timestamp = 0;
 		s_ctrl->stream_off_on_flush = false;
 		s_ctrl->is_stream_off_pkt_updated = false;
+		s_ctrl->fsync_blob_ready = false;
+		s_ctrl->is_fsync_active = false;
 	}
 		break;
 	case CAM_QUERY_CAP: {
@@ -2383,6 +2426,14 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 				}
 			}
 			CAM_DBG(CAM_SENSOR, "applied req_id: %llu", req_id);
+
+			if (s_ctrl->io_master_info.master_type == CCI_MASTER) {
+				rc = cam_sensor_fsync_apply(s_ctrl, req_id);
+				if (rc < 0)
+					CAM_ERR(CAM_SENSOR,
+						"[%s] cam_sensor_fsync_apply failed rc=%d req_id=%lld",
+						s_ctrl->sensor_name, rc, req_id);
+			}
 		} else {
 			CAM_DBG(CAM_SENSOR,
 				"Invalid/NOP request to apply: %lld", req_id);
@@ -2446,6 +2497,29 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 						CAM_ERR(CAM_SENSOR,
 							"Delete request Fail:%lld rc:%d i:%d j:%d",
 							del_req_id, rc, i, j);
+				}
+			}
+		}
+
+		/* Delete old sync info entries */
+		if (s_ctrl->per_frame_sync_info) {
+			for (j = 0; j < MAX_PER_FRAME_ARRAY; j++) {
+				if ((del_req_id > s_ctrl->per_frame_sync_info[j].request_id) &&
+				    (s_ctrl->per_frame_sync_info[j].is_settings_valid == 1)) {
+					s_ctrl->per_frame_sync_info[j].request_id = 0;
+					s_ctrl->per_frame_sync_info[j].is_settings_valid = 0;
+				}
+			}
+		}
+
+		/* Delete old cmd_buf entries */
+		if (s_ctrl->per_frame_cmd_buf) {
+			for (j = 0; j < MAX_PER_FRAME_ARRAY; j++) {
+				if (s_ctrl->per_frame_cmd_buf[j].cmd_buf_ready &&
+				    s_ctrl->per_frame_sync_info &&
+				    del_req_id > s_ctrl->per_frame_sync_info[j].request_id) {
+					s_ctrl->per_frame_cmd_buf[j].cmd_buf_ready = false;
+					s_ctrl->per_frame_cmd_buf[j].cmd_count = 0;
 				}
 			}
 		}
