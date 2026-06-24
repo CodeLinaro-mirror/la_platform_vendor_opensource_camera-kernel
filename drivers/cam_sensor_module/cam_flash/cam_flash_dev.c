@@ -614,23 +614,21 @@ static int cam_flash_component_bind(struct device *dev,
 		fctrl->io_master_info.cci_client->cci_device = fctrl->cci_num;
 		CAM_DBG(CAM_FLASH, "cci-index %d", fctrl->cci_num, rc);
 		soc_info = &fctrl->soc_info;
+
 		if (!soc_info->gpio_data) {
-			CAM_INFO(CAM_FLASH, "No GPIO found");
-			rc = 0;
-			return rc;
-		}
-
-		if (!soc_info->gpio_data->cam_gpio_common_tbl_size) {
+			CAM_INFO(CAM_FLASH, "No GPIO found, skipping GPIO init");
+		} else if (!soc_info->gpio_data->cam_gpio_common_tbl_size) {
 			CAM_INFO(CAM_FLASH, "No GPIO found");
 			return -EINVAL;
+		} else {
+			rc = cam_sensor_util_init_gpio_pin_tbl(soc_info,
+					&fctrl->power_info.gpio_num_info);
+			if ((rc < 0) || (!fctrl->power_info.gpio_num_info)) {
+				CAM_ERR(CAM_FLASH, "No/Error Flash GPIOs");
+				return -EINVAL;
+			}
 		}
 
-		rc = cam_sensor_util_init_gpio_pin_tbl(soc_info,
-				&fctrl->power_info.gpio_num_info);
-		if ((rc < 0) || (!fctrl->power_info.gpio_num_info)) {
-			CAM_ERR(CAM_FLASH, "No/Error Flash GPIOs");
-			return -EINVAL;
-		}
 		fctrl->i2c_data.per_frame =
 			CAM_MEM_ZALLOC(sizeof(struct i2c_settings_array) *
 			MAX_PER_FRAME_ARRAY, GFP_KERNEL);
