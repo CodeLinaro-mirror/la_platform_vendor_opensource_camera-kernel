@@ -1127,6 +1127,26 @@ void cam_hrtimer_setup(struct hrtimer *on_timer,
 #endif
 }
 
+void __iomem *cam_compat_ioremap(bool mem_block_rw_prop,
+	unsigned long mem_block_start,
+	unsigned long mem_block_size)
+{
+	void __iomem *mem_base;
+
+	if (mem_block_rw_prop) {
+		mem_base = ioremap(mem_block_start, mem_block_size);
+	} else {
+#if KERNEL_VERSION(6, 15, 0) <= LINUX_VERSION_CODE
+		mem_base = ioremap_prot(mem_block_start, mem_block_size,
+		__pgprot((_PAGE_IOREMAP & ~PTE_WRITE) | PTE_RDONLY));
+#else
+		mem_base = ioremap_prot(mem_block_start, mem_block_size,
+		(_PAGE_IOREMAP & ~PTE_WRITE) | PTE_RDONLY);
+#endif
+	}
+
+	return mem_base;
+}
 
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
 #ifdef CONFIG_ARCH_QTI_VM

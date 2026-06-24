@@ -4296,11 +4296,8 @@ void __iomem * cam_soc_util_get_mem_base(
 		}
 	}
 
-	if (mem_block_rw_prop)
-		mem_base = ioremap(mem_block_start, mem_block_size);
-	else
-		mem_base = ioremap_prot(mem_block_start, mem_block_size,
-			(_PAGE_IOREMAP & ~PTE_WRITE) | PTE_RDONLY);
+	mem_base = cam_compat_ioremap(mem_block_rw_prop,
+			mem_block_start, mem_block_size);
 
 	if (!mem_base) {
 		CAM_ERR(CAM_UTIL, "get mem base failed");
