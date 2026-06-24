@@ -249,7 +249,7 @@ struct cam_flash_ctrl {
 	uint32_t                            torch_num_sources;
 	struct mutex                        flash_mutex;
 	enum   cam_flash_state              flash_state;
-	uint8_t                             flash_type;
+	uint32_t                             flash_type;
 	bool                                is_regulator_enabled;
 	struct cam_flash_func_tbl           func_tbl;
 	struct led_trigger           *flash_trigger[CAM_FLASH_MAX_LED_TRIGGERS];

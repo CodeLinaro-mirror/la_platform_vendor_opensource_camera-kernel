@@ -1569,6 +1569,9 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 			MAX_PER_FRAME_ARRAY;
 		csl_req_id = csl_packet->header.request_id;
 		CAM_DBG(CAM_FLASH, "Flash pkt init fire opcode received");
+		offset = (uint32_t *)((uint8_t *)&csl_packet->payload_flex +
+			csl_packet->cmd_buf_offset);
+		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 		/* add support for handling i2c_data*/
 		i2c_reg_settings =
 			&fctrl->i2c_data.per_frame[frm_offset];
