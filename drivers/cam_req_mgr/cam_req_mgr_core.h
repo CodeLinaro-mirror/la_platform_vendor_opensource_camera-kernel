@@ -57,7 +57,7 @@
 #define CAM_REQ_MGR_COMPUTE_TIMEOUT(x) ((x) + (((x) * (x + 25)) / 100))
 
 /* Number of words for dumping req state info */
-#define CAM_CRM_DUMP_EVENT_NUM_WORDS  6
+#define CAM_CRM_DUMP_EVENT_NUM_WORDS  7
 
 /* Maximum length of tag while dumping */
 #define CAM_CRM_DUMP_TAG_MAX_LEN 128
@@ -412,6 +412,7 @@ struct cam_req_mgr_req_queue {
  * @frame_id     : frame id
  * @time_stamp   : the time stamp of the state
  * @name         : device_name
+ * @group_id     : manual trigger group id (-1 if not in a group)
  */
 struct cam_req_mgr_state_monitor {
 	enum cam_req_mgr_req_state  req_state;
@@ -420,6 +421,7 @@ struct cam_req_mgr_state_monitor {
 	int64_t                     frame_id;
 	struct timespec64           time_stamp;
 	char                        name[256];
+	int64_t                     group_id;
 };
 
 /**
