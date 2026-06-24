@@ -12,6 +12,7 @@
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
 #include "cam_mem_mgr_api.h"
+#include "cam_flash_core.h"
 #include <linux/leds.h>
 #include <linux/led-class-flash.h>
 #include <linux/hrtimer.h>
@@ -640,14 +641,9 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 			}
 
 			if (flash_ctrl->precise_flash.timer_state != TIMER_STATE_INIT) {
-				hrtimer_init(&flash_ctrl->precise_flash.on_timer,
-					CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-				hrtimer_init(&flash_ctrl->precise_flash.off_timer,
-					CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-				flash_ctrl->precise_flash.on_timer.function =
-					on_timer_function;
-				flash_ctrl->precise_flash.off_timer.function =
-					off_timer_function;
+				cam_hrtimer_setup(&flash_ctrl->precise_flash.on_timer,
+					&flash_ctrl->precise_flash.off_timer,
+					on_timer_function, off_timer_function);
 			}
 			flash_ctrl->precise_flash.off_time_ms =
 				flash_data->flash_active_time_ms;

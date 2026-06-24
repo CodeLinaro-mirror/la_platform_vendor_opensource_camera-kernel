@@ -1109,6 +1109,24 @@ void cam_compat_delete_timer_sync(struct timer_list *sys_timer)
 #endif
 }
 
+void cam_hrtimer_setup(struct hrtimer *on_timer,
+	struct hrtimer *off_timer,
+	enum hrtimer_restart (*timer_func_on)(struct hrtimer *timer),
+	enum hrtimer_restart (*timer_func_off)(struct hrtimer *timer))
+{
+#if KERNEL_VERSION(6, 15, 0) <= LINUX_VERSION_CODE
+		hrtimer_setup(on_timer, timer_func_on,
+			CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+		hrtimer_setup(off_timer, timer_func_off,
+			CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+#else
+		hrtimer_init(on_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+		hrtimer_init(off_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+		on_timer->function = timer_func_on;
+		off_timer->function = timer_func_off;
+#endif
+}
+
 
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
 #ifdef CONFIG_ARCH_QTI_VM

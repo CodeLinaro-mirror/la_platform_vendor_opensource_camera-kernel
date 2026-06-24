@@ -173,6 +173,10 @@ void cam_compat_delete_timer_sync(struct timer_list *sync_timer);
 inline struct icc_path *cam_icc_get_path(struct device *dev,
 	const int src_id, const int dst_id, const char *path_name, bool use_path_name);
 #endif
+void cam_hrtimer_setup(struct hrtimer *on_timer,
+	struct hrtimer *off_timer,
+	enum hrtimer_restart (*timer_func_on)(struct hrtimer *timer),
+	enum hrtimer_restart (*timer_func_off)(struct hrtimer *timer));
 
 #if IS_REACHABLE(CONFIG_DMABUF_HEAPS)
 #ifdef CONFIG_ARCH_QTI_VM
