@@ -10721,6 +10721,7 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 	start_isp.is_internal_start = false;
 	start_isp.is_trigger_type =
 		(ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) ? true : false;
+	start_isp.is_dual_trigger = ctx_isp->dual_trigger;
 
 	rc = __cam_isp_ctx_query_primary_port_info(ctx);
 	if (rc)
@@ -11275,6 +11276,9 @@ static int __cam_isp_ctx_reset_and_recover(
 
 	start_isp.start_only = true;
 	start_isp.is_internal_start = true;
+	start_isp.is_trigger_type =
+		(ctx_isp->stream_type == CAM_REQ_MGR_LINK_TRIGGER_TYPE) ? true : false;
+	start_isp.is_dual_trigger = ctx_isp->dual_trigger;
 
 	__cam_isp_context_reset_internal_recovery_params(ctx_isp);
 

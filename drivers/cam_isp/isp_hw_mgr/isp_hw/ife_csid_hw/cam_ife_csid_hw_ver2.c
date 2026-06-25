@@ -3182,6 +3182,7 @@ int cam_ife_csid_ver2_release(void *hw_priv,
 	csid_hw->sync_mode = CAM_ISP_HW_SYNC_NONE;
 	csid_hw->rup_aup_mask = 0;
 	csid_hw->trigger_cam_data.is_trigger_type = false;
+	csid_hw->trigger_cam_data.is_dual_trigger = false;
 
 	if (csid_hw->counters.csi2_reserve_cnt)
 		csid_hw->counters.csi2_reserve_cnt--;
@@ -4413,6 +4414,15 @@ static int cam_ife_csid_ver2_enable_csi2(struct cam_ife_csid_ver2_hw *csid_hw)
 	if (csid_hw->debug_info.debug_val & CAM_IFE_CSID_DEBUG_DISABLE_CRC)
 		val &= ~IFE_CSID_VER2_RX_ERROR_CRC;
 
+	/*
+	 * In the dual trigger use case the sensor streams two VCs and each CSID
+	 * is configured with only one of them, so the other VC is always seen
+	 * as unmapped by this CSID. The resulting UNMAPPED_VC_DT error is
+	 * expected and would only add noise, so do not subscribe to it.
+	 */
+	if (csid_hw->trigger_cam_data.is_dual_trigger)
+		val &= ~IFE_CSID_VER2_RX_UNMAPPED_VC_DT;
+
 	irq_mask[CAM_IFE_CSID_IRQ_REG_RX] = val;
 
 	csid_hw->rx_cfg.err_irq_handle =
@@ -4947,6 +4957,7 @@ int cam_ife_csid_ver2_start(void *hw_priv, void *args,
 	rc = cam_ife_csid_ver2_enable_hw(csid_hw);
 
 	csid_hw->trigger_cam_data.is_trigger_type = start_args->is_trigger_mode;
+	csid_hw->trigger_cam_data.is_dual_trigger = start_args->is_dual_trigger;
 
 	if (start_args->is_trigger_mode) {
 		if (!(csid_hw->trigger_cam_data.active_res_mask &
