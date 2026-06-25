@@ -193,14 +193,24 @@ static void cam_ope_free_io_config(struct cam_ope_request *req)
 
 static void cam_ope_free_cpu_buf(struct cam_ope_request *req)
 {
-	if (req && req->ope_kmd_buf.cpu_addr) {
-		cam_mem_put_cpu_buf(req->ope_kmd_buf.mem_handle);
+	int i;
+
+	if (!req) {
+		CAM_ERR(CAM_OPE, "Invalid input param");
+		return;
+	}
+
+	for (i = 0; i < req->num_batch; i++) {
+		if (req->ope_kmd_buf.cpu_addr)
+			cam_mem_put_cpu_buf(req->ope_kmd_buf.mem_handle);
+		if (req->ope_debug_buf.cpu_addr)
+			cam_mem_put_cpu_buf(req->ope_debug_buf.mem_handle);
+	}
+	if (req->ope_kmd_buf.cpu_addr)
 		req->ope_kmd_buf.cpu_addr = 0;
-	}
-	if (req && req->ope_debug_buf.cpu_addr) {
-		cam_mem_put_cpu_buf(req->ope_debug_buf.mem_handle);
+
+	if (req->ope_debug_buf.cpu_addr)
 		req->ope_debug_buf.cpu_addr = 0;
-	}
 }
 
 static void cam_ope_device_timer_stop(struct cam_ope_hw_mgr *hw_mgr)
