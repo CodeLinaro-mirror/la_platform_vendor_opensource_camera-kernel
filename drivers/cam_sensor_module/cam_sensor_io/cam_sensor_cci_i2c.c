@@ -281,8 +281,8 @@ int32_t cam_cci_i2c_read_append_write(
 	cci_ctrl.cfg.cci_i2c_write_cfg.addr_type = rd_append_write_setting->addr_type;
 	cci_ctrl.cfg.cci_i2c_write_cfg.size = rd_append_write_setting->size;
 
-	rc = v4l2_subdev_call(client->cci_client->cci_subdev,
-		core, ioctl, VIDIOC_MSM_CCI_CFG, &cci_ctrl);
+	rc = cam_cci_client_ops(client->cci_client->cci_subdev,
+		VIDIOC_MSM_CCI_CFG, &cci_ctrl);
 	if (rc < 0) {
 		CAM_ERR(CAM_SENSOR, "Failed rc = %d", rc);
 		return rc;
@@ -316,8 +316,8 @@ int32_t cam_cci_i2c_sequential_xfer(
 		MSM_CCI_I2C_SEQUENTIAL_XFER_LOCK : MSM_CCI_I2C_SEQUENTIAL_XFER_UNLOCK);
 	cci_ctrl.cci_info = io_master_info->cci_client;
 
-	rc = v4l2_subdev_call(io_master_info->cci_client->cci_subdev,
-		core, ioctl, VIDIOC_MSM_CCI_CFG, &cci_ctrl);
+	rc = cam_cci_client_ops(io_master_info->cci_client->cci_subdev,
+		VIDIOC_MSM_CCI_CFG, &cci_ctrl);
 	if (rc < 0) {
 		CAM_ERR(CAM_SENSOR, "Failed rc = %d", rc);
 		return rc;
