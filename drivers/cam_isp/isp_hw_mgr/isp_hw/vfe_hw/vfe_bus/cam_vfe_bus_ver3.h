@@ -16,6 +16,7 @@
 #define CAM_VFE_BUS_VER3_MAX_MID_PER_PORT    4
 #define CAM_VFE_BUS_VER3_CONS_ERR_MAX        32
 #define CAM_VFE_BUS_VER3_MAX_CLIENTS         28
+#define CAM_VFE_BUS_VER3_IRQ_MAX             2
 
 enum cam_vfe_bus_wr_wm_mode {
 	CAM_VFE_WM_LINE_BASED_MODE,
@@ -229,6 +230,12 @@ struct cam_vfe_bus_ver3_reg_offset_bus_client {
 	uint32_t comp_group;
 	uint64_t supported_formats;
 	uint32_t rcs_en_mask;
+};
+
+enum cam_vfe_bus_ver3_stored_irq_masks {
+	CAM_VFE_BUS_VER3_BUF_DONE_MASK,
+	CAM_VFE_BUS_VER3_RUP_MASK,
+	CAM_VFE_BUS_VER3_MAX_STORED_MASKS,
 };
 
 /*

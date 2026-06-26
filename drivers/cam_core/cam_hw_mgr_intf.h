@@ -19,7 +19,7 @@
 
 
 /* maximum context numbers */
-#define CAM_CTX_MAX                         8
+#define CAM_CTX_MAX                         16
 
 /* maximum buf done irqs, multiplied by 3 hw context entries per resource */
 #define CAM_NUM_OUT_PER_COMP_IRQ_MAX        36
@@ -782,6 +782,7 @@ struct cam_hw_mgr_intf {
 	int (*hw_recovery)(void *hw_priv, void *hw_recovery_args);
 	void (*hw_inject_evt)(void *hw_priv, void *evt_args);
 	int (*synx_trigger)(void *hw_priv, void *synx_params);
+	int (*hw_update_sensor_grp_stream_cfg)(void *hw_priv, void *hw_cfg_args);
 };
 
 #endif /* _CAM_HW_MGR_INTF_H_ */

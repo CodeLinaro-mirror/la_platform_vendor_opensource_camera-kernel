@@ -111,6 +111,16 @@ enum msm_camera_power_seq_type {
 	SENSOR_CUSTOM_GPIO1,
 	SENSOR_CUSTOM_GPIO2,
 	SENSOR_VANA1,
+	SENSOR_CUSTOM_GPIO3,
+	SENSOR_CUSTOM_GPIO4,
+	SENSOR_CUSTOM_GPIO5,
+	SENSOR_CUSTOM_GPIO6,
+	SENSOR_CUSTOM_GPIO7,
+	SENSOR_CUSTOM_GPIO8,
+	SENSOR_CUSTOM_GPIO9,
+	SENSOR_CUSTOM_GPIO10,
+	SENSOR_CUSTOM_GPIO11,
+	SENSOR_CUSTOM_GPIO12,
 	SENSOR_SEQ_TYPE_MAX,
 };
 
@@ -163,7 +173,12 @@ enum cam_sensor_i2c_cmd_type {
 	CAM_SENSOR_I2C_WRITE_SEQ,
 	CAM_SENSOR_I2C_READ_RANDOM,
 	CAM_SENSOR_I2C_READ_SEQ,
-	CAM_SENSOR_I2C_POLL
+	CAM_SENSOR_I2C_POLL,
+	CAM_SENSOR_I2C_SET_I2C_INFO,
+	CAM_SENSOR_I2C_READ_APPEND_WRITE,
+	CAM_SENSOR_I2C_SEQUENTIAL_XFER_LOCK,
+	CAM_SENSOR_I2C_SEQUENTIAL_XFER_UNLOCK,
+	CAM_SENSOR_I2C_GPIO_CTL
 };
 
 struct common_header {
@@ -237,6 +252,8 @@ struct cam_sensor_i2c_seq_reg {
 struct i2c_settings_list {
 	struct cam_sensor_i2c_reg_setting i2c_settings;
 	struct cam_sensor_i2c_seq_reg seq_settings;
+	struct cam_cmd_i2c_info slave_info;
+	struct cam_cmd_i2c_sequential_xfer seq_xfer;
 	enum cam_sensor_i2c_cmd_type op_code;
 	struct list_head list;
 };
@@ -278,6 +295,7 @@ struct cam_camera_slave_info {
 	uint32_t sensor_id_reg_addr;
 	uint32_t sensor_id;
 	uint32_t sensor_id_mask;
+	uint8_t  i2c_freq_mode;
 };
 
 struct msm_sensor_init_params {
@@ -302,6 +320,17 @@ enum msm_sensor_camera_id_t {
 	CAMERA_13,
 	CAMERA_14,
 	CAMERA_15,
+	CAMERA_16,
+	CAMERA_17,
+	CAMERA_18,
+	CAMERA_19,
+	CAMERA_20,
+	CAMERA_21,
+	CAMERA_22,
+	CAMERA_23,
+	CAMERA_24,
+	CAMERA_25,
+	CAMERA_26,
 	MAX_CAMERAS,
 };
 

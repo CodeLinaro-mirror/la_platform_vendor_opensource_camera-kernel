@@ -967,12 +967,22 @@ ssize_t cam_iommu_map_sg(struct iommu_domain *domain,
 }
 #endif
 
-int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info)
+int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info, bool is_child)
 {
 	struct device_node *of_node = NULL;
 	int16_t gpio_array_size = 0;
 
-	of_node = soc_info->dev->of_node;
+	if (is_child)
+		of_node = soc_info->parent_node;
+	else
+		of_node = soc_info->dev->of_node;
+
+/* Validate input parameters */
+	if (!of_node) {
+		CAM_ERR(CAM_UTIL, "Invalid param of_node");
+		return -EINVAL;
+	}
+
 #if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
 	gpio_array_size = of_count_phandle_with_args(
 		of_node, "gpios", "#gpio-cells");
@@ -984,12 +994,21 @@ int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info)
 }
 
 uint16_t cam_get_named_gpio(struct cam_hw_soc_info *soc_info,
-	int index)
+	int index, bool is_child)
 {
 	struct device_node *of_node = NULL;
 	uint16_t gpio_pin = 0;
 
-	of_node = soc_info->dev->of_node;
+	if (is_child)
+		of_node = soc_info->parent_node;
+	else
+		of_node = soc_info->dev->of_node;
+
+/* Validate input parameters */
+	if (!of_node) {
+		CAM_ERR(CAM_UTIL, "Invalid param of_node");
+		return -EINVAL;
+	}
 #if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
 	gpio_pin = of_get_named_gpio(of_node, "gpios", index);
 #else
