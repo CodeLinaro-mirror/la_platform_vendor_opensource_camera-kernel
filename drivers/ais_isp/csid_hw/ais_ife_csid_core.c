@@ -354,6 +354,13 @@ static int ais_ife_csid_disable_hw(struct ais_ife_csid_hw *csid_hw)
 		return rc;
 	}
 
+	if (csid_hw->hw_info->hw_state != CAM_HW_STATE_POWER_UP) {
+		CAM_ERR(CAM_ISP, "CSID:%d Invalid hw state :%d",
+			csid_hw->hw_intf->hw_idx,
+			csid_hw->hw_info->hw_state);
+		return -EINVAL;
+	}
+
 	soc_info = &csid_hw->hw_info->soc_info;
 	csid_reg = csid_hw->csid_info->csid_reg;
 
@@ -492,8 +499,6 @@ static int ais_ife_csid_disable_csi2(struct ais_ife_csid_hw *csid_hw)
 	const struct ais_ife_csid_reg_offset *csid_reg;
 	struct cam_hw_soc_info               *soc_info;
 
-	csid_reg = csid_hw->csid_info->csid_reg;
-	soc_info = &csid_hw->hw_info->soc_info;
 	CAM_DBG(CAM_ISP, "CSID:%d cnt : %d Disable csi2 rx",
 		csid_hw->hw_intf->hw_idx, csid_hw->csi2_cfg_cnt);
 
@@ -503,6 +508,14 @@ static int ais_ife_csid_disable_csi2(struct ais_ife_csid_hw *csid_hw)
 	if (csid_hw->csi2_cfg_cnt)
 		return 0;
 
+	if (csid_hw->hw_info->hw_state != CAM_HW_STATE_POWER_UP) {
+		CAM_ERR(CAM_ISP, "CSID:%d Invalid hw state :%d",
+			csid_hw->hw_intf->hw_idx,
+			csid_hw->hw_info->hw_state);
+		return -EINVAL;
+	}
+	csid_reg = csid_hw->csid_info->csid_reg;
+	soc_info = &csid_hw->hw_info->soc_info;
 	/* Disable the CSI2 rx inerrupts */
 	cam_io_w_mb(0, soc_info->reg_map[0].mem_base +
 		csid_reg->csi2_reg->csid_csi2_rx_irq_mask_addr);
