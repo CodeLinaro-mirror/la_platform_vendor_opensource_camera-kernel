@@ -301,9 +301,13 @@ int cam_sensor_fsync_apply(struct cam_sensor_ctrl_t *s_ctrl, int64_t req_id)
 	if (!s_ctrl->per_frame_sync_info ||
 	    !s_ctrl->per_frame_sync_info[offset].is_settings_valid ||
 	    s_ctrl->per_frame_sync_info[offset].request_id != req_id) {
-		CAM_WARN(CAM_SENSOR, "No frame sync info for request id %lld", req_id);
-		return 0;
+		CAM_ERR(CAM_SENSOR, "Sensor[%s] invalid sync info for request id: %lld",
+			s_ctrl->sensor_name, req_id);
+		return -EINVAL;
 	}
+
+	CAM_DBG(CAM_SENSOR, "Sensor[%s] fsync apply for request id: %lld",
+		s_ctrl->sensor_name, req_id);
 
 	if (s_ctrl->per_frame_cmd_buf &&
 	    s_ctrl->per_frame_cmd_buf[offset].cmd_buf_ready) {

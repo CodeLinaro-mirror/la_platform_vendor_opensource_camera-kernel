@@ -443,6 +443,7 @@ static int cam_sensor_i2c_component_bind(struct device *dev,
 	s_ctrl->bridge_intf.ops.flush_req = cam_sensor_flush_request;
 	s_ctrl->bridge_intf.ops.process_evt = cam_sensor_process_evt;
 	s_ctrl->bridge_intf.ops.dump_req = cam_sensor_dump_request;
+	s_ctrl->bridge_intf.ops.external_trigger = cam_sensor_external_trigger;
 
 	s_ctrl->sensordata->power_info.dev = soc_info->dev;
 	CAM_GET_TIMESTAMP(ts_end);
@@ -740,6 +741,7 @@ static int cam_sensor_component_bind(struct device *dev,
 	s_ctrl->bridge_intf.ops.flush_req = cam_sensor_flush_request;
 	s_ctrl->bridge_intf.ops.process_evt = cam_sensor_process_evt;
 	s_ctrl->bridge_intf.ops.dump_req = cam_sensor_dump_request;
+	s_ctrl->bridge_intf.ops.external_trigger = cam_sensor_external_trigger;
 
 	s_ctrl->sensordata->power_info.dev = &pdev->dev;
 	platform_set_drvdata(pdev, s_ctrl);

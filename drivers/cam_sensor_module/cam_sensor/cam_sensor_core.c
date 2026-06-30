@@ -87,7 +87,8 @@ static int cam_sensor_notify_msg_req_mgr(
 
 static int cam_sensor_update_req_mgr(
 	struct cam_sensor_ctrl_t *s_ctrl,
-	struct cam_packet *csl_packet)
+	struct cam_packet *csl_packet,
+	bool external_trigger)
 {
 	int rc = 0;
 	struct cam_req_mgr_add_request add_req;
@@ -95,6 +96,7 @@ static int cam_sensor_update_req_mgr(
 	memset(&add_req, 0, sizeof(add_req));
 	add_req.link_hdl = s_ctrl->bridge_intf.link_hdl;
 	add_req.req_id = csl_packet->header.request_id;
+	add_req.external_trigger = external_trigger;
 	CAM_DBG(CAM_SENSOR, " Rxed Req Id: %llu",
 		csl_packet->header.request_id);
 	add_req.dev_hdl = s_ctrl->bridge_intf.device_hdl;
@@ -416,6 +418,7 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 	struct cam_config_dev_cmd config;
 	struct i2c_data_settings *i2c_data = NULL;
 	bool is_sensor_read = false;
+	bool external_trigger = false;
 
 	ioctl_ctrl = (struct cam_control *)arg;
 
@@ -656,10 +659,6 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 		i2c_reg_settings->request_id = csl_packet->header.request_id;
 		i2c_reg_settings->is_settings_valid = 1;
 
-		rc = cam_sensor_update_req_mgr(s_ctrl, csl_packet);
-		if (rc)
-			CAM_ERR(CAM_SENSOR,
-				"Failed in adding request to req_mgr");
 		break;
 	}
 	case CAM_SENSOR_PACKET_OPCODE_SENSOR_IMMEDIATE: {
@@ -768,8 +767,19 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 
 			rc = cam_packet_util_process_generic_cmd_buffer(&cmd_desc[i],
 				cam_sensor_generic_blob_handler, s_ctrl);
-			if (rc)
+			if (rc < 0) {
 				s_ctrl->sensor_res[idx].request_id = 0;
+				CAM_ERR(CAM_SENSOR, "Fail parsing generic blob pkt: %d", rc);
+				goto end;
+			}
+
+			if (s_ctrl->fsync_blob_ready) {
+				external_trigger = true;
+				s_ctrl->is_fsync_active = true;
+				s_ctrl->fsync_blob_ready = false;
+				CAM_DBG(CAM_SENSOR, "External trigger set for req_id %lld",
+					csl_packet->header.request_id);
+			}
 
 			break;
 		}
@@ -842,7 +852,21 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 		CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE) {
 		i2c_reg_settings->request_id =
 			csl_packet->header.request_id;
-		rc = cam_sensor_update_req_mgr(s_ctrl, csl_packet);
+
+		rc = cam_sensor_update_req_mgr(s_ctrl, csl_packet, external_trigger);
+		if (rc) {
+			CAM_ERR(CAM_SENSOR,
+				"Failed in adding request to req_mgr");
+			goto end;
+		}
+	}
+
+	if ((csl_packet->header.op_code & 0xFFFFFF) ==
+		CAM_SENSOR_PACKET_OPCODE_SENSOR_NOP) {
+		i2c_reg_settings->request_id =
+			csl_packet->header.request_id;
+
+		rc = cam_sensor_update_req_mgr(s_ctrl, csl_packet, external_trigger);
 		if (rc) {
 			CAM_ERR(CAM_SENSOR,
 				"Failed in adding request to req_mgr");
@@ -2426,14 +2450,6 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 				}
 			}
 			CAM_DBG(CAM_SENSOR, "applied req_id: %llu", req_id);
-
-			if (s_ctrl->io_master_info.master_type == CCI_MASTER) {
-				rc = cam_sensor_fsync_apply(s_ctrl, req_id);
-				if (rc < 0)
-					CAM_ERR(CAM_SENSOR,
-						"[%s] cam_sensor_fsync_apply failed rc=%d req_id=%lld",
-						s_ctrl->sensor_name, rc, req_id);
-			}
 		} else {
 			CAM_DBG(CAM_SENSOR,
 				"Invalid/NOP request to apply: %lld", req_id);
@@ -2966,4 +2982,34 @@ int cam_sensor_dump_request(struct cam_req_mgr_dump_info *dump)
 	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
 
 	return 0;
+}
+
+int cam_sensor_external_trigger(struct cam_req_mgr_extern_trigger *external_trigger)
+{
+	struct cam_sensor_ctrl_t *s_ctrl = NULL;
+	int rc = 0;
+
+	s_ctrl = (struct cam_sensor_ctrl_t *)
+		cam_get_device_priv(external_trigger->dev_hdl);
+	if (!s_ctrl) {
+		CAM_ERR(CAM_SENSOR, "Device data is NULL");
+		return -EINVAL;
+	}
+
+	CAM_DBG(CAM_SENSOR,
+		"Sensor:[%s-%d] external trigger last applied sensor req:%llu external_trigger req_id:%llu",
+		s_ctrl->sensor_name, s_ctrl->soc_info.index,
+		s_ctrl->last_applied_req, external_trigger->req_id);
+
+	mutex_lock(&(s_ctrl->cam_sensor_mutex));
+	if (s_ctrl->io_master_info.master_type == CCI_MASTER) {
+		rc = cam_sensor_fsync_apply(s_ctrl, external_trigger->req_id);
+		if (rc < 0)
+			CAM_ERR(CAM_SENSOR,
+				"[%s] fsync apply failed rc=%d req_id=%lld",
+				s_ctrl->sensor_name, rc, external_trigger->req_id);
+	}
+	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
+
+	return rc;
 }
