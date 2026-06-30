@@ -3785,10 +3785,8 @@ static bool __cam_req_mgr_mtrigger_check_slots_ready(
 	prev_link_slot = &link->req.in_q->slot[prev_idx];
 
 	/* There are still pending requests, do not trigger next sequence */
-	if (!(prev_link_slot->status == CRM_SLOT_STATUS_NO_REQ ||
-		prev_link_slot->status == CRM_SLOT_STATUS_REQ_APPLIED)) {
+	if (prev_link_slot->status != CRM_SLOT_STATUS_NO_REQ)
 		return false;
-	}
 
 	/*
 	 * group_ready is set on the seq-0 slot by
@@ -4821,13 +4819,38 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 			__cam_req_mgr_reset_req_slot(link, idx);
 		}
 	} else if (trigger_data->trigger == CAM_TRIGGER_POINT_EOF) {
-		if (link->properties_mask & CAM_LINK_PROPERTY_SENSOR_STANDBY_AFTER_EOF) {
-			rc = __cam_req_mgr_send_evt(0, CAM_REQ_MGR_LINK_EVT_EOF,
-				CRM_KMD_ERR_MAX, link);
-			if (!rc)
-				CAM_DBG(CAM_CRM, "Notify EOF event done on link:0x%x",
-					link->link_hdl);
+
+		/* Set index to point to previous applied slot */
+		idx = in_q->rd_idx;
+		__cam_req_mgr_dec_idx(&idx, 1, link->req.in_q->num_slots);
+
+		/* Check if we cross group boundery and new group should be
+		 * started at the last end of frame of current group.
+		*/
+		if (in_q->slot[in_q->rd_idx].group_id !=
+		    in_q->slot[idx].group_id) {
+
+			/* Reset all slots for the sequence which is done */
+			gr_size = in_q->slot[idx].group_size;
+			__cam_req_mgr_dec_idx(&idx, in_q->slot[idx].group_seq,
+					      link->req.in_q->num_slots);
+			in_q->last_applied_idx = -1;
+			for (i = 0; i < gr_size; i++) {
+				__cam_req_mgr_reset_req_slot(link, idx);
+				__cam_req_mgr_inc_idx(&idx, 1, link->req.in_q->num_slots);
+			}
+
+			/* Try to start next group */
+			rc = cam_req_mgr_mtrigger_try_to_start(in_q->rd_idx, link);
+			if (rc < 0) {
+				CAM_DBG(CAM_REQ,
+					"Error can't start new sequence");
+			}
 		}
+		goto release_lock;
+	} else {
+		CAM_ERR(CAM_REQ, "Invalid trigger in case of manual mode!");
+		goto release_lock;
 	}
 
 	/*
@@ -4886,30 +4909,6 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 	}
 
 	rc = __cam_req_mgr_process_req(link, trigger_data);
-
-	if (trigger_data->trigger == CAM_TRIGGER_POINT_EOF) {
-		idx = __cam_req_mgr_find_slot_for_req(in_q, trigger_data->req_id);
-
-		if (in_q->slot[in_q->rd_idx].group_id !=
-		    in_q->slot[idx].group_id) {
-
-			/* Reset all slots for the sequence which is done */
-			gr_size = in_q->slot[idx].group_size;
-			__cam_req_mgr_dec_idx(&idx, in_q->slot[idx].group_seq,
-					      link->req.in_q->num_slots);
-			for (i = 0; i < gr_size; i++) {
-				__cam_req_mgr_reset_req_slot(link, idx);
-				__cam_req_mgr_inc_idx(&idx, 1, link->req.in_q->num_slots);
-			}
-
-			/* Try to start next group */
-			rc = cam_req_mgr_mtrigger_try_to_start(in_q->rd_idx, link);
-			if (rc < 0) {
-				CAM_DBG(CAM_REQ,
-					"Error can't start new sequence");
-			}
-		}
-	}
 
 release_lock:
 	mutex_unlock(&link->req.lock);
@@ -5319,7 +5318,8 @@ static int cam_req_mgr_cb_notify_trigger(
 	 * Reduce the workq overhead when there is
 	 * not any eof event found.
 	 */
-	if (trigger == CAM_TRIGGER_POINT_EOF) {
+	if (trigger == CAM_TRIGGER_POINT_EOF &&
+	    (in_q->slot[in_q->rd_idx].trigger_mode != CAM_REQ_MGR_TRIGGER_MODE_MANUAL)) {
 		if (!atomic_read(&link->eof_event_cnt) &&
 			!(link->properties_mask & CAM_LINK_PROPERTY_SENSOR_STANDBY_AFTER_EOF)) {
 			CAM_DBG(CAM_CRM, "No any request to schedule at EOF");
