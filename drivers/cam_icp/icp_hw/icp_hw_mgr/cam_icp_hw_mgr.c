@@ -286,7 +286,11 @@ static int cam_icp_clk_idx_from_req_id(struct cam_icp_hw_ctx_data *ctx_data,
 		if (frame_process->request_id[i] == req_id)
 			return i;
 
-	return 0;
+	/*
+	 * Return -EINVAL on miss to avoid silently aliasing to slot 0
+	 * and causing a stale post-flush callback to corrupt that slot.
+	 */
+	return -EINVAL;
 }
 
 static int cam_icp_ctx_clk_info_init(struct cam_icp_hw_ctx_data *ctx_data)
@@ -297,6 +301,8 @@ static int cam_icp_ctx_clk_info_init(struct cam_icp_hw_ctx_data *ctx_data)
 	ctx_data->clk_info.base_clk = 0;
 	ctx_data->clk_info.uncompressed_bw = 0;
 	ctx_data->clk_info.compressed_bw = 0;
+	/* Reset num_paths to prevent stale value causing OOB in cam_icp_update_bw_v2 */
+	ctx_data->clk_info.num_paths = 0;
 	for (i = 0; i < CAM_ICP_MAX_PER_PATH_VOTES; i++) {
 		ctx_data->clk_info.axi_path[i].camnoc_bw = 0;
 		ctx_data->clk_info.axi_path[i].mnoc_ab_bw = 0;
@@ -542,9 +548,11 @@ static int cam_icp_remove_ctx_bw(struct cam_icp_hw_mgr *hw_mgr,
 				CAM_AXI_PATH_DATA_IPE_START_OFFSET;
 			}
 
-			if (path_index >= CAM_ICP_MAX_PER_PATH_VOTES) {
+			if (path_index < 0 ||
+				path_index >= CAM_ICP_MAX_PER_PATH_VOTES) {
 				CAM_WARN(CAM_PERF,
-				"Invalid path %d, start offset=%d, max=%d",
+				"Invalid path_index %d path_data_type=%d start_offset=%d max=%d",
+				path_index,
 				ctx_data->clk_info.axi_path[i].path_data_type,
 				CAM_AXI_PATH_DATA_IPE_START_OFFSET,
 				CAM_ICP_MAX_PER_PATH_VOTES);
@@ -593,6 +601,7 @@ static int cam_icp_remove_ctx_bw(struct cam_icp_hw_mgr *hw_mgr,
 		memset(&ctx_data->clk_info.axi_path[0], 0,
 			CAM_ICP_MAX_PER_PATH_VOTES *
 			sizeof(struct cam_axi_per_path_bw_vote));
+		ctx_data->clk_info.num_paths = 0;
 		ctx_data->clk_info.curr_fc = 0;
 		ctx_data->clk_info.base_clk = 0;
 
@@ -1162,9 +1171,11 @@ static bool cam_icp_update_bw_v2(struct cam_icp_hw_mgr *hw_mgr,
 				CAM_AXI_PATH_DATA_IPE_START_OFFSET;
 		}
 
-		if (path_index >= CAM_ICP_MAX_PER_PATH_VOTES) {
+		if (path_index < 0 ||
+			path_index >= CAM_ICP_MAX_PER_PATH_VOTES) {
 			CAM_WARN(CAM_PERF,
-				"Invalid path %d, start offset=%d, max=%d",
+				"Invalid path_index %d path_data_type=%d start_offset=%d max=%d",
+				path_index,
 				ctx_data->clk_info.axi_path[i].path_data_type,
 				CAM_AXI_PATH_DATA_IPE_START_OFFSET,
 				CAM_ICP_MAX_PER_PATH_VOTES);
@@ -1206,9 +1217,11 @@ static bool cam_icp_update_bw_v2(struct cam_icp_hw_mgr *hw_mgr,
 				CAM_AXI_PATH_DATA_IPE_START_OFFSET;
 		}
 
-		if (path_index >= CAM_ICP_MAX_PER_PATH_VOTES) {
+		if (path_index < 0 ||
+			path_index >= CAM_ICP_MAX_PER_PATH_VOTES) {
 			CAM_WARN(CAM_PERF,
-				"Invalid path %d, start offset=%d, max=%d",
+				"Invalid path_index %d path_data_type=%d start_offset=%d max=%d",
+				path_index,
 				ctx_data->clk_info.axi_path[i].path_data_type,
 				CAM_AXI_PATH_DATA_IPE_START_OFFSET,
 				CAM_ICP_MAX_PER_PATH_VOTES);
@@ -4055,6 +4068,15 @@ static int cam_icp_mgr_config_hw(void *hw_mgr_priv, void *config_hw_args)
 	frame_info = (struct icp_frame_info *)config_args->priv;
 	req_id = frame_info->request_id;
 	idx = cam_icp_clk_idx_from_req_id(ctx_data, req_id);
+	/* Discard stale post-flush callback if req_id no longer exists. */
+	if (idx < 0) {
+		mutex_unlock(&ctx_data->ctx_mutex);
+		mutex_unlock(&hw_mgr->hw_mgr_mutex);
+		CAM_WARN(CAM_ICP,
+			"req_id %llu not found in ctx %u, stale post-flush callback",
+			req_id, ctx_data->ctx_id);
+		return -EINVAL;
+	}
 
 	cam_icp_mgr_ipe_bps_clk_update(hw_mgr, ctx_data, idx);
 	ctx_data->hfi_frame_process.fw_process_flag[idx] = true;
