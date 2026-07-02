@@ -829,6 +829,9 @@ static int32_t cam_sensor_restore_slave_info(struct cam_sensor_ctrl_t *s_ctrl)
 	case SPI_MASTER:
 		break;
 
+	case I3C_MASTER:
+		break;
+
 	default:
 		CAM_ERR(CAM_SENSOR, "Invalid master type: %d",
 				s_ctrl->io_master_info.master_type);
