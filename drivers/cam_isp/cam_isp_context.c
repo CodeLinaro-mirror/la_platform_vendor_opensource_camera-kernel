@@ -6656,9 +6656,11 @@ static int __cam_isp_ctx_flush_req_in_top_state(
 		ctx->state = CAM_CTX_FLUSHED;
 		ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_HALT;
 		spin_unlock_bh(&ctx->lock);
-		atomic_set(&ctx_isp->flush_in_progress, 1);
-		cam_isp_ctx_flush_all_affected_ctx_stream_grp(ctx, flush_req,
-			CAM_ISP_CTX_FLUSH_AFFECTED_CTX_SET_FLUSH_IN_PROGRESS);
+		if (ctx_isp->per_port_en) {
+			atomic_set(&ctx_isp->flush_in_progress, 1);
+			cam_isp_ctx_flush_all_affected_ctx_stream_grp(ctx, flush_req,
+				CAM_ISP_CTX_FLUSH_AFFECTED_CTX_SET_FLUSH_IN_PROGRESS);
+		}
 
 		CAM_INFO(CAM_ISP, "Last request id to flush is %lld, ctx_id:%u link: 0x%x",
 			flush_req->req_id, ctx->ctx_id, ctx->link_hdl);
@@ -6702,11 +6704,12 @@ static int __cam_isp_ctx_flush_req_in_top_state(
 		ctx_isp->active_req_cnt = 0;
 		spin_unlock_bh(&ctx->lock);
 
-		rc = cam_isp_ctx_flush_all_affected_ctx_stream_grp(ctx, flush_req,
-			CAM_ISP_CTX_FLUSH_AFFECTED_CTX_REQ_LIST);
-		if (rc)
-			CAM_ERR(CAM_ISP, "Failed to flush other active HW ctx rc: %d", rc);
-
+		if (ctx_isp->per_port_en) {
+			rc = cam_isp_ctx_flush_all_affected_ctx_stream_grp(ctx, flush_req,
+				CAM_ISP_CTX_FLUSH_AFFECTED_CTX_REQ_LIST);
+			if (rc)
+				CAM_ERR(CAM_ISP, "Failed to flush other active HW ctx rc: %d", rc);
+		}
 		reset_args.ctxt_to_hw_map = ctx_isp->hw_ctx;
 		rc = ctx->hw_mgr_intf->hw_reset(ctx->hw_mgr_intf->hw_mgr_priv,
 			&reset_args);
@@ -6736,7 +6739,8 @@ end:
 	atomic_set(&ctx_isp->process_bubble, 0);
 	atomic_set(&ctx_isp->rxd_epoch, 0);
 	atomic_set(&ctx_isp->internal_recovery_set, 0);
-	atomic_set(&ctx_isp->flush_in_progress, 0);
+	if (ctx_isp->per_port_en)
+		atomic_set(&ctx_isp->flush_in_progress, 0);
 	return rc;
 }
 
@@ -6894,12 +6898,6 @@ static int __cam_isp_ctx_rdi_only_sof_in_top_state(
 
 	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx, ctx_idx: %u, link: 0x%x",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val, ctx->ctx_id, ctx->link_hdl);
-
-	if (list_empty(&ctx->active_req_list))
-		ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_SOF;
-	else
-		CAM_DBG(CAM_ISP, "ctx:%d Still need to wait for the buf done",
-			ctx->ctx_id);
 
 	/*
 	 * notify reqmgr with sof signal. Note, due to scheduling delay
@@ -8384,6 +8382,7 @@ static int __cam_isp_ctx_acquire_dev_in_available(struct cam_context *ctx,
 	ctx_isp->split_acquire = false;
 	ctx->ctxt_to_hw_map = param.ctxt_to_hw_map;
 	ctx_isp->bubble_recover_dis = isp_hw_cmd_args.u.ctx_info.bubble_recover_dis;
+	ctx_isp->per_port_en = isp_hw_cmd_args.u.ctx_info.per_port_en;
 	atomic64_set(&ctx_isp->dbg_monitors.state_monitor_head, -1);
 	atomic64_set(&ctx_isp->dbg_monitors.frame_monitor_head, -1);
 	for (i = 0; i < CAM_ISP_CTX_EVENT_MAX; i++)
@@ -8937,6 +8936,7 @@ static int __cam_isp_ctx_acquire_hw_v2(struct cam_context *ctx,
 	ctx->ctxt_to_hw_map = param.ctxt_to_hw_map;
 	ctx->hw_mgr_ctx_id = param.hw_mgr_ctx_id;
 	ctx_isp->bubble_recover_dis = isp_hw_cmd_args.u.ctx_info.bubble_recover_dis;
+	ctx_isp->per_port_en = isp_hw_cmd_args.u.ctx_info.per_port_en;
 
 	snprintf(ctx->ctx_id_string, sizeof(ctx->ctx_id_string),
 		"%s_ctx[%d]_hwmgrctx[%d]_hwidx[0x%x]",
