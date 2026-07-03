@@ -4615,12 +4615,14 @@ static int __cam_isp_ctx_validate_for_req_reapply_util(
 	struct cam_isp_context *ctx_isp)
 {
 	int rc = 0;
+	bool task_ctx;
 	struct cam_ctx_request *req_temp;
 	struct cam_ctx_request *req = NULL;
 	struct cam_isp_ctx_req *req_isp = NULL;
 	struct cam_context *ctx = ctx_isp->base;
 
-	if (in_task())
+	task_ctx = in_task();
+	if (task_ctx)
 		cam_isp_ctx_worker_lock(ctx);
 
 	/* Check for req in active/wait lists */
@@ -4681,7 +4683,7 @@ static int __cam_isp_ctx_validate_for_req_reapply_util(
 	}
 
 end:
-	if (in_task())
+	if (task_ctx)
 		cam_isp_ctx_worker_unlock(ctx);
 	return rc;
 }
