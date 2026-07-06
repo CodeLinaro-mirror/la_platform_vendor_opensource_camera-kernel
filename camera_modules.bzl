@@ -2,6 +2,8 @@ load("//build/kernel/kleaf:kernel.bzl", "ddk_module")
 load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
 load(":target_variants.bzl", "get_all_variants")
 load(":project_defconfig.bzl", "get_project_defconfig")
+load("@rules_pkg//pkg:install.bzl", "pkg_install")
+load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
 
 def _define_module(target, variant):
     tv = "{}_{}".format(target, variant)
@@ -307,14 +309,16 @@ def _define_module(target, variant):
         kernel_build = kernel_build,
     )
 
-    copy_to_dist_dir(
-        name = "{}_camera_dist".format(tv),
-        data = [":{}_camera".format(tv)],
-        dist_dir = "out/target/product/{}/dlkm/lib/modules/".format(target),
-        flat = True,
-        wipe_dist_dir = False,
-        allow_duplicate_filenames = False,
-        mode_overrides = {"**/*": "644"},
+    pkg_files(
+       name = tv + "_dist_files",
+       srcs = [":{}_camera".format(tv)],
+       strip_prefix = strip_prefix.files_only(),
+    )
+
+    pkg_install(
+       name = "{}_camera_dist".format(tv),
+       srcs = [":{}_dist_files".format(tv)],
+       destdir = "out/target/product/{}/dlkm/lib/modules/".format(target),
     )
 
 def define_camera_module():

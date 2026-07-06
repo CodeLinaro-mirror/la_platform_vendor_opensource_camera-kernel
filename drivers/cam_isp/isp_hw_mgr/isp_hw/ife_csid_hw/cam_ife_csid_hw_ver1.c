@@ -2753,7 +2753,6 @@ static int cam_ife_csid_ver1_enable_hw(struct cam_ife_csid_ver1_hw *csid_hw)
 	memset(&csid_hw->timestamp, 0, sizeof(struct cam_ife_csid_timestamp));
 	spin_lock_irqsave(&csid_hw->lock_state, flags);
 	csid_hw->flags.fatal_err_detected = false;
-	csid_hw->flags.device_enabled = true;
 	spin_unlock_irqrestore(&csid_hw->lock_state, flags);
 
 	return rc;
@@ -2939,7 +2938,6 @@ static int cam_ife_csid_ver1_disable_hw(
 			csid_hw->hw_intf->hw_idx);
 
 	spin_lock_irqsave(&csid_hw->lock_state, flags);
-	csid_hw->flags.device_enabled = false;
 	spin_unlock_irqrestore(&csid_hw->lock_state, flags);
 	csid_hw->hw_info->hw_state = CAM_HW_STATE_POWER_DOWN;
 	csid_hw->counters.error_irq_count = 0;
@@ -3113,12 +3111,16 @@ int cam_ife_csid_ver1_start(void *hw_priv, void *args,
 		}
 	}
 
-	if (rc && res)
+	if (rc && res) {
 		CAM_ERR(CAM_ISP, "CSID:%d start fail res type:%d res id:%d",
 			csid_hw->hw_intf->hw_idx, res->res_type,
 			res->res_id);
-	if (!rc)
+		goto end;
+	}
+	if (!rc) {
+		csid_hw->flags.device_enabled = true;
 		csid_hw->flags.reset_awaited = false;
+	}
 
 	/*
 	 * For targets with MINK based API support, hand over relevant parameters
@@ -3357,6 +3359,7 @@ int cam_ife_csid_ver1_stop(void *hw_priv,
 	}
 
 	csid_hw->counters.error_irq_count = 0;
+	csid_hw->flags.device_enabled = false;
 
 	return rc;
 }
@@ -4202,6 +4205,14 @@ static int cam_ife_csid_ver1_rx_bottom_half_handler(
 		return -EINVAL;
 	}
 
+	if (!csid_hw->flags.device_enabled ||
+		csid_hw->hw_info->hw_state != CAM_HW_STATE_POWER_UP) {
+		CAM_WARN(CAM_ISP, "CSID[%u] powered down state irq_status:0%x device_en:%d",
+			csid_hw->hw_intf->hw_idx, evt_payload->irq_status[CAM_IFE_CSID_IRQ_REG_RX],
+			csid_hw->flags.device_enabled);
+		return IRQ_HANDLED;
+	}
+
 	soc_info = &csid_hw->hw_info->soc_info;
 	csid_reg = (struct cam_ife_csid_ver1_reg_info *)
 			csid_hw->core_info->csid_reg;
@@ -4374,6 +4385,14 @@ static int cam_ife_csid_ver1_path_bottom_half_handler(
 		return 0;
 	}
 
+	if (!csid_hw->flags.device_enabled ||
+		csid_hw->hw_info->hw_state != CAM_HW_STATE_POWER_UP) {
+		CAM_WARN(CAM_ISP, "CSID[%u] powered down state irq_status:0%x device_en:%d",
+			csid_hw->hw_intf->hw_idx, evt_payload->irq_status[index],
+			csid_hw->flags.device_enabled);
+		return IRQ_HANDLED;
+	}
+
 	irq_status = evt_payload->irq_status[index] & path_reg->fatal_err_mask;
 	bit_pos = 0;
 	log_buf = csid_hw->log_buf;
@@ -4530,6 +4549,8 @@ static int cam_ife_csid_ver1_rx_top_half(
 
 	if (status & csi2_reg->fatal_err_mask) {
 		csid_hw->flags.fatal_err_detected = true;
+		CAM_ERR(CAM_ISP, "CSID[%u] rx error detected status:0x%x",
+			csid_hw->hw_intf->hw_idx, status);
 		cam_ife_csid_ver1_disable_csi2(csid_hw);
 	}
 
