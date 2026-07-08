@@ -1,5 +1,4 @@
 load("//build/kernel/kleaf:kernel.bzl", "ddk_module")
-load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
 load(":target_variants.bzl", "get_all_variants")
 load(":project_defconfig.bzl", "get_project_defconfig")
 load("@rules_pkg//pkg:install.bzl", "pkg_install")
