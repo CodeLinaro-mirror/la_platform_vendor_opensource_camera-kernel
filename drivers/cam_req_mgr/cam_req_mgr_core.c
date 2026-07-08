@@ -3812,7 +3812,7 @@ static bool __cam_req_mgr_mtrigger_check_slots_ready(
 					ext_trigger_info->dev = rdev;
 					ext_trigger_info->link_hdl = link->link_hdl;
 					ext_trigger_info->req_id =
-						link->req.in_q->slot[group_start_idx].req_id;
+						link->req.in_q->slot[pd_idx].req_id;
 				} else {
 					CAM_ERR(CAM_CRM, "More than one external triggers");
 					return false;
@@ -3991,6 +3991,7 @@ static int __cam_req_mgr_mtrigger_apply_req_in_idle(
 		}
 
 		mtrigger_idx = link->req.in_q->rd_idx;
+		link_slot = &link->req.in_q->slot[mtrigger_idx];
 	}
 
 	/* Apply first request in the sequence */
@@ -5254,7 +5255,40 @@ end:
 	return rc;
 }
 
+/**
+ * cam_req_mgr_get_dispatch_slot_idx()
+ *
+ * @brief        : This function return dispatch index used to select correct
+ *                 slot and call manual trigger handle or normal trigger handle.
+ * @in_q         : Pointer to link input slot queue
+ * @trigger_data : trigger notify data
+ *
+ * @return  : dispatch index
+ *
+ */
+static int32_t cam_req_mgr_get_dispatch_slot_idx(
+	struct cam_req_mgr_req_queue *in_q,
+	struct cam_req_mgr_trigger_notify *trigger_data)
+{
+	int32_t current_idx = in_q->rd_idx;
+	int32_t dispatch_idx =  -1;
 
+	__cam_req_mgr_dec_idx(&current_idx, 1, in_q->num_slots);
+	dispatch_idx = current_idx;
+	if ((in_q->slot[dispatch_idx].status == CRM_SLOT_STATUS_NO_REQ) ||
+		(in_q->slot[dispatch_idx].req_id < 0)) {
+		dispatch_idx = in_q->rd_idx;
+		if ((in_q->slot[dispatch_idx].status == CRM_SLOT_STATUS_NO_REQ) ||
+			(in_q->slot[dispatch_idx].req_id < 0)) {
+			CAM_WARN(CAM_CRM,
+				"No request on link 0x%x frame %lld (rd_idx=%d prev_idx=%d empty queue)",
+				trigger_data->link_hdl, trigger_data->frame_id,
+				in_q->rd_idx, current_idx);
+		}
+	}
+
+	return dispatch_idx;
+}
 
 /**
  * cam_req_mgr_cb_notify_trigger()
@@ -5276,6 +5310,7 @@ static int cam_req_mgr_cb_notify_trigger(
 	struct crm_task_payload         *task_data;
 	struct cam_req_mgr_state_monitor state;
 	struct cam_req_mgr_req_queue    *in_q = NULL;
+	int32_t dispatch_idx = -1;
 
 	if (!trigger_data) {
 		CAM_ERR(CAM_CRM, "trigger_data is NULL");
@@ -5307,6 +5342,11 @@ static int cam_req_mgr_cb_notify_trigger(
 		goto end;
 	}
 
+	/* Get the index for the current slot. rd_idx is not dispatch index.
+	 * If there is not available dispatch index rd_idx is used.
+	 */
+	dispatch_idx = cam_req_mgr_get_dispatch_slot_idx(in_q, trigger_data);
+
 	state.req_state = CAM_CRM_NOTIFY_TRIGGER;
 	state.req_id = in_q->slot[in_q->rd_idx].req_id;
 	state.dev_hdl = -1;
@@ -5319,7 +5359,7 @@ static int cam_req_mgr_cb_notify_trigger(
 	 * not any eof event found.
 	 */
 	if (trigger == CAM_TRIGGER_POINT_EOF &&
-	    (in_q->slot[in_q->rd_idx].trigger_mode != CAM_REQ_MGR_TRIGGER_MODE_MANUAL)) {
+	    (in_q->slot[dispatch_idx].trigger_mode != CAM_REQ_MGR_TRIGGER_MODE_MANUAL)) {
 		if (!atomic_read(&link->eof_event_cnt) &&
 			!(link->properties_mask & CAM_LINK_PROPERTY_SENSOR_STANDBY_AFTER_EOF)) {
 			CAM_DBG(CAM_CRM, "No any request to schedule at EOF");
@@ -5394,7 +5434,7 @@ static int cam_req_mgr_cb_notify_trigger(
 	notify_trigger->req_id = trigger_data->req_id;
 	notify_trigger->sof_timestamp_val = trigger_data->sof_timestamp_val;
 
-	switch (in_q->slot[in_q->rd_idx].trigger_mode) {
+	switch (in_q->slot[dispatch_idx].trigger_mode) {
 	case CAM_REQ_MGR_TRIGGER_MODE_AUTO:
 		task->process_cb = &cam_req_mgr_process_trigger;
 		break;
