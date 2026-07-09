@@ -428,6 +428,7 @@ struct cam_isp_fcg_prediction_tracker {
  *                             by other devices on the link as part of link setup
  * @mode_switch_en:            Indicates if mode switch is enabled
  * @sfe_en:                    Indicates if SFE is being used
+ * @last_sent_sof_timestamp:   SOF timestamp of the last sent SOF timestamp frame
  *
  */
 struct cam_isp_context {
@@ -498,6 +499,7 @@ struct cam_isp_context {
 	bool                                  mode_switch_en;
 	bool                                  sfe_en;
 	bool                                  standby_en;
+	uint64_t                              last_sent_sof_timestamp;
 };
 
 /**
@@ -591,6 +593,7 @@ struct cam_isp_ctx_req_mini_dump {
  * @use_frame_header_ts:       Use frame header for qtimer ts
  * @support_consumed_addr:     Indicate whether HW has last consumed addr reg
  * @use_default_apply:         Use default settings in case of frame skip
+ * @last_sent_sof_timestamp:   SOF timestamp of the last sent SOF timestamp frame
  *
  */
 struct cam_isp_ctx_mini_dump_info {
@@ -630,6 +633,7 @@ struct cam_isp_ctx_mini_dump_info {
 	bool                                   use_frame_header_ts;
 	bool                                   support_consumed_addr;
 	bool                                   use_default_apply;
+	uint64_t                               last_sent_sof_timestamp;
 };
 
 /**
