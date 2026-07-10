@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  */
 
@@ -2845,7 +2845,8 @@ static int cam_icp_alloc_secheap_mem(struct cam_mem_mgr_memory_desc *secheap)
 	return rc;
 }
 
-static int cam_icp_alloc_sfr_mem(struct cam_mem_mgr_memory_desc *sfr)
+static int cam_icp_alloc_shared_mem(
+	size_t size_requested, struct cam_mem_mgr_memory_desc *alloc_out)
 {
 	int rc;
 	struct cam_mem_mgr_request_desc alloc;
@@ -2853,32 +2854,7 @@ static int cam_icp_alloc_sfr_mem(struct cam_mem_mgr_memory_desc *sfr)
 
 	memset(&alloc, 0, sizeof(alloc));
 	memset(&out, 0, sizeof(out));
-	alloc.size = SZ_8K;
-	alloc.align = 0;
-	alloc.flags = CAM_MEM_FLAG_HW_READ_WRITE |
-		CAM_MEM_FLAG_HW_SHARED_ACCESS;
-
-	alloc.smmu_hdl = icp_hw_mgr.iommu_hdl;
-	rc = cam_mem_mgr_request_mem(&alloc, &out);
-	if (rc)
-		return rc;
-
-	*sfr = out;
-	CAM_DBG(CAM_ICP, "kva: %llX, iova: %x, hdl: %x, len: %lld",
-		out.kva, out.iova, out.mem_handle, out.len);
-
-	return rc;
-}
-
-static int cam_icp_alloc_shared_mem(struct cam_mem_mgr_memory_desc *qtbl)
-{
-	int rc;
-	struct cam_mem_mgr_request_desc alloc;
-	struct cam_mem_mgr_memory_desc out;
-
-	memset(&alloc, 0, sizeof(alloc));
-	memset(&out, 0, sizeof(out));
-	alloc.size = SZ_1M;
+	alloc.size = size_requested;
 	alloc.align = 0;
 	alloc.flags = CAM_MEM_FLAG_HW_READ_WRITE |
 		CAM_MEM_FLAG_HW_SHARED_ACCESS;
@@ -2887,7 +2863,7 @@ static int cam_icp_alloc_shared_mem(struct cam_mem_mgr_memory_desc *qtbl)
 	if (rc)
 		return rc;
 
-	*qtbl = out;
+	*alloc_out = out;
 	CAM_DBG(CAM_ICP, "kva: %llX, iova: %x, hdl: %x, len: %lld",
 		out.kva, out.iova, out.mem_handle, out.len);
 
@@ -2965,6 +2941,7 @@ static int cam_icp_get_io_mem_info(void)
 static int cam_icp_allocate_hfi_mem(void)
 {
 	int rc;
+	size_t qtbl_size, cmdq_size, msgq_size, dbgq_size, sfr_size, sec_heap_size;
 	struct cam_smmu_region_info fwuncached_region_info;
 	bool fwuncached_region_exists = false;
 
@@ -2994,16 +2971,23 @@ static int cam_icp_allocate_hfi_mem(void)
 	if (!rc)
 		fwuncached_region_exists = true;
 
+	qtbl_size = ALIGN(ICP_QTBL_SIZE_IN_BYTES, PAGE_SIZE) + PAGE_SIZE;
+	cmdq_size = ALIGN(ICP_CMD_Q_SIZE_IN_BYTES, PAGE_SIZE) + PAGE_SIZE;
+	msgq_size = ALIGN(ICP_MSG_Q_SIZE_IN_BYTES, PAGE_SIZE) + PAGE_SIZE;
+	dbgq_size = ALIGN(ICP_DBG_Q_SIZE_IN_BYTES, PAGE_SIZE) + PAGE_SIZE;
+	sfr_size = ALIGN(ICP_MSG_SFR_SIZE_IN_BYTES, PAGE_SIZE) + PAGE_SIZE;
+	sec_heap_size = ALIGN(ICP_SEC_HEAP_SIZE_IN_BYTES, PAGE_SIZE) + PAGE_SIZE;
+
 	if (fwuncached_region_exists) {
 		struct cam_mem_mgr_request_desc alloc;
 		struct cam_mem_mgr_memory_desc out;
 		uint32_t offset;
-		uint64_t size;
 
 		memset(&alloc, 0, sizeof(alloc));
 		memset(&out, 0, sizeof(out));
 
-		alloc.size = fwuncached_region_info.iova_len;
+		alloc.size = qtbl_size + cmdq_size + msgq_size + dbgq_size +
+			sfr_size + sec_heap_size;
 		alloc.align = 0;
 		alloc.flags = CAM_MEM_FLAG_KMD_ACCESS;
 		alloc.smmu_hdl = icp_hw_mgr.iommu_hdl;
@@ -3019,59 +3003,53 @@ static int cam_icp_allocate_hfi_mem(void)
 
 		offset = 0;
 
-		size = SZ_1M;
 		icp_hw_mgr.hfi_mem.sec_heap.iova       = out.iova + offset;
 		icp_hw_mgr.hfi_mem.sec_heap.kva        = out.kva + offset;
-		icp_hw_mgr.hfi_mem.sec_heap.len        = size;
+		icp_hw_mgr.hfi_mem.sec_heap.len        = sec_heap_size;
 		icp_hw_mgr.hfi_mem.sec_heap.smmu_hdl   = out.smmu_hdl;
 		icp_hw_mgr.hfi_mem.sec_heap.mem_handle = out.mem_handle;
 		icp_hw_mgr.hfi_mem.sec_heap.region     = out.region;
-		offset += (uint32_t)size;
+		offset += (uint32_t)sec_heap_size;
 
-		size = SZ_1M;
 		icp_hw_mgr.hfi_mem.qtbl.iova       = out.iova + offset;
 		icp_hw_mgr.hfi_mem.qtbl.kva        = out.kva + offset;
-		icp_hw_mgr.hfi_mem.qtbl.len        = size;
+		icp_hw_mgr.hfi_mem.qtbl.len        = qtbl_size;
 		icp_hw_mgr.hfi_mem.qtbl.smmu_hdl   = out.smmu_hdl;
 		icp_hw_mgr.hfi_mem.qtbl.mem_handle = out.mem_handle;
 		icp_hw_mgr.hfi_mem.qtbl.region     = out.region;
-		offset += (uint32_t)size;
+		offset += (uint32_t)qtbl_size;
 
-		size = SZ_1M;
 		icp_hw_mgr.hfi_mem.cmd_q.iova       = out.iova + offset;
 		icp_hw_mgr.hfi_mem.cmd_q.kva        = out.kva + offset;
-		icp_hw_mgr.hfi_mem.cmd_q.len        = size;
+		icp_hw_mgr.hfi_mem.cmd_q.len        = cmdq_size;
 		icp_hw_mgr.hfi_mem.cmd_q.smmu_hdl   = out.smmu_hdl;
 		icp_hw_mgr.hfi_mem.cmd_q.mem_handle = out.mem_handle;
 		icp_hw_mgr.hfi_mem.cmd_q.region     = out.region;
-		offset += (uint32_t)size;
+		offset += (uint32_t)cmdq_size;
 
-		size = SZ_1M;
 		icp_hw_mgr.hfi_mem.msg_q.iova       = out.iova + offset;
 		icp_hw_mgr.hfi_mem.msg_q.kva        = out.kva + offset;
-		icp_hw_mgr.hfi_mem.msg_q.len        = size;
+		icp_hw_mgr.hfi_mem.msg_q.len        = msgq_size;
 		icp_hw_mgr.hfi_mem.msg_q.smmu_hdl   = out.smmu_hdl;
 		icp_hw_mgr.hfi_mem.msg_q.mem_handle = out.mem_handle;
 		icp_hw_mgr.hfi_mem.msg_q.region     = out.region;
-		offset += (uint32_t)size;
+		offset += (uint32_t)msgq_size;
 
-		size = SZ_1M;
 		icp_hw_mgr.hfi_mem.dbg_q.iova       = out.iova + offset;
 		icp_hw_mgr.hfi_mem.dbg_q.kva        = out.kva + offset;
-		icp_hw_mgr.hfi_mem.dbg_q.len        = size;
+		icp_hw_mgr.hfi_mem.dbg_q.len        = dbgq_size;
 		icp_hw_mgr.hfi_mem.dbg_q.smmu_hdl   = out.smmu_hdl;
 		icp_hw_mgr.hfi_mem.dbg_q.mem_handle = out.mem_handle;
 		icp_hw_mgr.hfi_mem.dbg_q.region     = out.region;
-		offset += (uint32_t)size;
+		offset += (uint32_t)dbgq_size;
 
-		size = SZ_8K;
 		icp_hw_mgr.hfi_mem.sfr_buf.iova       = out.iova + offset;
 		icp_hw_mgr.hfi_mem.sfr_buf.kva        = out.kva + offset;
-		icp_hw_mgr.hfi_mem.sfr_buf.len        = size;
+		icp_hw_mgr.hfi_mem.sfr_buf.len        = sfr_size;
 		icp_hw_mgr.hfi_mem.sfr_buf.smmu_hdl   = out.smmu_hdl;
 		icp_hw_mgr.hfi_mem.sfr_buf.mem_handle = out.mem_handle;
 		icp_hw_mgr.hfi_mem.sfr_buf.region     = out.region;
-		offset += (uint32_t)size;
+		offset += (uint32_t)sfr_size;
 
 		if (offset > out.len) {
 			CAM_ERR(CAM_ICP,
@@ -3082,31 +3060,31 @@ static int cam_icp_allocate_hfi_mem(void)
 			goto qtbl_alloc_failed;
 		}
 	} else {
-		rc = cam_icp_alloc_shared_mem(&icp_hw_mgr.hfi_mem.qtbl);
+		rc = cam_icp_alloc_shared_mem(qtbl_size, &icp_hw_mgr.hfi_mem.qtbl);
 		if (rc) {
 			CAM_ERR(CAM_ICP, "Unable to allocate qtbl memory");
 			goto qtbl_alloc_failed;
 		}
 
-		rc = cam_icp_alloc_shared_mem(&icp_hw_mgr.hfi_mem.cmd_q);
+		rc = cam_icp_alloc_shared_mem(cmdq_size, &icp_hw_mgr.hfi_mem.cmd_q);
 		if (rc) {
 			CAM_ERR(CAM_ICP, "Unable to allocate cmd q memory");
 			goto cmd_q_alloc_failed;
 		}
 
-		rc = cam_icp_alloc_shared_mem(&icp_hw_mgr.hfi_mem.msg_q);
+		rc = cam_icp_alloc_shared_mem(msgq_size, &icp_hw_mgr.hfi_mem.msg_q);
 		if (rc) {
 			CAM_ERR(CAM_ICP, "Unable to allocate msg q memory");
 			goto msg_q_alloc_failed;
 		}
 
-		rc = cam_icp_alloc_shared_mem(&icp_hw_mgr.hfi_mem.dbg_q);
+		rc = cam_icp_alloc_shared_mem(dbgq_size, &icp_hw_mgr.hfi_mem.dbg_q);
 		if (rc) {
 			CAM_ERR(CAM_ICP, "Unable to allocate dbg q memory");
 			goto dbg_q_alloc_failed;
 		}
 
-		rc = cam_icp_alloc_sfr_mem(&icp_hw_mgr.hfi_mem.sfr_buf);
+		rc = cam_icp_alloc_shared_mem(sfr_size, &icp_hw_mgr.hfi_mem.sfr_buf);
 		if (rc) {
 			CAM_ERR(CAM_ICP, "Unable to allocate sfr buffer");
 			goto sfr_buf_alloc_failed;
@@ -3126,7 +3104,9 @@ static int cam_icp_allocate_hfi_mem(void)
 		fwuncached_region_info.iova_len);
 
 	CAM_DBG(CAM_ICP,
-		"FwUncached[0x%x %p %lld] QTbl[0x%x %p %lld] CmdQ[0x%x %p %lld] MsgQ[0x%x %p %lld]",
+		"FwUncached_dt[0x%x %lld] FwUncached[0x%x %p %lld] QTbl[0x%x %p %lld] CmdQ[0x%x %p %lld] MsgQ[0x%x %p %lld]",
+		fwuncached_region_info.iova_start,
+		fwuncached_region_info.iova_len,
 		icp_hw_mgr.hfi_mem.fw_uncached.iova,
 		icp_hw_mgr.hfi_mem.fw_uncached.kva,
 		icp_hw_mgr.hfi_mem.fw_uncached.len,

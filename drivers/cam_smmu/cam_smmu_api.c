@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -2001,16 +2001,17 @@ int cam_smmu_reserve_buf_region(enum cam_smmu_region_id region,
 		buf_info->table->sgl,
 		buf_info->table->orig_nents,
 		prot);
-	if (size != region_info->iova_len) {
+	if (region_info->iova_len < size) {
 		CAM_ERR(CAM_SMMU,
-			"IOMMU mapping failed size=%zu, iova_len=%zu",
+			"IOMMU mapping failed for size=%zu available iova_len=%zu",
 			size, region_info->iova_len);
 		goto err_unmap_sg;
 	}
 
 	*is_buf_allocated = true;
 	*iova = (uint32_t)region_info->iova_start;
-	*request_len = region_info->iova_len;
+	/* Assign size mapped */
+	*request_len = size;
 	mutex_unlock(&cb_info->lock);
 
 	return rc;

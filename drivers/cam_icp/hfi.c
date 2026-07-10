@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/io.h>
@@ -798,7 +798,7 @@ int cam_hfi_init(struct hfi_mem_info *hfi_mem, const struct hfi_ops *hfi_ops,
 	qtbl_hdr = &qtbl->q_tbl_hdr;
 	qtbl_hdr->qtbl_version = 0xFFFFFFFF;
 	qtbl_hdr->qtbl_size = sizeof(struct hfi_qtbl);
-	qtbl_hdr->qtbl_qhdr0_offset = sizeof(struct hfi_qtbl_hdr);
+	qtbl_hdr->qtbl_qhdr0_offset = offsetof(struct hfi_qtbl, q_hdr);
 	qtbl_hdr->qtbl_qhdr_size = sizeof(struct hfi_q_hdr);
 	qtbl_hdr->qtbl_num_q = ICP_HFI_NUMBER_OF_QS;
 	qtbl_hdr->qtbl_num_active_q = ICP_HFI_NUMBER_OF_QS;
