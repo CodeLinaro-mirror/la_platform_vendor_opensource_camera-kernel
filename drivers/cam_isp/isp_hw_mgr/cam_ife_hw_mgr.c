@@ -11201,6 +11201,15 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		bw_config_size = sizeof(struct cam_isp_bw_config) + ((bw_config_u->num_rdi-1)*
 					sizeof(struct cam_isp_bw_vote));
 
+		if (blob_size < bw_config_size) {
+			CAM_ERR(CAM_ISP,
+				"Invalid blob size: %u expected %zu, num_rdi: %u, bw_cfg size: %zu, bw_vote size: %zu, ctx_idx: %u",
+				blob_size, bw_config_size, bw_config_u->num_rdi,
+				sizeof(struct cam_isp_bw_config),
+				sizeof(struct cam_isp_bw_vote), ife_mgr_ctx->ctx_index);
+			return -EINVAL;
+		}
+
 		rc = cam_common_mem_kdup((void **)&bw_config, bw_config_u, bw_config_size);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Alloc and copy request bw_config failed");
@@ -11227,17 +11236,6 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 			}
 		}
 
-		if ((bw_config->num_rdi != 0) && (blob_size <
-			(sizeof(struct cam_isp_bw_config) +
-			(bw_config->num_rdi - 1) *
-			sizeof(struct cam_isp_bw_vote)))) {
-			CAM_ERR(CAM_ISP, "Invalid blob size %u expected %lu ctx_idx: %u",
-				blob_size, sizeof(struct cam_isp_bw_config) +
-				(bw_config->num_rdi - 1) *
-				sizeof(struct cam_isp_bw_vote), ife_mgr_ctx->ctx_index);
-			cam_common_mem_free(bw_config);
-			return -EINVAL;
-		}
 
 		if (!prepare || !prepare->priv ||
 			(bw_config->usage_type >= CAM_ISP_HW_USAGE_TYPE_MAX)) {
@@ -11282,6 +11280,15 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		bw_config_size = sizeof(struct cam_isp_bw_config_v2) + ((bw_config_u->num_paths-1)*
 					sizeof(struct cam_axi_per_path_bw_vote));
 
+		if (blob_size < bw_config_size) {
+			CAM_ERR(CAM_ISP,
+				"Invalid blob size: %u expected %zu, num_paths: %u, bw_cfg_v2 size: %zu, per_path_vote size: %zu, ctx_idx: %u",
+				blob_size, bw_config_size, bw_config_u->num_paths,
+				sizeof(struct cam_isp_bw_config_v2),
+				sizeof(struct cam_axi_per_path_bw_vote), ife_mgr_ctx->ctx_index);
+			return -EINVAL;
+		}
+
 		rc = cam_common_mem_kdup((void **)&bw_config, bw_config_u, bw_config_size);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Alloc and copy request bw_config failed");
@@ -11311,18 +11318,6 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 			}
 		}
 
-		if ((bw_config->num_paths != 0) && (blob_size <
-			(sizeof(struct cam_isp_bw_config_v2) +
-			(bw_config->num_paths - 1) *
-			sizeof(struct cam_axi_per_path_bw_vote)))) {
-			CAM_ERR(CAM_ISP,
-				"Invalid blob size: %u, num_paths: %u, bw_config size: %lu, per_path_vote size: %lu, ctx_idx: %u",
-				blob_size, bw_config->num_paths,
-				sizeof(struct cam_isp_bw_config_v2),
-				sizeof(struct cam_axi_per_path_bw_vote), ife_mgr_ctx->ctx_index);
-			cam_common_mem_free(bw_config);
-			return -EINVAL;
-		}
 
 		if (!prepare || !prepare->priv ||
 			(bw_config->usage_type >= CAM_ISP_HW_USAGE_TYPE_MAX)) {
