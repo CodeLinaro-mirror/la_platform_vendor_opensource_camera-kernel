@@ -1310,10 +1310,10 @@ static int cam_ife_mgr_dump_sensor_grp_stream_cfg(void)
 	CAM_DBG(CAM_ISP, "num_grp_cfg :%d",
 		g_ife_sns_grp_cfg.num_grp_cfg);
 
-		for (i = 0; i < CAM_ISP_STREAM_GROUP_CFG_MAX; i++) {
-			if (!g_ife_sns_grp_cfg.grp_cfg[i])
-				continue;
-	
+	for (i = 0; i < CAM_ISP_STREAM_GROUP_CFG_MAX; i++) {
+		if (!g_ife_sns_grp_cfg.grp_cfg[i])
+			continue;
+
 		grp_cfg = g_ife_sns_grp_cfg.grp_cfg[i];
 		CAM_DBG(CAM_ISP, "stream_cfg_cnt: %d", grp_cfg->stream_cfg_cnt);
 
@@ -2769,7 +2769,10 @@ static int cam_ife_mgr_csid_stop_hw(
 		for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
 			if (!hw_mgr_res->hw_res[i] ||
 				(hw_mgr_res->hw_res[i]->res_state !=
-				CAM_ISP_RESOURCE_STATE_STREAMING && !ctx->flags.per_port_en))
+				CAM_ISP_RESOURCE_STATE_STREAMING &&
+				(!ctx->flags.per_port_en ||
+				hw_mgr_res->hw_res[i]->res_state ==
+				CAM_ISP_RESOURCE_STATE_AVAILABLE)))
 				continue;
 
 			isp_res = hw_mgr_res->hw_res[i];
@@ -5501,6 +5504,8 @@ static int cam_ife_hw_mgr_acquire_res_ife_src(
 
 		switch (csid_res->res_id) {
 		case CAM_IFE_PIX_PATH_RES_IPP:
+		case CAM_IFE_PIX_PATH_RES_IPP_1:
+		case CAM_IFE_PIX_PATH_RES_IPP_2:
 			if (!acquire_lcr)
 				vfe_acquire.vfe_in.res_id =
 					CAM_ISP_HW_VFE_IN_CAMIF;
@@ -5514,6 +5519,8 @@ static int cam_ife_hw_mgr_acquire_res_ife_src(
 				vfe_acquire.vfe_in.sync_mode =
 				CAM_ISP_HW_SYNC_NONE;
 			vfe_acquire.vfe_in.is_dual = csid_res->is_dual_isp;
+			if (!per_port_acquire)
+				vfe_acquire.vfe_in.hw_ctxt_mask = in_port->ipp_dst_hw_ctxt_mask;
 
 			break;
 		case CAM_IFE_PIX_PATH_RES_PPP:
@@ -12061,13 +12068,13 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 	ctx->scratch_buf_info.num_fetches = 0;
 	ctx->num_acq_vfe_out = 0;
 	ctx->num_acq_sfe_out = 0;
-	ctx->mapping_table.rdi_path_count = 0;
-
-	for (i = 0; i < CAM_ISP_STREAM_CFG_MAX; i++) {
-		ctx->mapping_table.virtual_rdi[i] = 0;
-		ctx->mapping_table.acquired_rdi[i] = 0;
+	if (per_port_feature_enable) {
+		ctx->mapping_table.rdi_path_count = 0;
+		for (i = 0; i < CAM_ISP_STREAM_CFG_MAX; i++) {
+			ctx->mapping_table.virtual_rdi[i] = 0;
+			ctx->mapping_table.acquired_rdi[i] = 0;
+		}
 	}
-
 	CAM_MEM_FREE(ctx->res_list_ife_out);
 	ctx->res_list_ife_out = NULL;
 	ctx->pri_rdi_out_res = g_ife_hw_mgr.isp_caps.max_vfe_out_res_type;
@@ -18772,6 +18779,7 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 				isp_hw_cmd_args->u.ctx_info.bubble_recover_dis  = 1;
 			else
 				isp_hw_cmd_args->u.ctx_info.bubble_recover_dis = 0;
+			isp_hw_cmd_args->u.ctx_info.per_port_en = ctx->flags.per_port_en;
 			break;
 		case CAM_ISP_HW_MGR_GET_PACKET_OPCODE:
 			packet = (struct cam_packet *)

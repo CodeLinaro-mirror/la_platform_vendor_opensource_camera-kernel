@@ -610,6 +610,7 @@ struct cam_isp_hw_cmd_args {
 		struct {
 			uint64_t                  type;
 			bool                      bubble_recover_dis;
+			bool                      per_port_en;
 		} ctx_info;
 		struct {
 			uint64_t                  curr;
