@@ -34,6 +34,7 @@
 #include "cam_dp_bdg_core.h"
 #include "cam_dp_bdg_lt7911d_core.h"
 #include "cam_ir_led_dev.h"
+#include "msm_hdmidp_in_extcon.h"
 
 #if IS_REACHABLE(CONFIG_LEDS_QPNP_FLASH_V2) || \
 	IS_REACHABLE(CONFIG_LEDS_QTI_FLASH)
@@ -130,6 +131,7 @@ static const struct camera_submodule_component camera_sensor[] = {
 	{&cam_sensor_driver_init, &cam_sensor_driver_exit},
 	{&cam_eeprom_driver_init, &cam_eeprom_driver_exit},
 	{&cam_ois_driver_init, &cam_ois_driver_exit},
+	{&msm_hdmidp_in_init, &msm_hdmidp_in_exit},
 	{&hdmi_bdg_irq_handler_init, &hdmi_bdg_irq_handler_exit},
 	{&hdmi_bdg_lt6911uxe_irq_handler_init, &hdmi_bdg_lt6911uxe_irq_handler_exit},
 	{&dp_bdg_irq_handler_init, &dp_bdg_irq_handler_exit},
