@@ -940,12 +940,18 @@ irqreturn_t cam_tfe_irq(int irq_num, void *data)
 		goto end;
 	}
 
-	cam_worker_wrapper_enqueue(
+	rc = cam_worker_wrapper_enqueue(
 		top_priv->worker_ctx,
 		&taskdata_args,
 		core_info,
 		evt_payload,
 		cam_tfe_irq_bottom_half);
+	if (rc) {
+		CAM_ERR_RATE_LIMIT(CAM_ISP,
+			"TFE:%d worker enqueue failed rc=%d",
+			core_info->core_index, rc);
+		cam_tfe_put_evt_payload(core_info, &evt_payload);
+	}
 
 end:
 	return IRQ_HANDLED;
