@@ -50,6 +50,10 @@
 #define AIS_TFE_BUS_IRQ_REG0            0
 #define AIS_TFE_BUS_IRQ_REG1            1
 
+#define AIS_FLUSH_HW_Q_NONE                         0
+#define AIS_FLUSH_HW_Q_FLUSH                        1
+#define AIS_FLUSH_HW_Q_DONE                         2
+
 static int ais_tfe_dump_reg(struct cam_hw_info *vfe_hw)
 {
 	uint32_t i = 0;
@@ -166,6 +170,7 @@ static void ais_clear_rdi_path(struct ais_tfe_rdi_output *rdi_path)
 	rdi_path->frame_cnt = 0;
 
 	rdi_path->num_buffer_hw_q = 0;
+	rdi_path->flush = AIS_FLUSH_HW_Q_NONE;
 	INIT_LIST_HEAD(&rdi_path->buffer_q);
 	INIT_LIST_HEAD(&rdi_path->buffer_hw_q);
 	INIT_LIST_HEAD(&rdi_path->free_buffer_list);
@@ -1010,11 +1015,16 @@ static void ais_tfe_q_bufs_to_hw(struct ais_vfe_hw_core_info *core_info,
 	bus_hw_info = core_info->vfe_hw_info->bus_hw_info;
 	client_regs = &bus_hw_info->bus_client_reg[path];
 
-	is_full = (rdi_path->num_buffer_hw_q >= bus_hw_info->max_fifo_num);
+	is_full = ((rdi_path->num_buffer_hw_q >= bus_hw_info->max_fifo_num) ||
+				rdi_path->flush) ? true : false;
 
 	while (!is_full) {
-		if (list_empty(&rdi_path->buffer_q))
+		if (list_empty(&rdi_path->buffer_q)) {
+			CAM_DBG(CAM_ISP, "I%d|R%d: buffer_q emtpy HW Q %d Flush %d",
+				core_info->vfe_idx, path,
+				rdi_path->num_buffer_hw_q, rdi_path->flush);
 			break;
+		}
 
 		vfe_buf = list_first_entry(&rdi_path->buffer_q,
 				struct ais_vfe_buffer_t, list);
@@ -1046,7 +1056,8 @@ static void ais_tfe_q_bufs_to_hw(struct ais_vfe_hw_core_info *core_info,
 		list_add_tail(&vfe_buf->list, &rdi_path->buffer_hw_q);
 		++rdi_path->num_buffer_hw_q;
 
-		is_full = (rdi_path->num_buffer_hw_q >= bus_hw_info->max_fifo_num);
+		is_full = ((rdi_path->num_buffer_hw_q >= bus_hw_info->max_fifo_num) ||
+				rdi_path->flush) ? true : false;
 
 		//trace_ais_isp_tfe_enq_buf_hw(core_info->vfe_idx, path,
 		//	vfe_buf->bufIdx, rdi_path->num_buffer_hw_q, is_full);
@@ -1112,6 +1123,34 @@ void ais_tfe_ife_discard_old_frame_done_event(struct ais_vfe_hw_core_info *core_
 		CAM_WARN(CAM_ISP, "I%d|R%d can't find old frame done buffer:%d",
 			core_info->vfe_idx, path, buf_idx);
 	}
+}
+
+static int ais_tfe_flush_hw_q(struct ais_vfe_hw_core_info *core_info,
+		struct ais_ife_rdi_flush_hw_q_args *flush)
+{
+	int rc = 0;
+
+	struct ais_tfe_rdi_output  *rdi_path = NULL;
+
+	if (flush->path >= AIS_IFE_PATH_MAX) {
+		CAM_ERR(CAM_ISP, "Invalid output path %d", flush->path);
+		rc = -EINVAL;
+		goto EXIT;
+	}
+
+	rdi_path = &core_info->rdi_out[flush->path];
+
+	spin_lock_bh(&rdi_path->buffer_lock);
+	rdi_path->flush = AIS_FLUSH_HW_Q_FLUSH;
+	spin_unlock_bh(&rdi_path->buffer_lock);
+
+	CAM_INFO(CAM_ISP, "Notify Flush IFE%d|RDI%d HW Q(%d)",
+			core_info->vfe_idx,
+			flush->path,
+			rdi_path->num_buffer_hw_q);
+
+EXIT:
+	return rc;
 }
 
 static int ais_tfe_cmd_enq_buf(struct ais_vfe_hw_core_info *core_info,
@@ -1243,6 +1282,15 @@ int ais_tfe_process_cmd(void *hw_priv, uint32_t cmd_type,
 			rc = -EINVAL;
 		else
 			rc = ais_tfe_cmd_enq_buf(core_info, enq_buf);
+		break;
+	}
+	case AIS_VFE_CMD_FLUSH_HW_Q: {
+		struct ais_ife_rdi_flush_hw_q_args *flush =
+			(struct ais_ife_rdi_flush_hw_q_args *)cmd_args;
+		if (arg_size != sizeof(*flush))
+			rc = -EINVAL;
+		else
+			rc = ais_tfe_flush_hw_q(core_info, flush);
 		break;
 	}
 	default:
@@ -1405,6 +1453,14 @@ static void ais_tfe_handle_sof_rdi(struct ais_vfe_hw_core_info *core_info,
 		ais_tfe_q_sof(core_info, path, &sof);
 
 	} else {
+		spin_lock_bh(&p_rdi->buffer_lock);
+		if (p_rdi->flush) {
+			CAM_INFO(CAM_ISP, "I%d R%d Skip Flush SOF",
+					core_info->vfe_idx, path);
+			spin_unlock_bh(&p_rdi->buffer_lock);
+			return;
+		}
+		spin_unlock_bh(&p_rdi->buffer_lock);
 		//trace_ais_isp_tfe_sof(core_info->vfe_idx, path,
 		//			&work_data->ts_hw[path],
 		//			p_rdi->num_buffer_hw_q, 0);
@@ -1473,6 +1529,27 @@ static int ais_tfe_handle_sof(
 		p_rdi = &core_info->rdi_out[path];
 		if (p_rdi->state != AIS_ISP_RESOURCE_STATE_STREAMING)
 			continue;
+
+		spin_lock_bh(&p_rdi->buffer_lock);
+		if (p_rdi->flush == AIS_FLUSH_HW_Q_FLUSH &&
+				!p_rdi->num_buffer_hw_q) {
+			p_rdi->flush = AIS_FLUSH_HW_Q_DONE;
+			spin_unlock_bh(&p_rdi->buffer_lock);
+
+			CAM_INFO(CAM_ISP, "IFE%d|RDI%d Flush Done",
+				core_info->vfe_idx, path);
+			core_info->event.msg.type = AIS_IFE_MSG_FLUSH_DONE;
+			core_info->event.msg.path = path;
+			core_info->event_cb(core_info->event_cb_priv,
+				&core_info->event);
+			continue;
+		} else if (p_rdi->flush) {
+			CAM_DBG(CAM_ISP, "Skip IFE%d|RDI%d SOF",
+				core_info->vfe_idx, path);
+			spin_unlock_bh(&p_rdi->buffer_lock);
+			continue;
+		}
+		spin_unlock_bh(&p_rdi->buffer_lock);
 
 		//AIS_ATRACE_BEGIN("SOF_%u_%u_%lu",
 		//	core_info->vfe_idx, path, p_rdi->frame_cnt);
@@ -1590,6 +1667,7 @@ static void ais_tfe_bus_handle_client_frame_done(
 	uint64_t                           cur_sof_hw_ts;
 	bool last_addr_match = false;
 	uint32_t i = 0;
+	bool flush_sof_q = false;
 
 	CAM_DBG(CAM_ISP, "I%d|R%d last_addr 0x%x",
 			core_info->vfe_idx, path, last_addr);
@@ -1723,8 +1801,13 @@ static void ais_tfe_bus_handle_client_frame_done(
 			&core_info->event);
 	}
 
+	spin_lock_bh(&rdi_path->buffer_lock);
+	flush_sof_q = ((rdi_path->num_buffer_hw_q == 0) &&
+			(!rdi_path->flush)) ? true : false;
+	spin_unlock_bh(&rdi_path->buffer_lock);
+
 	/* Flush SOF info Q if HW Buffer Q is empty */
-	if (rdi_path->num_buffer_hw_q == 0) {
+	if (flush_sof_q) {
 		struct ais_sof_info_t *p_sof_info = NULL;
 
 		CAM_DBG(CAM_ISP, "I%d|R%d|F%llu: Flush SOF (%d) HW Q empty",
@@ -1787,6 +1870,38 @@ static int ais_tfe_bus_handle_frame_done(
 		if (client_mask &
 				(0x1 << (client_regs->comp_group +
 					 bus_hw_info->comp_done_shift))) {
+
+				spin_lock_bh(&p_rdi->buffer_lock);
+				if (p_rdi->flush == AIS_FLUSH_HW_Q_FLUSH &&
+						(!p_rdi->num_buffer_hw_q ||
+						p_rdi->num_buffer_hw_q == 1)) {
+					p_rdi->num_buffer_hw_q -= 1;
+					p_rdi->flush = AIS_FLUSH_HW_Q_DONE;
+					spin_unlock_bh(&p_rdi->buffer_lock);
+					CAM_INFO(CAM_ISP, "IFE%d|RDI%d Flush Done",
+						core_info->vfe_idx, client);
+
+					core_info->event.msg.type = AIS_IFE_MSG_FLUSH_DONE;
+					core_info->event.msg.path = client;
+					core_info->event.u.err_msg.reserved = 0;
+					core_info->event_cb(core_info->event_cb_priv,
+						&core_info->event);
+
+					continue;
+				} else if (p_rdi->flush == AIS_FLUSH_HW_Q_FLUSH) {
+					p_rdi->num_buffer_hw_q -= 1;
+					CAM_DBG(CAM_ISP, "Skip IFE%d|RDI%d Q %d",
+						core_info->vfe_idx, client, p_rdi->num_buffer_hw_q);
+					spin_unlock_bh(&p_rdi->buffer_lock);
+					continue;
+				} else if (p_rdi->flush == AIS_FLUSH_HW_Q_DONE) {
+					spin_unlock_bh(&p_rdi->buffer_lock);
+					continue;
+				} else {
+					CAM_DBG(CAM_ISP, "Do Frame Done IFE%d|RDI%d Q %d Flush %d",
+						core_info->vfe_idx, client, p_rdi->num_buffer_hw_q, p_rdi->flush);
+				}
+				spin_unlock_bh(&p_rdi->buffer_lock);
 			//process frame done
 			//AIS_ATRACE_BEGIN("FD_%u_%u_%lu",
 			//	core_info->vfe_idx, client, p_rdi->frame_cnt);

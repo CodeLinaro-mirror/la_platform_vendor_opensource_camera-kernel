@@ -113,8 +113,8 @@ static int ais_tfe_dev_component_bind(struct device *dev,
 	if (vfe_hw_intf->hw_idx < AIS_TFE_HW_NUM_MAX)
 		ais_tfe_hw_list[vfe_hw_intf->hw_idx] = vfe_hw_intf;
 
-	// ais_tfe_init_hw(vfe_hw, NULL, 0);
-	// ais_tfe_deinit_hw(vfe_hw, NULL, 0);
+	ais_tfe_init_hw(vfe_hw, NULL, 0);
+	ais_tfe_deinit_hw(vfe_hw, NULL, 0);
 
 	ais_tfe_debugfs_register(vfe_hw);
 
