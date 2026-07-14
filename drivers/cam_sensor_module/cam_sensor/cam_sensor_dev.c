@@ -362,6 +362,7 @@ static int cam_sensor_i2c_component_bind(struct device *dev,
 		goto free_qup;
 	}
 
+
 	rc = cam_sensor_init_subdev_params(s_ctrl);
 	if (rc)
 		goto free_qup;
@@ -564,6 +565,9 @@ static int cam_sensor_component_bind(struct device *dev,
 	struct platform_device *pdev = to_platform_device(dev);
 	struct timespec64 ts_start, ts_end;
 	long microsec = 0;
+	struct device_node *endpoint, *remote;
+	struct device_node *deser_node;
+	u32 csiphy_sd_index;
 
 	CAM_GET_TIMESTAMP(ts_start);
 	i3c_i2c_target = of_property_read_bool(pdev->dev.of_node, "i3c-i2c-target");
@@ -601,6 +605,37 @@ static int cam_sensor_component_bind(struct device *dev,
 
 	/* Fill platform device id*/
 	pdev->id = soc_info->index;
+
+	if (of_graph_is_present(s_ctrl->of_node)) {
+		endpoint = of_graph_get_next_endpoint(s_ctrl->of_node, NULL);
+		if (!endpoint) {
+			CAM_DBG(CAM_SENSOR, "No local endpoint found");
+		} else {
+			remote = of_graph_get_remote_port(endpoint);
+			if (!remote) {
+				CAM_ERR(CAM_SENSOR, "No remote endpoint found");
+				of_node_put(endpoint);
+			}
+
+			deser_node = of_get_parent(remote);
+			if (!deser_node) {
+				CAM_ERR(CAM_SENSOR, "No deserializer node found");
+				of_node_put(remote);
+				of_node_put(endpoint);
+			}
+
+			rc = of_property_read_u32(deser_node, "csiphy-sd-index", &csiphy_sd_index);
+			if (rc) {
+				CAM_ERR(CAM_SENSOR, "Failed to read csiphy-sd-index");
+			} else {
+				CAM_DBG(CAM_SENSOR, "Deserializer csiphy-sd-index: %u", csiphy_sd_index);
+			}
+		}
+	} else {
+		CAM_DBG(CAM_SENSOR, "No graph connections present");
+
+	}
+
 
 	rc = cam_sensor_init_subdev_params(s_ctrl);
 	if (rc)
@@ -669,7 +704,7 @@ static int cam_sensor_component_bind(struct device *dev,
 	s_ctrl->sensordata->power_info.dev = &pdev->dev;
 	platform_set_drvdata(pdev, s_ctrl);
 	s_ctrl->sensor_state = CAM_SENSOR_INIT;
-	CAM_DBG(CAM_SENSOR, "Component bound successfully for %s", pdev->name);
+	CAM_INFO(CAM_SENSOR, "Component bound successfully for %s", pdev->name);
 
 	g_i3c_sensor_data[soc_info->index].s_ctrl = s_ctrl;
 	init_completion(&g_i3c_sensor_data[soc_info->index].probe_complete);
@@ -749,6 +784,7 @@ static int cam_sensor_platform_remove(struct platform_device *pdev)
 static const struct of_device_id cam_sensor_driver_dt_match[] = {
 	{.compatible = "qcom,cam-sensor"},
 	{.compatible = "qcom,cam-hotplug-sensor"},
+        {.compatible = "qcom,cam-gmsl-sensor"},
 	{}
 };
 MODULE_DEVICE_TABLE(of, cam_sensor_driver_dt_match);

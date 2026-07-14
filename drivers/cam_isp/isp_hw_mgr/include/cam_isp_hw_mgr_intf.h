@@ -36,7 +36,7 @@
 #define CAM_TFE_CTX_MAX      4
 
 /* maximum context numbers for IFE */
-#define CAM_IFE_CTX_MAX      8
+#define CAM_IFE_CTX_MAX      16
 
 /* Appliacble vote paths for dual ife, based on no. of UAPI definitions */
 #define CAM_ISP_MAX_PER_PATH_VOTES 40
@@ -70,6 +70,13 @@
 #define CAM_ISP_IFE_MAX_FCG_CH_CTXS    3
 #define CAM_ISP_SFE_MAX_FCG_CHANNELS   2
 
+/* ctx get virtual rdi mapping callback function type */
+typedef int (*cam_hw_get_virtual_rdi_mapping_cb_func)(void *context,
+	uint32_t out_port, bool is_virtual_rdi);
+
+/* Update result info for fastpath */
+typedef void (*cam_isp_ctx_update_fastpath_result)(void *data,
+	uint32_t value);
 /**
  *  enum cam_isp_hw_event_type - Collection of the ISP hardware events
  */
@@ -379,6 +386,9 @@ struct cam_isp_path_exp_order_update_internal {
  * @mup_en:                 Flag if dynamic sensor switch is enabled
  * @force_disable_drv:      Force to disable drv
  * @fcg_info:               Track FCG config for further usage in config stage
+ * @virtual_rdi_mapping_cb:  virtual rdi mapping cb function for
+ *                           respective sensor via ife_ctx
+ * @per_port_enable:         Indicates if perport feature is enabled or not
  *
  */
 struct cam_isp_prepare_hw_update_data {
@@ -404,6 +414,8 @@ struct cam_isp_prepare_hw_update_data {
 	bool                                           mup_en;
 	bool                                           force_disable_drv;
 	struct cam_isp_fcg_config_info                 fcg_info;
+	cam_hw_get_virtual_rdi_mapping_cb_func         virtual_rdi_mapping_cb;
+	bool                                           per_port_enable;
 };
 
 
@@ -515,6 +527,9 @@ enum cam_isp_hw_mgr_command {
 	CAM_ISP_HW_MGR_CMD_UPDATE_CLOCK,
 	CAM_ISP_HW_MGR_GET_LAST_CONSUMED_ADDR,
 	CAM_ISP_HW_MGR_SET_DRV_INFO,
+	CAM_ISP_HW_MGR_GET_ACTIVE_HW_CTX_CNT,
+	CAM_ISP_HW_MGR_UPDATE_FLUSH_IN_PROGRESS,
+	CAM_ISP_HW_MGR_GET_HW_CTX,
 	CAM_ISP_HW_MGR_CMD_MAX,
 };
 
@@ -580,6 +595,10 @@ struct cam_isp_hw_per_req_info {
  * @default_cfg_params:    The params for default config
  * @drv_info:              DRV info for corresponding req
  * @cdm_done_ts:           CDM callback done timestamp
+ * @hw_ctx_cnt:            count of active ife ctxs
+ * @stream_grp_cfg_index:  index of sensor group stream configuration
+ * @out_port_id:           out resource id
+ * @ptr:                   void pointer out param
  */
 struct cam_isp_hw_cmd_args {
 	uint32_t                          cmd_type;
@@ -598,12 +617,30 @@ struct cam_isp_hw_cmd_args {
 			uint64_t                  boot;
 		} sof_ts;
 		struct {
+			uint32_t                  hw_ctx_cnt;
+			int                       stream_grp_cfg_index;
+		} active_hw_ctx;
+		struct {
 			int64_t                   last_applied_max_pd_req;
 			bool                      force_disable_drv;
 		} default_cfg_params;
 		struct cam_isp_hw_drv_info    drv_info;
+		uint32_t                      out_port_id;
+		void                         *ptr;
 	} u;
 	struct timespec64 cdm_done_ts;
+};
+
+/**
+ * struct cam_isp_hw_active_hw_ctx
+ *
+ * @index:                 index of active hw ctx
+ * @stream_grp_cfg_index:  sensor group configuration index
+ *
+ */
+struct cam_isp_hw_active_hw_ctx {
+	int         index;
+	int         stream_grp_cfg_index;
 };
 
 /**

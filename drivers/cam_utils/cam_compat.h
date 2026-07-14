@@ -165,10 +165,10 @@ ssize_t cam_iommu_map_sg(struct iommu_domain *domain,
 	dma_addr_t iova_start, struct scatterlist *sgl, uint64_t orig_nents,
 	int prot);
 
-int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info);
+int16_t cam_get_gpio_counts(struct cam_hw_soc_info *soc_info, bool is_child);
 
 uint16_t cam_get_named_gpio(struct cam_hw_soc_info *soc_info,
-	int index);
+	int index, bool is_child);
 
 #if IS_REACHABLE(CONFIG_INTERCONNECT_QCOM)
 inline struct icc_path *cam_icc_get_path(struct device *dev,

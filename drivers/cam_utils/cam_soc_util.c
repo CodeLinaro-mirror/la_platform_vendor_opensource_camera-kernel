@@ -2930,7 +2930,16 @@ static int cam_soc_util_get_gpio_info(struct cam_hw_soc_info *soc_info)
 	if (!soc_info || !soc_info->dev)
 		return -EINVAL;
 
-	of_node = soc_info->dev->of_node;
+	if (soc_info->is_child_node) {
+		of_node = soc_info->parent_node;
+	} else {
+		of_node = soc_info->dev->of_node;
+	}
+
+	if (!of_node) {
+		CAM_ERR(CAM_UTIL, "of_node is NULL");
+		return -EINVAL;
+	}
 
 	/* Validate input parameters */
 	if (!of_node) {
@@ -2938,12 +2947,12 @@ static int cam_soc_util_get_gpio_info(struct cam_hw_soc_info *soc_info)
 		return -EINVAL;
 	}
 
-	gpio_array_size = cam_get_gpio_counts(soc_info);
+	gpio_array_size = cam_get_gpio_counts(soc_info, soc_info->is_child_node);
 
 	if (gpio_array_size <= 0)
 		return 0;
 
-	CAM_DBG(CAM_UTIL, "gpio count %d", gpio_array_size);
+	CAM_ERR(CAM_UTIL, "gpio count %d", gpio_array_size);
 
 	gpio_array = CAM_MEM_ZALLOC_ARRAY(gpio_array_size, sizeof(uint16_t), GFP_KERNEL);
 	if (!gpio_array) {
@@ -2952,7 +2961,7 @@ static int cam_soc_util_get_gpio_info(struct cam_hw_soc_info *soc_info)
 	}
 
 	for (i = 0; i < gpio_array_size; i++) {
-		gpio_array[i] = cam_get_named_gpio(soc_info, i);
+		gpio_array[i] = cam_get_named_gpio(soc_info, i, soc_info->is_child_node);
 		CAM_DBG(CAM_UTIL, "gpio_array[%d] = %d", i, gpio_array[i]);
 	}
 
@@ -3069,7 +3078,16 @@ static int cam_soc_util_get_dt_regulator_info
 		return -EINVAL;
 	}
 
-	of_node = soc_info->dev->of_node;
+	if (soc_info->is_child_node) {
+		of_node = soc_info->parent_node;
+	} else {
+		of_node = soc_info->dev->of_node;
+	}
+
+	if (!of_node) {
+		CAM_ERR(CAM_UTIL, "of_node is NULL");
+		return -EINVAL;
+	}
 
 	soc_info->num_rgltr = 0;
 	count = of_property_count_strings(of_node, "regulator-names");

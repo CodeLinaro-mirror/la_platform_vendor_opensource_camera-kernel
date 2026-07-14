@@ -18,6 +18,25 @@
 #define VALIDATE_VOLTAGE(min, max, config_val) ((config_val) && \
 	(config_val >= min) && (config_val <= max))
 
+/* Define a lookup table mapping DT property names to GPIO enum indices */
+static const struct {
+	const char *dt_name;
+	enum msm_camera_power_seq_type gpio_index;
+} gpio_custom_map[] = {
+	{ "gpio-custom1", SENSOR_CUSTOM_GPIO1 },
+	{ "gpio-custom2", SENSOR_CUSTOM_GPIO2 },
+	{ "gpio-custom3", SENSOR_CUSTOM_GPIO3 },
+	{ "gpio-custom4", SENSOR_CUSTOM_GPIO4 },
+	{ "gpio-custom5", SENSOR_CUSTOM_GPIO5 },
+	{ "gpio-custom6", SENSOR_CUSTOM_GPIO6 },
+	{ "gpio-custom7", SENSOR_CUSTOM_GPIO7 },
+	{ "gpio-custom8", SENSOR_CUSTOM_GPIO8 },
+	{ "gpio-custom9", SENSOR_CUSTOM_GPIO9 },
+	{ "gpio-custom10", SENSOR_CUSTOM_GPIO10 },
+	{ "gpio-custom11", SENSOR_CUSTOM_GPIO11 },
+	{ "gpio-custom12", SENSOR_CUSTOM_GPIO12 }
+};
+
 int cam_sensor_count_elems_i3c_device_id(struct device_node *dev,
 	int *num_entries, char *sensor_id_table_str)
 {
@@ -115,13 +134,28 @@ int cam_sensor_fill_i3c_device_id(struct device_node *dev, int num_entries,
 	return 0;
 }
 
+
+static struct i2c_settings_list*
+	cam_sensor_get_list_ptr(void)
+{
+	struct i2c_settings_list *tmp;
+
+	tmp = kzalloc(sizeof(struct i2c_settings_list), GFP_KERNEL);
+	if (!tmp) {
+		CAM_ERR(CAM_SENSOR_UTIL, "Not Enough memory for list");
+		return NULL;
+	}
+
+	return tmp;
+}
+
 static struct i2c_settings_list*
 	cam_sensor_get_i2c_ptr(struct i2c_settings_array *i2c_reg_settings,
 		uint32_t size)
 {
 	struct i2c_settings_list *tmp;
 
-	tmp = CAM_MEM_ZALLOC(sizeof(struct i2c_settings_list), GFP_KERNEL);
+	tmp = cam_sensor_get_list_ptr();
 
 	if (tmp != NULL)
 		list_add_tail(&(tmp->list),
@@ -261,6 +295,8 @@ int32_t cam_sensor_handle_poll(
 		cond_wait->reg_data;
 	i2c_list->i2c_settings.reg_setting->delay =
 		cond_wait->timeout;
+	i2c_list->i2c_settings.reg_setting->data_mask =
+		cond_wait->data_mask;
 
 	(*cmd_buf) += sizeof(struct cam_cmd_conditional_wait) /
 		sizeof(uint32_t);
@@ -552,36 +588,94 @@ int32_t cam_sensor_handle_continuous_read(
 }
 
 static int cam_sensor_handle_slave_info(
-	struct camera_io_master *io_master,
-	uint32_t *cmd_buf)
+	uint32_t *cmd_buf,
+	struct i2c_settings_array *i2c_reg_settings,
+	struct list_head **list_ptr)
 {
 	int rc = 0;
 	struct cam_cmd_i2c_info *i2c_info = (struct cam_cmd_i2c_info *)cmd_buf;
+	struct i2c_settings_list *i2c_list;
 
-	if (io_master == NULL || cmd_buf == NULL) {
-		CAM_ERR(CAM_SENSOR_UTIL, "Invalid args");
-		return -EINVAL;
+	i2c_list =
+		cam_sensor_get_i2c_ptr(i2c_reg_settings, 1);
+	if (!i2c_list || !i2c_list->i2c_settings.reg_setting) {
+		CAM_ERR(CAM_SENSOR_UTIL, "Failed in allocating mem for list");
+		return -ENOMEM;
 	}
 
-	switch (io_master->master_type) {
-	case CCI_MASTER:
-		io_master->cci_client->sid = (i2c_info->slave_addr >> 1);
-		io_master->cci_client->i2c_freq_mode = i2c_info->i2c_freq_mode;
-		break;
+	i2c_list->op_code = CAM_SENSOR_I2C_SET_I2C_INFO;
+	i2c_list->slave_info = *i2c_info;
 
-	case I2C_MASTER:
-		io_master->qup_client->i2c_client->addr = i2c_info->slave_addr;
-		break;
+	return rc;
+}
 
-	case SPI_MASTER:
-		break;
+static int cam_sensor_handle_sequential_xfer(
+	uint32_t *cmd_buf,
+	struct i2c_settings_array *i2c_reg_settings,
+	enum cam_sensor_i2c_cmd_type opcode,
+	struct list_head **list_ptr)
+{
+	int rc = 0;
+	struct cam_cmd_i2c_sequential_xfer *i2c_info =
+		(struct cam_cmd_i2c_sequential_xfer *)cmd_buf;
+	struct i2c_settings_list *i2c_list;
 
-	default:
-		CAM_ERR(CAM_SENSOR_UTIL, "Invalid master type: %d",
-			io_master->master_type);
-		rc = -EINVAL;
-		break;
+	i2c_list =
+		cam_sensor_get_list_ptr();
+	if (!i2c_list) {
+		CAM_ERR(CAM_SENSOR_UTIL, "Failed in allocating mem for list");
+		return -ENOMEM;
 	}
+
+	list_add_tail(&(i2c_list->list),
+		&(i2c_reg_settings->list_head));
+	if (opcode == CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_LOCK)
+		i2c_list->op_code = CAM_SENSOR_I2C_SEQUENTIAL_XFER_LOCK;
+	else
+		i2c_list->op_code = CAM_SENSOR_I2C_SEQUENTIAL_XFER_UNLOCK;
+
+	i2c_list->seq_xfer = *i2c_info;
+
+	return rc;
+}
+
+static int cam_sensor_handle_read_append_write(
+	struct cam_cmd_i2c_random_wr *cam_cmd_i2c_rd_append_wr,
+	struct i2c_settings_array *i2c_reg_settings,
+	uint32_t *cmd_length_in_bytes, int32_t *offset,
+	struct list_head **list)
+{
+	struct i2c_settings_list *i2c_list;
+	int32_t rc = 0, cnt, payload_count;
+
+	payload_count = cam_cmd_i2c_rd_append_wr->header.count;
+	i2c_list = cam_sensor_get_i2c_ptr(i2c_reg_settings,
+		payload_count);
+	if (i2c_list == NULL ||
+		i2c_list->i2c_settings.reg_setting == NULL) {
+		CAM_ERR(CAM_SENSOR_UTIL, "Failed in allocating i2c_list");
+		return -ENOMEM;
+	}
+
+	*cmd_length_in_bytes = (sizeof(struct i2c_rdwr_header) +
+		sizeof(struct i2c_random_wr_payload) *
+		payload_count);
+	i2c_list->op_code = CAM_SENSOR_I2C_READ_APPEND_WRITE;
+	i2c_list->i2c_settings.addr_type =
+		cam_cmd_i2c_rd_append_wr->header.addr_type;
+	i2c_list->i2c_settings.data_type =
+		cam_cmd_i2c_rd_append_wr->header.data_type;
+
+	for (cnt = 0; cnt < payload_count; cnt++) {
+		i2c_list->i2c_settings.reg_setting[cnt].reg_addr =
+			cam_cmd_i2c_rd_append_wr->random_wr_payload[cnt].reg_addr;
+		i2c_list->i2c_settings.reg_setting[cnt].reg_data =
+			cam_cmd_i2c_rd_append_wr->random_wr_payload[cnt].reg_data;
+		i2c_list->i2c_settings.reg_setting[cnt].data_mask =
+			cam_cmd_i2c_rd_append_wr->random_wr_payload[cnt].mask;
+	}
+	*offset = cnt;
+	*list = &(i2c_list->list);
 
 	return rc;
 }
@@ -607,7 +701,7 @@ int cam_sensor_i2c_command_parser(
 	int32_t num_cmd_buffers,
 	struct cam_buf_io_cfg *io_cfg)
 {
-	int16_t                   rc = 0, i = 0;
+	int16_t                   rc = 0, i = 0, xfer_lock_cnt = 0;
 	size_t                    len_of_buff = 0;
 	uintptr_t                 generic_ptr;
 	uint16_t                  cmd_length_in_bytes = 0;
@@ -707,6 +801,46 @@ int cam_sensor_i2c_command_parser(
 				if (rc < 0) {
 					CAM_ERR(CAM_SENSOR_UTIL,
 					"Failed in random write %d", rc);
+					rc = -EINVAL;
+					goto end;
+				}
+
+				cmd_buf += cmd_length_in_bytes /
+					sizeof(uint32_t);
+				byte_cnt += cmd_length_in_bytes;
+				break;
+			}
+			case CAMERA_SENSOR_CMD_TYPE_I2C_RD_APPEND_WR: {
+				uint32_t cmd_length_in_bytes   = 0;
+				struct cam_cmd_i2c_random_wr
+					*cam_cmd_i2c_random_wr =
+					(struct cam_cmd_i2c_random_wr *)cmd_buf;
+
+				if ((remain_len - byte_cnt) <
+					sizeof(struct cam_cmd_i2c_random_wr)) {
+					CAM_ERR(CAM_SENSOR_UTIL,
+						"Not enough buffer provided");
+					rc = -EINVAL;
+					goto end;
+				}
+				tot_size = sizeof(struct i2c_rdwr_header) +
+					(sizeof(struct i2c_random_wr_payload) *
+					cam_cmd_i2c_random_wr->header.count);
+
+				if (tot_size > (remain_len - byte_cnt)) {
+					CAM_ERR(CAM_SENSOR_UTIL,
+						"Not enough buffer provided");
+					rc = -EINVAL;
+					goto end;
+				}
+
+				rc = cam_sensor_handle_read_append_write(
+					cam_cmd_i2c_random_wr,
+					i2c_reg_settings,
+					&cmd_length_in_bytes, &j, &list);
+				if (rc < 0) {
+					CAM_ERR(CAM_SENSOR_UTIL,
+					"Failed in read append write %d", rc);
 					rc = -EINVAL;
 					goto end;
 				}
@@ -817,7 +951,7 @@ int cam_sensor_i2c_command_parser(
 					goto end;
 				}
 				rc = cam_sensor_handle_slave_info(
-					io_master, cmd_buf);
+					cmd_buf, i2c_reg_settings, &list);
 				if (rc) {
 					CAM_ERR(CAM_SENSOR_UTIL,
 					"Handle slave info failed with rc: %d",
@@ -826,6 +960,52 @@ int cam_sensor_i2c_command_parser(
 				}
 				cmd_length_in_bytes =
 					sizeof(struct cam_cmd_i2c_info);
+				cmd_buf +=
+					cmd_length_in_bytes / sizeof(uint32_t);
+				byte_cnt += cmd_length_in_bytes;
+				break;
+			}
+
+			case CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_LOCK:
+			case CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_UNLOCK:{
+				CAM_DBG(CAM_SENSOR_UTIL,"Handle sequential xfer cmd: %d",
+					cmm_hdr->cmd_type);
+				if (remain_len - byte_cnt <
+					sizeof(struct cam_cmd_i2c_sequential_xfer)) {
+					CAM_ERR(CAM_SENSOR_UTIL,
+						"Not enough buffer space");
+					rc = -EINVAL;
+					goto end;
+				}
+
+				/* While packaging xfer locks make sure they are in pairs*/
+				if (CAMERA_SENSOR_CMD_TYPE_I2C_SEQUENTIAL_XFER_LOCK == cmm_hdr->cmd_type) {
+					if(0 == xfer_lock_cnt) {
+						xfer_lock_cnt++;
+					} else {
+						CAM_ERR(CAM_SENSOR_UTIL, "Not expecting again lock without unlock");
+						rc = -EINVAL;
+						goto end;
+					}
+				} else {
+					if(1 == xfer_lock_cnt) {
+						xfer_lock_cnt--;
+					} else {
+						CAM_ERR(CAM_SENSOR_UTIL, "Not expecting unlock without lock");
+						rc = -EINVAL;
+						goto end;
+					}
+				}
+				rc = cam_sensor_handle_sequential_xfer(
+					cmd_buf, i2c_reg_settings, cmm_hdr->cmd_type, &list);
+				if (rc) {
+					CAM_ERR(CAM_SENSOR_UTIL,
+					"Handle sequential xfer failed with rc: %d",
+					rc);
+					goto end;
+				}
+				cmd_length_in_bytes =
+					sizeof(struct cam_cmd_i2c_sequential_xfer);
 				cmd_buf +=
 					cmd_length_in_bytes / sizeof(uint32_t);
 				byte_cnt += cmd_length_in_bytes;
@@ -914,6 +1094,46 @@ int cam_sensor_i2c_command_parser(
 				byte_cnt += cmd_length_in_bytes;
 				break;
 			}
+			case CAMERA_SENSOR_CMD_TYPE_I2C_GPIO_CTRL: {
+				uint32_t cmd_length_in_bytes   = 0;
+				struct cam_cmd_i2c_random_wr
+					*cam_cmd_i2c_random_wr =
+					(struct cam_cmd_i2c_random_wr *)cmd_buf;
+					payload_count = cam_cmd_i2c_random_wr->header.count;
+
+				if ((remain_len - byte_cnt) <
+					sizeof(struct cam_cmd_i2c_random_wr)) {
+					CAM_ERR(CAM_SENSOR_UTIL,
+						"Not enough buffer provided");
+					rc = -EINVAL;
+					goto end;
+				}
+				tot_size = sizeof(struct i2c_rdwr_header) +
+					(sizeof(struct i2c_random_wr_payload) *
+					payload_count);
+
+				if (tot_size > (remain_len - byte_cnt)) {
+					CAM_ERR(CAM_SENSOR_UTIL,
+						"Not enough buffer provided");
+					rc = -EINVAL;
+					goto end;
+				}
+
+				rc = cam_sensor_handle_gpio_control(
+					cam_cmd_i2c_random_wr,
+					i2c_reg_settings,
+					&cmd_length_in_bytes, &j, &list, payload_count);
+				if (rc < 0) {
+					CAM_ERR(CAM_SENSOR_UTIL,
+					"Failed in gpio control %d", rc);
+					rc = -EINVAL;
+					goto end;
+				}
+				cmd_buf += cmd_length_in_bytes /
+					sizeof(uint32_t);
+				byte_cnt += cmd_length_in_bytes;
+				break;
+			}
 			default:
 				CAM_ERR(CAM_SENSOR_UTIL, "Invalid Command Type:%d",
 					 cmm_hdr->cmd_type);
@@ -923,6 +1143,12 @@ int cam_sensor_i2c_command_parser(
 		}
 		i2c_reg_settings->is_settings_valid = 1;
 		cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
+	}
+
+	if(0 != xfer_lock_cnt) {
+		CAM_ERR(CAM_SENSOR_UTIL, "Invalid xfer_lock_cnt=%d with rc=%d",
+			xfer_lock_cnt, rc);
+	rc = -EINVAL;
 	}
 
 	return rc;
@@ -992,6 +1218,14 @@ int cam_sensor_util_i2c_apply_setting(
 		}
 	break;
 	}
+	case CAM_SENSOR_I2C_GPIO_CTL: {
+		/* GPIO control is handled via camera_sensor_execute_gpio,
+		* not through io_master. Not applicable here.
+		*/
+		CAM_WARN(CAM_SENSOR_UTIL,
+			"GPIO_CTL op_code not supported in i2c_apply_setting");
+	break;
+	}
 	default:
 		CAM_ERR(CAM_SENSOR_UTIL, "Wrong Opcode: %d", i2c_list->op_code);
 		rc = -EINVAL;
@@ -1014,6 +1248,12 @@ int32_t cam_sensor_i2c_read_data(
 
 	list_for_each_entry(i2c_list,
 		&(i2c_settings->list_head), list) {
+		if (i2c_list->op_code == CAM_SENSOR_I2C_SET_I2C_INFO) {
+			CAM_DBG(CAM_SENSOR_UTIL,
+				"CAM_SENSOR_I2C_SET_I2C_INFO continue");
+			continue;
+		}
+
 		read_buff = i2c_list->i2c_settings.read_buff;
 		buff_length = i2c_list->i2c_settings.read_buff_len;
 		if ((read_buff == NULL) || (buff_length == 0)) {
@@ -1796,7 +2036,16 @@ int cam_sensor_util_init_gpio_pin_tbl(
 		return -EINVAL;
 	}
 
-	of_node = soc_info->dev->of_node;
+	if (soc_info->is_child_node) {
+		of_node = soc_info->parent_node;
+	} else {
+		of_node = soc_info->dev->of_node;
+	}
+
+	if (!of_node) {
+		CAM_ERR(CAM_SENSOR_UTIL, "of_node is NULL");
+		return -EINVAL;
+	}
 
 	gconf = soc_info->gpio_data;
 	if (!gconf) {
@@ -1967,44 +2216,30 @@ int cam_sensor_util_init_gpio_pin_tbl(
 			gpio_num_info->gpio_num[SENSOR_VAF_PWDM]);
 	}
 
-	rc = of_property_read_u32(of_node, "gpio-custom1", &val);
-	if (rc != -EINVAL) {
+	/* Replace all individual gpio-customN blocks with this loop */
+	for (int i = 0; i < ARRAY_SIZE(gpio_custom_map); i++) {
+		rc = of_property_read_u32(of_node, gpio_custom_map[i].dt_name, &val);
+		if (rc == -EINVAL) {
+			rc = 0;
+			continue;
+		}
 		if (rc < 0) {
 			CAM_ERR(CAM_SENSOR_UTIL,
-				"read gpio-custom1 failed rc %d", rc);
+				"read %s failed rc %d", gpio_custom_map[i].dt_name, rc);
 			goto free_gpio_info;
-		} else if (val >= gpio_array_size) {
-			CAM_ERR(CAM_SENSOR_UTIL, "gpio-custom1 invalid %d", val);
+		}
+		if (val >= gpio_array_size) {
+			CAM_ERR(CAM_SENSOR_UTIL,
+				"%s invalid %d", gpio_custom_map[i].dt_name, val);
 			rc = -EINVAL;
 			goto free_gpio_info;
 		}
-		gpio_num_info->gpio_num[SENSOR_CUSTOM_GPIO1] =
+		gpio_num_info->gpio_num[gpio_custom_map[i].gpio_index] =
 			gconf->cam_gpio_common_tbl[val].gpio;
-		gpio_num_info->valid[SENSOR_CUSTOM_GPIO1] = 1;
-
-		CAM_DBG(CAM_SENSOR_UTIL, "gpio-custom1 %d",
-			gpio_num_info->gpio_num[SENSOR_CUSTOM_GPIO1]);
-	}
-
-	rc = of_property_read_u32(of_node, "gpio-custom2", &val);
-	if (rc != -EINVAL) {
-		if (rc < 0) {
-			CAM_ERR(CAM_SENSOR_UTIL,
-				"read gpio-custom2 failed rc %d", rc);
-			goto free_gpio_info;
-		} else if (val >= gpio_array_size) {
-			CAM_ERR(CAM_SENSOR_UTIL, "gpio-custom2 invalid %d", val);
-			rc = -EINVAL;
-			goto free_gpio_info;
-		}
-		gpio_num_info->gpio_num[SENSOR_CUSTOM_GPIO2] =
-			gconf->cam_gpio_common_tbl[val].gpio;
-		gpio_num_info->valid[SENSOR_CUSTOM_GPIO2] = 1;
-
-		CAM_DBG(CAM_SENSOR_UTIL, "gpio-custom2 %d",
-			gpio_num_info->gpio_num[SENSOR_CUSTOM_GPIO2]);
-	} else {
-		rc = 0;
+		gpio_num_info->valid[gpio_custom_map[i].gpio_index] = 1;
+		CAM_DBG(CAM_SENSOR_UTIL, "%s %d",
+			gpio_custom_map[i].dt_name,
+			gpio_num_info->gpio_num[gpio_custom_map[i].gpio_index]);
 	}
 
 	return rc;
@@ -2085,6 +2320,85 @@ int msm_cam_sensor_handle_reg_gpio(int seq_type,
 	}
 
 	return 0;
+}
+
+int32_t camera_sensor_execute_gpio(
+	struct cam_sensor_i2c_reg_setting *write_setting,
+	struct cam_sensor_power_ctrl_t *ctrl
+	)
+{
+	int32_t rc = 0;
+	struct msm_camera_gpio_num_info *gpio_num_info = NULL;
+
+	if (!ctrl || !write_setting) {
+		CAM_ERR(CAM_SENSOR_UTIL, "Invalid args: ctrl=%pK write_setting=%pK",
+			ctrl, write_setting);
+		return -EINVAL;
+	}
+
+	gpio_num_info = ctrl->gpio_num_info;
+
+	if (!gpio_num_info) {
+		CAM_ERR(CAM_SENSOR_UTIL, "Invalid gpio_num_info");
+		return -EINVAL;
+	}
+
+	for (int cnt = 0; cnt < write_setting->size; cnt++) {
+		uint32_t custom_gpio = write_setting->reg_setting[cnt].reg_addr;
+		uint32_t custom_gpio_val = write_setting->reg_setting[cnt].reg_data;
+		uint32_t hw_delay = write_setting->reg_setting[cnt].delay;
+
+		CAM_DBG(CAM_SENSOR_UTIL, "config[%d] val %u config_type %d hw delay:%d",
+			cnt, custom_gpio_val, custom_gpio, hw_delay);
+		switch (custom_gpio) {
+		case SENSOR_CUSTOM_GPIO1:
+		case SENSOR_CUSTOM_GPIO2:
+		case SENSOR_CUSTOM_GPIO3:
+		case SENSOR_CUSTOM_GPIO4:
+		case SENSOR_CUSTOM_GPIO5:
+		case SENSOR_CUSTOM_GPIO6:
+		case SENSOR_CUSTOM_GPIO7:
+		case SENSOR_CUSTOM_GPIO8:
+		case SENSOR_CUSTOM_GPIO9:
+		case SENSOR_CUSTOM_GPIO10:
+		case SENSOR_CUSTOM_GPIO11:
+		case SENSOR_CUSTOM_GPIO12:
+		{
+			rc = msm_cam_sensor_handle_reg_gpio(
+				custom_gpio,
+				gpio_num_info,
+				custom_gpio_val);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR_UTIL,
+					"Error in handling custom GPIO");
+				return rc;
+			}
+
+			break;
+		}
+		default:
+			CAM_ERR(CAM_SENSOR_UTIL, "error setting custom SENSOR_CUSTOM_GPIO%d",
+				custom_gpio);
+			break;
+		}
+
+		/* hw delay in [uS]. */
+		if (hw_delay > 20000)
+			msleep(hw_delay / 1000);
+		else if (hw_delay)
+			usleep_range(hw_delay, hw_delay + max(hw_delay / 10, 1U));
+	}
+
+	//sw delay in [mS].
+	CAM_DBG(CAM_SENSOR_UTIL, "config sw delay:%d ", write_setting->delay);
+	if (write_setting->delay > 0) {
+		if (write_setting->delay > 20)
+			msleep(write_setting->delay);
+		else if (write_setting->delay)
+			usleep_range(write_setting->delay * 1000, (write_setting->delay
+				* 1000) + 1000);
+	}
+	return rc;
 }
 
 static int cam_config_mclk_reg(struct cam_sensor_power_ctrl_t *ctrl,
@@ -2272,6 +2586,16 @@ int cam_sensor_core_power_up(struct cam_sensor_power_ctrl_t *ctrl,
 		case SENSOR_STANDBY:
 		case SENSOR_CUSTOM_GPIO1:
 		case SENSOR_CUSTOM_GPIO2:
+		case SENSOR_CUSTOM_GPIO3:
+		case SENSOR_CUSTOM_GPIO4:
+		case SENSOR_CUSTOM_GPIO5:
+		case SENSOR_CUSTOM_GPIO6:
+		case SENSOR_CUSTOM_GPIO7:
+		case SENSOR_CUSTOM_GPIO8:
+		case SENSOR_CUSTOM_GPIO9:
+		case SENSOR_CUSTOM_GPIO10:
+		case SENSOR_CUSTOM_GPIO11:
+		case SENSOR_CUSTOM_GPIO12:
 			if (!gpio_num_info) {
 				CAM_ERR(CAM_SENSOR_UTIL, "Invalid gpio_num_info");
 				goto power_up_failed;
@@ -2418,6 +2742,16 @@ power_up_failed:
 		case SENSOR_STANDBY:
 		case SENSOR_CUSTOM_GPIO1:
 		case SENSOR_CUSTOM_GPIO2:
+		case SENSOR_CUSTOM_GPIO3:
+		case SENSOR_CUSTOM_GPIO4:
+		case SENSOR_CUSTOM_GPIO5:
+		case SENSOR_CUSTOM_GPIO6:
+		case SENSOR_CUSTOM_GPIO7:
+		case SENSOR_CUSTOM_GPIO8:
+		case SENSOR_CUSTOM_GPIO9:
+		case SENSOR_CUSTOM_GPIO10:
+		case SENSOR_CUSTOM_GPIO11:
+		case SENSOR_CUSTOM_GPIO12:
 			if (!gpio_num_info)
 				continue;
 			if (!gpio_num_info->valid
@@ -2591,7 +2925,16 @@ int cam_sensor_util_power_down(struct cam_sensor_power_ctrl_t *ctrl,
 		case SENSOR_STANDBY:
 		case SENSOR_CUSTOM_GPIO1:
 		case SENSOR_CUSTOM_GPIO2:
-
+		case SENSOR_CUSTOM_GPIO3:
+		case SENSOR_CUSTOM_GPIO4:
+		case SENSOR_CUSTOM_GPIO5:
+		case SENSOR_CUSTOM_GPIO6:
+		case SENSOR_CUSTOM_GPIO7:
+		case SENSOR_CUSTOM_GPIO8:
+		case SENSOR_CUSTOM_GPIO9:
+		case SENSOR_CUSTOM_GPIO10:
+		case SENSOR_CUSTOM_GPIO11:
+		case SENSOR_CUSTOM_GPIO12:
 			if (!gpio_num_info->valid[pd->seq_type])
 				continue;
 
@@ -2688,6 +3031,55 @@ int cam_sensor_util_power_down(struct cam_sensor_power_ctrl_t *ctrl,
 	ctrl->cam_pinctrl_status = 0;
 
 	return 0;
+}
+
+int32_t cam_sensor_handle_gpio_control(
+	struct cam_cmd_i2c_random_wr *cam_cmd_i2c_gpio_ctl,
+	struct i2c_settings_array *i2c_reg_settings,
+	uint32_t *cmd_length_in_bytes, int32_t *offset,
+	struct list_head **list, uint32_t payload_count)
+{
+	struct i2c_settings_list  *i2c_list;
+	int32_t rc = 0, cnt;
+
+	if (!payload_count) {
+		CAM_ERR(CAM_SENSOR_UTIL, "Invalid GPIO control payload count 0");
+		return -EINVAL;
+	}
+
+	i2c_list = cam_sensor_get_i2c_ptr(i2c_reg_settings,
+						payload_count);
+
+	if (i2c_list == NULL ||
+		i2c_list->i2c_settings.reg_setting == NULL) {
+		CAM_ERR(CAM_SENSOR_UTIL, "Failed in allocating i2c_list");
+		return -ENOMEM;
+	}
+
+	CAM_DBG(CAM_SENSOR_UTIL, "Enter");
+
+	*cmd_length_in_bytes = (sizeof(struct i2c_rdwr_header) +
+		sizeof(struct i2c_random_wr_payload) *
+		payload_count);
+
+	i2c_list->op_code = CAM_SENSOR_I2C_GPIO_CTL;
+	i2c_list->i2c_settings.addr_type =
+		cam_cmd_i2c_gpio_ctl->header.addr_type;
+	i2c_list->i2c_settings.data_type =
+		cam_cmd_i2c_gpio_ctl->header.data_type;
+
+	for (cnt = 0; cnt < payload_count; cnt++) {
+		i2c_list->i2c_settings.reg_setting[cnt].reg_addr =
+			cam_cmd_i2c_gpio_ctl->random_wr_payload_flex[cnt].reg_addr;
+		i2c_list->i2c_settings.reg_setting[cnt].reg_data =
+			cam_cmd_i2c_gpio_ctl->random_wr_payload_flex[cnt].reg_data;
+		i2c_list->i2c_settings.reg_setting[cnt].data_mask = 0;
+	}
+
+	*offset = cnt;
+	*list = &(i2c_list->list);
+
+	return rc;
 }
 
 void cam_sensor_utils_parse_pm_ctrl_flag(struct device_node *of_node,

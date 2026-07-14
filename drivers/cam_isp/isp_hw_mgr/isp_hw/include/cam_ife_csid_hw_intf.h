@@ -141,6 +141,7 @@ struct cam_isp_out_port_generic_info {
 	uint32_t                reserved;
 	uint32_t                wm_mode;
 	uint32_t                hw_context_id;
+	uint32_t                acquired_res_type;
 	bool                    rcs_en;
 	bool                    use_wm_pack;
 };
@@ -191,6 +192,7 @@ struct cam_isp_in_port_generic_info {
 	uint32_t                        epoch_factor;
 	uint32_t                        path_id;
 	uint32_t                        ipp_dst_hw_ctxt_mask;
+	uint32_t                        sensor_id;
 	bool                            secure_mode;
 	bool                            dynamic_sensor_switch_en;
 	bool                            can_use_lite;
@@ -198,6 +200,7 @@ struct cam_isp_in_port_generic_info {
 	bool                            epd_supported;
 	bool                            aeb_mode;
 	bool                            dynamic_hdr_switch_en;
+	bool                            per_port_en;
 	struct cam_isp_out_port_generic_info    *data;
 };
 
@@ -246,6 +249,11 @@ struct cam_csid_secondary_evt_config {
  * @use_wm_pack:           [OUT]Flag to indicate if WM packing is to be used for packing
  * @handle_camif_irq:      Flag to indicate if CSID IRQ is enabled
  * @dynamic_drv_supported: Flag to indicate if dynamic drv is supported
+ * @per_port_acquire:    Indicates if acquire as real acquire or per port
+ *                       virtual acquire for current res path
+ * @vc:                  input virtual channel number
+ * @dt:                  input data type number
+ * @decode_fmt:          decode format
  *
  */
 struct cam_csid_hw_reserve_resource_args {
@@ -274,6 +282,41 @@ struct cam_csid_hw_reserve_resource_args {
 	bool                                      use_wm_pack;
 	bool                                      handle_camif_irq;
 	bool                                      dynamic_drv_supported;
+	bool                                      per_port_acquire;
+	uint32_t                                  vc;
+	uint32_t                                  dt;
+	uint32_t                                  decode_fmt;
+};
+
+/**
+ * struct cam_ife_mgr_csid_resource_update
+ * @priv:                  Context data
+ * @res:                   HW resource to get the update from
+ * @csid_acquire:          Csid hw reserve
+ *
+ */
+struct cam_csid_resource_update {
+	void                                     *priv;
+	struct cam_isp_hw_mgr_res                *res;
+	struct cam_csid_hw_reserve_resource_args *csid_acquire;
+};
+
+/**
+ * struct cam_csid_res_irq_info
+ * @priv:                  Context data
+ * @node_res:              reource pointer array( ie CSID/IFE_SRC/IFE_OUT)
+ * @num_res:               number of resources
+ * @enable_irq:            TRUE: enables irq for requested path
+ *                         FALSE: disables irq for requested path
+ * @is_internal_start:     Start triggered internally for reset & recovery
+ *
+ */
+struct cam_csid_res_irq_info {
+	void                                *priv;
+	struct cam_isp_resource_node        **node_res;
+	uint32_t                             num_res;
+	bool                                 enable_irq;
+	bool                                 is_internal_start;
 };
 
 /**
@@ -343,6 +386,8 @@ struct cam_csid_hw_stop_args {
  * @is_internal_start:  Start triggered internally for reset & recovery
  * @start_only:         start only, no init required
  * @is_drv_config_en:   If drv config is enabled
+ * @is_per_port_start:  Indicates if start Hw is called on real start call or
+ *                      on per port enabled start call.
  *
  */
 struct cam_csid_hw_start_args {
@@ -353,6 +398,7 @@ struct cam_csid_hw_start_args {
 	bool                                      is_internal_start;
 	bool                                      start_only;
 	bool                                      is_drv_config_en;
+	bool                                      is_per_port_start;
 };
 
 

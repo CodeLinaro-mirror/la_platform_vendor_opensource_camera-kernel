@@ -285,6 +285,8 @@ struct cam_soc_gpio_data {
  * @clk_control:            Enable/disable clk rate control through debugfs
  * @cam_cx_ipeak_enable     cx-ipeak enable/disable flag
  * @cam_cx_ipeak_bit        cx-ipeak mask for driver
+ * @is_child_node:          If this node is a child to a parent device
+ * @parent_node             The parent node to inherit data from
  * @soc_private:            Soc private data
  * @hw_id:                  Vm resource manager to identify hw
  * @num_vmrm_resource_ids:  Vm resource manager resource ids count
@@ -361,6 +363,8 @@ struct cam_hw_soc_info {
 	bool                            clk_control_enable;
 	bool                            cam_cx_ipeak_enable;
 	int32_t                         cam_cx_ipeak_bit;
+	bool                            is_child_node;
+	struct device_node             *parent_node;
 
 	void                           *soc_private;
 	uint32_t                        hw_id;
