@@ -42,6 +42,7 @@ static void __cam_req_mgr_reset_group_slot(struct cam_req_mgr_group_slot *gs)
 	gs->size                 = 0;
 	gs->start_link_slot_idx  = -1;
 	gs->ready                = false;
+	gs->state                = CAM_CRM_GROUP_STATE_IDLE;
 	gs->tbl_ready_cnt        = 0;
 	gs->external_trigger.link_hdl = -1;
 	gs->external_trigger.req_id   = -1;
@@ -4295,8 +4296,11 @@ static struct cam_req_mgr_group_slot *__cam_req_mgr_mtrigger_apply_sequence(
 	}
 
 	gs = __cam_req_mgr_get_group_slot(link->req.in_q, link_slot->group_id);
-	if (gs && gs->external_trigger.dev)
-		ext_trigger_gs = gs;
+	if (gs) {
+		gs->state = CAM_CRM_GROUP_STATE_IN_PROGRESS;
+		if (gs->external_trigger.dev)
+			ext_trigger_gs = gs;
+	}
 
 	/* Apply all synced links */
 	for (i = 0; i < link_slot->num_sync_links; i++) {
@@ -4324,12 +4328,15 @@ static struct cam_req_mgr_group_slot *__cam_req_mgr_mtrigger_apply_sequence(
 
 		gs = __cam_req_mgr_get_group_slot(sync_link->req.in_q,
 			sync_link->req.in_q->slot[sync_idx].group_id);
-		if (gs && gs->external_trigger.dev) {
-			if (ext_trigger_gs) {
-				CAM_WARN(CAM_CRM,
-					"multiple external triggers across links, using first");
-			} else {
-				ext_trigger_gs = gs;
+		if (gs) {
+			gs->state = CAM_CRM_GROUP_STATE_IN_PROGRESS;
+			if(gs->external_trigger.dev) {
+				if (ext_trigger_gs) {
+					CAM_WARN(CAM_CRM,
+						"multiple external triggers across links, using first");
+				} else {
+					ext_trigger_gs = gs;
+				}
 			}
 		}
 	}
@@ -5027,6 +5034,8 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 	struct cam_req_mgr_state_monitor          state;
 	int64_t                                   current_group_id;
 	uint32_t                                  gr_size;
+	struct cam_req_mgr_slot                  *rd_slot = NULL;
+	struct cam_req_mgr_group_slot            *gs = NULL;
 
 	if (!data || !priv) {
 		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
@@ -5055,6 +5064,22 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 	mutex_lock(&link->req.lock);
 
 	if (trigger_data->trigger == CAM_TRIGGER_POINT_SOF) {
+		rd_slot = &in_q->slot[in_q->rd_idx];
+		gs = __cam_req_mgr_get_group_slot(in_q, rd_slot->group_id);
+		if (!gs || gs->state != CAM_CRM_GROUP_STATE_IN_PROGRESS) {
+			if (!gs) {
+				CAM_WARN(CAM_CRM,
+					"Unexpected SOF on link 0x%x frame %lld (rd_idx=%d group=%lld no_group_slot)",
+					link->link_hdl, trigger_data->frame_id,
+					in_q->rd_idx, rd_slot->group_id);
+			} else {
+				CAM_WARN(CAM_CRM,
+					"Unexpected SOF on link 0x%x group %lld frame %lld state=%d",
+					link->link_hdl, rd_slot->group_id,
+					trigger_data->frame_id, gs->state);
+			}
+		}
+
 		idx = __cam_req_mgr_find_slot_for_req(in_q,
 			trigger_data->req_id);
 		if (idx >= 0) {
