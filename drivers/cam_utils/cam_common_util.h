@@ -247,6 +247,22 @@ struct cam_common_hw_dump_header {
  */
 void cam_common_release_evt_params(int32_t dev_hdl);
 
+#define _SPIN_LOCK_PROCESS_TO_BH(lock)          \
+({                                              \
+		if (in_task())			\
+			spin_lock_bh(lock);	\
+		else				\
+			spin_lock(lock);	\
+})                                              \
+
+#define _SPIN_UNLOCK_PROCESS_TO_BH(lock)        \
+({                                              \
+		if (in_task())			\
+			spin_unlock_bh(lock);	\
+		else				\
+			spin_unlock(lock);	\
+})                                              \
+
 /**
  * cam_common_util_get_string_index()
  *
