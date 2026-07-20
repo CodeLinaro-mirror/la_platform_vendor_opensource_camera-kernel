@@ -546,6 +546,45 @@ static long cam_private_ioctl(struct file *file, void *fh,
 		}
 		break;
 
+	case CAM_REQ_MGR_SCHED_REQ_V4: {
+		struct cam_req_mgr_sched_request_v4 *sched_req;
+		struct cam_req_mgr_sched_request_v4 crm_sched_req;
+		int sched_req_size;
+		int num_links = 0;
+
+		if (copy_from_user(&crm_sched_req,
+			u64_to_user_ptr(k_ioctl->handle),
+			sizeof(struct cam_req_mgr_sched_request_v4))) {
+			return -EFAULT;
+		}
+
+		num_links = crm_sched_req.num_links;
+
+		if ((num_links > MAXIMUM_LINKS_PER_SESSION) ||
+			(num_links < 0))
+			return -EINVAL;
+
+		sched_req_size = sizeof(struct cam_req_mgr_sched_request_v4) +
+			((num_links) * sizeof(__signed__ int));
+
+		if (k_ioctl->size != sched_req_size)
+			return -EINVAL;
+
+		sched_req = CAM_MEM_ZALLOC(sched_req_size, GFP_KERNEL);
+		if (!sched_req) {
+			return -ENOMEM;
+		}
+
+		if (copy_from_user(sched_req, u64_to_user_ptr(k_ioctl->handle), sched_req_size)) {
+			CAM_MEM_FREE(sched_req);
+			sched_req = NULL;
+			return -EFAULT;
+		}
+
+		rc = cam_req_mgr_schedule_request_v4(sched_req);
+		CAM_MEM_FREE(sched_req);
+		}
+		break;
 	case CAM_REQ_MGR_FLUSH_REQ: {
 		struct cam_req_mgr_flush_info flush_info;
 
