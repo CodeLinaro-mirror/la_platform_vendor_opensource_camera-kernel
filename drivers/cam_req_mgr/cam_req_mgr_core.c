@@ -42,6 +42,7 @@ static void __cam_req_mgr_reset_group_slot(struct cam_req_mgr_group_slot *gs)
 	gs->size                 = 0;
 	gs->start_link_slot_idx  = -1;
 	gs->ready                = false;
+	gs->tbl_ready_cnt        = 0;
 	gs->external_trigger.link_hdl = -1;
 	gs->external_trigger.req_id   = -1;
 	gs->external_trigger.dev      = NULL;
@@ -501,15 +502,16 @@ static void __cam_req_mgr_dump_state_monitor_array(
 
 	/* Snapshot: group slots */
 	CAM_INFO(CAM_CRM, "Link %x group_slot snapshot", link->link_hdl);
-	CAM_INFO(CAM_CRM, "%4s  %8s  %4s  %6s  %10s",
-		"hash", "group_id", "size", "ready", "start_idx");
+	CAM_INFO(CAM_CRM, "%4s  %8s  %4s  %6s  %10s  %9s",
+		"hash", "group_id", "size", "ready", "start_idx", "ready_cnt");
 	for (i = 0; i < MAX_GROUP_SLOTS; i++) {
 		struct cam_req_mgr_group_slot *gs = &in_q->group_slot[i];
 
 		if (gs->id == -1)
 			continue;
-		CAM_INFO(CAM_CRM, "%4d  %8lld  %4u  %6d  %10d",
-			i, gs->id, gs->size, gs->ready, gs->start_link_slot_idx);
+		CAM_INFO(CAM_CRM, "%4d  %8lld  %4u  %6d  %10d  %9u",
+			i, gs->id, gs->size, gs->ready, gs->start_link_slot_idx,
+			gs->tbl_ready_cnt);
 	}
 }
 
@@ -3514,6 +3516,17 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 		int64_t  gid = sched_req->trigger_params.data.manual.id;
 		uint32_t gsz = sched_req->trigger_params.data.manual.size;
 
+		/*
+		 * Do not allow manual trigger mode when devices have
+		 * more then one pd table
+		 */
+		if (link->req.num_tbl > 1) {
+			CAM_ERR(CAM_CRM,
+				"Allowed pd tables in man trigger mode is 1");
+			rc = -EINVAL;
+			goto end;
+		}
+
 		slot->group_id = gid;
 		slot->skip_set = !!sched_req->trigger_params.data.manual.skip;
 
@@ -4401,26 +4414,22 @@ static int cam_req_mgr_mtrigger_try_to_start(
 }
 
 /**
- * __cam_req_mgr_mtrigger_update_group_ready()
+ * cam_req_mgr_mtrigger_update_group_ready()
  *
- * @brief : When a pd_tbl slot becomes READY, check if all slots in the group
- *          for all devices are ready. If so, set group_ready=true on the seq-0
- *          in_q slot. The full scan runs only once — when the last device
- *          completes — avoiding repeated scans on every add_request.
- * @idx       : Current in_q slot index (slot that just became ready)
- * @link_slot : In_q slot pointer for @idx
- * @tbl       : Pd table for the device
- * @device    : Device whose slot just became ready
+ * @brief : Called once per (in_q slot, pd_tbl) pair that transitions to
+ *          CRM_REQ_STATE_READY. Bumps the group's tbl_ready_cnt instead of
+ *          rescanning every device/slot in the group — the group is ready
+ *          once tbl_ready_cnt reaches size * num_tbl (every seq position in
+ *          the group has reached READY on every unique pd table).
+ * @link_slot : In_q slot pointer for the slot that just became ready
  * @link      : Link pointer
+ *
+ * @return: true if group is ready.
  */
-static void __cam_req_mgr_mtrigger_update_group_ready(
-	int idx,
+static bool cam_req_mgr_mtrigger_update_group_ready(
 	struct cam_req_mgr_slot *link_slot,
 	struct cam_req_mgr_core_link *link)
 {
-	int group_start_idx;
-	int check_idx;
-	int i, seq;
 	struct cam_req_mgr_group_slot *gs;
 
 	gs = __cam_req_mgr_get_group_slot(link->req.in_q, link_slot->group_id);
@@ -4428,27 +4437,19 @@ static void __cam_req_mgr_mtrigger_update_group_ready(
 		CAM_ERR(CAM_CRM,
 			"link 0x%x no group_slot for group %lld",
 			link->link_hdl, link_slot->group_id);
-		return;
+		return false;
 	}
 
-	group_start_idx = gs->start_link_slot_idx;
-
-	/* Scan all devices × group slots — runs only when last device completes */
-	for (i = 0; i < link->num_devs; i++) {
-		struct cam_req_mgr_req_tbl *dev_tbl = link->l_dev[i].pd_tbl;
-
-		check_idx = group_start_idx;
-		for (seq = 0; seq < gs->size; seq++) {
-			if (dev_tbl->slot[check_idx].state != CRM_REQ_STATE_READY)
-				return;
-			__cam_req_mgr_inc_idx(&check_idx, 1, dev_tbl->num_slots);
-		}
-	}
+	gs->tbl_ready_cnt++;
+	if (gs->tbl_ready_cnt < gs->size)
+		return false;
 
 	gs->ready = true;
 	CAM_DBG(CAM_CRM,
 		"link 0x%x group %lld all devices ready",
 		link->link_hdl, link_slot->group_id);
+
+	return true;
 }
 
 /**
@@ -4557,6 +4558,8 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 	trace_cam_req_mgr_add_req(link, idx, add_req, tbl, device);
 
 	if (slot->req_ready_map == tbl->dev_mask) {
+		bool rd;
+
 		CAM_DBG(CAM_REQ,
 			"link 0x%x idx %d req_id %lld pd %d SLOT READY",
 			link->link_hdl, idx, add_req->req_id, tbl->pd);
@@ -4569,10 +4572,10 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 		state.group_id = link_slot->group_id;
 		__cam_req_mgr_update_state_monitor_array(link, &state);
 
-		__cam_req_mgr_mtrigger_update_group_ready(idx, link_slot, link);
+		rd = cam_req_mgr_mtrigger_update_group_ready(link_slot, link);
+		if (rd)
+			rc = cam_req_mgr_mtrigger_try_to_start(idx, link);
 	}
-
-	rc = cam_req_mgr_mtrigger_try_to_start(idx, link);
 
 end_unlock:
 	mutex_unlock(&link->req.lock);

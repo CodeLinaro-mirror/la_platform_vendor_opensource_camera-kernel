@@ -371,6 +371,9 @@ struct cam_req_mgr_slot {
  * @size                : number of requests in this group
  * @start_link_slot_idx : in_q slot index of the first (seq-0) request
  * @ready               : true when all devices have all group slots ready
+ * @tbl_ready_cnt       : count of (slot, pd_tbl) pairs that have reached
+ *                        CRM_REQ_STATE_READY for this group; group is ready
+ *                        once this reaches size * link->req.num_tbl
  * @external_trigger    : cached external trigger info (dev == NULL if none)
  */
 struct cam_req_mgr_connected_device;
@@ -379,6 +382,7 @@ struct cam_req_mgr_group_slot {
 	uint32_t  size;
 	int32_t   start_link_slot_idx;
 	bool      ready;
+	uint32_t  tbl_ready_cnt;
 	struct {
 		int32_t                              link_hdl;
 		int64_t                              req_id;
