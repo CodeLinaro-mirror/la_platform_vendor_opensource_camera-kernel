@@ -197,6 +197,8 @@ int32_t camera_io_dev_read_append_write(
 	case CCI_MASTER:
 		return cam_cci_i2c_read_append_write(io_master_info, write_setting);
 	case I2C_MASTER:
+		return cam_qup_i2c_read_append_write(io_master_info->qup_client->i2c_client,
+			write_setting);
 	case SPI_MASTER:
 	case I3C_MASTER:
 		CAM_ERR(CAM_SENSOR, "Read append write only supported in CCI Master");

@@ -2288,7 +2288,6 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 			return rc;
 	}
 
-	//memset(bus_irq_reg_mask, 0, sizeof(bus_irq_reg_mask));
 	rc = cam_vfe_bus_ver3_start_comp_grp(rsrc_data,
 			rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_BUF_DONE_MASK]);
 

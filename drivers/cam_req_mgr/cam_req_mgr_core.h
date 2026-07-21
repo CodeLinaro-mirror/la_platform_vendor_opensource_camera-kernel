@@ -14,6 +14,7 @@
 
 #define CAM_REQ_MGR_MAX_LINKED_DEV     16
 #define MAX_REQ_SLOTS                  48
+#define MAX_GROUP_SLOTS                8
 #define MAX_REQ_STATE_MONITOR_NUM      108
 #define MAX_DEV_FOR_SPECIAL_OPS        4
 
@@ -56,7 +57,7 @@
 #define CAM_REQ_MGR_COMPUTE_TIMEOUT(x) ((x) + (((x) * (x + 25)) / 100))
 
 /* Number of words for dumping req state info */
-#define CAM_CRM_DUMP_EVENT_NUM_WORDS  6
+#define CAM_CRM_DUMP_EVENT_NUM_WORDS  7
 
 /* Maximum length of tag while dumping */
 #define CAM_CRM_DUMP_TAG_MAX_LEN 128
@@ -281,6 +282,7 @@ struct crm_tbl_slot_special_ops {
  *                        skip_next frame: in case of applying one device
  *                        and skip others
  *                        apply_at_eof: device that needs to apply at EOF
+ * @extern_trigger_map  : Map which hold device responsible to triggering if any
  */
 struct cam_req_mgr_tbl_slot {
 	int32_t                                idx;
@@ -290,6 +292,7 @@ struct cam_req_mgr_tbl_slot {
 	uint32_t                               inject_delay_at_sof;
 	uint32_t                               inject_delay_at_eof;
 	struct  crm_tbl_slot_special_ops       ops;
+	uint32_t                               extern_trigger_map;
 };
 
 /**
@@ -339,6 +342,8 @@ struct cam_req_mgr_req_tbl {
  * of this slot
  * @internal_recovered    : indicate if internal recover is already done for request
  * @skip_set              : Simulate a frame skip on this slot
+ * @trigger_mode          : Trigger mode
+ * @group_id              : If requests are grouped the id of the group
  */
 struct cam_req_mgr_slot {
 	int32_t               idx;
@@ -356,6 +361,29 @@ struct cam_req_mgr_slot {
 	int32_t               mismatched_frame_mode;
 	bool                  internal_recovered;
 	bool                  skip_set;
+	uint32_t              trigger_mode;
+	int64_t               group_id;
+};
+
+/**
+ * struct cam_req_mgr_group_slot
+ * @id                  : group_id (-1 = empty/unused)
+ * @size                : number of requests in this group
+ * @start_link_slot_idx : in_q slot index of the first (seq-0) request
+ * @ready               : true when all devices have all group slots ready
+ * @external_trigger    : cached external trigger info (dev == NULL if none)
+ */
+struct cam_req_mgr_connected_device;
+struct cam_req_mgr_group_slot {
+	int64_t   id;
+	uint32_t  size;
+	int32_t   start_link_slot_idx;
+	bool      ready;
+	struct {
+		int32_t                              link_hdl;
+		int64_t                              req_id;
+		struct cam_req_mgr_connected_device *dev;
+	} external_trigger;
 };
 
 /**
@@ -365,13 +393,15 @@ struct cam_req_mgr_slot {
  * @rd_idx      : indicates slot index currently in process.
  * @wr_idx      : indicates slot index to hold new upcoming req.
  * @last_applied_idx : indicates slot index last applied successfully.
+ * @group_slot  : per-group metadata indexed by group_id % MAX_GROUP_SLOTS.
  */
 struct cam_req_mgr_req_queue {
-	int32_t                     num_slots;
-	struct cam_req_mgr_slot     slot[MAX_REQ_SLOTS];
-	int32_t                     rd_idx;
-	int32_t                     wr_idx;
-	int32_t                     last_applied_idx;
+	int32_t                        num_slots;
+	struct cam_req_mgr_slot        slot[MAX_REQ_SLOTS];
+	int32_t                        rd_idx;
+	int32_t                        wr_idx;
+	int32_t                        last_applied_idx;
+	struct cam_req_mgr_group_slot  group_slot[MAX_GROUP_SLOTS];
 };
 
 /**
@@ -382,6 +412,7 @@ struct cam_req_mgr_req_queue {
  * @frame_id     : frame id
  * @time_stamp   : the time stamp of the state
  * @name         : device_name
+ * @group_id     : manual trigger group id (-1 if not in a group)
  */
 struct cam_req_mgr_state_monitor {
 	enum cam_req_mgr_req_state  req_state;
@@ -390,6 +421,7 @@ struct cam_req_mgr_state_monitor {
 	int64_t                     frame_id;
 	struct timespec64           time_stamp;
 	char                        name[256];
+	int64_t                     group_id;
 };
 
 /**
@@ -714,6 +746,7 @@ struct cam_req_mgr_core_link_mini_dump {
  * @param_mask           : mask to indicate what the parameters are
  * @params               : pointer, point to parameters passed from user space
  * @link_hdls            : pointer, point to Input Param - Array of link handles to be for sync
+ * @trigger_params       : Trigger parameters
  */
 struct cam_req_mgr_core_sched_req {
 	int32_t                     session_hdl;
@@ -729,6 +762,7 @@ struct cam_req_mgr_core_sched_req {
 	int32_t                     param_mask;
 	int32_t                    *params;
 	int32_t                    *link_hdls;
+	struct cam_req_mgr_trigger_params trigger_params;
 };
 
 /**
@@ -803,6 +837,14 @@ int cam_req_mgr_schedule_request_v2(struct cam_req_mgr_sched_request_v2 *sched_r
  * @sched_req: request id, session, link id info, bubble recovery info and sync info
  */
 int cam_req_mgr_schedule_request_v3(struct cam_req_mgr_sched_request_v3 *sched_req);
+
+/**
+ * cam_req_mgr_schedule_request_v4()
+ * @brief: Request is scheduled
+ * @sched_req: request id, session, link id info, bubble recovery info,
+ *             sync info and trigger params
+ */
+int cam_req_mgr_schedule_request_v4(struct cam_req_mgr_sched_request_v4 *sched_req);
 
 /**
  * cam_req_mgr_sync_config()
