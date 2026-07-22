@@ -2474,10 +2474,12 @@ static void __cam_req_mgr_free_link(struct cam_req_mgr_core_link *link)
 
 	/*
 	 * Acquire link->lock to synchronize with cam_req_mgr_cb_add_req()
-	 * and prevent TOCTOU race when freeing in_q
+	 * and schedule_request paths that read link->parent; null both
+	 * pointers inside the lock so readers see a consistent state.
 	 */
 	mutex_lock(&link->lock);
 	CAM_MEM_FREE(link->req.in_q);
+	link->parent = NULL;
 	link->req.in_q = NULL;
 	mutex_unlock(&link->lock);
 
@@ -4260,12 +4262,15 @@ int cam_req_mgr_schedule_request(
 		goto end;
 	}
 
+	mutex_lock(&link->lock);
 	session = (struct cam_req_mgr_core_session *)link->parent;
 	if (!session) {
 		CAM_WARN(CAM_CRM, "session ptr NULL %x", sched_req->link_hdl);
+		mutex_unlock(&link->lock);
 		rc = -EINVAL;
 		goto end;
 	}
+	mutex_unlock(&link->lock);
 
 	if (sched_req->req_id <= link->last_flush_id) {
 		CAM_INFO(CAM_CRM,
