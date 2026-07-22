@@ -5148,6 +5148,7 @@ static int __cam_req_mgr_unlink(
 
 	/* Destroy worker of link and corresponding task data */
 	cam_worker_wrapper_deinit(link->worker_ctx);
+	link->worker_ctx = NULL;
 	CAM_MEM_FREE(link->task_data);
 	link->task_data = NULL;
 	/* Acquire session mutex after worker flush */
