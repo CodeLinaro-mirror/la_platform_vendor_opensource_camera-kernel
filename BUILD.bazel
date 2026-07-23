@@ -39,6 +39,7 @@ camera_driver_includes = [
     "camera/drivers/cam_sensor_module/cam_eeprom",
     "camera/drivers/cam_sensor_module/cam_sensor_io",
     "camera/drivers/cam_sensor_module/cam_cci",
+    "camera/drivers/cam_sensor_module/cam_cci/include",
     "camera/drivers/cam_sensor_module/cam_actuator",
     "camera/drivers/cam_sensor_module/cam_flash",
     "camera/drivers/cam_sensor_module/cam_ois",
