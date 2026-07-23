@@ -949,6 +949,85 @@ static int32_t __cam_req_mgr_find_slot_for_req(
 }
 
 /**
+ * __cam_req_mgr_notify_mtrigger_error()
+ *
+ * @brief   : Notify userspace of a manual trigger mode failure on a link,
+ *            and fan the notification out to all links synced with it.
+ * @link    : link on which the manual trigger sequence could not be applied
+ * @req_id  : request id that failed to apply, -1 if not available
+ *
+ */
+static int __cam_req_mgr_notify_mtrigger_error(
+	struct cam_req_mgr_core_link *link,
+	int64_t req_id)
+{
+	int                               i, rc = 0;
+	int32_t                           idx;
+	struct cam_req_mgr_core_session  *session = NULL;
+	struct cam_req_mgr_core_link     *notify_link = NULL;
+	struct cam_req_mgr_message        msg = {0};
+	struct cam_req_mgr_slot          *slot = NULL;
+
+	if (!link) {
+		CAM_ERR(CAM_CRM, "link ptr NULL");
+		return -EINVAL;
+	}
+
+	session = (struct cam_req_mgr_core_session *)link->parent;
+	if (!session) {
+		CAM_WARN(CAM_CRM, "session ptr NULL %x", link->link_hdl);
+		return -EINVAL;
+	}
+
+	CAM_ERR_RATE_LIMIT(CAM_CRM,
+		"Notifying userspace of manual trigger error on link 0x%x for session %d",
+		link->link_hdl, session->session_hdl);
+
+	__cam_req_mgr_dump_state_monitor_array(link);
+
+	mutex_lock(&link->req.lock);
+
+	idx = __cam_req_mgr_find_slot_for_req(link->req.in_q, req_id);
+	if (idx < 0) {
+		CAM_ERR(CAM_CRM,
+			"Req_id %lld not found in in_q on link 0x%x",
+			req_id, link->link_hdl);
+		rc = -EBADSLT;
+		goto end;
+	}
+	slot = &link->req.in_q->slot[idx];
+
+	for (i = -1; i < slot->num_sync_links; i++) {
+		if (i < 0)
+			notify_link = link;
+		else
+			notify_link = cam_get_link_priv(slot->sync_link_hdls[i]);
+		if (!notify_link)
+			continue;
+
+		memset(&msg, 0, sizeof(msg));
+		msg.session_hdl = session->session_hdl;
+		msg.u.err_msg.error_type = CAM_REQ_MGR_ERROR_TYPE_RECOVERY;
+		msg.u.err_msg.request_id = req_id;
+		msg.u.err_msg.link_hdl   = notify_link->link_hdl;
+		msg.u.err_msg.resource_size = 0;
+		msg.u.err_msg.error_code = CAM_REQ_MGR_MTRIGGER_ERR;
+
+		rc = cam_req_mgr_notify_message(&msg,
+			V4L_EVENT_CAM_REQ_MGR_ERROR,
+			V4L_EVENT_CAM_REQ_MGR_EVENT);
+		if (rc)
+			CAM_ERR_RATE_LIMIT(CAM_CRM,
+				"Error notifying mtrigger error for session %d link 0x%x rc %d",
+				session->session_hdl, notify_link->link_hdl, rc);
+	}
+
+end:
+	mutex_unlock(&link->req.lock);
+	return rc;
+}
+
+/**
  * __cam_req_mgr_disconnect_req_on_sync_link()
  *
  * @brief    : Disconnect link and sync link
@@ -4305,10 +4384,11 @@ static int cam_req_mgr_mtrigger_try_to_start(
 		return 0;
 
 	ext_trigger_gs = __cam_req_mgr_mtrigger_apply_sequence(idx, link);
-	if (IS_ERR(ext_trigger_gs)) {
-		rc = PTR_ERR(ext_trigger_gs);
-		CAM_ERR(CAM_CRM, "Failed to apply sequence for group id: %lld rc: %d",
-			link->req.in_q->slot[idx].group_id, rc);
+	if (IS_ERR_OR_NULL(ext_trigger_gs)) {
+		rc = ext_trigger_gs ? PTR_ERR(ext_trigger_gs) : -ENODEV;
+		CAM_ERR(CAM_CRM, "Failed to apply seq for group id: %lld %s",
+			link->req.in_q->slot[idx].group_id,
+			ext_trigger_gs ? "Error" : "Missing external trigger");
 		return rc;
 	}
 
@@ -4496,6 +4576,9 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 
 end_unlock:
 	mutex_unlock(&link->req.lock);
+
+	if (rc < 0)
+		__cam_req_mgr_notify_mtrigger_error(link, link_slot->req_id);
 end:
 	return rc;
 }
