@@ -12,6 +12,7 @@
 #include "cam_res_mgr_api.h"
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
+#include <dt-bindings/msm-camera.h>
 #include "cam_mem_mgr_api.h"
 #include <linux/leds.h>
 #include <linux/led-class-flash.h>
@@ -539,26 +540,42 @@ static int cam_flash_ops(struct cam_flash_ctrl *flash_ctrl,
 int cam_flash_off(struct cam_flash_ctrl *flash_ctrl)
 {
 	int i = 0;
+	int rc = 0;
 
 	if (!flash_ctrl) {
 		CAM_ERR(CAM_FLASH, "Flash control Null");
 		return -EINVAL;
 	}
 
+	CAM_DBG(CAM_FLASH, "Flash OFF Triggered");
+
 	if (flash_ctrl->switch_trigger)
 		cam_res_mgr_led_trigger_event(flash_ctrl->switch_trigger,
 			(enum led_brightness)LED_SWITCH_OFF);
-	else if (flash_ctrl->led_cldev_en == 1) {
-		for (i = 0; i < flash_ctrl->flash_num_sources; i++) {
-			if (flash_ctrl->pmic_lcdev[i] != NULL) {
-				CAM_DBG(CAM_FLASH,
-					"Led_Torch[%d]: brightness: 0 (LED_OFF)", i);
-				led_set_brightness_sync(flash_ctrl->pmic_lcdev[i], LED_OFF);
+
+	if (flash_ctrl->flash_type == CAM_FLASH_TYPE_PMIC) {
+		if (flash_ctrl->led_cldev_en == 1) {
+			for (i = 0; i < flash_ctrl->flash_num_sources; i++) {
+				if (flash_ctrl->pmic_lcdev[i] != NULL) {
+					CAM_DBG(CAM_FLASH,
+						"Led_Torch[%d]: brightness: 0 (LED_OFF)", i);
+					led_set_brightness_sync(
+						flash_ctrl->pmic_lcdev[i], LED_OFF);
+				}
 			}
+		}
+	} else if (flash_ctrl->flash_type == CAM_FLASH_TYPE_I2C) {
+		if (flash_ctrl->i2c_data.streamoff_settings.is_settings_valid &&
+			flash_ctrl->i2c_data.streamoff_settings.request_id == 0) {
+			flash_ctrl->apply_streamoff = true;
+			rc = cam_flash_i2c_apply_setting(flash_ctrl, 0);
+			if (rc < 0)
+				CAM_ERR(CAM_SENSOR,
+					"cannot apply streamoff settings");
 		}
 	}
 
-	return 0;
+	return rc;
 }
 
 static int cam_flash_low(

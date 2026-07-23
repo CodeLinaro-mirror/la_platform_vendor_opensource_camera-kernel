@@ -170,6 +170,7 @@ static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 
 		CAM_DBG(CAM_FLASH, "CAM_QUERY_CAP");
 		flash_cap.slot_info = fctrl->soc_info.index;
+		flash_cap.flash_type = soc_private->flash_type;
 		cam_flash_populate_query_current(fctrl, &flash_cap, soc_private);
 		if (copy_to_user(u64_to_user_ptr(cmd->handle),
 			&flash_cap, sizeof(struct cam_flash_query_cap_info))) {
