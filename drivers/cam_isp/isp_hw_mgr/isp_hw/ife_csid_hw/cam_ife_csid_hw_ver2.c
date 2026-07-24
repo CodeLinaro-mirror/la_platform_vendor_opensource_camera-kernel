@@ -5392,10 +5392,15 @@ static int cam_ife_csid_ver2_reg_update(
 
 	return rc;
 err:
-	CAM_ERR(CAM_ISP, "CSID[%d] wrong Resource[id:%d name:%s]",
-		csid_hw->hw_intf->hw_idx,
-		rup_args->res[bit]->res_id,
-		rup_args->res[bit]->res_name);
+	if (bit < CAM_IFE_PIX_PATH_RES_MAX && rup_args->res[bit]) {
+		CAM_ERR(CAM_ISP, "CSID[%d] wrong Resource[id:%d name:%s]",
+			csid_hw->hw_intf->hw_idx,
+			rup_args->res[bit]->res_id,
+			rup_args->res[bit]->res_name);
+	} else {
+		CAM_ERR(CAM_ISP, "CSID[%d] wrong Resource[invalid bit:%d]",
+			csid_hw->hw_intf->hw_idx, bit);
+	}
 	return rc;
 }
 
