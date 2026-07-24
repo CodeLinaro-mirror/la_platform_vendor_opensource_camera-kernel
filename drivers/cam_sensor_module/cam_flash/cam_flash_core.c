@@ -1568,6 +1568,11 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 		offset = (uint32_t *)((uint8_t *)&csl_packet->payload_flex +
 			csl_packet->cmd_buf_offset);
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
+		if (!cmd_desc) {
+			CAM_ERR(CAM_FLASH, "cmd_desc is NULL");
+			rc = -EINVAL;
+			goto end;
+		}
 		/* add support for handling i2c_data*/
 		i2c_reg_settings =
 			&fctrl->i2c_data.per_frame[frm_offset];
@@ -1576,6 +1581,7 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 			i2c_reg_settings->is_settings_valid = false;
 			goto update_req_mgr;
 		}
+
 		i2c_reg_settings->is_settings_valid = true;
 		i2c_reg_settings->request_id =
 			csl_packet->header.request_id;
