@@ -4344,12 +4344,16 @@ static struct cam_req_mgr_group_slot *__cam_req_mgr_mtrigger_apply_sequence(
  *             that are unsupported in manual trigger mode.
  * @add_req  : The add request to validate.
  * @link     : Link on which the request is being added.
+ * @slot     : PD table slot for corresponding request id
+ * @device   : Connected device on the link which call add_req
  *
  * @return: 0 if valid, -EINVAL if an unsupported flag is set.
  */
 static int __cam_req_mgr_validate_manual_trigger_req(
-	struct cam_req_mgr_add_request *add_req,
-	struct cam_req_mgr_core_link   *link)
+	struct cam_req_mgr_add_request      *add_req,
+	struct cam_req_mgr_core_link        *link,
+	struct cam_req_mgr_tbl_slot         *slot,
+	struct cam_req_mgr_connected_device *device)
 {
 	if (add_req->trigger_skip) {
 		CAM_ERR(CAM_CRM,
@@ -4376,6 +4380,13 @@ static int __cam_req_mgr_validate_manual_trigger_req(
 		CAM_ERR(CAM_CRM,
 			"trigger_eof not supported in manual trigger mode for req: %lld on link 0x%x",
 			add_req->req_id, link->link_hdl);
+		return -EINVAL;
+	}
+
+	if (slot->req_ready_map & BIT(device->dev_bit)) {
+		CAM_ERR(CAM_CRM,
+			"Request req: %lld on link 0x%x for dev: %s is already added",
+			add_req->req_id, link->link_hdl, device->dev_info.name);
 		return -EINVAL;
 	}
 
@@ -4517,7 +4528,7 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 
 	WARN_ON(tbl->num_slots != link->req.in_q->num_slots);
 
-	rc = __cam_req_mgr_validate_manual_trigger_req(add_req, link);
+	rc = __cam_req_mgr_validate_manual_trigger_req(add_req, link, slot, device);
 	if (rc)
 		goto end_unlock;
 
