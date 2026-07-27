@@ -7357,6 +7357,15 @@ static int cam_icp_packet_generic_blob_handler(void *user_data,
 				}
 			}
 
+			if (!scid_match &&
+				sys_cache_cfg->num >= CAM_ICP_SYS_CACHE_TYPE_MAX) {
+				CAM_ERR(CAM_ICP,
+					"%s: scid table full (%u), dropping new scid %u",
+					ctx_data->ctx_id_string, sys_cache_cfg->num,
+					sys_cache_blob_info->sys_cache_config_flex[j].scid_id);
+				continue;
+			}
+
 			rc = cam_icp_llcc_sys_cache_config_util(
 				ctx_data, &sys_cache_cfg->scid_cfg[i],
 				&sys_cache_blob_info->sys_cache_config_flex[j], scid_match);
