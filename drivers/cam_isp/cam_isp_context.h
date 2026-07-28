@@ -46,6 +46,9 @@
 /* Number of words for dumping isp context events*/
 #define CAM_ISP_CTX_DUMP_EVENT_NUM_WORDS  3
 
+/* Number of words for dumping state monitor */
+#define CAM_ISP_CTX_DUMP_STATE_MONITOR_NUM_WORDS  4
+
 /* Number of words for dumping request info*/
 #define CAM_ISP_CTX_DUMP_REQUEST_NUM_WORDS  2
 

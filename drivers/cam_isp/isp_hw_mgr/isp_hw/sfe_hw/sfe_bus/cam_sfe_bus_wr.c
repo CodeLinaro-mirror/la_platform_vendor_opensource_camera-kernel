@@ -27,6 +27,8 @@
 
 static const char drv_name[] = "sfe_bus_wr";
 
+#define CAM_SFE_BUS_WR_DUMP_WM_WORDS  22
+
 #define CAM_SFE_BUS_WR_PAYLOAD_MAX             256
 
 #define CAM_SFE_RDI_BUS_DEFAULT_WIDTH          0xFFFF
@@ -2082,6 +2084,9 @@ static int cam_sfe_bus_wr_user_dump(
 	struct cam_sfe_bus_wr_wm_resource_data    *wm = NULL;
 	struct cam_hw_info                        *hw_info = NULL;
 	struct cam_isp_hw_dump_args               *dump_args;
+	size_t                                     min_len;
+	size_t                                     remain_len;
+	uint32_t                                   total_wm = 0;
 	uint32_t                                   i, j = 0;
 	int                                        rc = 0;
 	int32_t                                    sfe_out_type;
@@ -2101,12 +2106,53 @@ static int cam_sfe_bus_wr_user_dump(
 		return -EINVAL;
 	}
 
+	if (dump_args->buf_len <= dump_args->offset) {
+		CAM_WARN(CAM_ISP,
+			"SFE BUS WR: Dump buffer overshoot len %zu offset %zu",
+			dump_args->buf_len, dump_args->offset);
+		return -ENOSPC;
+	}
+
+	min_len = sizeof(struct cam_common_hw_dump_header) + sizeof(uint64_t);
+	remain_len = dump_args->buf_len - dump_args->offset;
+	if (remain_len < min_len) {
+		CAM_WARN(CAM_ISP,
+			"SFE BUS WR: Dump buffer exhaust remain %zu min %zu",
+			remain_len, min_len);
+		return -ENOSPC;
+	}
+
 	rc = cam_common_user_dump_helper(dump_args, cam_common_user_dump_clock,
 		hw_info, sizeof(uint64_t), "CLK_RATE_PRINT:");
 
 	if (rc) {
 		CAM_ERR(CAM_ISP, "SFE BUS WR: Clock dump failed, rc:%d", rc);
 		return rc;
+	}
+
+	/* Aggregate worst-case bytes for all WM dumps across active out resources. */
+	for (i = 0; i < bus_priv->num_out; i++) {
+		sfe_out_type = cam_sfe_bus_wr_get_out_type(bus_priv, i);
+		if ((sfe_out_type < 0) ||
+			(sfe_out_type >= CAM_SFE_BUS_SFE_OUT_MAX))
+			continue;
+		rsrc_node = &bus_priv->sfe_out[sfe_out_type];
+		if (rsrc_node->res_state < CAM_ISP_RESOURCE_STATE_RESERVED)
+			continue;
+		rsrc_data = rsrc_node->res_priv;
+		if (!rsrc_data)
+			continue;
+		total_wm += rsrc_data->num_wm;
+	}
+	min_len = (size_t)total_wm * (sizeof(struct cam_common_hw_dump_header) +
+			CAM_SFE_BUS_WR_DUMP_WM_WORDS * sizeof(uint32_t));
+
+	remain_len = dump_args->buf_len - dump_args->offset;
+	if (remain_len < min_len) {
+		CAM_WARN(CAM_ISP,
+			"SFE BUS WR: Dump buffer exhaust remain %zu min %zu (wm)",
+			remain_len, min_len);
+		return -ENOSPC;
 	}
 
 	for (i = 0; i < bus_priv->num_out; i++) {
