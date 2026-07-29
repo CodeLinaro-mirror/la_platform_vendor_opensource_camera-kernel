@@ -4236,7 +4236,7 @@ static int __cam_req_mgr_mtrigger_apply_req_in_idle(
  *          the cached external trigger info from the group_slot.
  * @gs    : Group slot containing the external trigger info
  *
- * @return: 0 on success, -EINVAL if no external trigger registered.
+ * @return: 0 on success, negative errno on failure.
  */
 static int __cam_req_mgr_mtrigger_external_trigger_send(
 	struct cam_req_mgr_group_slot *gs)
@@ -4245,12 +4245,15 @@ static int __cam_req_mgr_mtrigger_external_trigger_send(
 	struct cam_req_mgr_connected_device *dev;
 	struct cam_req_mgr_extern_trigger    external_trigger;
 
-	if (!gs || !gs->external_trigger.dev)
-		return 0;
+	if (IS_ERR_OR_NULL(gs) || !gs->external_trigger.dev)
+		return -ENODEV;
 
 	dev = gs->external_trigger.dev;
-	if (!dev->ops || !dev->ops->external_trigger)
+	if (!dev->ops || !dev->ops->external_trigger) {
+		CAM_ERR(CAM_CRM, "Missing external trigger ops for dev on link 0x%x",
+			gs->external_trigger.link_hdl);
 		return -EINVAL;
+	}
 
 	external_trigger.dev_hdl  = dev->dev_hdl;
 	external_trigger.link_hdl = gs->external_trigger.link_hdl;
@@ -4266,43 +4269,41 @@ static int __cam_req_mgr_mtrigger_external_trigger_send(
 }
 
 /**
- * __cam_req_mgr_mtrigger_apply_sequence()
+ * __cam_req_mgr_mtrigger_find_external_trigger_gs()
  *
- * @brief : Apply ready sequence on the current link and all synced links.
- *          Scans all links for the external trigger group_slot.
- * @idx   : Current slot index
- * @link  : Link on which to apply the slots
+ * @brief : Find the group slot that carries external-trigger callback info
+ *          for the sequence identified by @idx on @link. Search current link
+ *          first, then all synced links for the same request id.
+ * @idx   : Current slot index on @link
+ * @link  : Link where sequence start is being evaluated
  *
- * @return: Pointer to the group_slot that holds the external trigger device
- *          (NULL if none found), or ERR_PTR on failure.
+ * @return: Valid group slot pointer with external trigger info on success,
+ *          ERR_PTR(-ENODEV) if no external trigger is registered for the
+ *          sequence, ERR_PTR(-EINVAL/-EBADSLT) for invalid topology/slots.
  */
-static struct cam_req_mgr_group_slot *__cam_req_mgr_mtrigger_apply_sequence(
+static struct cam_req_mgr_group_slot *
+__cam_req_mgr_mtrigger_find_external_trigger_gs(
 	int idx,
 	struct cam_req_mgr_core_link *link)
 {
-	int                            rc = 0, i = 0;
-	int64_t                        req_id = link->req.in_q->slot[idx].req_id;
-	struct cam_req_mgr_core_link  *sync_link = NULL;
+	int                            i = 0;
 	int                            sync_idx = 0;
-	struct cam_req_mgr_slot       *link_slot = &link->req.in_q->slot[idx];
+	int64_t                        req_id;
+	struct cam_req_mgr_slot       *link_slot;
+	struct cam_req_mgr_core_link  *sync_link = NULL;
 	struct cam_req_mgr_group_slot *gs;
 	struct cam_req_mgr_group_slot *ext_trigger_gs = NULL;
 
-	rc = __cam_req_mgr_mtrigger_apply_req_in_idle(idx, link);
-	if (rc < 0) {
-		CAM_ERR(CAM_REQ, "Failed to apply manual trigger request on link 0x%x",
-			link->link_hdl);
-		return ERR_PTR(rc);
-	}
+	if (!link || !link->req.in_q || idx < 0)
+		return ERR_PTR(-EINVAL);
+
+	req_id = link->req.in_q->slot[idx].req_id;
+	link_slot = &link->req.in_q->slot[idx];
 
 	gs = __cam_req_mgr_get_group_slot(link->req.in_q, link_slot->group_id);
-	if (gs) {
-		gs->state = CAM_CRM_GROUP_STATE_IN_PROGRESS;
-		if (gs->external_trigger.dev)
-			ext_trigger_gs = gs;
-	}
+	if (gs && gs->external_trigger.dev)
+		ext_trigger_gs = gs;
 
-	/* Apply all synced links */
 	for (i = 0; i < link_slot->num_sync_links; i++) {
 		sync_link = cam_get_link_priv(link_slot->sync_link_hdls[i]);
 		if (!sync_link) {
@@ -4318,30 +4319,83 @@ static struct cam_req_mgr_group_slot *__cam_req_mgr_mtrigger_apply_sequence(
 			return ERR_PTR(-EBADSLT);
 		}
 
+		gs = __cam_req_mgr_get_group_slot(sync_link->req.in_q,
+			sync_link->req.in_q->slot[sync_idx].group_id);
+		if (gs && gs->external_trigger.dev) {
+			if (ext_trigger_gs) {
+				CAM_WARN(CAM_CRM,
+					"multiple external triggers across links, using first");
+			} else {
+				ext_trigger_gs = gs;
+			}
+		}
+	}
+
+	return ext_trigger_gs ? ext_trigger_gs : ERR_PTR(-ENODEV);
+}
+
+/**
+ * __cam_req_mgr_mtrigger_apply_sequence()
+ *
+ * @brief : Apply ready sequence on the current link and all synced links.
+ * @idx   : Current slot index
+ * @link  : Link on which to apply the slots
+ *
+ * @return: 0 on success, negative errno on failure.
+ */
+static int __cam_req_mgr_mtrigger_apply_sequence(
+	int idx,
+	struct cam_req_mgr_core_link *link)
+{
+	int                            rc = 0, i = 0;
+	int64_t                        req_id = link->req.in_q->slot[idx].req_id;
+	struct cam_req_mgr_core_link  *sync_link = NULL;
+	int                            sync_idx = 0;
+	struct cam_req_mgr_slot       *link_slot = &link->req.in_q->slot[idx];
+	struct cam_req_mgr_group_slot *gs;
+
+	rc = __cam_req_mgr_mtrigger_apply_req_in_idle(idx, link);
+	if (rc < 0) {
+		CAM_ERR(CAM_REQ, "Failed to apply manual trigger request on link 0x%x",
+			link->link_hdl);
+		return rc;
+	}
+
+	gs = __cam_req_mgr_get_group_slot(link->req.in_q, link_slot->group_id);
+	if (gs)
+		gs->state = CAM_CRM_GROUP_STATE_IN_PROGRESS;
+
+	/* Apply all synced links */
+	for (i = 0; i < link_slot->num_sync_links; i++) {
+		sync_link = cam_get_link_priv(link_slot->sync_link_hdls[i]);
+		if (!sync_link) {
+			CAM_ERR(CAM_CRM, "null sync_link: %d on link: 0x%x", i,
+				link->link_hdl);
+			return -EINVAL;
+		}
+
+		sync_idx = __cam_req_mgr_find_slot_for_req(sync_link->req.in_q, req_id);
+		if (sync_idx < 0) {
+			CAM_DBG(CAM_CRM, "req_id: %lld missing on link: 0x%x",
+				req_id, sync_link->link_hdl);
+			return -EBADSLT;
+		}
+
 		rc = __cam_req_mgr_mtrigger_apply_req_in_idle(sync_idx, sync_link);
 		if (rc < 0) {
 			CAM_ERR(CAM_REQ,
 				"Failed to apply manual trigger request on link 0x%x",
 				sync_link->link_hdl);
-			return ERR_PTR(rc);
+			return rc;
 		}
 
 		gs = __cam_req_mgr_get_group_slot(sync_link->req.in_q,
 			sync_link->req.in_q->slot[sync_idx].group_id);
-		if (gs) {
+		if (gs)
 			gs->state = CAM_CRM_GROUP_STATE_IN_PROGRESS;
-			if(gs->external_trigger.dev) {
-				if (ext_trigger_gs) {
-					CAM_WARN(CAM_CRM,
-						"multiple external triggers across links, using first");
-				} else {
-					ext_trigger_gs = gs;
-				}
-			}
-		}
 	}
 
-	return ext_trigger_gs;
+	return 0;
 }
 
 /**
@@ -4414,12 +4468,19 @@ static int cam_req_mgr_mtrigger_try_to_start(
 	if (!all_links_slots_ready)
 		return 0;
 
-	ext_trigger_gs = __cam_req_mgr_mtrigger_apply_sequence(idx, link);
+	ext_trigger_gs = __cam_req_mgr_mtrigger_find_external_trigger_gs(idx, link);
 	if (IS_ERR_OR_NULL(ext_trigger_gs)) {
 		rc = ext_trigger_gs ? PTR_ERR(ext_trigger_gs) : -ENODEV;
-		CAM_ERR(CAM_CRM, "Failed to apply seq for group id: %lld %s",
-			link->req.in_q->slot[idx].group_id,
-			ext_trigger_gs ? "Error" : "Missing external trigger");
+		CAM_ERR(CAM_CRM,
+			"Skip apply: external trigger missing/invalid for group %lld rc=%d",
+			link->req.in_q->slot[idx].group_id, rc);
+		return rc;
+	}
+
+	rc = __cam_req_mgr_mtrigger_apply_sequence(idx, link);
+	if (rc < 0) {
+		CAM_ERR(CAM_CRM, "Failed to apply seq for group id: %lld rc=%d",
+			link->req.in_q->slot[idx].group_id, rc);
 		return rc;
 	}
 
