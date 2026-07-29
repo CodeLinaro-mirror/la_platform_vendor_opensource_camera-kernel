@@ -446,6 +446,9 @@ int cam_ipe_process_cmd(void *device_priv, uint32_t cmd_type,
 		if (core_info->clk_enable == true)
 			cam_ipe_toggle_clk(soc_info, false);
 		core_info->clk_enable = false;
+		rc = cam_cpas_update_axi_floor_lvl(core_info->cpas_handle, 0);
+		if (rc)
+			CAM_ERR(CAM_PERF, "failed to reset axi floor level rc: %d", rc);
 		break;
 	case CAM_ICP_DEV_CMD_DUMP_CLK:
 		rc = cam_soc_util_dump_clk(soc_info);
