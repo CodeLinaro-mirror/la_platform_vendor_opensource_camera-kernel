@@ -12602,6 +12602,15 @@ static int cam_isp_scratch_buf_update_util(
 		return rc;
 	}
 
+	if (buffer_info->offset >= size) {
+		CAM_ERR(CAM_ISP,
+			"Invalid scratch buffer offset:%u size:%u mmu_hdl:%d hdl:%d res_type:0x%x",
+			buffer_info->offset, size, mmu_hdl, buffer_info->mem_handle,
+			buffer_info->resource_type);
+		rc = -EINVAL;
+		return rc;
+	}
+
 	port_info->res_id = buffer_info->resource_type;
 	port_info->io_addr = io_addr + buffer_info->offset;
 	port_info->width = buffer_info->width;
