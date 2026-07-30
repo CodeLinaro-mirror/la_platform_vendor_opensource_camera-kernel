@@ -121,12 +121,17 @@ static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 		break;
 	}
 	case CAM_RELEASE_DEV: {
+		int stop_rc = 0;
+
 		CAM_DBG(CAM_FLASH, "CAM_RELEASE_DEV");
-		if ((fctrl->flash_state == CAM_FLASH_STATE_INIT) ||
-			(fctrl->flash_state == CAM_FLASH_STATE_START)) {
+		if (fctrl->flash_state == CAM_FLASH_STATE_INIT) {
 			CAM_WARN(CAM_FLASH,
 				"Wrong state for Release dev: Prev state:%d",
 				fctrl->flash_state);
+		}
+		if (fctrl->flash_state == CAM_FLASH_STATE_START) {
+			CAM_WARN(CAM_FLASH,
+				"Release requested while in START state");
 		}
 
 		if (fctrl->bridge_intf.device_hdl == -1 &&
@@ -149,8 +154,21 @@ static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 		}
 
 		if ((fctrl->flash_state == CAM_FLASH_STATE_CONFIG) ||
-			(fctrl->flash_state == CAM_FLASH_STATE_START))
-			fctrl->func_tbl.flush_req(fctrl, FLUSH_ALL, 0);
+			(fctrl->flash_state == CAM_FLASH_STATE_START)) {
+			stop_rc = cam_flash_off(fctrl);
+			if (stop_rc)
+				CAM_ERR(CAM_FLASH,
+					"Flash off failed in release path: rc=%d",
+					stop_rc);
+
+			stop_rc = fctrl->func_tbl.flush_req(fctrl, FLUSH_ALL, 0);
+			if (stop_rc)
+				CAM_WARN(CAM_FLASH,
+					"Flush failed in release path: rc=%d",
+					stop_rc);
+
+			fctrl->last_flush_req = 0;
+		}
 
 		if (cam_flash_release_dev(fctrl))
 			CAM_WARN(CAM_FLASH,
