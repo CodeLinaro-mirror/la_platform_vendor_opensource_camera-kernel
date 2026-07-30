@@ -76,6 +76,33 @@ static void __cam_req_mgr_reset_state_monitor_array(
 	}
 }
 
+/**
+ * __cam_req_mgr_set_pause_timer()
+ *
+ * @brief    : Set the watchdog freeze-report gate (pause_timer) and emit a
+ *             debug print only when the value actually changes (paused <-> resumed).
+ * @link     : link on which the watchdog lives
+ * @pause    : true to pause (suppress freeze report), false to resume
+ * @path     : short tag naming the caller, for the debug print
+ *
+ * Callers must hold link->link_state_spin_lock.
+ */
+static void __cam_req_mgr_set_pause_timer(
+	struct cam_req_mgr_core_link *link, bool pause, const char *path)
+{
+	if (!link->watchdog)
+		return;
+
+	if (link->watchdog->pause_timer == pause)
+		return;
+
+	link->watchdog->pause_timer = pause;
+	CAM_DBG(CAM_CRM,
+		"watchdog %s link:0x%x open_req_cnt:%u path:%s",
+		pause ? "paused" : "resumed", link->link_hdl,
+		link->open_req_cnt, path);
+}
+
 void cam_req_mgr_core_link_reset(struct cam_req_mgr_core_link *link)
 {
 	int i = 0;
@@ -98,6 +125,7 @@ void cam_req_mgr_core_link_reset(struct cam_req_mgr_core_link *link)
 	link->parent = NULL;
 	link->sync_link_sof_skip = false;
 	link->open_req_cnt = 0;
+	link->is_mtrigger = false;
 	link->last_flush_id = -1;
 	link->initial_sync_req = -1;
 	link->dual_trigger = false;
@@ -1754,7 +1782,16 @@ static int __cam_req_mgr_send_req(struct cam_req_mgr_core_link *link,
 		memcpy(link->req.prev_apply_data, link->req.apply_data,
 			CAM_PIPELINE_DELAY_MAX *
 			sizeof(struct cam_req_mgr_apply));
-		if (req_applied_to_min_pd > 0) {
+		/*
+		 * Auto trigger mode keeps the stock pd-coupled decrement:
+		 * when the min_delay device applied, this request is fully
+		 * applied across the pipeline and can be decremented.
+		 * Manual trigger mode decrements at retire (process_req /
+		 * mtrigger_do_apply_in_idle) instead - the idle path bypasses
+		 * this function entirely, so the lead request of a burst would
+		 * leak here.
+		 */
+		if (!link->is_mtrigger && req_applied_to_min_pd > 0) {
 			link->open_req_cnt--;
 			CAM_DBG(CAM_REQ,
 				"Open_reqs: %u after successfully applying req:%d",
@@ -2694,6 +2731,29 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 		if (is_applied) {
 			slot->status = CRM_SLOT_STATUS_REQ_APPLIED;
 
+			/*
+			 * Manual trigger mode: the request has retired from the
+			 * in-queue: it is no longer open. Pair this with the
+			 * open_req_cnt++ done at schedule time
+			 * (cam_req_mgr_process_sched_req). This fires exactly once
+			 * per request independent of pipeline delay, so it stays
+			 * balanced even when min_delay == max_delay. Guard against
+			 * underflow on the unsigned counter. The watchdog pause
+			 * decision is intentionally left to the next SOF
+			 * (cam_req_mgr_cb_notify_trigger) so the just-applied
+			 * trailing frame stays covered.
+			 *
+			 * Auto trigger mode already decremented open_req_cnt in
+			 * __cam_req_mgr_send_req (pd == min_delay path) so it is
+			 * skipped here.
+			 */
+			if (link->is_mtrigger) {
+				spin_lock_bh(&link->link_state_spin_lock);
+				if (link->open_req_cnt > 0)
+					link->open_req_cnt--;
+				spin_unlock_bh(&link->link_state_spin_lock);
+			}
+
 			CAM_DBG(CAM_CRM, "req %d is applied on link %x success",
 				slot->req_id,
 				link->link_hdl);
@@ -3382,7 +3442,23 @@ static int __cam_req_mgr_try_cancel_req(struct cam_req_mgr_core_link *link,
 	CAM_DBG(CAM_CRM, "cancelling request %lld on link 0x%x for devices with pd less than %d",
 		flush_info->req_id, flush_info->link_hdl, pd);
 	__cam_req_mgr_flush_dev_with_max_pd(link, flush_info, pd);
-	link->open_req_cnt--;
+	if (link->is_mtrigger) {
+		spin_lock_bh(&link->link_state_spin_lock);
+		/*
+		 * A REQ_APPLIED slot already retired and paid its
+		 * open_req_cnt-- in __cam_req_mgr_process_req. Cancelling it
+		 * here too would double-decrement the unsigned counter.
+		 */
+		if ((slot->status != CRM_SLOT_STATUS_REQ_APPLIED) &&
+			(link->open_req_cnt > 0)) {
+			link->open_req_cnt--;
+			if (link->open_req_cnt == 0)
+				__cam_req_mgr_set_pause_timer(link, true, "try_cancel_req");
+		}
+		spin_unlock_bh(&link->link_state_spin_lock);
+	} else {
+		link->open_req_cnt--;
+	}
 	return 0;
 }
 
@@ -3427,7 +3503,14 @@ int cam_req_mgr_process_flush_req(void *priv, void *data)
 		__cam_req_mgr_flush_req_slot(link);
 		__cam_req_mgr_reset_apply_data(link);
 		__cam_req_mgr_flush_dev_with_max_pd(link, flush_info, link->max_delay);
-		link->open_req_cnt = 0;
+		if (link->is_mtrigger) {
+			spin_lock_bh(&link->link_state_spin_lock);
+			link->open_req_cnt = 0;
+			__cam_req_mgr_set_pause_timer(link, true, "flush_all");
+			spin_unlock_bh(&link->link_state_spin_lock);
+		} else {
+			link->open_req_cnt = 0;
+		}
 		link->resume_sync_curr_mask = 0x0;
 		link->exp_time_for_resume = 0;
 		break;
@@ -3622,6 +3705,12 @@ int cam_req_mgr_process_sched_req_manual_mode(void *priv, void *data)
 	slot->skip_set = !!sched_req->trigger_params.data.manual.skip;
 
 	__cam_req_mgr_alloc_group_slot(in_q, gid, gsz, in_q->wr_idx);
+	/*
+	 * Mark the link as manual-trigger so the request-driven
+	 * watchdog pause-on-idle engages only here; auto-trigger
+	 * links keep the stock free-running watchdog behavior.
+	 */
+	link->is_mtrigger = true;
 
 	CAM_INFO(CAM_CRM,
 		"TRIG_TRACE: SCHED link:0x%x req_id:%lld slot_idx:%d group_id:%lld group_size:%u skip_set:%d",
@@ -3640,7 +3729,17 @@ int cam_req_mgr_process_sched_req_manual_mode(void *priv, void *data)
 	}
 	slot->num_sync_links = sync_idx;
 
-	link->open_req_cnt++;
+	if (link->is_mtrigger) {
+		spin_lock_bh(&link->link_state_spin_lock);
+		link->open_req_cnt++;
+		if (link->watchdog) {
+			crm_timer_reset(link->watchdog);
+			__cam_req_mgr_set_pause_timer(link, false, "sched_req");
+		}
+		spin_unlock_bh(&link->link_state_spin_lock);
+	} else {
+		link->open_req_cnt++;
+	}
 	CAM_DBG(CAM_REQ, "Open_req_cnt:%u after scheduling req:%d mismatched_frame_mode:%d",
 		link->open_req_cnt, sched_req->req_id, slot->mismatched_frame_mode);
 	__cam_req_mgr_inc_idx(&in_q->wr_idx, 1, in_q->num_slots);
@@ -4252,8 +4351,22 @@ static int __cam_req_mgr_mtrigger_do_apply_in_idle(
 		dev = &link->l_dev[i];
 		req_apply_map_all |= BIT(dev->dev_bit);
 	}
-	if(pd_tbl_slot->req_apply_map == req_apply_map_all)
+	if(pd_tbl_slot->req_apply_map == req_apply_map_all) {
 		link_slot->status = CRM_SLOT_STATUS_REQ_APPLIED;
+
+		/*
+		 * Lead request of a manual-trigger sequence retires here
+		 * (applied while the link was idle) rather than through
+		 * __cam_req_mgr_process_req. Decrement open_req_cnt to pair
+		 * with the schedule-time increment, same as the retire path
+		 * in __cam_req_mgr_process_req. Without this the first request
+		 * of every trigger burst leaks +1. Guard against underflow.
+		 */
+		spin_lock_bh(&link->link_state_spin_lock);
+		if (link->open_req_cnt > 0)
+			link->open_req_cnt--;
+		spin_unlock_bh(&link->link_state_spin_lock);
+	}
 
 end:
 	return rc;
@@ -4961,6 +5074,21 @@ int cam_req_mgr_process_error(void *priv, void *data)
 			/* Increment bubble counter only for bubble errors */
 			if (err_info->error == CRM_KMD_ERR_BUBBLE)
 				in_q->slot[idx].bubble_times++;
+			/*
+			 * Manual trigger mode: if the bubbled request had already
+			 * retired (REQ_APPLIED) it was counted out of open_req_cnt
+			 * at retire; recovery re-opens it, so count it back in.
+			 * A still-pending request was never counted out, so leave
+			 * the counter alone in that case. Auto trigger keeps the
+			 * stock behavior (single unconditional ++ later, after
+			 * setting CAM_CRM_LINK_STATE_ERR).
+			 */
+			if (link->is_mtrigger &&
+				in_q->slot[idx].status == CRM_SLOT_STATUS_REQ_APPLIED) {
+				spin_lock_bh(&link->link_state_spin_lock);
+				link->open_req_cnt++;
+				spin_unlock_bh(&link->link_state_spin_lock);
+			}
 			in_q->slot[idx].status = CRM_SLOT_STATUS_REQ_ADDED;
 
 			/* Reset request apply map for all pd tables */
@@ -5032,6 +5160,23 @@ int cam_req_mgr_process_error(void *priv, void *data)
 				if (in_q->slot[idx].status == CRM_SLOT_STATUS_REQ_APPLIED) {
 					in_q->slot[idx].status = CRM_SLOT_STATUS_REQ_ADDED;
 
+					/*
+					 * Manual trigger mode only: this request had
+					 * retired (REQ_APPLIED) and was counted out of
+					 * open_req_cnt at that point. Recovery re-opens
+					 * it for re-apply, so count it back in - one ++
+					 * per reverted slot keeps the counter symmetric
+					 * with the retire decrement in
+					 * __cam_req_mgr_process_req. Auto trigger's
+					 * stock single unconditional ++ (below, after
+					 * CAM_CRM_LINK_STATE_ERR) covers it.
+					 */
+					if (link->is_mtrigger) {
+						spin_lock_bh(&link->link_state_spin_lock);
+						link->open_req_cnt++;
+						spin_unlock_bh(&link->link_state_spin_lock);
+					}
+
 					tbl = link->req.l_tbl;
 					/* Reset request apply map for all pd tables */
 					while (tbl) {
@@ -5044,7 +5189,17 @@ int cam_req_mgr_process_error(void *priv, void *data)
 			spin_lock_bh(&link->link_state_spin_lock);
 			link->state = CAM_CRM_LINK_STATE_ERR;
 			spin_unlock_bh(&link->link_state_spin_lock);
-			link->open_req_cnt++;
+			/*
+			 * Auto trigger mode: stock single unconditional ++ pairs
+			 * with the stock pd-coupled -- in __cam_req_mgr_send_req.
+			 * Manual trigger mode re-increments per reverted slot in
+			 * the revert loop above.
+			 */
+			if (!link->is_mtrigger){
+                                spin_lock_bh(&link->link_state_spin_lock);
+				link->open_req_cnt++;
+                                spin_unlock_bh(&link->link_state_spin_lock);
+                        }
 
 			/* Apply immediately to highest pd device on same frame */
 			__cam_req_mgr_apply_on_bubble(link, err_info);
@@ -5908,9 +6063,25 @@ static int cam_req_mgr_cb_notify_trigger(
 		goto end;
 	}
 
-	if ((link->watchdog) && (link->watchdog->pause_timer) &&
-		(trigger == CAM_TRIGGER_POINT_SOF))
-		link->watchdog->pause_timer = false;
+	/*
+	 * Request-based mode: the watchdog should only guard frames that
+	 * belong to a pending request. Decide on each SOF (i.e. once the
+	 * frame for the last applied request is actually observed): resume
+	 * if requests are still pending, otherwise pause until the next
+	 * request is scheduled. This keeps the just-applied trailing frame
+	 * covered instead of pausing the instant open_req_cnt hits 0.
+	 *
+	 * Auto trigger mode keeps the stock resume-on-any-SOF behavior.
+	 */
+	if (link->is_mtrigger) {
+		if (trigger == CAM_TRIGGER_POINT_SOF)
+			__cam_req_mgr_set_pause_timer(link,
+				(link->open_req_cnt == 0), "notify_trigger_sof");
+	} else {
+		if ((link->watchdog) && (link->watchdog->pause_timer) &&
+			(trigger == CAM_TRIGGER_POINT_SOF))
+			link->watchdog->pause_timer = false;
+	}
 
 	if (link->dual_trigger) {
 		if ((trigger_id >= 0) && (trigger_id <
@@ -5950,10 +6121,18 @@ static int cam_req_mgr_cb_notify_trigger(
 		CAM_ERR_RATE_LIMIT(CAM_CRM, "no empty task frame %lld",
 			trigger_data->frame_id);
 		rc = -EBUSY;
-		spin_lock_bh(&link->link_state_spin_lock);
-		if ((link->watchdog) && !(link->watchdog->pause_timer))
-			link->watchdog->pause_timer = true;
-		spin_unlock_bh(&link->link_state_spin_lock);
+		/*
+		 * Auto trigger mode: mainline pauses the watchdog on workq
+		 * congestion so a resume-on-SOF cycle can recover it. Manual
+		 * trigger mode doesn't need this - the request-driven pause
+		 * (open_req_cnt == 0) supersedes it.
+		 */
+		if (!link->is_mtrigger) {
+			spin_lock_bh(&link->link_state_spin_lock);
+			if ((link->watchdog) && !(link->watchdog->pause_timer))
+				link->watchdog->pause_timer = true;
+			spin_unlock_bh(&link->link_state_spin_lock);
+		}
 		goto end;
 	}
 	task_data = (struct crm_task_payload *)task->payload;
