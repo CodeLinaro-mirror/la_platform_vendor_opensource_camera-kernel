@@ -11,99 +11,6 @@
 #include "cam_common_util.h"
 #include "cam_sensor_util.h"
 
-static int cam_sensor_convert_sync_info_to_cmd_buf(
-	struct cci_sync_info *sync_info,
-	struct cam_cci_gpio_cmd_buf *cmd_buf)
-{
-	struct cci_gpio_timing_schema *schema = NULL;
-	int rc;
-
-	if (!sync_info || !cmd_buf) {
-		CAM_ERR(CAM_SENSOR,
-			"Invalid args sync_info=%pK cmd_buf=%pK",
-			sync_info, cmd_buf);
-		return -EINVAL;
-	}
-
-	schema = &sync_info->cci_timer_info_flex[0].timer_info;
-
-	rc = cam_cci_timing_schema_to_cmd_buf(schema, cmd_buf);
-	if (rc < 0) {
-		CAM_ERR(CAM_SENSOR, "Failed to convert timing schema: %d", rc);
-		return rc;
-	}
-
-	return 0;
-}
-
-static int cam_sensor_load_gpio_queue_from_cmd_buf(
-	struct cam_sensor_ctrl_t *s_ctrl,
-	struct cam_cci_gpio_cmd_buf *cmd_buf,
-	int64_t req_id)
-{
-	int rc = 0;
-	uint32_t idx;
-
-	if (!s_ctrl || !cmd_buf) {
-		CAM_ERR(CAM_SENSOR,
-			"Invalid args s_ctrl=%pK cmd_buf=%pK",
-			s_ctrl, cmd_buf);
-		return -EINVAL;
-	}
-
-	if (!cmd_buf->cmd_buf_ready || cmd_buf->cmd_count == 0) {
-		CAM_ERR(CAM_SENSOR,
-			"CMD buffer not ready or empty: ready=%d count=%d",
-			cmd_buf->cmd_buf_ready, cmd_buf->cmd_count);
-		return -EINVAL;
-	}
-
-	if (s_ctrl->io_master_info.master_type != CCI_MASTER) {
-		CAM_ERR(CAM_SENSOR,
-			"GPIO queue loading only supported on CCI master");
-		return -EINVAL;
-	}
-
-	if (!s_ctrl->io_master_info.cci_client) {
-		CAM_ERR(CAM_SENSOR, "cci_client is NULL");
-		return -EINVAL;
-	}
-
-	/* Copy cmd_buf to cci_client */
-	memcpy(&s_ctrl->io_master_info.cci_client->cmd_buf,
-	       cmd_buf,
-	       sizeof(struct cam_cci_gpio_cmd_buf));
-
-	/* Also need to copy sync_cfg for CPAS configuration */
-	idx = req_id % MAX_PER_FRAME_ARRAY;
-	if (s_ctrl->per_frame_sync_info &&
-	    s_ctrl->per_frame_sync_info[idx].is_settings_valid &&
-	    s_ctrl->per_frame_sync_info[idx].request_id == req_id) {
-		memcpy(&s_ctrl->io_master_info.cci_client->sync_cfg,
-		       &s_ctrl->per_frame_sync_info[idx].sync_info,
-		       sizeof(s_ctrl->io_master_info.cci_client->sync_cfg));
-	} else {
-		CAM_ERR(CAM_SENSOR,
-			"No sync_info found for req_id=%lld", req_id);
-		return -EINVAL;
-	}
-
-	/* Call MSM_CCI_TIMER_FSYNC_INDEPENDENT but skip conversion
-	 * since cmd_buf is already populated */
-	rc = cam_sensor_cci_i2c_util(
-		&s_ctrl->io_master_info,
-		MSM_CCI_TIMER_FSYNC_INDEPENDENT);
-	if (rc == 0) {
-		CAM_DBG(CAM_SENSOR,
-			"Loaded GPIO queue with %d commands for req_id=%lld",
-			cmd_buf->cmd_count, req_id);
-	} else {
-		CAM_ERR(CAM_SENSOR, "Failed to load GPIO queue: %d", rc);
-	}
-
-	return rc;
-}
-
 int cam_sensor_fsync_handle_blob(uint8_t *blob_data, uint32_t blob_size,
 	struct cam_sensor_ctrl_t *s_ctrl)
 {
@@ -220,7 +127,7 @@ int cam_sensor_fsync_handle_blob(uint8_t *blob_data, uint32_t blob_size,
 			 timer->trigger_cntrl_info.repeat_freq_info.number_of_frames);
 	}
 
-	/* Step 5: Mode-specific cross-field validation */
+	/* Step 5: Mode-specific cross-field validation and cmd_buf conversion */
 	switch (sync_info->operational_mode) {
 	case CCI_TIMER_MODE_SYNC_WITH_SINGLE_QUEUE:
 		if (num_timers > 3) {
@@ -232,17 +139,39 @@ int cam_sensor_fsync_handle_blob(uint8_t *blob_data, uint32_t blob_size,
 
 		if (s_ctrl->io_master_info.master_type == CCI_MASTER) {
 			uint32_t idx = s_ctrl->last_updated_req % MAX_PER_FRAME_ARRAY;
+			struct cam_sensor_fsync_slot *slot;
 
-			rc = cam_sensor_convert_sync_info_to_cmd_buf(
-				sync_info, &s_ctrl->per_frame_cmd_buf[idx]);
+			if (!s_ctrl->per_frame_fsync) {
+				CAM_ERR(CAM_SENSOR,
+					"SYNC_INFO: per_frame_fsync not allocated");
+				return -ENOMEM;
+			}
+
+			slot = &s_ctrl->per_frame_fsync[idx];
+
+			/*
+			 * D1 (deferred): only timer[0] is converted here.
+			 * Multi-timer support (timers 1 and 2) will be added
+			 * as part of the fsync object redesign.
+			 */
+			rc = cam_cci_timing_schema_to_cmd_buf(
+				&sync_info->cci_timer_info_flex[0].timer_info,
+				&slot->cmd_buf[0]);
 			if (rc < 0) {
 				CAM_ERR(CAM_SENSOR,
-					"Failed to convert sync_info to cmd_buf: %d", rc);
+					"Failed to convert timing schema: %d", rc);
 				return rc;
 			}
+
+			slot->num_queues = 1;
+			slot->request_id = s_ctrl->last_updated_req;
+			slot->is_valid = true;
+
 			CAM_DBG(CAM_SENSOR,
-				"SYNC_INFO: Converted to cmd_buf and stored in per_frame[%u]",
-				idx);
+				"SYNC_INFO: converted to cmd_buf[0] (%u cmds), "
+				"stored in per_frame_fsync[%u] req_id=%lld",
+				slot->cmd_buf[0].cmd_count, idx,
+				s_ctrl->last_updated_req);
 		} else {
 			CAM_INFO(CAM_SENSOR,
 				"SYNC_INFO: SENSOR [%s] is not on CCI master, "
@@ -264,27 +193,12 @@ int cam_sensor_fsync_handle_blob(uint8_t *blob_data, uint32_t blob_size,
 		return -EINVAL;
 	}
 
-	/* Step 6: Cache validated sync config into s_ctrl */
-	if (s_ctrl->per_frame_sync_info) {
-		uint32_t idx = s_ctrl->last_updated_req % MAX_PER_FRAME_ARRAY;
-		struct sync_info_data *sync_data = &s_ctrl->per_frame_sync_info[idx];
-
-		memcpy(&sync_data->sync_info, sync_info, sizeof(struct cci_sync_info));
-		sync_data->request_id = s_ctrl->last_updated_req;
-		sync_data->is_settings_valid = 1;
-
-		/* Also cache in s_ctrl for backward compatibility */
-		memcpy(&s_ctrl->sync_cfg, sync_info, sizeof(s_ctrl->sync_cfg));
-		s_ctrl->fsync_blob_ready = true;
-		s_ctrl->is_fsync_active = true;
-	} else {
-		CAM_ERR(CAM_SENSOR, "SYNC_INFO: per_frame_sync_info not allocated");
-		return -ENOMEM;
-	}
+	s_ctrl->fsync_blob_ready = true;
+	s_ctrl->is_fsync_active = true;
 
 	CAM_INFO(CAM_SENSOR,
 		 "SYNC_INFO: decode OK - mode=%d num_timers=%u req_id=%lld "
-		 "cached into per_frame[%u]",
+		 "cached into per_frame_fsync[%u]",
 		 sync_info->operational_mode,
 		 num_timers,
 		 s_ctrl->last_updated_req,
@@ -295,50 +209,65 @@ int cam_sensor_fsync_handle_blob(uint8_t *blob_data, uint32_t blob_size,
 
 int cam_sensor_fsync_apply(struct cam_sensor_ctrl_t *s_ctrl, int64_t req_id)
 {
-	uint32_t offset = req_id % MAX_PER_FRAME_ARRAY;
+	uint32_t idx = req_id % MAX_PER_FRAME_ARRAY;
+	struct cam_sensor_fsync_slot *slot;
+	struct cam_sensor_cci_client *cci_client;
 	int rc = 0;
 
-	if (!s_ctrl->per_frame_sync_info ||
-	    !s_ctrl->per_frame_sync_info[offset].is_settings_valid ||
-	    s_ctrl->per_frame_sync_info[offset].request_id != req_id) {
-		CAM_ERR(CAM_SENSOR, "Sensor[%s] invalid sync info for request id: %lld",
-			s_ctrl->sensor_name, req_id);
+	if (!s_ctrl->per_frame_fsync) {
+		CAM_ERR(CAM_SENSOR, "Sensor[%s] per_frame_fsync not allocated",
+			s_ctrl->sensor_name);
 		return -EINVAL;
 	}
 
-	CAM_DBG(CAM_SENSOR, "Sensor[%s] fsync apply for request id: %lld",
-		s_ctrl->sensor_name, req_id);
+	slot = &s_ctrl->per_frame_fsync[idx];
 
-	if (s_ctrl->per_frame_cmd_buf &&
-	    s_ctrl->per_frame_cmd_buf[offset].cmd_buf_ready) {
-		rc = cam_sensor_load_gpio_queue_from_cmd_buf(
-			s_ctrl,
-			&s_ctrl->per_frame_cmd_buf[offset],
-			req_id);
-		if (rc < 0) {
-			CAM_ERR(CAM_SENSOR,
-				"Failed to load GPIO queue from cmd_buf: %d", rc);
-			goto clear;
-		}
-
-		rc = cam_sensor_cci_i2c_util(&s_ctrl->io_master_info, MSM_CCI_GPIO_QUEUE_START);
-		if (rc < 0)
-			CAM_ERR(CAM_SENSOR, "GPIO queue start failed: %d", rc);
-	} else {
-		CAM_ERR(CAM_SENSOR, "Sensor[%s] no cmd_buf ready for req_id=%lld",
-			s_ctrl->sensor_name, req_id);
-		rc = -EINVAL;
+	if (!slot->is_valid || slot->request_id != req_id) {
+		CAM_ERR(CAM_SENSOR,
+			"Sensor[%s] no valid fsync slot for req_id=%lld "
+			"(slot: valid=%d req_id=%lld)",
+			s_ctrl->sensor_name, req_id,
+			slot->is_valid, slot->request_id);
+		return -EINVAL;
 	}
+
+	if (s_ctrl->io_master_info.master_type != CCI_MASTER ||
+	    !s_ctrl->io_master_info.cci_client) {
+		CAM_ERR(CAM_SENSOR,
+			"Sensor[%s] GPIO queue only supported on CCI master",
+			s_ctrl->sensor_name);
+		rc = -EINVAL;
+		goto clear;
+	}
+
+	cci_client = s_ctrl->io_master_info.cci_client;
+
+	CAM_DBG(CAM_SENSOR, "Sensor[%s] fsync apply req_id=%lld num_queues=%u",
+		s_ctrl->sensor_name, req_id, slot->num_queues);
+
+	/*
+	 * Pass cmd_buf[0] directly to the CCI layer via the cci_client
+	 * staging field. This will be removed once cam_cci_load_gpio_queue()
+	 * is updated to accept a cmd_buf pointer directly (item 6 of the
+	 * fsync redesign).
+	 */
+	cci_client->cmd_buf = slot->cmd_buf[0];
+
+	/*
+	 * MSM_CCI_TIMER_FSYNC_INDEPENDENT now handles load + start +
+	 * transient queue release in a single call.
+	 */
+	rc = cam_sensor_cci_i2c_util(&s_ctrl->io_master_info,
+		MSM_CCI_TIMER_FSYNC_INDEPENDENT);
+	if (rc < 0)
+		CAM_ERR(CAM_SENSOR,
+			"Sensor[%s] GPIO fsync failed rc=%d req_id=%lld",
+			s_ctrl->sensor_name, rc, req_id);
 
 clear:
-	/* Clear the applied entry regardless of success or failure */
-	s_ctrl->per_frame_sync_info[offset].is_settings_valid = 0;
-	s_ctrl->per_frame_sync_info[offset].request_id = 0;
-
-	if (s_ctrl->per_frame_cmd_buf) {
-		s_ctrl->per_frame_cmd_buf[offset].cmd_buf_ready = false;
-		s_ctrl->per_frame_cmd_buf[offset].cmd_count = 0;
-	}
+	slot->is_valid = false;
+	slot->request_id = 0;
+	slot->num_queues = 0;
 
 	return rc;
 }
