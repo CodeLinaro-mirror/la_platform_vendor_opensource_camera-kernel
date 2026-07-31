@@ -3698,9 +3698,6 @@ int cam_ife_csid_ver2_reset(void *hw_priv,
 	reset   = (struct cam_csid_reset_cfg_args  *)reset_args;
 
 	mutex_lock(&csid_hw->hw_info->hw_mutex);
-	if (atomic_read(&csid_hw->init_global_reset_cnt))
-		goto skip_reset;
-
 	switch (reset->reset_type) {
 	case CAM_IFE_CSID_RESET_GLOBAL:
 		rc = cam_ife_csid_ver2_internal_reset(csid_hw,
@@ -3744,8 +3741,6 @@ int cam_ife_csid_ver2_reset(void *hw_priv,
 			csid_hw->hw_intf->hw_idx,
 			cam_ife_csid_reset_type_to_string(reset->reset_type));
 
-skip_reset:
-	atomic_inc(&csid_hw->init_global_reset_cnt);
 	mutex_unlock(&csid_hw->hw_info->hw_mutex);
 	return rc;
 }
@@ -3887,12 +3882,18 @@ static int cam_ife_csid_ver2_disable_path(
 	int                                      rc = 0;
 
 	if (res->res_state != CAM_ISP_RESOURCE_STATE_STREAMING) {
-		/* possible reason can be irqs are already disabled in case per port feature*/
-		CAM_DBG(CAM_ISP,
+		if (res->is_per_port_acquire) {
+			CAM_DBG(CAM_ISP,
+				"CSID:%u path res type:%d res_id:%d not streaming, skip disable (per_port)",
+				csid_hw->hw_intf->hw_idx,
+				res->res_type, res->res_id);
+			return 0;
+		}
+		CAM_ERR(CAM_ISP,
 			"CSID:%u path res type:%d res_id:%d Invalid state:%d",
 			csid_hw->hw_intf->hw_idx,
 			res->res_type, res->res_id, res->res_state);
-		return 0;
+		return -EINVAL;
 	}
 
 	if (res->res_id >= CAM_IFE_PIX_PATH_RES_MAX) {
@@ -4548,14 +4549,14 @@ int cam_ife_csid_ver2_release(void *hw_priv,
 	memset(path_cfg, 0, sizeof(*path_cfg));
 
 	csid_hw->sync_mode = CAM_ISP_HW_SYNC_NONE;
-	memset(&csid_hw->rup_aup_mask, 0,
-		sizeof(struct cam_ife_csid_ver2_rup_aup_mask));
-
 	if (csid_hw->counters.csi2_reserve_cnt)
 		csid_hw->counters.csi2_reserve_cnt--;
 
-	if (!csid_hw->counters.csi2_reserve_cnt)
+	if (!csid_hw->counters.csi2_reserve_cnt) {
+		memset(&csid_hw->rup_aup_mask, 0,
+			sizeof(struct cam_ife_csid_ver2_rup_aup_mask));
 		cam_ife_csid_ver2_reset_csid_params(csid_hw);
+	}
 
 	res->res_state = CAM_ISP_RESOURCE_STATE_AVAILABLE;
 
@@ -4737,10 +4738,7 @@ static int  cam_ife_csid_ver2_program_init_cfg1_pxl_path(
 			(path_cfg->drop_enable <<
 				path_reg->drop_h_en_shift_val);
 
-//	if (((soc_private->is_ife_csid_lite) && (path_reg->capabilities & CAM_IFE_CSID_CAP_LITE_PIX_STORE)) ||
-//		(!soc_private->is_ife_csid_lite))
-	if ((soc_private->is_ife_csid_lite) || (!soc_private->is_ife_csid_lite))
-		cfg1 |= (1 << path_reg->pix_store_en_shift_val);
+	cfg1 |= (1 << path_reg->pix_store_en_shift_val);
 
 	/*enable early eof based on crop enable */
 	if (!(csid_hw->debug_info.debug_val &
@@ -7445,8 +7443,9 @@ static int cam_ife_csid_ver2_top_cfg(
 			csid_hw->core_info->csid_reg;
 	hw_idx = csid_hw->hw_intf->hw_idx;
 	csid_hw->top_cfg.out_ife_en = true;
-	memset(&csid_hw->rup_aup_mask, 0,
-		sizeof(struct cam_ife_csid_ver2_rup_aup_mask));
+	if (!csid_hw->counters.csi2_reserve_cnt)
+		memset(&csid_hw->rup_aup_mask, 0,
+			sizeof(struct cam_ife_csid_ver2_rup_aup_mask));
 
 	/* config out_core parameter*/
 
@@ -8415,6 +8414,12 @@ static int cam_ife_csid_ver2_update_res_data(struct cam_ife_csid_ver2_hw *csid_h
 			goto end;
 		}
 		if (res->res_state == CAM_ISP_RESOURCE_STATE_STREAMING) {
+			if (!reserve->in_port->per_port_en) {
+				CAM_DBG(CAM_ISP,
+					"CSID[%d] res:%d not per_port, skip cfg1 reprogram",
+					csid_hw->hw_intf->hw_idx, res->res_id);
+				goto skip_cfg1_reprogram;
+			}
 			switch (res->res_id) {
 			case CAM_IFE_PIX_PATH_RES_RDI_0:
 			case CAM_IFE_PIX_PATH_RES_RDI_1:
@@ -8449,6 +8454,8 @@ static int cam_ife_csid_ver2_update_res_data(struct cam_ife_csid_ver2_hw *csid_h
 				break;
 			}
 		}
+skip_cfg1_reprogram:
+		;
 	}
 
 	csid_hw->tasklet  = reserve->tasklet;
@@ -8637,7 +8644,6 @@ static int cam_ife_csid_ver2_update_path_irq(
 				rc = -EINVAL;
 				goto end;
 			}
-			//path_data->path_cfg.irq_handle = 0;
 		} else {
 			CAM_ERR(CAM_ISP, "CSID[%d] path Irq handle not found for res:%d",
 				csid_hw->hw_intf->hw_idx, res->res_id);

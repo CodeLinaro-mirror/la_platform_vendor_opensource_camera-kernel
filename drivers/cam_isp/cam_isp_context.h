@@ -511,6 +511,7 @@ struct cam_isp_context {
 	bool                                  mode_switch_en;
 	bool                                  sfe_en;
 	bool                                  standby_en;
+	bool                                  per_port_en;
 	uint64_t                              last_sent_sof_timestamp;
 	atomic_t                               flush_in_progress;
 	uint32_t                               waitlist_req_cnt;

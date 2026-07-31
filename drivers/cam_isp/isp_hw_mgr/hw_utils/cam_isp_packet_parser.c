@@ -852,7 +852,10 @@ static int cam_isp_io_buf_get_entries_util(
 		}
 	} else if (io_cfg->direction == CAM_BUF_INPUT) {
 		found = false;
-		res_id = res_type;
+		if (((struct cam_isp_prepare_hw_update_data *)buf_info->prepare->priv)->per_port_enable)
+			res_id = res_type;
+		else
+			res_id = io_cfg->resource_type;
 		if (!buf_info->res_list_in_rd) {
 			CAM_DBG(CAM_ISP,
 				"No BUS Read supported hw_type %d io_cfg %d req:%d type:%d fence:%d",

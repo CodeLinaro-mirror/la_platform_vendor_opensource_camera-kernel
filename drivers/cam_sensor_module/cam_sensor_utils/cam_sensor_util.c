@@ -707,6 +707,7 @@ int cam_sensor_i2c_command_parser(
 	uint16_t                  cmd_length_in_bytes = 0;
 	size_t                    remain_len = 0;
 	size_t                    tot_size = 0;
+	struct cam_buf_io_cfg     *p_io_cfg = io_cfg;
 
 	for (i = 0; i < num_cmd_buffers; i++) {
 		uint32_t                  *cmd_buf = NULL;
@@ -1078,11 +1079,18 @@ int cam_sensor_i2c_command_parser(
 					goto end;
 				}
 
+				if (p_io_cfg == NULL) {
+					CAM_ERR(CAM_SENSOR_UTIL,
+						"Not IO buffer found for transaction");
+					rc = -EINVAL;
+					goto end;
+				}
+
 				rc = cam_sensor_handle_continuous_read(
 					i2c_continuous_rd,
 					i2c_reg_settings,
 					&cmd_length_in_bytes, &j, &list,
-					io_cfg);
+					p_io_cfg);
 				if (rc < 0) {
 					CAM_ERR(CAM_SENSOR_UTIL,
 					"Failed in continuous read %d", rc);
@@ -1092,6 +1100,8 @@ int cam_sensor_i2c_command_parser(
 				cmd_buf += cmd_length_in_bytes /
 					sizeof(uint32_t);
 				byte_cnt += cmd_length_in_bytes;
+
+				p_io_cfg++;
 				break;
 			}
 			case CAMERA_SENSOR_CMD_TYPE_I2C_GPIO_CTRL: {
@@ -1322,6 +1332,38 @@ int32_t cam_sensor_i2c_read_data(
 			}
 		}
 	}
+
+	return rc;
+}
+
+int32_t cam_sensor_io_dev_read_seq(struct camera_io_master *io_master_info,
+			       struct cam_sensor_i2c_reg_setting *read_setting)
+{
+	int32_t                   rc = 0;
+	uint8_t                   *read_buff = NULL;
+	uint32_t                  buff_length = 0;
+	uint32_t                  read_length = 0;
+
+	read_buff = read_setting->read_buff;
+	buff_length = read_setting->read_buff_len;
+	read_length = read_setting->data_type * read_setting->size;
+
+	if ((read_length > buff_length) ||
+		(read_length < read_setting->size)) {
+		CAM_ERR(CAM_SENSOR_UTIL,
+		"Invalid size, readLen:%d, bufLen:%d, size: %d",
+		read_length, buff_length,
+		read_setting->size);
+		return -EINVAL;
+	}
+
+	rc = camera_io_dev_read_seq(
+		io_master_info,
+		read_setting->reg_setting->reg_addr,
+		read_buff,
+		read_setting->addr_type,
+		read_setting->data_type,
+		read_length);
 
 	return rc;
 }
