@@ -768,7 +768,6 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 
 			if (s_ctrl->fsync_blob_ready) {
 				external_trigger = true;
-				s_ctrl->is_fsync_active = true;
 				s_ctrl->fsync_blob_ready = false;
 				CAM_DBG(CAM_SENSOR, "External trigger set for req_id %lld",
 					csl_packet->header.request_id);
@@ -1438,7 +1437,6 @@ void cam_sensor_shutdown(struct cam_sensor_ctrl_t *s_ctrl)
 	s_ctrl->last_flush_req = 0;
 	s_ctrl->sensor_state = CAM_SENSOR_INIT;
 	s_ctrl->fsync_blob_ready = false;
-	s_ctrl->is_fsync_active = false;
 }
 
 int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
@@ -1773,7 +1771,6 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		s_ctrl->stream_off_on_flush = false;
 		s_ctrl->is_stream_off_pkt_updated = false;
 		s_ctrl->fsync_blob_ready = false;
-		s_ctrl->is_fsync_active = false;
 		memset(s_ctrl->sensor_res, 0, sizeof(s_ctrl->sensor_res));
 		CAM_INFO(CAM_SENSOR,
 			"CAM_ACQUIRE_DEV Success for %s sensor_id:0x%x,sensor_slave_addr:0x%x",
@@ -1802,7 +1799,9 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			goto release_mutex;
 		}
 
-		if (s_ctrl->is_fsync_active && s_ctrl->io_master_info.master_type == CCI_MASTER) {
+		if (s_ctrl->io_master_info.master_type == CCI_MASTER &&
+		    s_ctrl->io_master_info.cci_client &&
+		    s_ctrl->io_master_info.cci_client->acquired_gpio_queue >= 0) {
 			rc = camera_io_gpio_halt(&(s_ctrl->io_master_info));
 			if (rc < 0)
 				CAM_ERR(CAM_SENSOR, "[%s] GPIO queue halt failed rc=%d",
@@ -1853,7 +1852,6 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		s_ctrl->stream_off_on_flush = false;
 		s_ctrl->is_stream_off_pkt_updated = false;
 		s_ctrl->fsync_blob_ready = false;
-		s_ctrl->is_fsync_active = false;
 	}
 		break;
 	case CAM_QUERY_CAP: {

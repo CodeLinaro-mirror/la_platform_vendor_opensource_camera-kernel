@@ -127,8 +127,6 @@ struct cam_sensor_dev_res_info {
  * @read_buf_lock: Sensor register read cmd buffer mutex
  * @fsync_blob_ready: Valid SYNC_INFO blob decoded for current trigger group;
  *                    consumed once to set external_trigger then cleared
- * @is_fsync_active:  Sensor has been configured for GPIO fsync this session;
- *                    used to decide GPIO halt on release
  * @per_frame_fsync:  Per-request GPIO fsync slots; one cmd_buf per queue
  *                    needed, indexed by req_id % MAX_PER_FRAME_ARRAY
  */
@@ -176,7 +174,6 @@ struct cam_sensor_ctrl_t {
 	struct list_head               read_buf_list;
 	struct mutex                   read_buf_lock;
 	bool                           fsync_blob_ready;
-	bool                           is_fsync_active;
 	struct cam_sensor_fsync_slot   *per_frame_fsync;
 };
 
