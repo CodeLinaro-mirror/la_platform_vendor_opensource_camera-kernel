@@ -273,7 +273,7 @@ static struct cam_camnoc_specific
 			.value = 0x0,
 		},
 		.maxwr_low = {
-			.enable = false,
+			.enable = true,
 			.access_type = CAM_REG_TYPE_READ,
 			.masked_value = 0,
 			.offset = 0x9420, /* IFE_0_NIU_MAXWR_LOW */
@@ -363,7 +363,7 @@ static struct cam_camnoc_specific
 			.value = 0x0,
 		},
 		.maxwr_low = {
-			.enable = false,
+			.enable = true,
 			.access_type = CAM_REG_TYPE_READ,
 			.masked_value = 0,
 			.offset = 0x9820, /* IFE_LITE_0_NIU_MAXWR_LOW */
@@ -727,5 +727,26 @@ static struct cam_cpas_camnoc_qchannel cam634_cpas110_qchannel_info = {
 	.qchannel_ctrl   = 0x5C,
 	.qchannel_status = 0x60,
 };
+
+static struct cam_cpas_subpart_info cam634_cpas110_camera_subpart_info = {
+	.num_bits = 10,
+	/*
+	 * Below fuse indexing is based on software fuse definition which is in SMEM and provided
+	 * by XBL team.
+	 */
+	.hw_bitmap_mask = {
+		{CAM_CPAS_ISP_FUSE,        BIT(0)},  // HW index 0
+		{CAM_CPAS_FUSE_FEATURE_MAX,  BIT(0)},
+		{CAM_CPAS_FUSE_FEATURE_MAX,  BIT(0)},
+		{CAM_CPAS_FUSE_FEATURE_MAX,  BIT(0)},
+		{CAM_CPAS_FUSE_FEATURE_MAX,  BIT(0)},
+		{CAM_CPAS_FUSE_FEATURE_MAX,  BIT(0)},
+		{CAM_CPAS_FUSE_FEATURE_MAX,  BIT(0)},
+		{CAM_CPAS_FUSE_FEATURE_MAX,  BIT(0)},
+		{CAM_CPAS_ISP_LITE_FUSE,   BIT(1)},  // HW index 1  IFE LITE
+		{CAM_CPAS_ISP_LITE_FUSE,   BIT(2)},  // HW index 2  IFE LITE
+	}
+};
+
 #endif /* _CPASTOP_V634_110_H_ */
 
