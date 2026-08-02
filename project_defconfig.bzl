@@ -20,6 +20,7 @@ project_configs = select({
     # Project-specific configs
     ":no_project": [],
     ":shikra": shikra_configs,
+    ":sa2390": shikra_configs,
 })
 
 """
