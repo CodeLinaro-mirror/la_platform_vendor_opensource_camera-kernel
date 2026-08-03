@@ -3933,6 +3933,9 @@ static int cam_ife_csid_ver1_process_cmd(void *hw_priv,
 	case CAM_IFE_CSID_SOF_IRQ_DEBUG:
 		rc = cam_ife_csid_ver1_sof_irq_debug(csid_hw, cmd_args);
 		break;
+	case CAM_IFE_CSID_EOF_IRQ_ENABLE:
+		/* Not supported for V1 */
+		break;
 	case CAM_ISP_HW_CMD_CSID_CLOCK_UPDATE:
 		rc = cam_ife_csid_ver1_set_csid_clock(csid_hw, cmd_args);
 		break;
