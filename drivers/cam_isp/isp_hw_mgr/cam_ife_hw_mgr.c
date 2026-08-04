@@ -7602,10 +7602,17 @@ static int cam_ife_hw_mgr_set_secure_port_info(
 		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].protect, sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].mask,
 		sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].protect, sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].mask,
 		is_release, ife_ctx->ctx_index);
-	if (!sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].mask)
-		CAM_INFO(CAM_ISP, "No port to mask as unsecure in secure usecase");
-	else
-		rc = cam_isp_notify_secure_unsecure_port(sec_unsec_port_info);
+
+	if (!sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].mask) {
+		CAM_INFO(CAM_ISP,
+			"ctx %d No port to mask as unsecure in secure usecase",
+			ife_ctx->ctx_index);
+	} else if (!sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].mask) {
+		rc = cam_isp_notify_secure_unsecure_port
+			(&sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX], 1);
+	} else {
+		rc = cam_isp_notify_secure_unsecure_port(sec_unsec_port_info, 2);
+	}
 end:
 	if (!is_release) {
 		if (cam_ife_hw_mgr_is_secure_context(ife_ctx)) {
@@ -7771,12 +7778,16 @@ static int cam_ife_hw_mgr_set_secure_port_info(
 		sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports,
 		is_release, ife_ctx->ctx_index);
 
-	if (!sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports)
+	if (!sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports) {
 		CAM_INFO(CAM_ISP,
 			"ctx %d No port to mask as unsecure in secure usecase",
 			ife_ctx->ctx_index);
-	else
-		rc = cam_isp_notify_secure_unsecure_port(sec_unsec_port_info);
+	} else if (!sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports) {
+		rc = cam_isp_notify_secure_unsecure_port
+			(&sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX], 1);
+	} else {
+		rc = cam_isp_notify_secure_unsecure_port(sec_unsec_port_info, 2);
+	}
 end:
 	if (!is_release) {
 		if (cam_ife_hw_mgr_is_secure_context(ife_ctx))
