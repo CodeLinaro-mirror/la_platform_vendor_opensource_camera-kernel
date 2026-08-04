@@ -776,6 +776,8 @@ static int __cam_isp_ctx_user_dump_state_monitor_array(
 	uint32_t                                     oldest_entry;
 	uint32_t                                     num_entries;
 	uint64_t                                     state_head = 0;
+	size_t                                       min_len;
+	size_t                                       remain_len;
 
 	if (!dump_args || !ctx_isp) {
 		CAM_ERR(CAM_ISP, "Invalid args %pK %pK",
@@ -795,6 +797,25 @@ static int __cam_isp_ctx_user_dump_state_monitor_array(
 		div_u64_rem(state_head + 1,
 			CAM_ISP_CTX_STATE_MONITOR_MAX_ENTRIES, &oldest_entry);
 	}
+
+	if (dump_args->buf_len <= dump_args->offset) {
+		CAM_WARN(CAM_ISP,
+			"State monitor: Dump buffer overshoot len %zu offset %zu",
+			dump_args->buf_len, dump_args->offset);
+		return -ENOSPC;
+	}
+
+	min_len = (size_t)num_entries *
+		(sizeof(struct cam_common_hw_dump_header) +
+		CAM_ISP_CTX_DUMP_STATE_MONITOR_NUM_WORDS * sizeof(uint64_t));
+	remain_len = dump_args->buf_len - dump_args->offset;
+	if (remain_len < min_len) {
+		CAM_WARN(CAM_ISP,
+			"State monitor: Dump buffer exhaust remain %zu min %zu",
+			remain_len, min_len);
+		return -ENOSPC;
+	}
+
 	CAM_ERR(CAM_ISP,
 		"Dumping state information for preceding requests");
 
@@ -3656,19 +3677,23 @@ static int __cam_isp_ctx_reg_upd_in_epoch_bubble_state(
 				CAM_REQ_MGR_SOF_EVENT_SUCCESS);
 		}
 	} else {
-		if (!atomic_read(&ctx_isp->last_applied_default))
+		if (!atomic_read(&ctx_isp->last_applied_default) ||
+			atomic_read(&ctx_isp->apply_in_progress))
 			atomic_set(&ctx_isp->unserved_rup, 1);
 		CAM_WARN_RATE_LIMIT(CAM_ISP,
 			"ctx:%u Unexpected regupdate in activated Substate[%s] for frame_id:%lld",
-			"last_applied_default:%d, unserved_rup:%d",
+			"last_applied_default:%d, apply_in_progress: %d, unserved_rup:%d",
 			ctx_isp->base->ctx_id,
 			__cam_isp_ctx_substate_val_to_type(
 			ctx_isp->substate_activated),
 			ctx_isp->frame_id,
 			atomic_read(&ctx_isp->last_applied_default),
+			atomic_read(&ctx_isp->apply_in_progress),
 			atomic_read(&ctx_isp->unserved_rup));
 
-		atomic_set(&ctx_isp->last_applied_default, 0);
+		/* Force to zero only when the last applied settings aren't default */
+		if (!atomic_read(&ctx_isp->apply_in_progress))
+			atomic_set(&ctx_isp->last_applied_default, 0);
 
 		__cam_isp_ctx_send_sof_timestamp(ctx_isp, 0,
 			CAM_REQ_MGR_SOF_EVENT_SUCCESS);
@@ -6319,7 +6344,7 @@ static int __cam_isp_ctx_dump_req_info(
 	struct cam_common_hw_dump_args *dump_args)
 {
 	int                                 i, rc = 0;
-	uint32_t                            min_len;
+	size_t                              min_len;
 	size_t                              remain_len;
 	struct cam_isp_ctx_req             *req_isp;
 	struct cam_ctx_request             *req_temp;
@@ -6339,13 +6364,16 @@ static int __cam_isp_ctx_dump_req_info(
 	}
 
 	remain_len = dump_args->buf_len - dump_args->offset;
-	min_len = sizeof(struct cam_isp_context_dump_header) +
-		(CAM_ISP_CTX_DUMP_REQUEST_NUM_WORDS *
-			req_isp->num_fence_map_out *
-			sizeof(uint64_t));
+	min_len =
+		3 * (sizeof(struct cam_common_hw_dump_header) +
+			CAM_ISP_CTX_REQ_MAX * sizeof(uint64_t)) +
+		req_isp->num_fence_map_out *
+			(sizeof(struct cam_common_hw_dump_header) +
+			CAM_ISP_CTX_DUMP_REQUEST_NUM_WORDS * sizeof(uint64_t));
 
 	if (remain_len < min_len) {
-		CAM_WARN(CAM_ISP, "Dump buffer exhaust remain %zu min %u, ctx_idx: %u, link: 0x%x",
+		CAM_WARN(CAM_ISP,
+			"Req info: Dump buffer exhaust remain %zu min %zu, ctx_idx: %u, link: 0x%x",
 			remain_len, min_len, ctx->ctx_id, ctx->link_hdl);
 		return -ENOSPC;
 	}

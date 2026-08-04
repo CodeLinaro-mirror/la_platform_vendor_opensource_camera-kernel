@@ -6173,7 +6173,7 @@ static int cam_req_mgr_dump_state_monitor_info(
 	struct cam_common_hw_dump_args  dump_args;
 	size_t                          buf_len;
 	size_t                          remain_len;
-	uint32_t                        min_len;
+	size_t                          min_len;
 	uintptr_t                       cpu_addr;
 
 	rc = cam_mem_get_cpu_buf(dump_info->buf_handle,
@@ -6197,7 +6197,7 @@ static int cam_req_mgr_dump_state_monitor_info(
 		sizeof(struct cam_common_hw_dump_header) * CAM_CRM_DUMP_EVENT_NUM_HEADERS));
 
 	if (remain_len < min_len) {
-		CAM_WARN(CAM_CRM, "Dump buffer exhaust remain %zu min %u",
+		CAM_WARN(CAM_CRM, "Dump buffer exhaust remain %zu min %zu",
 			remain_len, min_len);
 		cam_mem_put_cpu_buf(dump_info->buf_handle);
 		return -ENOSPC;

@@ -32,6 +32,10 @@
 
 static const char drv_name[] = "vfe_bus";
 
+#define CAM_VFE_BUS_VER3_DUMP_WM_PREFIX_WORDS    4
+#define CAM_VFE_BUS_VER3_DUMP_WM_MC_DATA_WORDS  11
+#define CAM_VFE_BUS_VER3_DUMP_WM_TAIL_WORDS     10
+
 #define CAM_VFE_BUS_VER3_PAYLOAD_MAX             256
 
 #define CAM_VFE_RDI_BUS_DEFAULT_WIDTH               0xFFFF
@@ -3299,6 +3303,9 @@ static int cam_vfe_bus_ver3_user_dump(
 	struct cam_vfe_bus_ver3_wm_resource_data  *wm = NULL;
 	struct cam_hw_info                        *hw_info = NULL;
 	struct cam_isp_hw_dump_args               *dump_args;
+	size_t                                     min_len;
+	size_t                                     remain_len;
+	uint32_t                                   total_wm = 0;
 	uint32_t                                   i, j = 0;
 	int                                        rc = 0;
 
@@ -3313,8 +3320,26 @@ static int cam_vfe_bus_ver3_user_dump(
 
 	if (hw_info->hw_state == CAM_HW_STATE_POWER_DOWN) {
 		CAM_WARN(CAM_ISP,
-			"VFE:%u  BUS powered down", bus_priv->common_data.core_index);
+			"VFE:%u BUS VER3: BUS powered down", bus_priv->common_data.core_index);
 		return -EINVAL;
+	}
+
+	if (dump_args->buf_len <= dump_args->offset) {
+		CAM_WARN(CAM_ISP,
+			"VFE:%u BUS VER3: Dump buffer overshoot len %zu offset %zu",
+			bus_priv->common_data.core_index,
+			dump_args->buf_len, dump_args->offset);
+		return -ENOSPC;
+	}
+
+	min_len = (sizeof(struct cam_common_hw_dump_header) + sizeof(uint64_t));
+	remain_len = dump_args->buf_len - dump_args->offset;
+	if (remain_len < min_len) {
+		CAM_WARN(CAM_ISP,
+			"VFE:%u BUS VER3: Dump buffer exhaust remain %zu min %zu",
+			bus_priv->common_data.core_index,
+			remain_len, min_len);
+		return -ENOSPC;
 	}
 
 	rc = cam_common_user_dump_helper(dump_args, cam_common_user_dump_clock,
@@ -3324,6 +3349,29 @@ static int cam_vfe_bus_ver3_user_dump(
 		CAM_ERR(CAM_ISP, "VFE:%u BUS VER3: Clock dump failed, rc: %d",
 			bus_priv->common_data.core_index, rc);
 		return rc;
+	}
+
+	/* Aggregate worst-case bytes for all WM dumps across active out resources. */
+	for (i = 0; i < bus_priv->num_out; i++) {
+		rsrc_node = &bus_priv->vfe_out[i];
+		if (rsrc_node->res_state < CAM_ISP_RESOURCE_STATE_RESERVED)
+			continue;
+		rsrc_data = rsrc_node->res_priv;
+		if (!rsrc_data)
+			continue;
+		total_wm += rsrc_data->num_wm;
+	}
+	min_len = (size_t)total_wm * (sizeof(struct cam_common_hw_dump_header) +
+			(CAM_VFE_BUS_VER3_DUMP_WM_PREFIX_WORDS +
+			CAM_ISP_MULTI_CTXT_MAX * CAM_VFE_BUS_VER3_DUMP_WM_MC_DATA_WORDS +
+			CAM_VFE_BUS_VER3_DUMP_WM_TAIL_WORDS) * sizeof(uint32_t));
+
+	remain_len = dump_args->buf_len - dump_args->offset;
+	if (remain_len < min_len) {
+		CAM_WARN(CAM_ISP,
+			"VFE:%u BUS VER3: Dump buffer exhaust remain %zu min %zu (wm)",
+			bus_priv->common_data.core_index, remain_len, min_len);
+		return -ENOSPC;
 	}
 
 	for (i = 0; i < bus_priv->num_out; i++) {

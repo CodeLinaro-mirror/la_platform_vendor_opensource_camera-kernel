@@ -460,9 +460,9 @@ static int cam_flash_task_handler(void *priv, void *data)
 {
 	struct cam_flash_ctrl *flash_ctrl = NULL;
 
-	if (!data || !priv) {
+	if (!priv) {
 		CAM_ERR(CAM_FLASH,
-			"Invalid params: data:%pK priv:%pK", data, priv);
+			"Invalid params, priv: 0x%x", priv);
 		return -EINVAL;
 	}
 
