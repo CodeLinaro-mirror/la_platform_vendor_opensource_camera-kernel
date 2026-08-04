@@ -2888,6 +2888,17 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 	uint32_t  i, vfe_in_res_id;
 	uint32_t  res_id = max_ife_out_res;
 
+	if (!ife_ctx->vfe_bus_comp_grp || !ife_ctx->res_list_ife_out ||
+		!ife_ctx->vfe_out_map) {
+		CAM_ERR(CAM_ISP,
+			"IFE out ctx NULL in RDI acquire [bus:%s res:%s map:%s] ctx_idx:%u",
+			ife_ctx->vfe_bus_comp_grp ? "valid" : "NULL",
+			ife_ctx->res_list_ife_out ? "valid" : "NULL",
+			ife_ctx->vfe_out_map ? "valid" : "NULL",
+			ife_ctx->ctx_index);
+		return -EINVAL;
+	}
+
 	/* take left resource */
 	vfe_in_res_id = ife_src_res->hw_res[0]->res_id;
 
@@ -2970,6 +2981,17 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_pixel(
 	struct cam_hw_intf                       *hw_intf;
 	struct cam_isp_context_comp_record       *comp_grp = NULL;
 	bool                                      is_ife_out_in_list, is_single_ctxt_except;
+
+	if (!ife_ctx->vfe_bus_comp_grp || !ife_ctx->res_list_ife_out ||
+		!ife_ctx->vfe_out_map) {
+		CAM_ERR(CAM_ISP,
+			"IFE out ctx NULL in pixel acquire [bus:%s res:%s map:%s] ctx_idx:%u",
+			ife_ctx->vfe_bus_comp_grp ? "valid" : "NULL",
+			ife_ctx->res_list_ife_out ? "valid" : "NULL",
+			ife_ctx->vfe_out_map ? "valid" : "NULL",
+			ife_ctx->ctx_index);
+		return -EINVAL;
+	}
 
 	for (i = 0; i < in_port->num_out_res; i++) {
 		is_ife_out_in_list = false;
