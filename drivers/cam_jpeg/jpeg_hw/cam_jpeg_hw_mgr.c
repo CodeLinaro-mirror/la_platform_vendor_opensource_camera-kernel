@@ -818,7 +818,7 @@ static int cam_jpeg_mgr_process_hw_update_entries(void *priv, void *data)
 	}
 
 	ctx_data = (struct cam_jpeg_hw_ctx_data *)config_args->ctxt_to_hw_map;
-	if (!ctx_data->in_use) {
+	if (!ctx_data || !ctx_data->in_use) {
 		CAM_ERR(CAM_JPEG, "ctx is not in use");
 		rc = -EINVAL;
 		goto end_unusedev;
@@ -944,7 +944,7 @@ static int cam_jpeg_mgr_config_hw(void *hw_mgr_priv, void *config_hw_args)
 	mutex_lock(&hw_mgr->hw_mgr_mutex);
 
 	ctx_data = (struct cam_jpeg_hw_ctx_data *)config_args->ctxt_to_hw_map;
-	if (!ctx_data->in_use) {
+	if (!ctx_data || !ctx_data->in_use) {
 		CAM_ERR(CAM_JPEG, "ctx is not in use");
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
 		return -EINVAL;
@@ -1032,7 +1032,7 @@ static int cam_jpeg_mgr_prepare_hw_update(void *hw_mgr_priv,
 
 	mutex_lock(&hw_mgr->hw_mgr_mutex);
 	ctx_data = (struct cam_jpeg_hw_ctx_data *)prepare_args->ctxt_to_hw_map;
-	if (!ctx_data->in_use) {
+	if (!ctx_data || !ctx_data->in_use) {
 		CAM_ERR(CAM_JPEG, "ctx is not in use");
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
 		return -EINVAL;
