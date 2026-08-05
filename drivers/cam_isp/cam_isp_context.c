@@ -9160,11 +9160,13 @@ done:
 				CAM_INFO_RATE_LIMIT(CAM_CRM, "worker %s is paused, skip apply ctx:%u",
 					ctx_isp->hw_mgr_worker->worker_name, ctx->ctx_id);
 				rc = -EBUSY;
+				kfree(sof_notify_payload);
 				goto put_ref;
 			}
 			if (IS_ERR_OR_NULL(task)) {
 				CAM_ERR_RATE_LIMIT(CAM_CRM, "no empty task = %d ctx:%u",
 					PTR_ERR(task), ctx->ctx_id);
+				kfree(sof_notify_payload);
 				goto put_ref;
 			}
 
@@ -9182,6 +9184,7 @@ done:
 				CAM_ERR(CAM_REQ,
 					"Pending request processing failed rc:%d ctx:%u",
 					rc, ctx->ctx_id);
+				kfree(sof_notify_payload);
 				goto put_ref;
 			}
 		}
