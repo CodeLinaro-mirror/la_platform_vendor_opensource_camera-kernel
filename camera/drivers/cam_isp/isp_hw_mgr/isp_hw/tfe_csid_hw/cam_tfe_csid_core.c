@@ -1282,6 +1282,17 @@ static int cam_tfe_csid_enable_hw(struct cam_tfe_csid_hw  *csid_hw)
 	CAM_DBG(CAM_ISP, "CSID:%d init CSID HW is_secure: %d",
 		csid_hw->hw_intf->hw_idx, csid_hw->is_secure);
 
+	/*
+	 * applied_src_clk_rates.sw_client can carry over a stale value
+	 * (e.g. ULONG_MAX) from a prior session on this CSID instance.
+	 * cam_tfe_csid_set_csid_clock_dynamically() gates the real clock
+	 * set call on "requested <= sw_client", so a stale non-zero value
+	 * here permanently blocks CSID's src clock from ever being applied
+	 * for this session. Reset it before enabling the HW so the gate
+	 * compares against a valid baseline.
+	 */
+	soc_info->applied_src_clk_rates.sw_client = 0;
+
 	rc = cam_soc_util_get_clk_level(soc_info, csid_hw->clk_rate,
 		soc_info->src_clk_idx, &clk_lvl);
 	CAM_DBG(CAM_ISP, "CSID clock lvl %u", clk_lvl);
