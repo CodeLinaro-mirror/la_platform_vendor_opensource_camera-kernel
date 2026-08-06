@@ -349,7 +349,9 @@ def _define_module(target, variant):
         out = "camera.ko",
         srcs = base_srcs,
         conditional_srcs = conditional_srcs,
-        copts = ["-include", "$(location :camera_banner)"],
+        copts = ["-include", "$(location :camera_banner)"] + (
+            ["-DDMABUF_ALLOC_FIND_KERNEL_API"] if target == "shikra" else []
+        ),
         deps = base_deps + deps,
         kconfig = "Kconfig",
         defconfig = "{}_defconfig_generated".format(tv),

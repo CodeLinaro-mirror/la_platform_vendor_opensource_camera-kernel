@@ -1325,7 +1325,7 @@ static int __cam_csiphy_prgm_bist_reg(struct csiphy_device *csiphy_dev, bool is_
 	return 0;
 }
 
-#ifdef CONFIG_SECURE_CAMERA
+#ifdef CONFIG_SPECTRA_SECURE
 static int cam_csiphy_program_secure_mode(struct csiphy_device *csiphy_dev,
 	bool protect, int32_t offset, bool is_shutdown)
 {
@@ -1532,7 +1532,7 @@ void cam_csiphy_shutdown(struct csiphy_device *csiphy_dev)
 		for (i = 0; i < csiphy_dev->acquire_count; i++) {
 			param = &csiphy_dev->csiphy_info[i];
 
-#ifdef CONFIG_SECURE_CAMERA
+#ifdef CONFIG_SPECTRA_SECURE
 			if (param->secure_mode)
 				cam_csiphy_program_secure_mode(csiphy_dev,
 					CAM_SECURE_MODE_NON_SECURE, i, true);
@@ -2393,7 +2393,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 		cam_csiphy_update_lane_assign_info(csiphy_dev, offset, false);
 
 		if (--csiphy_dev->start_dev_count) {
-#ifdef CONFIG_SECURE_CAMERA
+#ifdef CONFIG_SPECTRA_SECURE
 			if (param->secure_mode)
 				cam_csiphy_program_secure_mode(csiphy_dev,
 					CAM_SECURE_MODE_NON_SECURE, offset, false);
@@ -2429,7 +2429,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			goto release_mutex;
 		}
 
-#ifdef CONFIG_SECURE_CAMERA
+#ifdef CONFIG_SPECTRA_SECURE
 		if (param->secure_mode)
 			cam_csiphy_program_secure_mode(csiphy_dev, CAM_SECURE_MODE_NON_SECURE,
 				offset, false);
@@ -2499,7 +2499,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			goto release_mutex;
 		}
 
-#ifdef CONFIG_SECURE_CAMERA
+#ifdef CONFIG_SPECTRA_SECURE
 		if (csiphy_dev->csiphy_info[offset].secure_mode)
 			cam_csiphy_program_secure_mode(
 				csiphy_dev,
@@ -2712,7 +2712,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 				}
 			}
 
-#ifdef CONFIG_SECURE_CAMERA
+#ifdef CONFIG_SPECTRA_SECURE
 			if (csiphy_dev->csiphy_info[offset].secure_mode == 1) {
 				if (!cam_cpas_is_feature_supported(
 					CAM_CPAS_SECURE_CAMERA_ENABLE,
@@ -2783,7 +2783,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			}
 		}
 
-#ifdef CONFIG_SECURE_CAMERA
+#ifdef CONFIG_SPECTRA_SECURE
 		if (csiphy_dev->csiphy_info[offset].secure_mode == 1) {
 			if (!cam_cpas_is_feature_supported(
 					CAM_CPAS_SECURE_CAMERA_ENABLE,
