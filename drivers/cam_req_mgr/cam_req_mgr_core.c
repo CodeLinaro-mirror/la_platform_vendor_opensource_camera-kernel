@@ -3465,12 +3465,104 @@ int cam_req_mgr_process_flush_req(void *priv, void *data)
 int cam_req_mgr_process_sched_req(void *priv, void *data)
 {
 	int                                  rc = 0, i, sync_idx = 0;
-	int32_t                              prev_slot_idx = 0;
 	struct cam_req_mgr_core_sched_req   *sched_req = NULL;
 	struct cam_req_mgr_core_link        *link = NULL;
 	struct cam_req_mgr_req_queue        *in_q = NULL;
 	struct cam_req_mgr_slot             *slot = NULL;
-	struct cam_req_mgr_slot             *prev_slot = NULL;
+
+	if (!data || !priv) {
+		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
+		rc = -EINVAL;
+		goto end;
+	}
+	link = (struct cam_req_mgr_core_link *)priv;
+	sched_req  = (struct cam_req_mgr_core_sched_req *)data;
+	in_q = link->req.in_q;
+
+	CAM_DBG(CAM_CRM,
+		"link_hdl %x req_id %lld at slot %d sync_mode %d is_master %d exp_timeout_val %d ms",
+		sched_req->link_hdl, sched_req->req_id,
+		in_q->wr_idx, sched_req->sync_mode,
+		link->is_master,
+		sched_req->additional_timeout);
+
+	mutex_lock(&link->req.lock);
+	slot = &in_q->slot[in_q->wr_idx];
+
+	if (slot->status != CRM_SLOT_STATUS_NO_REQ &&
+		slot->status != CRM_SLOT_STATUS_REQ_APPLIED)
+		CAM_WARN(CAM_CRM, "in_q overwrite %d", slot->status);
+
+	slot->status = CRM_SLOT_STATUS_REQ_ADDED;
+	slot->req_id = sched_req->req_id;
+	slot->sync_mode = sched_req->sync_mode;
+	slot->skip_idx = 0;
+	slot->recover = sched_req->bubble_enable;
+
+	if ((sched_req->num_valid_params > 0) &&
+		(sched_req->param_mask & CAM_CRM_MISMATCHED_FRAME_MODE_MASK))
+		slot->mismatched_frame_mode = sched_req->params[0];
+
+	slot->trigger_mode = CAM_REQ_MGR_TRIGGER_MODE_AUTO;
+	slot->group_id = -1;
+
+	for (i = 0; i < sched_req->num_links; i++) {
+		if (link->link_hdl != sched_req->link_hdls[i]) {
+			slot->sync_link_hdls[sync_idx] = sched_req->link_hdls[i];
+			CAM_DBG(CAM_REQ, "link:0x%x req:%lld sync_link[%d]:0x%x",
+				link->link_hdl, slot->req_id, sync_idx,
+				slot->sync_link_hdls[sync_idx]);
+			sync_idx++;
+		}
+	}
+	slot->num_sync_links = sync_idx;
+
+	link->open_req_cnt++;
+	CAM_DBG(CAM_REQ, "Open_req_cnt:%u after scheduling req:%d mismatched_frame_mode:%d",
+		link->open_req_cnt, sched_req->req_id, slot->mismatched_frame_mode);
+	__cam_req_mgr_inc_idx(&in_q->wr_idx, 1, in_q->num_slots);
+
+	if (slot->sync_mode == CAM_REQ_MGR_SYNC_MODE_SYNC) {
+		if (link->initial_sync_req == -1)
+			link->initial_sync_req = slot->req_id;
+	} else {
+		link->initial_sync_req = -1;
+		for (i = 0; i < link->num_sync_links; i++) {
+			if (link->sync_link[i])
+				link->sync_link[i]->initial_sync_req = -1;
+		}
+	}
+
+	mutex_unlock(&link->req.lock);
+
+end:
+	return rc;
+}
+
+/**
+ * cam_req_mgr_process_sched_req_manual_mode()
+ *
+ * @brief: This runs in workque thread context. Call core funcs to check
+ *         which peding requests can be processed, for manual trigger mode
+ *         requests. Mirrors cam_req_mgr_process_sched_req(), additionally
+ *         serializing group-slot allocation across the session's synced
+ *         links via session->group_lock (lock order: crm_lock ->
+ *         session->group_lock -> link->req.lock).
+ * @priv : link information.
+ * @data : contains information about frame_id, link etc.
+ *
+ * @return: 0 on success.
+ */
+int cam_req_mgr_process_sched_req_manual_mode(void *priv, void *data)
+{
+	int                                  rc = 0, i, sync_idx = 0;
+	int64_t                              gid;
+	uint32_t                             gsz;
+	struct cam_req_mgr_core_sched_req   *sched_req = NULL;
+	struct cam_req_mgr_core_link        *link = NULL;
+	struct cam_req_mgr_core_session     *session = NULL;
+	struct cam_req_mgr_req_queue        *in_q = NULL;
+	struct cam_req_mgr_slot             *slot = NULL;
 
 	if (!data || !priv) {
 		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
@@ -3487,12 +3579,14 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 		link->is_master,
 		sched_req->additional_timeout);
 
+	session = (struct cam_req_mgr_core_session *)link->parent;
+	if (!session) {
+		CAM_ERR(CAM_CRM, "session ptr NULL %x", link->link_hdl);
+		return -EINVAL;
+	}
+	mutex_lock(&session->group_lock);
 	mutex_lock(&link->req.lock);
 	slot = &in_q->slot[in_q->wr_idx];
-
-	prev_slot_idx = in_q->wr_idx;
-	__cam_req_mgr_dec_idx(&prev_slot_idx, 1, link->req.in_q->num_slots);
-	prev_slot = &in_q->slot[prev_slot_idx];
 
 	if (slot->status != CRM_SLOT_STATUS_NO_REQ &&
 		slot->status != CRM_SLOT_STATUS_REQ_APPLIED)
@@ -3509,42 +3603,31 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 		slot->mismatched_frame_mode = sched_req->params[0];
 
 	slot->trigger_mode = sched_req->trigger_params.mode;
-	switch (slot->trigger_mode) {
-	case CAM_REQ_MGR_TRIGGER_MODE_AUTO:
-		slot->group_id = -1;
-		break;
-	case CAM_REQ_MGR_TRIGGER_MODE_MANUAL: {
-		int64_t  gid = sched_req->trigger_params.data.manual.id;
-		uint32_t gsz = sched_req->trigger_params.data.manual.size;
 
-		/*
-		 * Do not allow manual trigger mode when devices have
-		 * more then one pd table
-		 */
-		if (link->req.num_tbl > 1) {
-			CAM_ERR(CAM_CRM,
-				"Allowed pd tables in man trigger mode is 1");
-			rc = -EINVAL;
-			goto end;
-		}
-
-		slot->group_id = gid;
-		slot->skip_set = !!sched_req->trigger_params.data.manual.skip;
-
-		__cam_req_mgr_alloc_group_slot(in_q, gid, gsz, in_q->wr_idx);
-
-		CAM_INFO(CAM_CRM,
-			"TRIG_TRACE: SCHED link:0x%x req_id:%lld slot_idx:%d group_id:%lld group_size:%u skip_set:%d",
-			link->link_hdl, slot->req_id, in_q->wr_idx,
-			slot->group_id, gsz,
-			slot->skip_set);
-		break;
-	}
-	default:
-		CAM_ERR(CAM_CRM, "Invalid trigger mode!");
+	/*
+	 * Do not allow manual trigger mode when devices have
+	 * more then one pd table
+	 */
+	if (link->req.num_tbl > 1) {
+		CAM_ERR(CAM_CRM,
+			"Allowed pd tables in man trigger mode is 1");
 		rc = -EINVAL;
 		goto end;
 	}
+
+	gid = sched_req->trigger_params.data.manual.id;
+	gsz = sched_req->trigger_params.data.manual.size;
+
+	slot->group_id = gid;
+	slot->skip_set = !!sched_req->trigger_params.data.manual.skip;
+
+	__cam_req_mgr_alloc_group_slot(in_q, gid, gsz, in_q->wr_idx);
+
+	CAM_INFO(CAM_CRM,
+		"TRIG_TRACE: SCHED link:0x%x req_id:%lld slot_idx:%d group_id:%lld group_size:%u skip_set:%d",
+		link->link_hdl, slot->req_id, in_q->wr_idx,
+		slot->group_id, gsz,
+		slot->skip_set);
 
 	for (i = 0; i < sched_req->num_links; i++) {
 		if (link->link_hdl != sched_req->link_hdls[i]) {
@@ -3575,6 +3658,7 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 
 end:
 	mutex_unlock(&link->req.lock);
+	mutex_unlock(&session->group_lock);
 	return rc;
 }
 
@@ -4602,6 +4686,7 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 	int                                       idx;
 	struct cam_req_mgr_add_request           *add_req = NULL;
 	struct cam_req_mgr_core_link             *link = NULL;
+	struct cam_req_mgr_core_session          *session = NULL;
 	struct cam_req_mgr_connected_device      *device = NULL;
 	struct cam_req_mgr_req_tbl               *tbl = NULL;
 	struct cam_req_mgr_tbl_slot              *slot = NULL;
@@ -4619,6 +4704,13 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 	task_data = (struct crm_task_payload *)data;
 	add_req = (struct cam_req_mgr_add_request *)&task_data->u;
 
+	session = (struct cam_req_mgr_core_session *)link->parent;
+	if (!session) {
+		CAM_ERR(CAM_CRM, "session ptr NULL %x", link->link_hdl);
+		rc = -EINVAL;
+		goto end;
+	}
+
 	for (i = 0; i < link->num_devs; i++) {
 		device = &link->l_dev[i];
 		if (device->dev_hdl == add_req->dev_hdl) {
@@ -4633,6 +4725,7 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 		goto end;
 	}
 
+	mutex_lock(&session->group_lock);
 	mutex_lock(&link->req.lock);
 	idx = __cam_req_mgr_find_slot_for_req(link->req.in_q, add_req->req_id);
 	if (idx < 0) {
@@ -4641,6 +4734,7 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 			add_req->req_id, device->dev_info.name, link->link_hdl);
 		rc = -EBADSLT;
 		mutex_unlock(&link->req.lock);
+		mutex_unlock(&session->group_lock);
 		goto end;
 	}
 
@@ -4721,6 +4815,7 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 
 end_unlock:
 	mutex_unlock(&link->req.lock);
+	mutex_unlock(&session->group_lock);
 
 	if (rc < 0)
 		__cam_req_mgr_notify_mtrigger_error(link, link_slot->req_id);
@@ -5151,6 +5246,7 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 	int32_t                                   idx = -1;
 	struct cam_req_mgr_trigger_notify        *trigger_data = NULL;
 	struct cam_req_mgr_core_link             *link = NULL;
+	struct cam_req_mgr_core_session          *session = NULL;
 	struct cam_req_mgr_req_queue             *in_q = NULL;
 	struct crm_task_payload                  *task_data = NULL;
 	int                                       reset_step = 0;
@@ -5171,6 +5267,13 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 	task_data = (struct crm_task_payload *)data;
 	trigger_data = (struct cam_req_mgr_trigger_notify *)&task_data->u;
 
+	session = (struct cam_req_mgr_core_session *)link->parent;
+	if (!session) {
+		CAM_ERR(CAM_CRM, "session ptr NULL %x", link->link_hdl);
+		rc = -EINVAL;
+		goto end;
+	}
+
 	CAM_DBG(CAM_REQ, "link_hdl %x frame_id %lld, trigger %x\n",
 		trigger_data->link_hdl,
 		trigger_data->frame_id,
@@ -5185,6 +5288,7 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 	state.group_id = in_q->slot[in_q->rd_idx].group_id;
 	__cam_req_mgr_update_state_monitor_array(link, &state);
 
+	mutex_lock(&session->group_lock);
 	mutex_lock(&link->req.lock);
 
 	if (trigger_data->trigger == CAM_TRIGGER_POINT_SOF) {
@@ -5339,6 +5443,7 @@ static int cam_req_mgr_process_trigger_manual(void *priv, void *data)
 
 release_lock:
 	mutex_unlock(&link->req.lock);
+	mutex_unlock(&session->group_lock);
 end:
 	return rc;
 }
@@ -6285,6 +6390,7 @@ int cam_req_mgr_create_session(
 	ses_info->session_hdl = session_hdl;
 
 	mutex_init(&cam_session->lock);
+	mutex_init(&cam_session->group_lock);
 	CAM_DBG(CAM_CRM, "LOCK_DBG session lock %pK hdl 0x%x",
 		&cam_session->lock, session_hdl);
 
@@ -6406,6 +6512,7 @@ int cam_req_mgr_destroy_session(
 	list_del(&cam_session->entry);
 	mutex_unlock(&cam_session->lock);
 	mutex_destroy(&cam_session->lock);
+	mutex_destroy(&cam_session->group_lock);
 
 	CAM_MEM_FREE(cam_session);
 
@@ -7069,7 +7176,10 @@ int cam_req_mgr_schedule_request_v4(
 	} else
 		sched.num_links = 0;
 
-	rc = cam_req_mgr_process_sched_req(link, &sched);
+	if (sched.trigger_params.mode == CAM_REQ_MGR_TRIGGER_MODE_MANUAL)
+		rc = cam_req_mgr_process_sched_req_manual_mode(link, &sched);
+	else
+		rc = cam_req_mgr_process_sched_req(link, &sched);
 
 	CAM_DBG(CAM_REQ, "Open req %lld on link 0x%x with sync_mode %d",
 		sched_req->req_id, sched_req->link_hdl, sched_req->sync_mode);

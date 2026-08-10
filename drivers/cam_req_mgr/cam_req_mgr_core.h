@@ -614,6 +614,8 @@ struct cam_req_mgr_core_link {
  * @force_err_recovery : For debugging, we can force bubble recovery
  *                       to be always ON or always OFF using debugfs.
  * @sync_mode          : Sync mode for this session links
+ *
+ * @group_lock         : lock to serialize links in manual trigger execute
  */
 struct cam_req_mgr_core_session {
 	int32_t                       session_hdl;
@@ -623,6 +625,7 @@ struct cam_req_mgr_core_session {
 	struct mutex                  lock;
 	int32_t                       force_err_recovery;
 	int32_t                       sync_mode;
+	struct mutex                  group_lock;
 };
 
 /**
