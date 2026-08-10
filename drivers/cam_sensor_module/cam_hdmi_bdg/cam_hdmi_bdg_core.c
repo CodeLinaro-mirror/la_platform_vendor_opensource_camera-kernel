@@ -1,9 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/module.h>
 #include <linux/firmware.h>
+#include <cam_sensor_cmn_header.h>
 #include "cam_sensor_core.h"
 #include "cam_sensor_util.h"
 #include "cam_soc_util.h"
@@ -18,7 +19,54 @@ static struct cam_sensor_ctrl_t *cam_hdmi_bdg_cam_ctrl = NULL;
 
 enum lt6911_fw_status lt6911_fw_status;
 
-bool is_lt6911uxc = false;
+static struct lt6911_reg_settings lt6911_reg_settings;
+
+static void lt6911_assign_reg_settings(bool is_uxc)
+{
+	if (is_uxc) {
+		lt6911_reg_settings.write_en_regs = uxc_write_en_regs;
+		lt6911_reg_settings.write_en_size = ARRAY_SIZE(uxc_write_en_regs);
+		lt6911_reg_settings.write_config_regs = uxc_write_config_regs;
+		lt6911_reg_settings.write_config_size = ARRAY_SIZE(uxc_write_config_regs);
+		lt6911_reg_settings.write_addr_set_regs = uxc_write_addr_set_regs;
+		lt6911_reg_settings.write_addr_set_size = ARRAY_SIZE(uxc_write_addr_set_regs);
+		lt6911_reg_settings.write_over_regs = uxc_write_over_regs;
+		lt6911_reg_settings.write_over_size = ARRAY_SIZE(uxc_write_over_regs);
+		lt6911_reg_settings.block_erase_regs = uxc_block_erase_regs;
+		lt6911_reg_settings.block_erase_size = ARRAY_SIZE(uxc_block_erase_regs);
+		lt6911_reg_settings.block_erase_delay = 0;
+		lt6911_reg_settings.gxc_block_erase_ext_regs = NULL;
+		lt6911_reg_settings.gxc_block_erase_ext_size = 0;
+		lt6911_reg_settings.config_regs = uxc_config_regs;
+		lt6911_reg_settings.config_size = ARRAY_SIZE(uxc_config_regs);
+		lt6911_reg_settings.read_addr_regs = uxc_read_addr_regs;
+		lt6911_reg_settings.read_addr_size = ARRAY_SIZE(uxc_read_addr_regs);
+		lt6911_reg_settings.get_fw_regs = uxc_get_fw_regs;
+		lt6911_reg_settings.get_fw_size = ARRAY_SIZE(uxc_get_fw_regs);
+		lt6911_reg_settings.erase_time = 3;
+	} else {
+		lt6911_reg_settings.write_en_regs = gxc_write_en_regs;
+		lt6911_reg_settings.write_en_size = ARRAY_SIZE(gxc_write_en_regs);
+		lt6911_reg_settings.write_config_regs = gxc_write_config_regs;
+		lt6911_reg_settings.write_config_size = ARRAY_SIZE(gxc_write_config_regs);
+		lt6911_reg_settings.write_addr_set_regs = gxc_write_addr_set_regs;
+		lt6911_reg_settings.write_addr_set_size = ARRAY_SIZE(gxc_write_addr_set_regs);
+		lt6911_reg_settings.write_over_regs = gxc_write_over_regs;
+		lt6911_reg_settings.write_over_size = ARRAY_SIZE(gxc_write_over_regs);
+		lt6911_reg_settings.block_erase_regs = gxc_block_erase_regs;
+		lt6911_reg_settings.block_erase_size = ARRAY_SIZE(gxc_block_erase_regs);
+		lt6911_reg_settings.block_erase_delay = 500;
+		lt6911_reg_settings.gxc_block_erase_ext_regs = gxc_block_erase_ext_regs;
+		lt6911_reg_settings.gxc_block_erase_ext_size = ARRAY_SIZE(gxc_block_erase_ext_regs);
+		lt6911_reg_settings.config_regs = gxc_config_regs;
+		lt6911_reg_settings.config_size = ARRAY_SIZE(gxc_config_regs);
+		lt6911_reg_settings.read_addr_regs = gxc_read_addr_regs;
+		lt6911_reg_settings.read_addr_size = ARRAY_SIZE(gxc_read_addr_regs);
+		lt6911_reg_settings.get_fw_regs = gxc_get_fw_regs;
+		lt6911_reg_settings.get_fw_size = ARRAY_SIZE(gxc_get_fw_regs);
+		lt6911_reg_settings.erase_time = 2;
+	}
+}
 
 int lt6911_get_fw_state(void)
 {
@@ -40,10 +88,8 @@ static int lt6911_flash_write_en(struct cam_sensor_ctrl_t *s_ctrl)
 		return -EINVAL;
 	}
 
-	m_i2c_write_settings.reg_setting = is_lt6911uxc ?
-						uxc_write_en_regs :
-						gxc_write_en_regs;
-	m_i2c_write_settings.size = 6;
+	m_i2c_write_settings.reg_setting = lt6911_reg_settings.write_en_regs;
+	m_i2c_write_settings.size = lt6911_reg_settings.write_en_size;
 	m_i2c_write_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.delay = 0;
@@ -67,10 +113,8 @@ static int lt6911_flash_write_config(struct cam_sensor_ctrl_t *s_ctrl)
 		return -EINVAL;
 	}
 
-	m_i2c_write_settings.reg_setting = is_lt6911uxc ?
-						uxc_write_config_regs :
-						gxc_write_config_regs;
-	m_i2c_write_settings.size = 4;
+	m_i2c_write_settings.reg_setting = lt6911_reg_settings.write_config_regs;
+	m_i2c_write_settings.size = lt6911_reg_settings.write_config_size;
 	m_i2c_write_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.delay = 0;
@@ -132,19 +176,11 @@ static int lt6911_flash_write_addr_set(struct cam_sensor_ctrl_t *s_ctrl, u32 add
 		return -EINVAL;
 	}
 
-	if (is_lt6911uxc) {
-		uxc_write_addr_set_regs[0].reg_data = (addr & 0xFF0000) >> 16;
-		uxc_write_addr_set_regs[1].reg_data = (addr & 0x00FF00) >> 8;
-		uxc_write_addr_set_regs[2].reg_data = addr & 0x0000FF;
-		m_i2c_write_settings.reg_setting = uxc_write_addr_set_regs;
-		m_i2c_write_settings.size = 6;
-	} else {
-		gxc_write_addr_set_regs[0].reg_data = (addr & 0xFF0000) >> 16;
-		gxc_write_addr_set_regs[1].reg_data = (addr & 0x00FF00) >> 8;
-		gxc_write_addr_set_regs[2].reg_data = addr & 0x0000FF;
-		m_i2c_write_settings.reg_setting = gxc_write_addr_set_regs;
-		m_i2c_write_settings.size = 5;
-	}
+	lt6911_reg_settings.write_addr_set_regs[0].reg_data = (addr & 0xFF0000) >> 16;
+	lt6911_reg_settings.write_addr_set_regs[1].reg_data = (addr & 0x00FF00) >> 8;
+	lt6911_reg_settings.write_addr_set_regs[2].reg_data = addr & 0x0000FF;
+	m_i2c_write_settings.reg_setting = lt6911_reg_settings.write_addr_set_regs;
+	m_i2c_write_settings.size = lt6911_reg_settings.write_addr_set_size;
 	m_i2c_write_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.delay = 0;
@@ -167,10 +203,8 @@ static int lt6911_write_over_config(struct cam_sensor_ctrl_t *s_ctrl)
 		return -EINVAL;
 	}
 
-	m_i2c_write_settings.reg_setting = is_lt6911uxc ?
-						uxc_write_over_regs :
-						gxc_write_over_regs;
-	m_i2c_write_settings.size = 2;
+	m_i2c_write_settings.reg_setting = lt6911_reg_settings.write_over_regs;
+	m_i2c_write_settings.size = lt6911_reg_settings.write_over_size;
 	m_i2c_write_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.delay = 0;
@@ -267,50 +301,41 @@ static int lt6911_block_erase(struct cam_sensor_ctrl_t *s_ctrl)
 {
 	int32_t rc = 0;
 	struct cam_sensor_i2c_reg_setting m_i2c_write_settings;
-	struct cam_sensor_i2c_reg_setting m_i2c_write_settings_2;
 
 	if (s_ctrl == NULL) {
 		CAM_ERR(CAM_SENSOR, " failed: %pK", s_ctrl);
 		return -EINVAL;
 	}
 
-	if (is_lt6911uxc) {
-		m_i2c_write_settings.reg_setting = uxc_block_erase_regs;
-		m_i2c_write_settings.size = 10;
+	m_i2c_write_settings.reg_setting = lt6911_reg_settings.block_erase_regs;
+	m_i2c_write_settings.size = lt6911_reg_settings.block_erase_size;
+	m_i2c_write_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
+	m_i2c_write_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
+	m_i2c_write_settings.delay = lt6911_reg_settings.block_erase_delay;
+
+	rc = camera_io_dev_write(&(s_ctrl->io_master_info),
+			&m_i2c_write_settings);
+
+	if (rc < 0)
+		CAM_ERR(CAM_SENSOR,"Failed to erase block rc %d", rc);
+
+	if (lt6911_reg_settings.gxc_block_erase_ext_regs) {
+		m_i2c_write_settings.reg_setting =
+			lt6911_reg_settings.gxc_block_erase_ext_regs;
+		m_i2c_write_settings.size =
+			lt6911_reg_settings.gxc_block_erase_ext_size;
 		m_i2c_write_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 		m_i2c_write_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
-		m_i2c_write_settings.delay = 0;
+		m_i2c_write_settings.delay =
+			lt6911_reg_settings.block_erase_delay;
 
 		rc = camera_io_dev_write(&(s_ctrl->io_master_info),
 				&m_i2c_write_settings);
-
-		if (rc < 0)
-			CAM_ERR(CAM_SENSOR,"Failed to erase block rc %d", rc);
-	} else {
-		m_i2c_write_settings.reg_setting = gxc_block_erase_regs_1;
-		m_i2c_write_settings.size = 9;
-		m_i2c_write_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
-		m_i2c_write_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
-		m_i2c_write_settings.delay = 500;
-
-		rc = camera_io_dev_write(&(s_ctrl->io_master_info),
-				&m_i2c_write_settings);
-
-		if (rc < 0)
-			CAM_ERR(CAM_SENSOR,"Failed to erase block rc %d", rc);
-
-		m_i2c_write_settings_2.reg_setting = gxc_block_erase_regs_2;
-		m_i2c_write_settings_2.size = 9;
-		m_i2c_write_settings_2.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
-		m_i2c_write_settings_2.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
-		m_i2c_write_settings_2.delay = 500;
-
-		rc = camera_io_dev_write(&(s_ctrl->io_master_info),
-				&m_i2c_write_settings_2);
 
 		if (rc < 0)
 			CAM_ERR(CAM_SENSOR,"Failed to erase block rc %d", rc);
 	}
+
 	return rc;
 }
 
@@ -323,13 +348,9 @@ static int lt6911_config(struct cam_sensor_ctrl_t *s_ctrl)
 		CAM_ERR(CAM_SENSOR, " failed: %pK", s_ctrl);
 		return -EINVAL;
 	}
-	if (is_lt6911uxc) {
-		m_i2c_write_settings.reg_setting = uxc_config_regs;
-		m_i2c_write_settings.size  = 9;
-	} else {
-		m_i2c_write_settings.reg_setting = gxc_config_regs;
-		m_i2c_write_settings.size = 8;
-	}
+
+	m_i2c_write_settings.reg_setting = lt6911_reg_settings.config_regs;
+	m_i2c_write_settings.size = lt6911_reg_settings.config_size;
 	m_i2c_write_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.delay = 0;
@@ -352,18 +373,11 @@ static int lt6911_flash_read_addr_set(struct cam_sensor_ctrl_t *s_ctrl, u32 addr
 		return -EINVAL;
 	}
 
-	if (is_lt6911uxc) {
-		uxc_read_addr_regs[3].reg_data = (addr & 0xFF0000) >> 16;
-		uxc_read_addr_regs[4].reg_data = (addr & 0x00FF00) >> 8;
-		uxc_read_addr_regs[5].reg_data = addr & 0x0000FF;
-		m_i2c_write_settings.reg_setting = uxc_read_addr_regs;
-	} else {
-		gxc_read_addr_regs[3].reg_data = (addr & 0xFF0000) >> 16;
-		gxc_read_addr_regs[4].reg_data = (addr & 0x00FF00) >> 8;
-		gxc_read_addr_regs[5].reg_data = addr & 0x0000FF;
-		m_i2c_write_settings.reg_setting = gxc_read_addr_regs;
-	}
-	m_i2c_write_settings.size = 9;
+	lt6911_reg_settings.read_addr_regs[3].reg_data = (addr & 0xFF0000) >> 16;
+	lt6911_reg_settings.read_addr_regs[4].reg_data = (addr & 0x00FF00) >> 8;
+	lt6911_reg_settings.read_addr_regs[5].reg_data = addr & 0x0000FF;
+	m_i2c_write_settings.reg_setting = lt6911_reg_settings.read_addr_regs;
+	m_i2c_write_settings.size = lt6911_reg_settings.read_addr_size;
 	m_i2c_write_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.delay = 0;
@@ -484,7 +498,6 @@ int lt6911_firmware_upgrade(struct cam_sensor_ctrl_t *s_ctrl,
 {
 	int i = 0;
 	u8 *fw_read_data = NULL;
-
 	int erase_time;
 	int data_len = 0;
 	int rc = -1;
@@ -512,12 +525,12 @@ int lt6911_firmware_upgrade(struct cam_sensor_ctrl_t *s_ctrl,
 		goto end;
 	}
 
-	erase_time = is_lt6911uxc ? 3 : 2;
 	/*
 	* Need erase block 2 times here.
 	* lt6911uxc need erase 3 times.
 	* Sometimes, erase can fail.
 	*/
+	erase_time = lt6911_reg_settings.erase_time;
 	for (i = 0; i < erase_time; i++) {
 		rc = lt6911_block_erase(s_ctrl);
 		if (rc < 0)
@@ -577,7 +590,7 @@ uint32_t cam_hdmi_bdg_get_fw_version(void)
 	uint32_t version = 0;
 	uint32_t buf = 0;
 	int rc = 0;
-	struct cam_sensor_i2c_reg_array  m_i2c_write_regs[2];
+	struct cam_sensor_i2c_reg_array m_i2c_write_regs[2];
 	struct cam_sensor_i2c_reg_setting m_i2c_write_settings;
 
 	if (s_ctrl == NULL) {
@@ -589,10 +602,8 @@ uint32_t cam_hdmi_bdg_get_fw_version(void)
 		return -EINVAL;
 	}
 
-	m_i2c_write_settings.reg_setting = is_lt6911uxc ?
-						uxc_get_fw_regs :
-						gxc_get_fw_regs;
-	m_i2c_write_settings.size = 3;
+	m_i2c_write_settings.reg_setting = lt6911_reg_settings.get_fw_regs;
+	m_i2c_write_settings.size = lt6911_reg_settings.get_fw_size;
 	m_i2c_write_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	m_i2c_write_settings.delay = 0;
@@ -711,9 +722,11 @@ int cam_hdmi_bdg_set_cam_ctrl(struct cam_sensor_ctrl_t *s_ctrl)
 		cam_hdmi_bdg_cam_ctrl = s_ctrl;
 		if (s_ctrl->sensordata->slave_info.sensor_id == HDMI_UXC_SENSOR_ID &&
 			s_ctrl->sensordata->slave_info.sensor_slave_addr == HDMI_UXC_SENSOR_SLAVE_ADDR) {
-			is_lt6911uxc = true;
+			lt6911_assign_reg_settings(true);
+		} else {
+			lt6911_assign_reg_settings(false);
 		}
-		CAM_ERR(CAM_SENSOR, "Setting sctrl for HDMI");
+		CAM_INFO(CAM_SENSOR, "set_cam_ctrl for HDMI done");
 		rc = 0;
 	} else {
 		cam_hdmi_bdg_cam_ctrl = NULL;
@@ -748,6 +761,7 @@ int cam_hdmi_bdg_upgrade_firmware(void)
 		CAM_ERR(CAM_SENSOR, " failed: %pK", slave_info);
 		return -EINVAL;
 	}
+
 	if (slave_info->sensor_id == HDMI_GXC_SENSOR_ID ||
 		slave_info->sensor_id == HDMI_UXC_SENSOR_ID) {
 		int max_wait_times = 25;

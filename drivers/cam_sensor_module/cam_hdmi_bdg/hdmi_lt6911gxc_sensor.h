@@ -117,7 +117,7 @@ struct cam_sensor_i2c_reg_array  gxc_write_over_regs [2] = {
     .data_mask = 0x00
 }};
 
-struct cam_sensor_i2c_reg_array  gxc_block_erase_regs_1 [9] = {
+struct cam_sensor_i2c_reg_array  gxc_block_erase_regs [9] = {
 {
     .reg_addr = 0xFF,
     .reg_data = 0xe0,
@@ -173,7 +173,7 @@ struct cam_sensor_i2c_reg_array  gxc_block_erase_regs_1 [9] = {
     .data_mask = 0x00
 }};
 
-struct cam_sensor_i2c_reg_array  gxc_block_erase_regs_2 [9] = {
+struct cam_sensor_i2c_reg_array  gxc_block_erase_ext_regs [9] = {
 {
     .reg_addr = 0xFF,
     .reg_data = 0xe0,
