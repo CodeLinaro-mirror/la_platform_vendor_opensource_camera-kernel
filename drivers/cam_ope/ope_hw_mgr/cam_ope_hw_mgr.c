@@ -3137,6 +3137,7 @@ static int cam_ope_mgr_release_ctx(struct cam_ope_hw_mgr *hw_mgr, int ctx_id)
 		if (rc)
 			CAM_ERR(CAM_OPE, "OPE Dev release failed: %d", rc);
 	}
+	mutex_unlock(&hw_mgr->ctx[ctx_id].ctx_mutex);
 
 	rc = cam_cdm_stream_off(hw_mgr->ctx[ctx_id].ope_cdm.cdm_handle);
 	if (rc)
@@ -3146,7 +3147,7 @@ static int cam_ope_mgr_release_ctx(struct cam_ope_hw_mgr *hw_mgr, int ctx_id)
 	if (rc)
 		CAM_ERR(CAM_OPE, "OPE CDM relase failed: %d", rc);
 
-
+	mutex_lock(&hw_mgr->ctx[ctx_id].ctx_mutex);
 	for (i = 0; i < CAM_CTX_REQ_MAX; i++) {
 		if (!hw_mgr->ctx[ctx_id].req_list[i])
 			continue;
