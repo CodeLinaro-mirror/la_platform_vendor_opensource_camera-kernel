@@ -632,7 +632,8 @@ static int cam_isp_mgr_drv_config(struct cam_ife_hw_mgr_ctx         *ctx,
 			 * Save an initial record for early PCR request, then below threshold
 			 * can be saved to the first slot.
 			 */
-			index = ctx->wr_per_req_index++;
+			index = ctx->wr_per_req_index % MAX_DRV_REQUEST_DEPTH;
+			ctx->wr_per_req_index = (ctx->wr_per_req_index + 1) % MAX_DRV_REQUEST_DEPTH;
 			ctx->per_req_info[index].drv_info.req_id = request_id;
 			ctx->per_req_info[index].drv_info.blanking_duration = 0;
 		} else {
