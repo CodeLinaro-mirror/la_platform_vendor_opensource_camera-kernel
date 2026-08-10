@@ -3532,6 +3532,12 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 		slot->skip_set = !!sched_req->trigger_params.data.manual.skip;
 
 		__cam_req_mgr_alloc_group_slot(in_q, gid, gsz, in_q->wr_idx);
+
+		CAM_INFO(CAM_CRM,
+			"TRIG_TRACE: SCHED link:0x%x req_id:%lld slot_idx:%d group_id:%lld group_size:%u skip_set:%d",
+			link->link_hdl, slot->req_id, in_q->wr_idx,
+			slot->group_id, gsz,
+			slot->skip_set);
 		break;
 	}
 	default:
@@ -4057,6 +4063,11 @@ static bool __cam_req_mgr_mtrigger_check_sequence_ready(
 	int64_t req_id = link->req.in_q->slot[idx].req_id;
 	struct cam_req_mgr_slot *link_slot = &link->req.in_q->slot[idx];
 
+
+	CAM_INFO(CAM_CRM,
+		"TRIG_TRACE: SEQ_READY_CHECK link:0x%x idx:%d req_id:%lld num_sync_links:%d",
+		link->link_hdl, idx, req_id, link_slot->num_sync_links);
+
 	/* 1. Check for current link */
 	ready = __cam_req_mgr_mtrigger_check_slots_ready(idx, link);
 	if (!ready)
@@ -4090,6 +4101,10 @@ static bool __cam_req_mgr_mtrigger_check_sequence_ready(
 			break;
 		}
 	}
+
+	CAM_INFO(CAM_CRM,
+		"TRIG_TRACE: SEQ_READY_RESULT link:0x%x req_id:%lld ready:%d",
+		link->link_hdl, req_id, ready);
 
 	return ready;
 }
@@ -4259,10 +4274,21 @@ static int __cam_req_mgr_mtrigger_external_trigger_send(
 	external_trigger.link_hdl = gs->external_trigger.link_hdl;
 	external_trigger.req_id   = gs->external_trigger.req_id;
 
+	CAM_INFO(CAM_REQ,
+		"TRIG_TRACE: EXT_TRIGGER_SEND link_hdl:0x%x dev:%s dev_hdl:0x%x req_id:%lld",
+		external_trigger.link_hdl, dev->dev_info.name, external_trigger.dev_hdl,
+		external_trigger.req_id);
+
 	rc = dev->ops->external_trigger(&external_trigger);
 	if (rc < 0) {
-		CAM_ERR(CAM_CRM, "Apply gpio sync failed for dev: %s on link 0x%x",
-			dev->dev_info.name, gs->external_trigger.link_hdl);
+		CAM_ERR(CAM_CRM,
+			"TRIG_TRACE: EXT_TRIGGER_SEND_FAILED dev:%s link:0x%x req_id:%lld rc:%d",
+			dev->dev_info.name, external_trigger.link_hdl,
+			external_trigger.req_id, rc);
+	} else {
+		CAM_INFO(CAM_REQ,
+			"TRIG_TRACE: EXT_TRIGGER_SEND_OK dev:%s link:0x%x req_id:%lld",
+			dev->dev_info.name, external_trigger.link_hdl, external_trigger.req_id);
 	}
 
 	return rc;
@@ -4330,6 +4356,17 @@ __cam_req_mgr_mtrigger_find_external_trigger_gs(
 			}
 		}
 	}
+
+	if (ext_trigger_gs == NULL)
+		CAM_INFO(CAM_CRM,
+			"TRIG_TRACE: GROUP_READY_NO_EXT_TRIGGER link:0x%x — no device in this group set extern_trigger_map",
+			link->link_hdl);
+	else
+		CAM_INFO(CAM_CRM,
+			"TRIG_TRACE: GROUP_READY_EXT_TRIGGER_FOUND link:0x%x group_id:%lld dev:%s req_id:%lld",
+			link->link_hdl, ext_trigger_gs->id,
+			ext_trigger_gs->external_trigger.dev->dev_info.name,
+			ext_trigger_gs->external_trigger.req_id);
 
 	return ext_trigger_gs ? ext_trigger_gs : ERR_PTR(-ENODEV);
 }
@@ -4462,8 +4499,17 @@ static int cam_req_mgr_mtrigger_try_to_start(
 	bool                           all_links_slots_ready;
 	struct cam_req_mgr_group_slot *ext_trigger_gs;
 
+	CAM_INFO(CAM_CRM,
+		"TRIG_TRACE: TRY_TO_START link:0x%x idx:%d req_id:%lld group_id:%lld",
+		link->link_hdl, idx, link->req.in_q->slot[idx].req_id,
+		link->req.in_q->slot[idx].group_id);
+
 	all_links_slots_ready =
 		__cam_req_mgr_mtrigger_check_sequence_ready(idx, link);
+
+	CAM_INFO(CAM_CRM,
+		"TRIG_TRACE: TRY_TO_START_RESULT link:0x%x idx:%d req_id:%lld all_links_slots_ready:%d",
+		link->link_hdl, idx, link->req.in_q->slot[idx].req_id, all_links_slots_ready);
 
 	if (!all_links_slots_ready)
 		return 0;
@@ -4486,8 +4532,11 @@ static int cam_req_mgr_mtrigger_try_to_start(
 
 	rc = __cam_req_mgr_mtrigger_external_trigger_send(ext_trigger_gs);
 	if (rc < 0)
-		CAM_ERR(CAM_REQ, "Failed to send external trigger on link 0x%x",
-			link->link_hdl);
+		CAM_ERR(CAM_REQ,
+			"TRIG_TRACE: Failed to send external trigger info on link 0x%x group_id:%lld ext_trigger_dev:%s ext_trigger_req_id:%lld rc:%d",
+			ext_trigger_gs->external_trigger.link_hdl, link->req.in_q->slot[idx].group_id,
+			ext_trigger_gs->external_trigger.dev ? ext_trigger_gs->external_trigger.dev->dev_info.name : "none",
+			ext_trigger_gs->external_trigger.req_id, rc);
 
 	return rc;
 }
@@ -4520,8 +4569,12 @@ static bool cam_req_mgr_mtrigger_update_group_ready(
 	}
 
 	gs->tbl_ready_cnt++;
-	if (gs->tbl_ready_cnt < gs->size)
+	if (gs->tbl_ready_cnt < gs->size) {
+		CAM_DBG(CAM_CRM,
+			"TRIG_TRACE: GROUP_NOT_READY link:0x%x group_id:%lld",
+			link->link_hdl, link_slot->group_id);
 		return false;
+	}
 
 	gs->ready = true;
 	CAM_DBG(CAM_CRM,
@@ -4600,10 +4653,20 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 	if (rc)
 		goto end_unlock;
 
+	CAM_INFO(CAM_CRM,
+		"TRIG_TRACE: ADD_REQ_ENTER link:0x%x idx:%d req_id:%lld dev:%s dev_hdl:0x%x external_trigger:%d group_id:%lld",
+		link->link_hdl, idx, add_req->req_id, device->dev_info.name, add_req->dev_hdl,
+		add_req->external_trigger, link_slot->group_id);
+
 	if (add_req->external_trigger) {
 		struct cam_req_mgr_group_slot *gs;
 
 		slot->extern_trigger_map |= BIT(device->dev_bit);
+
+		CAM_INFO(CAM_REQ,
+			"TRIG_TRACE: EXT_TRIGGER_MAP_SET req_id:%lld dev:%s dev_bit:%lld extern_trigger_map:0x%x on link:0x%x",
+			add_req->req_id, device->dev_info.name, device->dev_bit,
+			slot->extern_trigger_map, link->link_hdl);
 		gs = __cam_req_mgr_get_group_slot(link->req.in_q, link_slot->group_id);
 		if (gs) {
 			if (!gs->external_trigger.dev) {
