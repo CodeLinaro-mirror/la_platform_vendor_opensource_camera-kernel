@@ -14,6 +14,7 @@
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include "cam_dp_bdg_lt7911d_core.h"
+#include "msm_hdmidp_in_extcon.h"
 
 #define DP_BDG_IRQ_LT7911D_DEVNAME             "dp_bdg_lt7911d_handler"
 #define DP_BDG_IRQ_LT7911D_MAGIC_NUM           0xff
@@ -62,6 +63,7 @@ static const struct  of_device_id dp_bdg_handler_lt7911d_dev_id[] = {
 };
 
 static bool is_irq_happen;
+static atomic_t initial_state_reported = ATOMIC_INIT(0);
 static int dp_bdg_irq;
 static int dp_bdg_irq_gpio;
 static wait_queue_head_t dp_bdg_read_wq;
@@ -115,9 +117,21 @@ static long dp_bdg_irq_lt7911d_dev_ioctl(struct file *filp,
 			&s_dp_bdg_res_info.height,
 			&s_dp_bdg_res_info.id);
 		if (!rc) {
-			CAM_INFO(CAM_SENSOR, "DP_BDG Input resolution = %d x %d",
+			int notify_rc;
+			CAM_INFO(CAM_SENSOR, "DP_BDG Input resolution = %d x %d, connected:%d",
 				s_dp_bdg_res_info.width,
-				s_dp_bdg_res_info.height);
+				s_dp_bdg_res_info.height,
+				s_dp_bdg_res_info.have_dp_signal);
+			/* Use atomic_cmpxchg to atomically check and set the flag */
+			if (atomic_cmpxchg(&initial_state_reported, 0, 1) == 0) {
+				notify_rc = msm_hdmidp_in_notify(MSM_IN_DP,
+					s_dp_bdg_res_info.have_dp_signal);
+				if (notify_rc && notify_rc != -EEXIST) {
+					/* Restore flag on error to allow retry */
+					atomic_set(&initial_state_reported, 0);
+					CAM_ERR(CAM_SENSOR, "msm_hdmidp_in_notify failed: %d", notify_rc);
+				}
+			}
 		}
 		rc = copy_to_user((struct dp_bdg_lt7911d_res_info *)arg,
 			&s_dp_bdg_res_info,
@@ -130,6 +144,7 @@ static long dp_bdg_irq_lt7911d_dev_ioctl(struct file *filp,
 		s_dp_bdg_res_info.height = -1;
 		s_dp_bdg_res_info.have_dp_signal = false;
 		s_dp_bdg_res_info.id = 0;
+		atomic_set(&initial_state_reported, 0);
 		break;
 	case DP_BDG_IRQ_LT7911D_IOCTL_CMD_UPGRADE_FW:
 		CAM_INFO(CAM_SENSOR, "dp_bdg_irq_handler: Upgrading firmware...");
@@ -166,6 +181,7 @@ static const struct file_operations dp_bdg_irq_lt7911d_dev_fops = {
 static irqreturn_t dp_bdg_lt7911d_irq_handler(int irq, void *p)
 {
 	int rc = 0;
+	int notify_rc;
 
 	CAM_INFO(CAM_SENSOR, "dp hotplug happened");
 	rc = cam_dp_bdg_lt7911d_get_src_resolution(
@@ -174,11 +190,15 @@ static irqreturn_t dp_bdg_lt7911d_irq_handler(int irq, void *p)
 			&s_dp_bdg_res_info.height,
 			&s_dp_bdg_res_info.id);
 	if (!rc) {
-		CAM_INFO(CAM_SENSOR, "DP_BDG Input resolution = %d x %d",
+		CAM_INFO(CAM_SENSOR, "DP_BDG Input resolution = %d x %d, connected:%d",
 				s_dp_bdg_res_info.width,
-				s_dp_bdg_res_info.height);
+				s_dp_bdg_res_info.height,
+				s_dp_bdg_res_info.have_dp_signal);
 		is_irq_happen = true;
 		wake_up_all(&dp_bdg_read_wq);
+		notify_rc = msm_hdmidp_in_notify(MSM_IN_DP, s_dp_bdg_res_info.have_dp_signal);
+		if (notify_rc && notify_rc != -EEXIST)
+			CAM_ERR(CAM_SENSOR, "msm_hdmidp_in_notify failed: %d", notify_rc);
 	} else {
 		CAM_ERR(CAM_SENSOR, "Get resolution failed!");
 	}
@@ -262,6 +282,7 @@ static int dp_bdg_irq_lt7911d_probe(struct platform_device *pdev)
 
 	CAM_INFO(CAM_SENSOR, "%s %d",__func__,__LINE__);
 
+	atomic_set(&initial_state_reported, 0);
 	dp_bdg_irq_gpio = of_get_named_gpio(pdev->dev.of_node,
 			"dp_bdg_irq_pin", 0);
 	ret = gpio_request(dp_bdg_irq_gpio, "dp_bdg_irq_pin");
