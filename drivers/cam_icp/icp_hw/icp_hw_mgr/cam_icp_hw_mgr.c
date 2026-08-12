@@ -3385,6 +3385,8 @@ static int cam_icp_mgr_trigger_recovery(struct cam_icp_hw_mgr *hw_mgr)
 		return rc;
 	}
 
+	// Initializing the completion variable for FW download
+	reinit_completion(&hw_mgr->icp_fw_download_complete);
 	atomic_set(&hw_mgr->recovery, 1);
 	cam_icp_mgr_dev_get_gdsc_control(hw_mgr);
 
@@ -3425,9 +3427,14 @@ static int cam_icp_mgr_trigger_recovery(struct cam_icp_hw_mgr *hw_mgr)
 	 */
 	if (!atomic_read(&hw_mgr->load_in_process) &&
 		atomic_read(&hw_mgr->recovery)) {
+		hw_mgr->all_handle_invalid = true;
 		rc = cam_icp_mgr_restart_icp(hw_mgr);
 		if (!rc)
 			atomic_set(&hw_mgr->recovery, 0);
+		else
+			CAM_ERR(CAM_ICP,
+				"[%s] Restart ICP not successful, rc %d",
+				hw_mgr->hw_mgr_name, rc);
 
 		CAM_DBG(CAM_ICP, "[%s] recovery success: %s",
 			hw_mgr->hw_mgr_name,
@@ -5034,7 +5041,7 @@ static int cam_icp_mgr_abort_handle(struct cam_icp_hw_ctx_data *ctx_data)
 	struct cam_icp_hw_ctx_info *ctx_info;
 	struct cam_icp_hw_mgr *hw_mgr = ctx_data->hw_mgr_priv;
 
-	if (atomic_read(&hw_mgr->recovery))
+	if (atomic_read(&hw_mgr->recovery) || hw_mgr->all_handle_invalid)
 		return 0;
 
 	ctx_info = CAM_MEM_ZALLOC(sizeof(struct cam_icp_hw_ctx_info), GFP_KERNEL);
@@ -5090,7 +5097,7 @@ static int cam_icp_mgr_destroy_handle(
 	struct cam_icp_hw_mgr *hw_mgr = ctx_data->hw_mgr_priv;
 	struct cam_icp_hw_ctx_info *ctx_info;
 
-	if (atomic_read(&hw_mgr->recovery))
+	if (atomic_read(&hw_mgr->recovery) || hw_mgr->all_handle_invalid)
 		return 0;
 
 	packet_size = sizeof(struct hfi_cmd_dev_async);
@@ -6121,8 +6128,10 @@ static int cam_icp_mgr_restart_icp(struct cam_icp_hw_mgr *hw_mgr)
 		cam_hfi_deinit(hw_mgr->hfi_handle);
 
 		rc = cam_icp_mgr_hfi_init_util(hw_mgr);
-		if (rc)
+		if (rc) {
+			CAM_ERR(CAM_ICP, "hfi init not successful rc %d", rc);
 			goto end;
+		}
 	} else {
 		rc = cam_icp_allocate_hfi_mem(hw_mgr);
 		if (rc) {
@@ -6133,12 +6142,14 @@ static int cam_icp_mgr_restart_icp(struct cam_icp_hw_mgr *hw_mgr)
 
 		rc = cam_icp_mgr_hfi_init_util(hw_mgr);
 		if (rc) {
+			CAM_ERR(CAM_ICP, "hfi init not successful rc %d", rc);
 			cam_icp_free_hfi_mem(hw_mgr);
 			goto end;
 		}
 	}
 
 	hw_mgr->icp_booted = true;
+	complete_all(&hw_mgr->icp_fw_download_complete);
 	CAM_INFO(CAM_ICP, "[%s] FW download done successfully",
 		hw_mgr->hw_mgr_name);
 end:
@@ -8294,7 +8305,8 @@ static int cam_icp_mgr_hw_flush(void *hw_priv, void *hw_flush_args)
 			mutex_unlock(&hw_mgr->hw_mgr_mutex);
 			cam_icp_mgr_flush_info_dump(flush_args,
 				ctx_data->ctx_id);
-			cam_icp_mgr_enqueue_abort(ctx_data);
+			if (!hw_mgr->all_handle_invalid)
+				cam_icp_mgr_enqueue_abort(ctx_data);
 		} else {
 			mutex_unlock(&hw_mgr->hw_mgr_mutex);
 		}
@@ -8332,6 +8344,8 @@ static int cam_icp_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 	struct cam_icp_hw_mgr *hw_mgr = hw_mgr_priv;
 	struct cam_icp_hw_ctx_data *ctx_data = NULL;
 	struct cam_icp_mgr_hw_args hw_args = {0};
+	unsigned long rem_jiffies;
+	int timeout = 5000;
 
 	if (!release_hw || !hw_mgr) {
 		CAM_ERR(CAM_ICP, "Invalid args: %pK %pK", release_hw, hw_mgr);
@@ -8369,12 +8383,28 @@ static int cam_icp_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
 	}
 
+	if (hw_mgr->all_handle_invalid) {
+		rem_jiffies = CAM_COMMON_WAIT_FOR_COMPLETION_TIMEOUT_ERRMSG(
+				&hw_mgr->icp_fw_download_complete,
+				msecs_to_jiffies(timeout), CAM_ICP,
+				"%s: Waiting for FW download to complete in workq context",
+				ctx_data->ctx_id_string);
+		if (!rem_jiffies) {
+			rc = -ETIMEDOUT;
+			if (hw_mgr->enable_panic)
+				CAM_TRIGGER_PANIC("[%s] Handle Creation Timeout.....",
+					hw_mgr->hw_mgr_name);
+		}
+	}
+
 	mutex_lock(&hw_mgr->hw_mgr_mutex);
 	rc = cam_icp_mgr_release_ctx(hw_mgr, ctx_data);
 	if (!hw_mgr->ctxt_cnt) {
 		/* Clear SSR flag on last release */
 		atomic_set(&hw_mgr->abort_in_process, 0);
-		CAM_DBG(CAM_ICP, "[%s] Last Release", hw_mgr->hw_mgr_name);
+		CAM_DBG(CAM_ICP, "[%s] Last Release, all_handle_invalid %d",
+			hw_mgr->hw_mgr_name, hw_mgr->all_handle_invalid);
+		hw_mgr->all_handle_invalid = false;
 		cam_icp_mgr_icp_power_collapse(hw_mgr, &hw_args);
 		cam_icp_hw_mgr_reset_clk_info(hw_mgr);
 		rc = cam_icp_device_deint(hw_mgr);
@@ -10415,6 +10445,7 @@ int cam_icp_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 	}
 
 	init_completion(&hw_mgr->icp_complete);
+	init_completion(&hw_mgr->icp_fw_download_complete);
 	cam_common_register_mini_dump_cb(cam_icp_hw_mgr_mini_dump_cb, hw_mgr->hw_mgr_name,
 			&hw_mgr->hw_mgr_id);
 	cam_icp_test_irq_line_at_probe(hw_mgr);
