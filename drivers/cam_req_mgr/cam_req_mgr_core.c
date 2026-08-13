@@ -3631,7 +3631,7 @@ int cam_req_mgr_process_add_req(void *priv, void *data)
 
 	if (add_req->trigger_eof) {
 		slot->ops.apply_at_eof = true;
-		if (slot->ops.num_dev == MAX_DEV_FOR_SPECIAL_OPS) {
+		if (slot->ops.num_dev >= MAX_DEV_FOR_SPECIAL_OPS) {
 			CAM_ERR(CAM_REQ|CAM_CRM,
 				"Req_id %llu slot:%d already has %d devices, can't add more",
 				add_req->req_id, idx, slot->ops.num_dev);
