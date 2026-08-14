@@ -1670,8 +1670,12 @@ static int cam_icp_update_clk_rate(struct cam_icp_hw_mgr *hw_mgr,
 	CAM_DBG(CAM_PERF|CAM_ICP, "%s: clk_rate %u",
 		ctx_data->ctx_id_string, curr_clk_rate);
 
-	if (atomic_read(&hw_mgr->abort_in_process))
+	if (atomic_read(&hw_mgr->abort_in_process[ctx_data->device_info->hw_dev_type])) {
+		CAM_DBG(CAM_ICP,
+			"Abort in progress for %s HW_type %d, Skipping clock update",
+			hw_mgr->hw_mgr_name, ctx_data->device_info->hw_dev_type);
 		return 0;
+	}
 
 	return cam_icp_update_clk_util(curr_clk_rate, hw_mgr, ctx_data);
 }
@@ -7902,7 +7906,19 @@ static int cam_icp_mgr_enqueue_abort(
 	task_data->data = (void *)ctx_info;
 	task_data->type = ICP_WORKER_TASK_CMD_TYPE;
 
-	atomic_inc(&hw_mgr->abort_in_process);
+	if (!ctx_data->device_info) {
+		CAM_ERR(CAM_ICP, "device_info is NULL for ctx %d", ctx_data->ctx_id);
+		return -EINVAL;
+	}
+
+	if (!CAM_ICP_IS_VALID_HW_DEV_TYPE(ctx_data->device_info->hw_dev_type)) {
+		CAM_ERR(CAM_ICP, "Invalid hw_dev_type %d for ctx %d",
+			ctx_data->device_info->hw_dev_type, ctx_data->ctx_id);
+		return -EINVAL;
+	}
+
+	atomic_inc(&hw_mgr->abort_in_process[ctx_data->device_info->hw_dev_type]);
+
 	cam_icp_update_clk_util(ctx_data->clk_info.clk_rate[CAM_TURBO_VOTE],
 		hw_mgr, ctx_data);
 	CAM_DBG(CAM_ICP, "[%s] voting device to %u rate",
@@ -7939,8 +7955,8 @@ static int cam_icp_mgr_enqueue_abort(
 	CAM_DBG(CAM_ICP, "%s: Abort after flush is success", ctx_data->ctx_id_string);
 
 end:
-	atomic_dec(&hw_mgr->abort_in_process);
-	if (!atomic_read(&hw_mgr->abort_in_process)) {
+	atomic_dec(&hw_mgr->abort_in_process[ctx_data->device_info->hw_dev_type]);
+	if (!atomic_read(&hw_mgr->abort_in_process[ctx_data->device_info->hw_dev_type])) {
 		dev_clk_info = &ctx_data->device_info->clk_info;
 
 		cam_icp_update_clk_util(dev_clk_info->curr_clk, hw_mgr, ctx_data);
@@ -8401,7 +8417,8 @@ static int cam_icp_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 	rc = cam_icp_mgr_release_ctx(hw_mgr, ctx_data);
 	if (!hw_mgr->ctxt_cnt) {
 		/* Clear SSR flag on last release */
-		atomic_set(&hw_mgr->abort_in_process, 0);
+		for (i = 0; i < CAM_ICP_HW_MAX; i++)
+			atomic_set(&hw_mgr->abort_in_process[i], 0);
 		CAM_DBG(CAM_ICP, "[%s] Last Release, all_handle_invalid %d",
 			hw_mgr->hw_mgr_name, hw_mgr->all_handle_invalid);
 		hw_mgr->all_handle_invalid = false;
@@ -10469,8 +10486,8 @@ int cam_icp_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 	}
 
 	g_icp_hw_mgr[device_idx] = hw_mgr;
-	atomic_set(&hw_mgr->abort_in_process, 0);
-
+	for (i = 0; i < CAM_ICP_HW_MAX; i++)
+		atomic_set(&hw_mgr->abort_in_process[i], 0);
 	CAM_DBG(CAM_ICP, "Done hw mgr[%u] init: icp name:%s",
 		device_idx, hw_mgr->hw_mgr_name);
 
