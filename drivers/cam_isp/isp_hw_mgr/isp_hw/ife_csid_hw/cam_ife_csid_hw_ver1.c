@@ -3358,15 +3358,6 @@ int cam_ife_csid_ver1_stop(void *hw_priv,
 		res->res_state = CAM_ISP_RESOURCE_STATE_INIT_HW;
 	}
 
-	/*
-	 * Disable CSI2 RX in stop path so next start re-runs
-	 * RX programming/reset.
-	 */
-	cam_ife_csid_ver1_disable_csi2(csid_hw);
-	CAM_DBG(CAM_ISP,
-		"CSID:%d stop: disabling CSI2 rx",
-		csid_hw->hw_intf->hw_idx);
-
 	csid_hw->counters.error_irq_count = 0;
 	csid_hw->flags.device_enabled = false;
 
