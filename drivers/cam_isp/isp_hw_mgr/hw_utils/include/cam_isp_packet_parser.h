@@ -158,6 +158,7 @@ struct cam_isp_io_buf_info {
 	uint32_t                                 out_max;
 	uint32_t                                 major_version;
 	bool                                     fill_fence;
+	void                                    *priv;
 };
 
 /*

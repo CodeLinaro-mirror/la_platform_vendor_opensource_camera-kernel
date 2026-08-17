@@ -236,6 +236,12 @@ struct cam_vfe_ver4_path_reg_data {
 	uint32_t                                     frm_irq_hw_ctxt_mask[CAM_ISP_MULTI_CTXT_MAX];
 };
 
+enum cam_vfe_top_ver4_stored_irq_masks {
+	VFE_TOP_VER4_FRAME_IRQ_MASK = 0,
+	VFE_TOP_VER4_ERR_MASK,
+	VFE_TOP_VER4_SOF_MASK,
+	VFE_TOP_VER4_MAX_STORED_MASKS,
+};
 
 int cam_vfe_top_ver4_init(struct cam_hw_soc_info     *soc_info,
 	struct cam_hw_intf                           *hw_intf,

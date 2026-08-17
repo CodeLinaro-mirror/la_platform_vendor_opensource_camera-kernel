@@ -92,6 +92,22 @@ int32_t cam_sensor_handle_continuous_read(
 	struct list_head **list,
 	struct cam_buf_io_cfg *io_cfg);
 
+/**
+ * @write_setting: write settings information
+ * @cam_sensor_power_ctrl_t: power control for gpio set/unset
+ *
+ * this function execute gpio control from write_setting value
+ */
+int32_t camera_sensor_execute_gpio(
+	struct cam_sensor_i2c_reg_setting *write_setting,
+	struct cam_sensor_power_ctrl_t *ctrl);
+
+int32_t cam_sensor_handle_gpio_control(
+	struct cam_cmd_i2c_random_wr *cam_cmd_i2c_gpio_ctl,
+	struct i2c_settings_array *i2c_reg_settings,
+	uint32_t *cmd_length_in_bytes, int32_t *offset,
+	struct list_head **list, uint32_t payload_count);
+
 int cam_sensor_i2c_command_parser(struct camera_io_master *io_master,
 	struct i2c_settings_array *i2c_reg_settings,
 	struct cam_cmd_buf_desc *cmd_desc, int32_t num_cmd_buffers,
@@ -103,6 +119,10 @@ int cam_sensor_util_i2c_apply_setting(struct camera_io_master *io_master_info,
 int32_t cam_sensor_i2c_read_data(
 	struct i2c_settings_array *i2c_settings,
 	struct camera_io_master *io_master_info);
+
+
+int32_t cam_sensor_io_dev_read_seq(struct camera_io_master *io_master_info,
+			       struct cam_sensor_i2c_reg_setting *read_setting);
 
 int32_t delete_request(struct i2c_settings_array *i2c_array);
 int cam_sensor_util_request_gpio_table(

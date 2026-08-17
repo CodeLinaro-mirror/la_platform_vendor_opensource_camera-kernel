@@ -70,6 +70,7 @@ enum cam_context_state {
  *                         used by the HW block for a particular req
  * @pf_data                page fault debug data
  * @packet                 pointer to packet
+ * @is_triggered_in_idle   set to true for start request in manual trigger
  *
  */
 struct cam_ctx_request {
@@ -91,6 +92,7 @@ struct cam_ctx_request {
 	struct list_head               buf_tracker;
 	struct cam_hw_mgr_pf_request_info  pf_data;
 	void                           *packet;
+	bool                           is_triggered_in_idle;
 };
 
 /**

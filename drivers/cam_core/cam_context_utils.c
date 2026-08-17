@@ -572,6 +572,7 @@ int32_t cam_context_prepare_dev_to_hw(struct cam_context *ctx,
 	req->num_out_acked          = 0;
 	req->flushed                = 0;
 	atomic_set(&req->num_in_acked, 0);
+	req->is_triggered_in_idle    = false;
 
 	remain_len = cam_context_parse_config_cmd(ctx, cmd, &packet);
 	if (IS_ERR_OR_NULL(packet)) {

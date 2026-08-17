@@ -236,6 +236,13 @@ struct cam_ife_csid_ver2_rup_aup_mask {
 	uint32_t rup_aup_set_mask;
 };
 
+enum cam_ife_csid_ver2_stored_irq_masks {
+	CAM_IFE_CSID_TOP_MASK,
+	CAM_IFE_CSID_SOF_DISCARD_MASK,
+	CAM_IFE_CSID_ERR_MASK,
+	CAM_IFE_CSID_MAX_STORED_MASKS,
+};
+
 /*
  * struct cam_ife_csid_ver2_path_cfg: place holder for path parameters
  *
@@ -268,6 +275,7 @@ struct cam_ife_csid_ver2_rup_aup_mask {
  * @sof_cnt:                SOF counter
  * @num_frames_discard:     number of frames to discard
  * @epoch_cfg:              Epoch configured value
+ * @stored_irq_masks:       Stored irq mask for each resource path
  * @switch_out_of_sync_cnt: Sensor out of sync error cnt
  * @sync_mode   :           Sync mode--> master/slave/none
  * @vfr_en   :              flag to indicate if variable frame rate is enabled
@@ -318,6 +326,7 @@ struct cam_ife_csid_ver2_path_cfg {
 	uint32_t                             sof_cnt;
 	uint32_t                             num_frames_discard;
 	uint32_t                             epoch_cfg;
+	uint32_t   stored_irq_masks[CAM_IFE_CSID_MAX_STORED_MASKS][CAM_IFE_CSID_IRQ_REG_MAX];
 	atomic_t                             switch_out_of_sync_cnt;
 	enum cam_isp_hw_sync_mode            sync_mode;
 	bool                                 vfr_en;
@@ -761,6 +770,19 @@ struct cam_ife_csid_ver2_reg_info {
 };
 
 /*
+ * struct cam_ife_csid_token_info: place holder for csid res path context private data
+ *
+ * @token:        context private of ife hw manager
+ * @res_id:       Unique resource ID within res_type objects
+ *                for a particular HW
+ *
+ */
+struct cam_ife_csid_token_info {
+	void                    *token;
+	int                      res_id;
+};
+
+/*
  * struct cam_ife_csid_ver2_hw: place holder for csid hw
  *
  * @path_res:                 array of path resources
@@ -782,7 +804,7 @@ struct cam_ife_csid_ver2_reg_info {
  * @buf_done_irq_controller:  buf done irq controller
  * @hw_info:                  hw info
  * @core_info:                csid core info
- * @token:                    Context private of ife hw manager
+ * @token_data:               array of context private of ife hw manager
  * @event_cb:                 Event cb to ife hw manager
  * @counters:                 counters used in csid hw
  * @log_buf:                  Log Buffer to dump info
@@ -802,6 +824,8 @@ struct cam_ife_csid_ver2_reg_info {
  * @is_drv_config_en:         If drv config is enabled
  * @standby_asserted:         Standby was asserted at stream off
  * @crc_error_threshold:      CRC error threshold to be treated as fatal error
+ * @init_global_reset_cnt:    Count of global reset called during init
+ * @rup_aup_mask:             rup aup mask enabled for particular HW
  *
  */
 struct cam_ife_csid_ver2_hw {
@@ -813,7 +837,7 @@ struct cam_ife_csid_ver2_hw {
 	struct cam_ife_csid_hw_counters        counters;
 	struct cam_ife_csid_hw_flags           flags;
 	struct cam_ife_csid_ver2_debug_info    debug_info;
-	struct cam_ife_csid_timestamp          timestamp;
+	struct cam_ife_csid_timestamp          timestamp[CAM_IFE_PIX_PATH_RES_MAX];
 	struct cam_ife_csid_ver2_evt_payload   rx_evt_payload[
 						CAM_IFE_CSID_VER2_PAYLOAD_MAX];
 	struct cam_ife_csid_ver2_evt_payload   path_evt_payload[
@@ -832,7 +856,8 @@ struct cam_ife_csid_ver2_hw {
 	struct cam_hw_intf                    *hw_intf;
 	struct cam_hw_info                    *hw_info;
 	struct cam_ife_csid_core_info         *core_info;
-	void                                  *token;
+	struct cam_ife_csid_token_info         token_data[CAM_IFE_PIX_PATH_RES_MAX];
+	struct cam_ife_csid_ver2_rup_aup_mask  rup_aup_mask;
 	cam_hw_mgr_event_cb_func               event_cb;
 	uint8_t                                log_buf
 						[CAM_IFE_CSID_LOG_BUF_LEN];
@@ -855,6 +880,7 @@ struct cam_ife_csid_ver2_hw {
 	bool                                   is_drv_config_en;
 	bool                                   standby_asserted;
 	uint32_t                               crc_error_threshold;
+	atomic_t                               init_global_reset_cnt;
 };
 
 /*

@@ -292,6 +292,75 @@ struct cam_req_mgr_sched_request_v3 {
 };
 
 /**
+ * enum cam_req_mgr_trigger_mode - Request apply trigger modes
+ *
+ * @CAM_REQ_MGR_TRIG_MODE_AUTO: Normal SOF-synchronized apply mode
+ *                              Requests are applied at SOF events
+ *                              This is the legacy/default behavior.
+ * @CAM_REQ_MGR_TRIG_MODE_MANUAL: Manual immediate apply mode
+ *                                Requests are applied immediately when
+ *                                CRM calls apply, bypassing SOF sync.
+ * @CAM_REQ_MGR_TRIG_MODE_MAX: Invalid/max value.
+ */
+enum cam_req_mgr_trigger_mode {
+       CAM_REQ_MGR_TRIGGER_MODE_AUTO   = 0,
+       CAM_REQ_MGR_TRIGGER_MODE_MANUAL = 1,
+       CAM_REQ_MGR_TRIGGER_MODE_MAX    = 2,
+};
+
+/**
+ * struct cam_req_mgr_trigger_params
+ * @mode   : Trigger mode. Auto or manual.
+ * @manual : Parameters for manual trigger mode.
+ */
+struct cam_req_mgr_trigger_params {
+	__u32 mode;
+	union {
+		struct {
+			__s64 id;
+			__u32 size;
+			__u32 skip;
+		} manual;
+		__u8 raw_data[64];
+	} data;
+};
+
+/** struct cam_req_mgr_sched_request_v4
+ * @version: Version number
+ * @session_hdl: Input param - Identifier for CSL session
+ * @link_hdl: Input Param -Identifier for link including itself.
+ * @bubble_enable: Input Param - Cam req mgr will do bubble recovery if this
+ * flag is set.
+ * @sync_mode: Type of Sync mode for this request
+ * @additional_timeout: Additional timeout value (in ms) associated with
+ * this request. This value needs to be 0 in cases where long exposure is
+ * not configured for the sensor.The max timeout that will be supported
+ * is 50000 ms
+ * @num_links: Input Param - Num of links for sync
+ * @num_valid_params: Number of valid params
+ * @req_id: Input Param - Request Id from which all requests will be flushed
+ * @param_mask: mask to indicate what the parameters are
+ * @params: parameters passed from user space
+ * @trigger_params: Trigger specific parameters
+ * @link_hdls: Input Param - Array of link handles to be for sync
+ */
+struct cam_req_mgr_sched_request_v4 {
+	__s32 version;
+	__s32 session_hdl;
+	__s32 link_hdl;
+	__s32 bubble_enable;
+	__s32 sync_mode;
+	__s32 additional_timeout;
+	__s32 num_links;
+	__s32 num_valid_params;
+	__s64 req_id;
+	__s32 param_mask;
+	__s32 params[5];
+	struct cam_req_mgr_trigger_params trigger_params;
+	__s32 link_hdls[];
+};
+
+/**
  * struct cam_req_mgr_sync_mode
  * @session_hdl:         Input param - Identifier for CSL session
  * @sync_mode:           Input Param - Type of sync mode
@@ -392,6 +461,7 @@ struct cam_req_mgr_link_properties {
 #define CAM_REQ_MGR_MEM_CPU_ACCESS_OP           (CAM_COMMON_OPCODE_MAX + 20)
 #define CAM_REQ_MGR_QUERY_CAP                   (CAM_COMMON_OPCODE_MAX + 21)
 #define CAM_REQ_MGR_SCHED_REQ_V3                (CAM_COMMON_OPCODE_MAX + 22)
+#define CAM_REQ_MGR_SCHED_REQ_V4                (CAM_COMMON_OPCODE_MAX + 23)
 
 /* end of cam_req_mgr opcodes */
 

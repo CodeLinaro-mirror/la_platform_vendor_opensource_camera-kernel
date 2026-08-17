@@ -687,7 +687,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe_lite108x_bus_hw_info = {
 		BIT(0), BIT(1), BIT(2), BIT(3), BIT(4),
 	},
 	.top_irq_shift   = 0,
-	.max_out_res = CAM_ISP_IFE_OUT_RES_BASE + 34,
+	.max_out_res = CAM_ISP_IFE_OUT_RES_BASE + 49,
 };
 
 static struct cam_vfe_irq_hw_info vfe_lite108x_irq_hw_info = {
