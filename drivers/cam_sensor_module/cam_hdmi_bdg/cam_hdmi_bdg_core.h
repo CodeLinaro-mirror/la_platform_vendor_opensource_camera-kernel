@@ -8,10 +8,38 @@
 #include <linux/firmware.h>
 #include "cam_sensor_dev.h"
 
-#define HDMI_BDG_SENSOR_ID 0x1901
+#define HDMI_GXC_SENSOR_ID 0x1901
+#define HDMI_UXC_SENSOR_ID 0x1704
 #define HDMI_BDG_HDMI_CONNECTED    0x01
 #define HDMI_BDG_HDMI_DISCONNECTED 0x00
-#define HDMI_SENSOR_NAME "lt6911gxc"
+#define HDMI_GXC_SENSOR_NAME "lt6911gxc"
+#define HDMI_UXC_SENSOR_NAME "lt6911uxc"
+#define HDMI_UXC_SENSOR_SLAVE_ADDR 0x56
+
+struct cam_sensor_i2c_reg_array;
+
+struct lt6911_reg_settings {
+	struct cam_sensor_i2c_reg_array *write_en_regs;
+	int write_en_size;
+	struct cam_sensor_i2c_reg_array *write_config_regs;
+	int write_config_size;
+	struct cam_sensor_i2c_reg_array *write_addr_set_regs;
+	int write_addr_set_size;
+	struct cam_sensor_i2c_reg_array *write_over_regs;
+	int write_over_size;
+	struct cam_sensor_i2c_reg_array *block_erase_regs;
+	int block_erase_size;
+	uint32_t block_erase_delay;
+	struct cam_sensor_i2c_reg_array *gxc_block_erase_ext_regs;
+	int gxc_block_erase_ext_size;
+	struct cam_sensor_i2c_reg_array *config_regs;
+	int config_size;
+	struct cam_sensor_i2c_reg_array *read_addr_regs;
+	int read_addr_size;
+	struct cam_sensor_i2c_reg_array *get_fw_regs;
+	int get_fw_size;
+	int erase_time;
+};
 
 enum lt6911_fw_status {
 	UPDATE_SUCCESS = 0,

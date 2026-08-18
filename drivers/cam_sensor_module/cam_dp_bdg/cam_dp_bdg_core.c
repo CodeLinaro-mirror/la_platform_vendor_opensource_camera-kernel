@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2021-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #include <linux/module.h>
 #include <linux/firmware.h>
@@ -719,7 +719,7 @@ static int lt7911_fw_read_back(struct cam_sensor_ctrl_t *s_ctrl, u8 *buff, int s
 		addr += 32;
 	}
 
-	if(rest_data != 0) {
+	if((rest_data > 0) && (rest_data < 32)) {
 		memset(page_data, 0x0, rest_data);
 		rc = lt7911_flash_read_addr_set(s_ctrl, addr);
 		if (rc < 0)
@@ -1088,6 +1088,7 @@ int cam_dp_bdg_get_src_resolution(bool *signal_stable,
 		*signal_stable = false;
 		*height = -1;
 		*width = -1;
+		*id = -1;
 		return -EINVAL;
 	}
 	/* camera_io_init(&(cam_dp_bdg_cam_ctrl->io_master_info));*/
