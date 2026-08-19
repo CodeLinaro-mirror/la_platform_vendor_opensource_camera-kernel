@@ -2418,7 +2418,7 @@ static int cam_ope_mgr_process_cmd_desc(struct cam_ope_hw_mgr *hw_mgr,
 	size_t len;
 	struct cam_cmd_buf_desc *cmd_desc = NULL;
 	uintptr_t cpu_addr = 0;
-	uint32_t *cpu_addr_local = NULL, *cpu_addr_u = NULL;
+	uint32_t *cpu_addr_u = NULL;
 	int generic_cmd_buf_count = 0;
 
 	cmd_desc = (struct cam_cmd_buf_desc *)
@@ -2436,7 +2436,7 @@ static int cam_ope_mgr_process_cmd_desc(struct cam_ope_hw_mgr *hw_mgr,
 		if (generic_cmd_buf_count > 0) {
 			CAM_ERR(CAM_OPE, "Multiple generic command buffers not supported");
 			rc = -EINVAL;
-			goto free_buf;
+			goto end;
 		}
 
 		generic_cmd_buf_count++;
@@ -2456,8 +2456,7 @@ static int cam_ope_mgr_process_cmd_desc(struct cam_ope_hw_mgr *hw_mgr,
 		}
 
 		cpu_addr_u = (uint32_t *)(((uint8_t *)cpu_addr) + cmd_desc[i].offset);
-		cam_common_mem_kdup((void **)&cpu_addr_local, cpu_addr_u, cmd_desc[i].size);
-		*ope_cmd_buf_addr = cpu_addr_local;
+		*ope_cmd_buf_addr = cpu_addr_u;
 	}
 
 	if (!cpu_addr_u) {
@@ -2472,7 +2471,7 @@ static int cam_ope_mgr_process_cmd_desc(struct cam_ope_hw_mgr *hw_mgr,
 		*ope_cmd_buf_addr, len, ope_request, buf_tracker);
 	if (rc) {
 		CAM_ERR(CAM_OPE, "Process OPE cmd request is failed: %d", rc);
-		goto free_buf;
+		goto end;
 	}
 
 	rc = cam_ope_mgr_process_cmd_io_buf_req(hw_mgr, packet, ctx_data,
@@ -2481,13 +2480,10 @@ static int cam_ope_mgr_process_cmd_desc(struct cam_ope_hw_mgr *hw_mgr,
 		CAM_ERR(CAM_OPE, "Process OPE cmd io request is failed: %d",
 			rc);
 		cam_ope_free_cpu_buf(ope_request);
-		goto free_buf;
+		goto end;
 	}
 
 	return rc;
-
-free_buf:
-	cam_common_mem_free(cpu_addr_local);
 end:
 	*ope_cmd_buf_addr = 0;
 	return rc;
@@ -3517,7 +3513,6 @@ static int cam_ope_mgr_prepare_hw_update(void *hw_priv,
 		ctx_data->last_req_time);
 	cam_ope_req_timer_modify(ctx_data, ctx_data->req_timer_timeout);
 	set_bit(request_idx, ctx_data->bitmap);
-	cam_common_mem_free(ope_cmd_buf_addr);
 	cam_ope_mgr_put_cmd_buf(packet);
 	mutex_unlock(&ctx_data->ctx_mutex);
 	CAM_DBG(CAM_REQ, "Prepare Hw update Successful request_id: %d  ctx: %d",
@@ -3526,7 +3521,6 @@ static int cam_ope_mgr_prepare_hw_update(void *hw_priv,
 
 free_buf:
 	cam_ope_free_cpu_buf(ope_req);
-	cam_common_mem_free(ope_cmd_buf_addr);
 end:
 	cam_ope_mgr_put_cmd_buf(packet);
 	cam_free_clear((void *)ctx_data->req_list[request_idx]->cdm_cmd);
