@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef _CAMHDMIBDGCORE_H_
 #define _CAMHDMIBDGCORE_H_
@@ -12,6 +12,8 @@
 #define HDMI_UXC_SENSOR_ID 0x1704
 #define HDMI_BDG_HDMI_CONNECTED    0x01
 #define HDMI_BDG_HDMI_DISCONNECTED 0x00
+#define HDMI_UXC_HDMI_CONNECTED    0x55
+#define HDMI_UXC_HDMI_DISCONNECTED 0x88
 #define HDMI_GXC_SENSOR_NAME "lt6911gxc"
 #define HDMI_UXC_SENSOR_NAME "lt6911uxc"
 #define HDMI_UXC_SENSOR_SLAVE_ADDR 0x56
@@ -19,12 +21,14 @@
 struct cam_sensor_i2c_reg_array;
 
 struct lt6911_reg_settings {
+	bool is_uxc;
 	struct cam_sensor_i2c_reg_array *write_en_regs;
 	int write_en_size;
 	struct cam_sensor_i2c_reg_array *write_config_regs;
 	int write_config_size;
 	struct cam_sensor_i2c_reg_array *write_addr_set_regs;
 	int write_addr_set_size;
+	int write_addr_data_index;
 	struct cam_sensor_i2c_reg_array *write_over_regs;
 	int write_over_size;
 	struct cam_sensor_i2c_reg_array *block_erase_regs;
@@ -36,6 +40,7 @@ struct lt6911_reg_settings {
 	int config_size;
 	struct cam_sensor_i2c_reg_array *read_addr_regs;
 	int read_addr_size;
+	int read_addr_data_index;
 	struct cam_sensor_i2c_reg_array *get_fw_regs;
 	int get_fw_size;
 	int erase_time;
