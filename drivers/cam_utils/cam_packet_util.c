@@ -37,6 +37,9 @@ int cam_packet_util_get_cmd_mem_addr(int handle, uint32_t **buf_addr,
 
 int cam_packet_util_validate_cmd_desc(struct cam_cmd_buf_desc *cmd_desc)
 {
+	size_t                  len = 0;
+	uint32_t                *cpu_addr;
+	int                     rc = 0;
 
 	if (!cmd_desc) {
 		CAM_ERR(CAM_UTIL, "Invalid cmd desc");
@@ -51,7 +54,20 @@ int cam_packet_util_validate_cmd_desc(struct cam_cmd_buf_desc *cmd_desc)
 		return -EINVAL;
 	}
 
-	return 0;
+	rc = cam_packet_util_get_cmd_mem_addr(cmd_desc->mem_handle, &cpu_addr, &len);
+	if (rc)
+		return -EINVAL;
+
+	if (((size_t)cmd_desc->offset >= len) ||
+		((size_t)cmd_desc->size > (len - (size_t)cmd_desc->offset))) {
+		CAM_ERR(CAM_UTIL, "invalid memory offset %d, len:%zd and cmd desc size:%d",
+			cmd_desc->offset, len, cmd_desc->size);
+		rc = -EINVAL;
+	}
+
+	cam_mem_put_cpu_buf(cmd_desc->mem_handle);
+
+	return rc;
 }
 
 int cam_packet_util_validate_packet(struct cam_packet *packet,
