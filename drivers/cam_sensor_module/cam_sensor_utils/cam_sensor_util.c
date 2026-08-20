@@ -3169,7 +3169,7 @@ void cam_sensor_util_release_read_buf(struct list_head *read_buf_list)
 
 /* Temporary gpio number to cci_timer map for test purposes */
 static const uint16_t gpio_map[MAX_GPIO_INDEX] = {
-	109, 110, 111, 163, 164
+	109, 110, 163, 164, 111
 };
 
 int cam_sensor_util_get_gpio_index(int64_t gpio_number)
