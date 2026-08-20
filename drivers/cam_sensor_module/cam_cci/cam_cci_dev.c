@@ -76,13 +76,22 @@ static int __cci_configure_cpas(struct cci_device *cci_dev,
 {
 	int rc = 0;
 	uint32_t cpas_handle = cci_dev->cpas_handle;
-	uint32_t top_mux;
-	uint32_t second_level_mux;
+	uint32_t top_mux = 0;
 	uint32_t val;
 	uint32_t cpas_mux_val = 0;
 	int cci_index = cci_dev->soc_info.index;
-	int cmd_type = c_ctrl->cmd;
-	int cci_timer_index;
+	uint32_t cpas_hw_version = 0;
+
+	if (!c_ctrl) {
+		CAM_ERR(CAM_CCI, "Invalid c_ctrl");
+		return -EINVAL;
+	}
+
+	rc = cam_cpas_get_cpas_hw_version(&cpas_hw_version);
+	if (rc) {
+		CAM_ERR(CAM_CCI, "Failed to get CPAS HW version: %d", rc);
+		return rc;
+	}
 
 	rc = cam_cpas_reg_read(cpas_handle, CAM_CPAS_REGBASE_CPASTOP,
 		CCI_GPIO_CPAS_MUX_EN, true, &val);
@@ -91,103 +100,50 @@ static int __cci_configure_cpas(struct cci_device *cci_dev,
 		return rc;
 	}
 
-	CAM_INFO(CAM_CCI, "BEFORE WRITE CPAS VALUE: 0x%x", val);
+	CAM_DBG(CAM_CCI, "BEFORE WRITE CPAS VALUE: 0x%x", val);
 
 	/*
 	 * TODO (fsync redesign item 3): compute timer mask dynamically
 	 * by walking all registered cci_clients on cci_dev and OR-ing
-	 * their timer_mask values. For now use -1 (enables all timers)
-	 * which matches the previous behaviour.
+	 * their timer_mask values. For now enables all timers
 	 */
-	cci_timer_index = -1;
 
-	if (cmd_type == MSM_CCI_TIMER_FSYNC_ALL ||
-	    cmd_type == MSM_CCI_TIMER_FSYNC_INDEPENDENT) {
+	switch (cpas_hw_version) {
+	case CAM_CPAS_TITAN_980_V100: {
 		switch (cci_index) {
 		case 0:
-			CAM_INFO(CAM_CCI,
+			CAM_DBG(CAM_CCI,
 				"cci: %d is about to enable all cci timers",
 				cci_index);
-			top_mux = BIT(CCI_TIMER0) | BIT(CCI_TIMER1) |
-				BIT(CCI_TIMER2) | BIT(CCI_TIMER3) |
-				BIT(CCI_TIMER4);
-			if (cci_timer_index / 2 <= CCI_TIMER_MAX) {
-				second_level_mux = BIT(CCI_TIMER0) |
-					BIT(CCI_TIMER1) | BIT(CCI_TIMER2) |
-					BIT(CCI_TIMER3) | BIT(CCI_TIMER4);
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
-			} else {
-				second_level_mux = 0x00;
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_5_9;
-			}
-			cpas_mux_val = top_mux | second_level_mux;
-			break;
-		case 2:
-			CAM_INFO(CAM_CCI,
-				"cci: %d is about to enable all cci timers",
-				cci_index);
-			top_mux = BIT(CCI_TIMER5) | BIT(CCI_TIMER6) |
-				BIT(CCI_TIMER7) | BIT(CCI_TIMER8) |
-				BIT(CCI_TIMER9);
-			if (cci_timer_index / 2 <= CCI_TIMER_MAX) {
-				second_level_mux = 0x00;
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
-			} else {
-				second_level_mux = BIT(CCI_TIMER5) |
-					BIT(CCI_TIMER6) | BIT(CCI_TIMER7) |
-					BIT(CCI_TIMER8) | BIT(CCI_TIMER9);
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
-			}
-			cpas_mux_val = top_mux | second_level_mux;
+			top_mux = 0x155;
 			break;
 		case 1:
-			CAM_INFO(CAM_CCI,
+			CAM_DBG(CAM_CCI,
 				"cci: %d is about to enable all cci timers",
 				cci_index);
 			top_mux = 0x00;
-			if (cci_timer_index / 2 <= CCI_TIMER_MAX) {
-				second_level_mux = BIT(CCI_TIMER0) |
-					BIT(CCI_TIMER1) | BIT(CCI_TIMER2) |
-					BIT(CCI_TIMER3) | BIT(CCI_TIMER4);
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
-			} else {
-				second_level_mux = 0x00;
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_5_9;
-			}
-			cpas_mux_val = top_mux | second_level_mux;
 			break;
-		case 3:
-			CAM_INFO(CAM_CCI,
+		case 2:
+			CAM_DBG(CAM_CCI,
 				"cci: %d is about to enable all cci timers",
 				cci_index);
-			top_mux = 0x00;
-			if (cci_timer_index / 2 <= CCI_TIMER_MAX) {
-				second_level_mux = 0x00;
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
-			} else {
-				second_level_mux = BIT(CCI_TIMER5) |
-					BIT(CCI_TIMER6) | BIT(CCI_TIMER7) |
-					BIT(CCI_TIMER8) | BIT(CCI_TIMER9);
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
-			}
-			cpas_mux_val = top_mux | second_level_mux;
+			top_mux = 0x3ff;
 			break;
 		default:
 			CAM_ERR(CAM_CCI, "cci_index is not valid: %d",
 				cci_index);
 			return -EINVAL;
 		}
+		cpas_mux_val = top_mux;
+	}
+	break;
+	default:
+		CAM_ERR(CAM_CCI, "cpas_hw_version is not valid or not supported: %d",
+			cpas_hw_version);
+		return -EINVAL;
 	}
 
-	CAM_INFO(CAM_CCI, "CPAS_MUX_VAL: 0x%x", cpas_mux_val);
+	CAM_DBG(CAM_CCI, "CPAS_MUX_VAL: 0x%x", cpas_mux_val);
 	rc = cam_cpas_reg_write(cpas_handle, CAM_CPAS_REGBASE_CPASTOP,
 		CCI_GPIO_CPAS_MUX_EN, true, cpas_mux_val);
 	if (rc) {
