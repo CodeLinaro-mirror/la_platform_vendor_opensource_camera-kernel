@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -13,7 +13,6 @@
 #include "cam_mem_mgr_api.h"
 
 #define CCI_MASTER_LOCK_TIMEOUT msecs_to_jiffies(1000)
-
 
 static int32_t cam_cci_process_master_lock(struct cam_cci_ctrl *cci_ctrl,
 	struct cci_device *cci_dev,
@@ -2995,6 +2994,12 @@ int32_t cam_cci_core_cfg(struct v4l2_subdev *sd,
 		break;
 	case MSM_CCI_I2C_SEQUENTIAL_XFER_LOCK:
 	case MSM_CCI_I2C_SEQUENTIAL_XFER_UNLOCK:
+		break;
+	case MSM_CCI_TIMER_FSYNC_ALL:
+	case MSM_CCI_TIMER_FSYNC_INDEPENDENT:
+	case MSM_CCI_GPIO_QUEUE_HALT:
+	case MSM_CCI_GPIO_QUEUE_START:
+		rc = cam_cci_fsync_core_cfg(sd, cci_ctrl);
 		break;
 	default:
 		rc = -ENOIOCTLCMD;

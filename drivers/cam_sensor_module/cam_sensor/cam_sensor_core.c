@@ -8,6 +8,7 @@
 #include <cam_sensor_cmn_header.h>
 #include "cam_sensor_core.h"
 #include "cam_sensor_util.h"
+#include "cam_sensor_fsync.h"
 #include "cam_soc_util.h"
 #include "cam_trace.h"
 #include "cam_common_util.h"
@@ -86,7 +87,8 @@ static int cam_sensor_notify_msg_req_mgr(
 
 static int cam_sensor_update_req_mgr(
 	struct cam_sensor_ctrl_t *s_ctrl,
-	struct cam_packet *csl_packet)
+	struct cam_packet *csl_packet,
+	bool external_trigger)
 {
 	int rc = 0;
 	struct cam_req_mgr_add_request add_req;
@@ -94,6 +96,7 @@ static int cam_sensor_update_req_mgr(
 	memset(&add_req, 0, sizeof(add_req));
 	add_req.link_hdl = s_ctrl->bridge_intf.link_hdl;
 	add_req.req_id = csl_packet->header.request_id;
+	add_req.external_trigger = external_trigger;
 	CAM_DBG(CAM_SENSOR, " Rxed Req Id: %llu",
 		csl_packet->header.request_id);
 	add_req.dev_hdl = s_ctrl->bridge_intf.device_hdl;
@@ -379,6 +382,15 @@ static int32_t cam_sensor_generic_blob_handler(void *user_data,
 		rc = cam_sensor_handle_modeswitch_pd_info(s_ctrl, modeswitch_pd_info);
 		break;
 	}
+	case CAM_SENSOR_GENERIC_BLOB_SYNC_INFO: {
+		rc = cam_sensor_fsync_handle_blob(blob_data, blob_size, s_ctrl);
+		if (rc < 0) {
+			CAM_ERR(CAM_SENSOR, "SYNC_INFO: Invalid blob data rc=%d", rc);
+			return rc;
+		}
+
+		break;
+	}
 	default:
 		CAM_WARN(CAM_SENSOR, "Invalid blob type %d", blob_type);
 		break;
@@ -406,6 +418,7 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 	struct cam_config_dev_cmd config;
 	struct i2c_data_settings *i2c_data = NULL;
 	bool is_sensor_read = false;
+	bool external_trigger = false;
 
 	ioctl_ctrl = (struct cam_control *)arg;
 
@@ -552,6 +565,19 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 		i2c_reg_settings =
 			&i2c_data->per_frame[csl_packet->header.request_id %
 				MAX_PER_FRAME_ARRAY];
+
+		/* Reset fsync slot at the start of each update packet so
+		 * that a frame without a SYNC_INFO blob does not carry over
+		 * a stale configuration from a previous request. */
+		if (s_ctrl->per_frame_fsync) {
+			uint32_t idx = csl_packet->header.request_id % MAX_PER_FRAME_ARRAY;
+
+			s_ctrl->per_frame_fsync[idx].is_valid = false;
+			s_ctrl->per_frame_fsync[idx].request_id = 0;
+			s_ctrl->per_frame_fsync[idx].num_queues = 0;
+		}
+
+		s_ctrl->fsync_blob_ready = false;
 		CAM_DBG(CAM_SENSOR, "Received Packet: %lld req: %lld",
 			csl_packet->header.request_id % MAX_PER_FRAME_ARRAY,
 			csl_packet->header.request_id);
@@ -626,10 +652,6 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 		i2c_reg_settings->request_id = csl_packet->header.request_id;
 		i2c_reg_settings->is_settings_valid = 1;
 
-		rc = cam_sensor_update_req_mgr(s_ctrl, csl_packet);
-		if (rc)
-			CAM_ERR(CAM_SENSOR,
-				"Failed in adding request to req_mgr");
 		break;
 	}
 	case CAM_SENSOR_PACKET_OPCODE_SENSOR_IMMEDIATE: {
@@ -738,8 +760,18 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 
 			rc = cam_packet_util_process_generic_cmd_buffer(&cmd_desc[i],
 				cam_sensor_generic_blob_handler, s_ctrl);
-			if (rc)
+			if (rc < 0) {
 				s_ctrl->sensor_res[idx].request_id = 0;
+				CAM_ERR(CAM_SENSOR, "Fail parsing generic blob pkt: %d", rc);
+				goto end;
+			}
+
+			if (s_ctrl->fsync_blob_ready) {
+				external_trigger = true;
+				s_ctrl->fsync_blob_ready = false;
+				CAM_DBG(CAM_SENSOR, "External trigger set for req_id %lld",
+					csl_packet->header.request_id);
+			}
 
 			break;
 		}
@@ -812,7 +844,21 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 		CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE) {
 		i2c_reg_settings->request_id =
 			csl_packet->header.request_id;
-		rc = cam_sensor_update_req_mgr(s_ctrl, csl_packet);
+
+		rc = cam_sensor_update_req_mgr(s_ctrl, csl_packet, external_trigger);
+		if (rc) {
+			CAM_ERR(CAM_SENSOR,
+				"Failed in adding request to req_mgr");
+			goto end;
+		}
+	}
+
+	if ((csl_packet->header.op_code & 0xFFFFFF) ==
+		CAM_SENSOR_PACKET_OPCODE_SENSOR_NOP) {
+		i2c_reg_settings->request_id =
+			csl_packet->header.request_id;
+
+		rc = cam_sensor_update_req_mgr(s_ctrl, csl_packet, external_trigger);
 		if (rc) {
 			CAM_ERR(CAM_SENSOR,
 				"Failed in adding request to req_mgr");
@@ -1390,6 +1436,7 @@ void cam_sensor_shutdown(struct cam_sensor_ctrl_t *s_ctrl)
 	s_ctrl->is_probe_succeed = 0;
 	s_ctrl->last_flush_req = 0;
 	s_ctrl->sensor_state = CAM_SENSOR_INIT;
+	s_ctrl->fsync_blob_ready = false;
 }
 
 int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
@@ -1723,6 +1770,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		s_ctrl->last_applied_done_timestamp = 0;
 		s_ctrl->stream_off_on_flush = false;
 		s_ctrl->is_stream_off_pkt_updated = false;
+		s_ctrl->fsync_blob_ready = false;
 		memset(s_ctrl->sensor_res, 0, sizeof(s_ctrl->sensor_res));
 		CAM_INFO(CAM_SENSOR,
 			"CAM_ACQUIRE_DEV Success for %s sensor_id:0x%x,sensor_slave_addr:0x%x",
@@ -1749,6 +1797,15 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 				s_ctrl->bridge_intf.link_hdl);
 			rc = -EAGAIN;
 			goto release_mutex;
+		}
+
+		if (s_ctrl->io_master_info.master_type == CCI_MASTER &&
+		    s_ctrl->io_master_info.cci_client &&
+		    s_ctrl->io_master_info.cci_client->acquired_gpio_queue >= 0) {
+			rc = camera_io_gpio_halt(&(s_ctrl->io_master_info));
+			if (rc < 0)
+				CAM_ERR(CAM_SENSOR, "[%s] GPIO queue halt failed rc=%d",
+					s_ctrl->sensor_name, rc);
 		}
 
 		rc = cam_sensor_power_down(s_ctrl);
@@ -1794,6 +1851,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		s_ctrl->last_applied_done_timestamp = 0;
 		s_ctrl->stream_off_on_flush = false;
 		s_ctrl->is_stream_off_pkt_updated = false;
+		s_ctrl->fsync_blob_ready = false;
 	}
 		break;
 	case CAM_QUERY_CAP: {
@@ -2449,6 +2507,18 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 				}
 			}
 		}
+
+		/* Delete old fsync slots for requests older than del_req_id */
+		if (s_ctrl->per_frame_fsync) {
+			for (j = 0; j < MAX_PER_FRAME_ARRAY; j++) {
+				if (s_ctrl->per_frame_fsync[j].is_valid &&
+				    del_req_id > s_ctrl->per_frame_fsync[j].request_id) {
+					s_ctrl->per_frame_fsync[j].is_valid = false;
+					s_ctrl->per_frame_fsync[j].request_id = 0;
+					s_ctrl->per_frame_fsync[j].num_queues = 0;
+				}
+			}
+		}
 	}
 
 EXIT_RESTORE:
@@ -2892,4 +2962,34 @@ int cam_sensor_dump_request(struct cam_req_mgr_dump_info *dump)
 	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
 
 	return 0;
+}
+
+int cam_sensor_external_trigger(struct cam_req_mgr_extern_trigger *external_trigger)
+{
+	struct cam_sensor_ctrl_t *s_ctrl = NULL;
+	int rc = 0;
+
+	s_ctrl = (struct cam_sensor_ctrl_t *)
+		cam_get_device_priv(external_trigger->dev_hdl);
+	if (!s_ctrl) {
+		CAM_ERR(CAM_SENSOR, "Device data is NULL");
+		return -EINVAL;
+	}
+
+	CAM_DBG(CAM_SENSOR,
+		"Sensor:[%s-%d] external trigger last applied sensor req:%llu external_trigger req_id:%llu",
+		s_ctrl->sensor_name, s_ctrl->soc_info.index,
+		s_ctrl->last_applied_req, external_trigger->req_id);
+
+	mutex_lock(&(s_ctrl->cam_sensor_mutex));
+	if (s_ctrl->io_master_info.master_type == CCI_MASTER) {
+		rc = cam_sensor_fsync_apply(s_ctrl, external_trigger->req_id);
+		if (rc < 0)
+			CAM_ERR(CAM_SENSOR,
+				"[%s] fsync apply failed rc=%d req_id=%lld",
+				s_ctrl->sensor_name, rc, external_trigger->req_id);
+	}
+	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
+
+	return rc;
 }
