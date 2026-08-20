@@ -227,6 +227,7 @@ def _define_module(target, variant):
                     "drivers/cam_sensor_module/cam_dp_bdg_lt7911d/cam_dp_bdg_lt7911d_dev.c",
                     "drivers/cam_sensor_module/cam_hdmi_bdg_lt6911uxe/cam_hdmi_bdg_lt6911uxe_dev.c",
                     "drivers/cam_sensor_module/cam_hdmi_bdg_lt6911uxe/cam_hdmi_bdg_lt6911uxe_core.c",
+                    "drivers/cam_sensor_module/hdmidp-in-uevent/msm_hdmidp_in_extcon.c",
                 ],
             },
             "CONFIG_SPECTRA_CUSTOM": {
