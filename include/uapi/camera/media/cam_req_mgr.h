@@ -783,6 +783,7 @@ struct cam_mem_cpu_access_op {
  * @CAM_REQ_MGR_VALID_SHUTTER_DROPPED          : Valid shutter dropped
  * @CAM_REQ_MGR_ISP_ERR_HWPD_VIOLATION         : HWPD image size violation
  * @CAM_REQ_MGR_ISP_ERR_SETTING_MISMATCHED     : Setting mismatched between sensor and isp
+ * @CAM_REQ_MGR_MTRIGGER_ERR                   : Manual trigger mode sequence apply failure
  */
 #define CAM_REQ_MGR_ISP_UNREPORTED_ERROR                 0
 #define CAM_REQ_MGR_LINK_STALLED_ERROR                   BIT(0)
@@ -808,6 +809,7 @@ struct cam_mem_cpu_access_op {
 #define CAM_REQ_MGR_ISP_ERR_BUSIF_OVERFLOW               BIT(20)
 #define CAM_REQ_MGR_ISP_ERR_SETTING_MISMATCHED           BIT(21)
 #define CAM_REQ_MGR_ISP_ERR_ILLEGAL_DT_SWITCH            BIT(22)
+#define CAM_REQ_MGR_MTRIGGER_ERR                         BIT(23)
 
 /**
  * struct cam_req_mgr_error_msg

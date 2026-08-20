@@ -42,6 +42,7 @@ static void __cam_req_mgr_reset_group_slot(struct cam_req_mgr_group_slot *gs)
 	gs->size                 = 0;
 	gs->start_link_slot_idx  = -1;
 	gs->ready                = false;
+	gs->tbl_ready_cnt        = 0;
 	gs->external_trigger.link_hdl = -1;
 	gs->external_trigger.req_id   = -1;
 	gs->external_trigger.dev      = NULL;
@@ -501,15 +502,16 @@ static void __cam_req_mgr_dump_state_monitor_array(
 
 	/* Snapshot: group slots */
 	CAM_INFO(CAM_CRM, "Link %x group_slot snapshot", link->link_hdl);
-	CAM_INFO(CAM_CRM, "%4s  %8s  %4s  %6s  %10s",
-		"hash", "group_id", "size", "ready", "start_idx");
+	CAM_INFO(CAM_CRM, "%4s  %8s  %4s  %6s  %10s  %9s",
+		"hash", "group_id", "size", "ready", "start_idx", "ready_cnt");
 	for (i = 0; i < MAX_GROUP_SLOTS; i++) {
 		struct cam_req_mgr_group_slot *gs = &in_q->group_slot[i];
 
 		if (gs->id == -1)
 			continue;
-		CAM_INFO(CAM_CRM, "%4d  %8lld  %4u  %6d  %10d",
-			i, gs->id, gs->size, gs->ready, gs->start_link_slot_idx);
+		CAM_INFO(CAM_CRM, "%4d  %8lld  %4u  %6d  %10d  %9u",
+			i, gs->id, gs->size, gs->ready, gs->start_link_slot_idx,
+			gs->tbl_ready_cnt);
 	}
 }
 
@@ -946,6 +948,85 @@ static int32_t __cam_req_mgr_find_slot_for_req(
 		idx = -1;
 
 	return idx;
+}
+
+/**
+ * __cam_req_mgr_notify_mtrigger_error()
+ *
+ * @brief   : Notify userspace of a manual trigger mode failure on a link,
+ *            and fan the notification out to all links synced with it.
+ * @link    : link on which the manual trigger sequence could not be applied
+ * @req_id  : request id that failed to apply, -1 if not available
+ *
+ */
+static int __cam_req_mgr_notify_mtrigger_error(
+	struct cam_req_mgr_core_link *link,
+	int64_t req_id)
+{
+	int                               i, rc = 0;
+	int32_t                           idx;
+	struct cam_req_mgr_core_session  *session = NULL;
+	struct cam_req_mgr_core_link     *notify_link = NULL;
+	struct cam_req_mgr_message        msg = {0};
+	struct cam_req_mgr_slot          *slot = NULL;
+
+	if (!link) {
+		CAM_ERR(CAM_CRM, "link ptr NULL");
+		return -EINVAL;
+	}
+
+	session = (struct cam_req_mgr_core_session *)link->parent;
+	if (!session) {
+		CAM_WARN(CAM_CRM, "session ptr NULL %x", link->link_hdl);
+		return -EINVAL;
+	}
+
+	CAM_ERR_RATE_LIMIT(CAM_CRM,
+		"Notifying userspace of manual trigger error on link 0x%x for session %d",
+		link->link_hdl, session->session_hdl);
+
+	__cam_req_mgr_dump_state_monitor_array(link);
+
+	mutex_lock(&link->req.lock);
+
+	idx = __cam_req_mgr_find_slot_for_req(link->req.in_q, req_id);
+	if (idx < 0) {
+		CAM_ERR(CAM_CRM,
+			"Req_id %lld not found in in_q on link 0x%x",
+			req_id, link->link_hdl);
+		rc = -EBADSLT;
+		goto end;
+	}
+	slot = &link->req.in_q->slot[idx];
+
+	for (i = -1; i < slot->num_sync_links; i++) {
+		if (i < 0)
+			notify_link = link;
+		else
+			notify_link = cam_get_link_priv(slot->sync_link_hdls[i]);
+		if (!notify_link)
+			continue;
+
+		memset(&msg, 0, sizeof(msg));
+		msg.session_hdl = session->session_hdl;
+		msg.u.err_msg.error_type = CAM_REQ_MGR_ERROR_TYPE_RECOVERY;
+		msg.u.err_msg.request_id = req_id;
+		msg.u.err_msg.link_hdl   = notify_link->link_hdl;
+		msg.u.err_msg.resource_size = 0;
+		msg.u.err_msg.error_code = CAM_REQ_MGR_MTRIGGER_ERR;
+
+		rc = cam_req_mgr_notify_message(&msg,
+			V4L_EVENT_CAM_REQ_MGR_ERROR,
+			V4L_EVENT_CAM_REQ_MGR_EVENT);
+		if (rc)
+			CAM_ERR_RATE_LIMIT(CAM_CRM,
+				"Error notifying mtrigger error for session %d link 0x%x rc %d",
+				session->session_hdl, notify_link->link_hdl, rc);
+	}
+
+end:
+	mutex_unlock(&link->req.lock);
+	return rc;
 }
 
 /**
@@ -3435,6 +3516,17 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 		int64_t  gid = sched_req->trigger_params.data.manual.id;
 		uint32_t gsz = sched_req->trigger_params.data.manual.size;
 
+		/*
+		 * Do not allow manual trigger mode when devices have
+		 * more then one pd table
+		 */
+		if (link->req.num_tbl > 1) {
+			CAM_ERR(CAM_CRM,
+				"Allowed pd tables in man trigger mode is 1");
+			rc = -EINVAL;
+			goto end;
+		}
+
 		slot->group_id = gid;
 		slot->skip_set = !!sched_req->trigger_params.data.manual.skip;
 
@@ -4305,10 +4397,11 @@ static int cam_req_mgr_mtrigger_try_to_start(
 		return 0;
 
 	ext_trigger_gs = __cam_req_mgr_mtrigger_apply_sequence(idx, link);
-	if (IS_ERR(ext_trigger_gs)) {
-		rc = PTR_ERR(ext_trigger_gs);
-		CAM_ERR(CAM_CRM, "Failed to apply sequence for group id: %lld rc: %d",
-			link->req.in_q->slot[idx].group_id, rc);
+	if (IS_ERR_OR_NULL(ext_trigger_gs)) {
+		rc = ext_trigger_gs ? PTR_ERR(ext_trigger_gs) : -ENODEV;
+		CAM_ERR(CAM_CRM, "Failed to apply seq for group id: %lld %s",
+			link->req.in_q->slot[idx].group_id,
+			ext_trigger_gs ? "Error" : "Missing external trigger");
 		return rc;
 	}
 
@@ -4321,26 +4414,22 @@ static int cam_req_mgr_mtrigger_try_to_start(
 }
 
 /**
- * __cam_req_mgr_mtrigger_update_group_ready()
+ * cam_req_mgr_mtrigger_update_group_ready()
  *
- * @brief : When a pd_tbl slot becomes READY, check if all slots in the group
- *          for all devices are ready. If so, set group_ready=true on the seq-0
- *          in_q slot. The full scan runs only once — when the last device
- *          completes — avoiding repeated scans on every add_request.
- * @idx       : Current in_q slot index (slot that just became ready)
- * @link_slot : In_q slot pointer for @idx
- * @tbl       : Pd table for the device
- * @device    : Device whose slot just became ready
+ * @brief : Called once per (in_q slot, pd_tbl) pair that transitions to
+ *          CRM_REQ_STATE_READY. Bumps the group's tbl_ready_cnt instead of
+ *          rescanning every device/slot in the group — the group is ready
+ *          once tbl_ready_cnt reaches size * num_tbl (every seq position in
+ *          the group has reached READY on every unique pd table).
+ * @link_slot : In_q slot pointer for the slot that just became ready
  * @link      : Link pointer
+ *
+ * @return: true if group is ready.
  */
-static void __cam_req_mgr_mtrigger_update_group_ready(
-	int idx,
+static bool cam_req_mgr_mtrigger_update_group_ready(
 	struct cam_req_mgr_slot *link_slot,
 	struct cam_req_mgr_core_link *link)
 {
-	int group_start_idx;
-	int check_idx;
-	int i, seq;
 	struct cam_req_mgr_group_slot *gs;
 
 	gs = __cam_req_mgr_get_group_slot(link->req.in_q, link_slot->group_id);
@@ -4348,27 +4437,19 @@ static void __cam_req_mgr_mtrigger_update_group_ready(
 		CAM_ERR(CAM_CRM,
 			"link 0x%x no group_slot for group %lld",
 			link->link_hdl, link_slot->group_id);
-		return;
+		return false;
 	}
 
-	group_start_idx = gs->start_link_slot_idx;
-
-	/* Scan all devices × group slots — runs only when last device completes */
-	for (i = 0; i < link->num_devs; i++) {
-		struct cam_req_mgr_req_tbl *dev_tbl = link->l_dev[i].pd_tbl;
-
-		check_idx = group_start_idx;
-		for (seq = 0; seq < gs->size; seq++) {
-			if (dev_tbl->slot[check_idx].state != CRM_REQ_STATE_READY)
-				return;
-			__cam_req_mgr_inc_idx(&check_idx, 1, dev_tbl->num_slots);
-		}
-	}
+	gs->tbl_ready_cnt++;
+	if (gs->tbl_ready_cnt < gs->size)
+		return false;
 
 	gs->ready = true;
 	CAM_DBG(CAM_CRM,
 		"link 0x%x group %lld all devices ready",
 		link->link_hdl, link_slot->group_id);
+
+	return true;
 }
 
 /**
@@ -4477,6 +4558,8 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 	trace_cam_req_mgr_add_req(link, idx, add_req, tbl, device);
 
 	if (slot->req_ready_map == tbl->dev_mask) {
+		bool rd;
+
 		CAM_DBG(CAM_REQ,
 			"link 0x%x idx %d req_id %lld pd %d SLOT READY",
 			link->link_hdl, idx, add_req->req_id, tbl->pd);
@@ -4489,13 +4572,16 @@ static int cam_req_mgr_process_add_req_manual_trigger(void *priv, void *data)
 		state.group_id = link_slot->group_id;
 		__cam_req_mgr_update_state_monitor_array(link, &state);
 
-		__cam_req_mgr_mtrigger_update_group_ready(idx, link_slot, link);
+		rd = cam_req_mgr_mtrigger_update_group_ready(link_slot, link);
+		if (rd)
+			rc = cam_req_mgr_mtrigger_try_to_start(idx, link);
 	}
-
-	rc = cam_req_mgr_mtrigger_try_to_start(idx, link);
 
 end_unlock:
 	mutex_unlock(&link->req.lock);
+
+	if (rc < 0)
+		__cam_req_mgr_notify_mtrigger_error(link, link_slot->req_id);
 end:
 	return rc;
 }
