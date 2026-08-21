@@ -8333,6 +8333,10 @@ static int cam_icp_get_acquire_info_v1(struct cam_icp_hw_mgr *hw_mgr,
 		return -EFAULT;
 	}
 
+	acquire_info->secure_mode = icp_dev_acquire_info.secure_mode;
+	acquire_info->num_out_res = icp_dev_acquire_info.num_out_res;
+	acquire_info->dev_type = icp_dev_acquire_info.dev_type;
+
 	acquire_size_unified = sizeof(struct cam_icp_acquire_dev_info_unified) +
 		((icp_dev_acquire_info.num_out_res) *
 		sizeof(struct cam_icp_res_info_unified));
@@ -8462,6 +8466,10 @@ static int cam_icp_get_acquire_info_v2(struct cam_icp_hw_mgr *hw_mgr,
 		CAM_MEM_FREE(acquire_info);
 		return -EFAULT;
 	}
+
+	acquire_info->secure_mode = icp_dev_acquire_info_v2.secure_mode;
+	acquire_info->num_out_res = icp_dev_acquire_info_v2.num_out_res;
+	acquire_info->dev_type = icp_dev_acquire_info_v2.dev_type;
 
 	acquire_size_unified = sizeof(struct cam_icp_acquire_dev_info_unified) +
 		((icp_dev_acquire_info_v2.num_out_res) *
