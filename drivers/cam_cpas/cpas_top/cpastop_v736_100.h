@@ -1017,12 +1017,13 @@ static struct cam_cpas_camnoc_qchannel cam736_cpas100_qchannel_info = {
 };
 
 static struct cam_cpas_subpart_info cam736_cpas100_camera_subpart_info = {
-	.num_bits = 17,
+	.num_bits = 18,
 	/*
 	 * Below fuse indexing is based on software fuse definition which is in SMEM and provided
 	 * by XBL team.
 	 */
 	.hw_bitmap_mask = {
+		{CAM_CPAS_FUSE_FEATURE_MAX,  BIT(0)},
 		{CAM_CPAS_ISP_FUSE,        BIT(0)},  // HW index 0
 		{CAM_CPAS_ISP_FUSE,        BIT(1)},  // HW index 1
 		{CAM_CPAS_FUSE_FEATURE_MAX,  BIT(0)},
