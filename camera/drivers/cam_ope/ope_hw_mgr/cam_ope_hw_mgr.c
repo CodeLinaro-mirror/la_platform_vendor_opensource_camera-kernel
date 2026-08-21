@@ -869,15 +869,8 @@ static int32_t cam_ope_process_request_timer(void *priv, void *data)
 			.path_data_type -
 			CAM_AXI_PATH_DATA_OPE_START_OFFSET;
 
-		if ((path_index < 0) || (path_index >= CAM_OPE_MAX_PER_PATH_VOTES)) {
-			CAM_WARN(CAM_OPE,
-				"Invalid path %d, start offset=%d, max=%d",
-				ctx_data->clk_info.axi_path[i]
-				.path_data_type,
-				CAM_AXI_PATH_DATA_OPE_START_OFFSET,
-				CAM_OPE_MAX_PER_PATH_VOTES);
-				continue;
-		}
+		if ((path_index < 0) || (path_index >= CAM_OPE_MAX_PER_PATH_VOTES))
+			continue;
 
 		clk_info->axi_path[path_index].camnoc_bw -=
 			ctx_data->clk_info.axi_path[i].camnoc_bw;
@@ -1552,14 +1545,8 @@ static bool cam_ope_update_bw_v2(struct cam_ope_hw_mgr *hw_mgr,
 		ctx_data->clk_info.axi_path[i].path_data_type -
 		CAM_AXI_PATH_DATA_OPE_START_OFFSET;
 
-		if ((path_index < 0) || (path_index >= CAM_OPE_MAX_PER_PATH_VOTES)) {
-			CAM_WARN(CAM_OPE,
-				"Invalid path %d, start offset=%d, max=%d",
-				ctx_data->clk_info.axi_path[i].path_data_type,
-				CAM_AXI_PATH_DATA_OPE_START_OFFSET,
-				CAM_OPE_MAX_PER_PATH_VOTES);
+		if ((path_index < 0) || (path_index >= CAM_OPE_MAX_PER_PATH_VOTES))
 			continue;
-		}
 
 	hw_mgr_clk_info->axi_path[path_index].camnoc_bw -=
 		ctx_data->clk_info.axi_path[i].camnoc_bw;
@@ -1589,14 +1576,8 @@ static bool cam_ope_update_bw_v2(struct cam_ope_hw_mgr *hw_mgr,
 		ctx_data->clk_info.axi_path[i].path_data_type -
 			CAM_AXI_PATH_DATA_OPE_START_OFFSET;
 
-		if ((path_index < 0) || (path_index >= CAM_OPE_MAX_PER_PATH_VOTES)) {
-			CAM_WARN(CAM_OPE,
-				"Invalid path %d, start offset=%d, max=%d",
-				ctx_data->clk_info.axi_path[i].path_data_type,
-				CAM_AXI_PATH_DATA_OPE_START_OFFSET,
-				CAM_OPE_MAX_PER_PATH_VOTES);
+		if ((path_index < 0) || (path_index >= CAM_OPE_MAX_PER_PATH_VOTES))
 			continue;
-		}
 
 		hw_mgr_clk_info->axi_path[path_index].path_data_type =
 			ctx_data->clk_info.axi_path[i].path_data_type;
@@ -3039,14 +3020,8 @@ static int cam_ope_mgr_remove_bw(struct cam_ope_hw_mgr *hw_mgr, int ctx_id)
 		ctx_data->clk_info.axi_path[i].path_data_type -
 		CAM_AXI_PATH_DATA_OPE_START_OFFSET;
 
-		if ((path_index < 0) || (path_index >= CAM_OPE_MAX_PER_PATH_VOTES)) {
-			CAM_WARN(CAM_OPE,
-				"Invalid path %d, start offset=%d, max=%d",
-				ctx_data->clk_info.axi_path[i].path_data_type,
-				CAM_AXI_PATH_DATA_OPE_START_OFFSET,
-				CAM_OPE_MAX_PER_PATH_VOTES);
+		if ((path_index < 0) || (path_index >= CAM_OPE_MAX_PER_PATH_VOTES))
 			continue;
-		}
 
 		hw_mgr_clk_info->axi_path[path_index].camnoc_bw -=
 			ctx_data->clk_info.axi_path[i].camnoc_bw;
@@ -3507,8 +3482,6 @@ static int cam_ope_mgr_prepare_hw_update(void *hw_priv,
 	prepare_args->num_hw_update_entries       = 1;
 	prepare_args->hw_update_entries[0].addr   = (uintptr_t)ope_req->cdm_cmd;
 	prepare_args->priv                        = ope_req;
-
-	CAM_INFO(CAM_REQ, "OPE req %x num_batch %d", ope_req, ope_req->num_batch);
 
 	ktime_get_boottime_ts64(&ts);
 	ctx_data->last_req_time = (uint64_t)((ts.tv_sec * 1000000000) + ts.tv_nsec);
