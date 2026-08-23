@@ -195,14 +195,24 @@ static void cam_ope_free_io_config(struct cam_ope_request *req)
 
 static void cam_ope_free_cpu_buf(struct cam_ope_request *req)
 {
-	if (req && req->ope_kmd_buf.cpu_addr) {
-		cam_mem_put_cpu_buf(req->ope_kmd_buf.mem_handle);
+	int i;
+
+	if (!req) {
+		CAM_ERR(CAM_OPE, "Invalid input param");
+		return;
+	}
+
+	for (i = 0; i < req->num_batch; i++) {
+		if (req->ope_kmd_buf.cpu_addr)
+			cam_mem_put_cpu_buf(req->ope_kmd_buf.mem_handle);
+		if (req->ope_debug_buf.cpu_addr)
+			cam_mem_put_cpu_buf(req->ope_debug_buf.mem_handle);
+	}
+	if (req->ope_kmd_buf.cpu_addr)
 		req->ope_kmd_buf.cpu_addr = 0;
-	}
-	if (req && req->ope_debug_buf.cpu_addr) {
-		cam_mem_put_cpu_buf(req->ope_debug_buf.mem_handle);
+
+	if (req->ope_debug_buf.cpu_addr)
 		req->ope_debug_buf.cpu_addr = 0;
-	}
 }
 
 static void cam_ope_device_timer_stop(struct cam_ope_hw_mgr *hw_mgr)
@@ -3127,6 +3137,7 @@ static int cam_ope_mgr_release_ctx(struct cam_ope_hw_mgr *hw_mgr, int ctx_id)
 		if (rc)
 			CAM_ERR(CAM_OPE, "OPE Dev release failed: %d", rc);
 	}
+	mutex_unlock(&hw_mgr->ctx[ctx_id].ctx_mutex);
 
 	rc = cam_cdm_stream_off(hw_mgr->ctx[ctx_id].ope_cdm.cdm_handle);
 	if (rc)
@@ -3136,7 +3147,7 @@ static int cam_ope_mgr_release_ctx(struct cam_ope_hw_mgr *hw_mgr, int ctx_id)
 	if (rc)
 		CAM_ERR(CAM_OPE, "OPE CDM relase failed: %d", rc);
 
-
+	mutex_lock(&hw_mgr->ctx[ctx_id].ctx_mutex);
 	for (i = 0; i < CAM_CTX_REQ_MAX; i++) {
 		if (!hw_mgr->ctx[ctx_id].req_list[i])
 			continue;
