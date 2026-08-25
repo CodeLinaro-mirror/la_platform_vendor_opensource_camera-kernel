@@ -14,6 +14,7 @@
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include "cam_hdmi_bdg_lt6911uxe_core.h"
+#include "msm_hdmidp_in_extcon.h"
 
 #define HDMI_BDG_IRQ_LT6911UXE_DEVNAME             "hdmi_bdg_lt6911uxe_handler"
 #define HDMI_BDG_IRQ_LT6911UXE_MAGIC_NUM           0xee
@@ -51,6 +52,7 @@ static const struct  of_device_id hdmi_bdg_irq_lt6911uxe_dev_id[] = {
 };
 
 static bool is_irq_happen;
+static atomic_t initial_state_reported = ATOMIC_INIT(0);
 static int hdmi_bdg_irq;
 static int hdmi_bdg_irq_gpio;
 static wait_queue_head_t hdmi_bdg_read_wq;
@@ -103,9 +105,21 @@ static long hdmi_bdg_irq_lt6911uxe_dev_ioctl(struct file *filp,
 			&s_hdmi_bdg_res_info.height,
 			&s_hdmi_bdg_res_info.id);
 		if (!rc) {
-			CAM_INFO(CAM_SENSOR, "HDMI_BDG Input resolution = %d x %d",
+			int notify_rc;
+			CAM_INFO(CAM_SENSOR, "HDMI_BDG Input resolution = %d x %d, connected:%d",
 				s_hdmi_bdg_res_info.width,
-				s_hdmi_bdg_res_info.height);
+				s_hdmi_bdg_res_info.height,
+				s_hdmi_bdg_res_info.have_hdmi_signal);
+			/* Use atomic_cmpxchg to atomically check and set the flag */
+			if (atomic_cmpxchg(&initial_state_reported, 0, 1) == 0) {
+				notify_rc = msm_hdmidp_in_notify(MSM_IN_HDMI,
+					s_hdmi_bdg_res_info.have_hdmi_signal);
+				if (notify_rc && notify_rc != -EEXIST) {
+					/* Restore flag on error to allow retry */
+					atomic_set(&initial_state_reported, 0);
+					CAM_ERR(CAM_SENSOR, "msm_hdmidp_in_notify failed: %d", notify_rc);
+				}
+			}
 		}
 		rc = copy_to_user((struct hdmi_bdg_lt6911uxe_res_info *)arg,
 			&s_hdmi_bdg_res_info,
@@ -118,6 +132,7 @@ static long hdmi_bdg_irq_lt6911uxe_dev_ioctl(struct file *filp,
 		s_hdmi_bdg_res_info.height = -1;
 		s_hdmi_bdg_res_info.have_hdmi_signal = false;
 		s_hdmi_bdg_res_info.id = 0;
+		atomic_set(&initial_state_reported, 0);
 		break;
 	case HDMI_BDG_IRQ_HANDLER_IOCTL_CMD_UPGRADE_FW:
 		CAM_INFO(CAM_SENSOR, "hdmi_bdg_irq_handler: Upgrading firmware...");
@@ -162,11 +177,16 @@ static irqreturn_t hdmi_bdg_lt6911uxe_irq_handler(int irq, void *p)
 			&s_hdmi_bdg_res_info.height,
 			&s_hdmi_bdg_res_info.id);
 	if (!rc) {
-		CAM_INFO(CAM_SENSOR, "HDMI_BDG Input resolution = %d x %d",
+		int notify_rc;
+		CAM_INFO(CAM_SENSOR, "HDMI_BDG Input resolution = %d x %d, connected:%d",
 				s_hdmi_bdg_res_info.width,
-				s_hdmi_bdg_res_info.height);
+				s_hdmi_bdg_res_info.height,
+				s_hdmi_bdg_res_info.have_hdmi_signal);
 		is_irq_happen = true;
 		wake_up_all(&hdmi_bdg_read_wq);
+		notify_rc = msm_hdmidp_in_notify(MSM_IN_HDMI, s_hdmi_bdg_res_info.have_hdmi_signal);
+		if (notify_rc && notify_rc != -EEXIST)
+			CAM_ERR(CAM_SENSOR, "msm_hdmidp_in_notify failed: %d", notify_rc);
 	} else {
 		CAM_ERR(CAM_SENSOR, "Get resolution failed!");
 	}
@@ -177,6 +197,7 @@ static int hdmi_bdg_irq_lt6911uxe_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 
+	atomic_set(&initial_state_reported, 0);
 	hdmi_bdg_irq_gpio = of_get_named_gpio(pdev->dev.of_node,
 			"hdmi_bdg_irq_pin", 0);
 	ret = gpio_request(hdmi_bdg_irq_gpio, "hdmi_bdg_irq_pin");
