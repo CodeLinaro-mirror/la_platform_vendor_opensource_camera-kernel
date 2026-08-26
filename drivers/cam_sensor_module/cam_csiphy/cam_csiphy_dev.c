@@ -16,11 +16,10 @@
 static struct dentry *root_dentry;
 
 static void cam_csiphy_populate_secure_info(
-	struct csiphy_device *csiphy_dev, void *data)
+	struct csiphy_device *csiphy_dev,
+	struct cam_subdev_msg_phy_secure_params *secure_info)
 {
 	int i;
-	struct cam_csiphy_secure_info *secure_info =
-		(struct cam_csiphy_secure_info *)data;
 	struct cam_csiphy_param *param;
 
 	if (csiphy_dev->soc_info.index > MAX_SUPPORTED_PHY_IDX) {
@@ -33,7 +32,7 @@ static void cam_csiphy_populate_secure_info(
 		param = &csiphy_dev->csiphy_info[i];
 
 		if (param->secure_mode &&
-			param->lane_assign == secure_info->lane_assign) {
+			param->lane_assign == secure_info->lane_cfg) {
 
 			param->secure_info.cdm_hw_idx_mask = secure_info->cdm_hw_idx_mask;
 			param->secure_info.csid_hw_idx_mask = secure_info->csid_hw_idx_mask;
@@ -49,6 +48,7 @@ static void cam_csiphy_populate_secure_info(
 				param->secure_info.csid_hw_idx_mask,
 				param->secure_info.cdm_hw_idx_mask,
 				param->secure_info.vc_mask);
+			break;
 		}
 	}
 
@@ -84,7 +84,10 @@ static void cam_csiphy_subdev_handle_message(
 		}
 		break;
 	case CAM_SUBDEV_MESSAGE_DOMAIN_ID_SECURE_PARAMS: {
-		cam_csiphy_populate_secure_info(csiphy_dev, data);
+		struct cam_subdev_msg_phy_secure_params *secure_info =
+			(struct cam_subdev_msg_phy_secure_params *)data;
+
+		cam_csiphy_populate_secure_info(csiphy_dev, secure_info);
 		break;
 	}
 	default:

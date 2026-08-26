@@ -36,6 +36,24 @@ enum cam_subdev_rwsem {
 };
 
 /**
+ * struct cam_subdev_msg_phy_secure_params: Contains secure session info
+ *                                          sent from CSID to CSIPHY
+ *
+ * @phy_sel:          PHY index identifying the target CSIPHY device
+ * @lane_cfg:         Lane configuration value used to match the PHY session
+ * @vc_mask:          Virtual channel masks (unused for mobile use case)
+ * @csid_hw_idx_mask: Bit mask of CSID core(s) in use for the secure session
+ * @cdm_hw_idx_mask:  Bit mask of CDM in use for the secure session
+ */
+struct cam_subdev_msg_phy_secure_params {
+	uint32_t phy_sel;
+	uint32_t lane_cfg;
+	uint64_t vc_mask;
+	uint32_t csid_hw_idx_mask;
+	uint32_t cdm_hw_idx_mask;
+};
+
+/**
  * struct cam_subdev - describes a camera sub-device
  *
  * @pdev:                  Pointer to the platform device
