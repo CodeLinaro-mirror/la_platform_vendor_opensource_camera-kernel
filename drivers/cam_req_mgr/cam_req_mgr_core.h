@@ -520,6 +520,9 @@ struct cam_req_mgr_connected_device {
  *                                frame in sync link as well.
  * @open_req_cnt                : Counter to keep track of open requests that are yet
  *                                to be serviced in the kernel.
+ * @is_mtrigger                 : True once a manual-trigger request has been scheduled
+ *                                on this link; gates the request-driven watchdog
+ *                                pause-on-idle so auto-trigger links are unaffected.
  * @last_flush_id               : Last request to flush
  * @is_used                     : 1 if link is in use else 0
  * @is_master                   : Based on pd among links, the link with the highest pd
@@ -573,6 +576,7 @@ struct cam_req_mgr_core_link {
 	int32_t                              num_sync_links;
 	bool                                 sync_link_sof_skip;
 	uint32_t                             open_req_cnt;
+	bool                                 is_mtrigger;
 	int64_t                              last_flush_id;
 	atomic_t                             is_used;
 	bool                                 is_master;
