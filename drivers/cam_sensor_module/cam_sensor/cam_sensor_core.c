@@ -665,7 +665,7 @@ static int32_t cam_sensor_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 				csl_packet->io_configs_offset);
 
 			if (io_cfg == NULL) {
-				CAM_ERR(CAM_SENSOR, "I/O config is set (%d), but buffer is NULL", 
+				CAM_ERR(CAM_SENSOR, "I/O config is set (%d), but buffer is NULL",
 				csl_packet->num_io_configs);
 				goto end;
 			}
@@ -1425,6 +1425,7 @@ void cam_sensor_shutdown(struct cam_sensor_ctrl_t *s_ctrl)
 	s_ctrl->bridge_intf.device_hdl = -1;
 	s_ctrl->bridge_intf.link_hdl = -1;
 	s_ctrl->bridge_intf.session_hdl = -1;
+	s_ctrl->bridge_intf.crm_cb = NULL;
 	CAM_MEM_FREE(power_info->power_setting);
 	CAM_MEM_FREE(power_info->power_down_setting);
 	power_info->power_setting = NULL;
@@ -1838,6 +1839,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		s_ctrl->bridge_intf.device_hdl = -1;
 		s_ctrl->bridge_intf.link_hdl = -1;
 		s_ctrl->bridge_intf.session_hdl = -1;
+		s_ctrl->bridge_intf.crm_cb = NULL;
 
 		s_ctrl->sensor_state = CAM_SENSOR_INIT;
 		CAM_INFO(CAM_SENSOR,
