@@ -79,16 +79,20 @@ struct cam_pinctrl_res {
 /**
  * struct cam_res_mgr_dt
  *
- * @shared_gpio            : Shared gpios list
- * @shared_pctrl_gpio      : Shared pinctrl gpio list
- * @num_shared_gpio        : Number of shared gpio
- * @num_shared_pctrl_gpio  : Number of shared pinctrl gpio
- * @pctrl_name             : Pinctrl name from shared pinctrl gpio list
+ * @shared_gpio               : Shared gpios list
+ * @shared_gpio_no_refcount   : Shared gpios that bypass refcount
+ * @shared_pctrl_gpio         : Shared pinctrl gpio list
+ * @num_shared_gpio           : Number of shared gpio
+ * @num_shared_gpio_no_refcnt : Number of shared gpio(no refcount)
+ * @num_shared_pctrl_gpio     : Number of shared pinctrl gpio
+ * @pctrl_name                : Pinctrl name from shared pinctrl gpio list
  */
 struct cam_res_mgr_dt {
 	uint                shared_gpio[MAX_SHARED_GPIO_SIZE];
+	uint                shared_gpio_no_refcount[MAX_SHARED_GPIO_SIZE];
 	uint                shared_pctrl_gpio[MAX_SHARED_PCTRL_GPIO_SIZE];
 	int                 num_shared_gpio;
+	int                 num_shared_gpio_no_refcnt;
 	int                 num_shared_pctrl_gpio;
 	const char         *pctrl_name[MAX_SHARED_PCTRL_GPIO_SIZE];
 };
