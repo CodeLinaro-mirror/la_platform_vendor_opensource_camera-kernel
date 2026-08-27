@@ -11738,6 +11738,8 @@ static int cam_context_prepare_ul_request(struct cam_isp_context *ctx_isp, int t
 				req_isp->num_fence_map_out;
 			req_isp->num_cfg++;
 			req_isp->num_fence_map_out++;
+			/* Increase buffer index to avoid congestion in case of clubbed buf_done */
+			res_data[j].curr_buf_index = k;
 			req_isp->hw_update_data.virtual_frame_en = true;
 		}
 	}
