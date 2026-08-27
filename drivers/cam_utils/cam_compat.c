@@ -223,7 +223,8 @@ int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 }
 
 #ifdef CONFIG_SECURE_CAMERA_V3
-int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info)
+int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info,
+	uint32_t port_info_len)
 {
 	int rc = 0;
 	struct smci_object client_env, sc_object;
@@ -240,7 +241,8 @@ int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info)
 		goto release_client;
 	}
 
-	rc = trusted_camera_driver_dynamic_configure_ports(sc_object, sec_unsec_port_info, 2);
+	rc = trusted_camera_driver_dynamic_configure_ports(sc_object, sec_unsec_port_info,
+		port_info_len);
 	if (rc) {
 		CAM_ERR(CAM_ISP,
 			"trusted_camera_driver_dynamic_configure_ports failed, rc: %d", rc);
@@ -317,7 +319,8 @@ int32_t cam_convert_hw_id_to_secure_hw_type(uint32_t hw_id)
 #endif
 
 #ifdef CONFIG_TZ_DCP_API_VER_2
-int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info)
+int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info,
+	uint32_t port_info_len)
 {
 	int rc = 0;
 	struct smci_object client_env, sc_object;
@@ -334,7 +337,8 @@ int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info)
 		goto release_client;
 	}
 
-	rc = trusted_camera_driver_dynamic_configure_ports_v2(sc_object, sec_unsec_port_info, 2);
+	rc = trusted_camera_driver_dynamic_configure_ports_v2(sc_object, sec_unsec_port_info,
+		port_info_len);
 	if (rc) {
 		CAM_ERR(CAM_ISP,
 			"trusted_camera_driver_dynamic_configure_ports failed, rc: %d", rc);
