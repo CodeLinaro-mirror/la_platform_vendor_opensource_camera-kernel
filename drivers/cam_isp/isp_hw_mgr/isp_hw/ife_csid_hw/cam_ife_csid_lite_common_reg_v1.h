@@ -6,6 +6,14 @@
 #ifndef _CAM_IFE_CSID_LITE_COMMON_REG_V1_H_
 #define _CAM_IFE_CSID_LITE_COMMON_REG_V1_H_
 
+#include <linux/module.h>
+#include "cam_ife_csid_dev.h"
+#include "camera_main.h"
+#include "cam_ife_csid_common.h"
+#include "cam_ife_csid_hw_ver2.h"
+#include "cam_irq_controller.h"
+#include "cam_isp_hw_mgr_intf.h"
+
 static struct cam_ife_csid_irq_desc cam_ife_csid_lite_common_reg_v1_rx_irq_desc[][32] = {
 	{
 		{
