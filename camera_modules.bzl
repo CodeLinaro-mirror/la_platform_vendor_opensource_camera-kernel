@@ -28,7 +28,8 @@ def _define_module(target, variant):
             "//soc-repo:{}/drivers/soc/qcom/mdt_loader".format(soc_tv),
             "//soc-repo:{}/drivers/soc/qcom/qcom_va_minidump".format(soc_tv),
             "//soc-repo:{}/drivers/leds/flash/leds-qcom-flash".format(soc_tv),
-            "//soc-repo:{}/drivers/video/backlight/qcom-spmi-wled".format(soc_tv),
+            "//soc-repo:{}/drivers/leds/leds-qti-flash".format(soc_tv),
+	    "//soc-repo:{}/drivers/video/backlight/qcom-spmi-wled".format(soc_tv),
         ],
         "//build/kernel/kleaf:socrepo_false": [
             ":camera_headers",
