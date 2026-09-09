@@ -69,21 +69,31 @@ static int cam_icp_dev_evt_inject_cb(void *inject_args)
 {
 	struct cam_common_inject_evt_param *inject_params = inject_args;
 	struct cam_icp_subdev *icp_dev;
-	int i;
+	int i, rc = -ENODEV;
 
+	mutex_lock(&g_dev_lock);
 	/* Event Injection currently supported for only a single instance of ICP */
 	icp_dev = g_icp_dev[0];
+	if (!icp_dev) {
+		CAM_ERR(CAM_ICP, "ICP device is not bound");
+		mutex_unlock(&g_dev_lock);
+		return -ENODEV;
+	}
 
 	for (i = 0; i < CAM_ICP_CTX_MAX; i++) {
 		if (icp_dev->ctx[i].dev_hdl == inject_params->dev_hdl) {
 			cam_context_add_evt_inject(&icp_dev->ctx[i],
 				&inject_params->evt_params);
-			return 0;
+			rc = 0;
+			break;
 		}
 	}
 
-	CAM_ERR(CAM_ICP, "No dev hdl found %d", inject_params->dev_hdl);
-	return -ENODEV;
+	if (rc)
+		CAM_ERR(CAM_ICP, "No dev hdl found %d", inject_params->dev_hdl);
+
+	mutex_unlock(&g_dev_lock);
+	return rc;
 }
 
 static void cam_icp_dev_iommu_fault_handler(struct cam_smmu_pf_info *pf_smmu_info)
@@ -277,8 +287,10 @@ const struct v4l2_subdev_internal_ops cam_icp_subdev_internal_ops = {
 
 static inline void cam_icp_subdev_clean_up(uint32_t device_idx)
 {
+	mutex_lock(&g_dev_lock);
 	CAM_MEM_FREE(g_icp_dev[device_idx]);
 	g_icp_dev[device_idx] = NULL;
+	mutex_unlock(&g_dev_lock);
 }
 
 static int cam_icp_component_bind(struct device *dev,
