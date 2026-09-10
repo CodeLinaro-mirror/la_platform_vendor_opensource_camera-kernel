@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __MSM_CAMERA_H
@@ -174,4 +174,18 @@
 #define CAM_PVM    1
 #define CAM_SVM1   2
 #define CAM_VM_MAX 3
+
+/* CCI Timer */
+#define CCI_TIMER0 0
+#define CCI_TIMER1 1
+#define CCI_TIMER2 2
+#define CCI_TIMER3 3
+#define CCI_TIMER4 4
+#define CCI_TIMER5 5
+#define CCI_TIMER6 6
+#define CCI_TIMER7 7
+#define CCI_TIMER8 8
+#define CCI_TIMER9 9
+#define CCI_TIMER_MAX 10
+
 #endif

@@ -209,6 +209,16 @@ enum cam_req_mgr_req_state {
 };
 
 /**
+ * enum cam_req_mgr_group_state
+ * @CAM_CRM_GROUP_STATE_IDLE       : group allocated/reset, not ready to start
+ * @CAM_CRM_GROUP_STATE_IN_PROGRESS: group sequence started and is progressing
+ */
+enum cam_req_mgr_group_state {
+	CAM_CRM_GROUP_STATE_IDLE = 0,
+	CAM_CRM_GROUP_STATE_IN_PROGRESS,
+};
+
+/**
  * struct cam_req_mgr_traverse_result
  * @req_id        : Req id that is not ready
  * @pd            : pipeline delay
@@ -371,14 +381,20 @@ struct cam_req_mgr_slot {
  * @size                : number of requests in this group
  * @start_link_slot_idx : in_q slot index of the first (seq-0) request
  * @ready               : true when all devices have all group slots ready
+ * @state               : group state used by manual-trigger flow
+ * @tbl_ready_cnt       : count of (slot, pd_tbl) pairs that have reached
+ *                        CRM_REQ_STATE_READY for this group; group is ready
+ *                        once this reaches size * link->req.num_tbl
  * @external_trigger    : cached external trigger info (dev == NULL if none)
  */
 struct cam_req_mgr_connected_device;
 struct cam_req_mgr_group_slot {
-	int64_t   id;
-	uint32_t  size;
-	int32_t   start_link_slot_idx;
-	bool      ready;
+	int64_t                      id;
+	uint32_t                     size;
+	int32_t                      start_link_slot_idx;
+	bool                         ready;
+	enum cam_req_mgr_group_state state;
+	uint32_t                     tbl_ready_cnt;
 	struct {
 		int32_t                              link_hdl;
 		int64_t                              req_id;
@@ -504,6 +520,9 @@ struct cam_req_mgr_connected_device {
  *                                frame in sync link as well.
  * @open_req_cnt                : Counter to keep track of open requests that are yet
  *                                to be serviced in the kernel.
+ * @is_mtrigger                 : True once a manual-trigger request has been scheduled
+ *                                on this link; gates the request-driven watchdog
+ *                                pause-on-idle so auto-trigger links are unaffected.
  * @last_flush_id               : Last request to flush
  * @is_used                     : 1 if link is in use else 0
  * @is_master                   : Based on pd among links, the link with the highest pd
@@ -557,6 +576,7 @@ struct cam_req_mgr_core_link {
 	int32_t                              num_sync_links;
 	bool                                 sync_link_sof_skip;
 	uint32_t                             open_req_cnt;
+	bool                                 is_mtrigger;
 	int64_t                              last_flush_id;
 	atomic_t                             is_used;
 	bool                                 is_master;
@@ -598,6 +618,8 @@ struct cam_req_mgr_core_link {
  * @force_err_recovery : For debugging, we can force bubble recovery
  *                       to be always ON or always OFF using debugfs.
  * @sync_mode          : Sync mode for this session links
+ *
+ * @group_lock         : lock to serialize links in manual trigger execute
  */
 struct cam_req_mgr_core_session {
 	int32_t                       session_hdl;
@@ -607,6 +629,7 @@ struct cam_req_mgr_core_session {
 	struct mutex                  lock;
 	int32_t                       force_err_recovery;
 	int32_t                       sync_mode;
+	struct mutex                  group_lock;
 };
 
 /**

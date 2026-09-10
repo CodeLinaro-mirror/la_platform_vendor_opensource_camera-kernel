@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __UAPI_CAM_SENSOR_H__
@@ -48,6 +48,7 @@
 #define CAM_SENSOR_GENERIC_BLOB_RES_INFO           0
 #define CAM_SENSOR_GENERIC_BLOB_FRAME_INFO         1
 #define CAM_SENSOR_GENERIC_BLOB_MODESWITCHPD_INFO  2
+#define CAM_SENSOR_GENERIC_BLOB_SYNC_INFO          3
 
 enum camera_sensor_cmd_type {
 	CAMERA_SENSOR_CMD_TYPE_INVALID,
@@ -1317,5 +1318,224 @@ struct cam_flash_query_cap_info {
 	__u32    max_duration_flash[CAM_FLASH_MAX_LED_TRIGGERS];
 	__u32    max_current_torch[CAM_FLASH_MAX_LED_TRIGGERS];
 } __attribute__ ((packed));
+
+/* CCI Timer infrastructure */
+
+#define CAM_CCI_TIMER_MAX_EVENTS 20
+
+enum cci_timer_freq_mode {
+        CCI_TIMER_FREQ_MODE_INVALID = 0,
+	CCI_TIMER_INFINITE_FRAME,	/* sensor stop/streamoff */
+	CCI_TIMER_FINITE_FRAME,		/* single/multiple frames */
+	CCI_TIMER_FREQ_MODE_MAX
+};
+
+enum cci_timer_fsync_trigger_point {
+        CCI_TIMER_FSYNC_TP_INVALID = 0,
+	CCI_TIMER_FSYNC_ACQUIRE,
+	CCI_TIMER_FSYNC_STREAM_ON,
+	CCI_TIMER_FSYNC_MAX
+};
+
+enum cci_timer_per_frame_trigger_point {
+	CCI_TIMER_PERFRAME_EPOCH = 0,
+	CCI_TIMER_PERFRAME_IMMEDIATE,
+	CCI_TIMER_PERFRAME_EOF,
+	CCI_TIMER_PERFRAME_MAX
+};
+
+enum cci_timer_gpio_ops_mode {
+	CCI_TIMER_MODE_NO_OP = 0,
+	/*
+	 * CCI_TIMER_MODE_SYNC_INDEPENDENT:
+	 * Used for independent link. i.e. for MIPI single MIPI sensor and
+	 * for GMSL single deserializer
+	 * GMSL:
+	 *   - single deserializer can connect multiple sensor or single
+	 *     sensor, all underneath connected sensors will get the same
+	 *     XVS signal to perform any operation.
+	 * FPGA:
+	 * NOTE: Only one gpio control is needed. Expected number of
+	 *       eventCount = 2, one for high and one for low.
+	 * Usecase:
+	 *   - Single MIPI/FPGA Sensors with one timer gpio
+	 *   - Single desr - multiple/single sensor with perport and single
+	 *     timer gpio
+	 */
+	CCI_TIMER_MODE_SYNC_INDEPENDENT,
+	/*
+	 * CCI_TIMER_MODE_SYNC_WITH_MULTI_QUEUE:
+	 * This is for Multiple timer gpios on multiple Q
+	 *   - Multiple GPIO_Q can support different FPS
+	 * NOTE: As multiple GPIO_Q needs to be in sync with each other this
+	 *       has to be in MCX usecase. NonMCX usecase it is not guaranteed
+	 *       to be in sync as there is not any deterministic time for
+	 *       camera stream to start.
+	 * UseCase:
+	 *   - MCX Usecase: Multiple FPS with different gpios
+	 */
+	CCI_TIMER_MODE_SYNC_WITH_MULTI_QUEUE,
+	/*
+	 * CCI_TIMER_MODE_SYNC_WITH_SINGLE_QUEUE:
+	 * This is to sync multiple timers with Single GPIO_Q
+	 * - Single GPIO_Q can support different FPS but has to be
+	 *     multiplication factor. i.e. 5, 10, 15 or 15, 30, 60.
+	 * NOTE: This mode can only be supported Max of 3 variable frame
+	 *       rates with GPIO queue depth.
+	 * UseCase:
+	 *   - MCX:
+	 *       - Perport multiple deser/multiple groups
+	 *   - Multiple Deser: same FPS multiple GPIOS
+	 *   - Single Sensor: driving multiple CCI timers for different
+	 *     operation.
+	 */
+	CCI_TIMER_MODE_SYNC_WITH_SINGLE_QUEUE,
+	/*
+	 * CCI_TIMER_MODE_SYNC_WITH_ASYNC_CID_INPUT:
+	 * This is used to get sync with CSID driven notification
+	 *   - CSID -> programs CID based on VC and DT
+	 * NOTE: This can apply to both Single and Multiple Queue Sync
+	 */
+	CCI_TIMER_MODE_SYNC_WITH_ASYNC_CID_INPUT,
+	/*
+	 * CCI_TIMER_MODE_SYNC_WITH_ASYNC_GPIO_INPUT:
+	 * This is to driver GPIO_Q from external HW event via
+	 * CCI_ASYNC Gpio
+	 *   - This can also support both independent and Multiple Queue sync
+	 */
+	CCI_TIMER_MODE_SYNC_WITH_ASYNC_GPIO_INPUT,
+	/*
+	 * CCI_TIMER_MODE_SYNC_WITH_ASYNC_I2C_QUEUE_INPUT:
+	 * i2c cmd queue is triggering GPIO timer queue for the operation
+	 * NOTE: Only single slave should be connected to that CCI or single
+	 * slave communication should be there when using this command.
+	 * Two or more slave communication will not be deterministic
+	 * for particular sensor based trigger.
+	 */
+	CCI_TIMER_MODE_SYNC_WITH_ASYNC_I2C_QUEUE_INPUT,
+	CCI_TIMER_MODE_SYNC_MAX
+};
+
+enum cci_gpio_level {
+	CCI_GPIO_LEVEL_LOW  = 0,
+	CCI_GPIO_LEVEL_HIGH = 1,
+};
+
+/**
+ * struct cci_timer_freq_info - CCI timer frequency information
+ * @freq_mode:         Frequency mode (infinite or finite frames) of type enum cci_timer_freq_mode
+ * @number_of_frames:  Number of frames for finite mode
+ * @reserved:          Reserved for padding and future use
+ */
+struct cci_timer_freq_info {
+	__u32 freq_mode;
+	__u16 number_of_frames;
+	__u16 reserved;
+} __attribute__((packed));
+
+/**
+ * struct cci_csid_sync_info - CSID synchronization information
+ * @vc:              Virtual channel
+ * @dt:              Data type
+ * @line_to_trigger: Line number within the frame at which to trigger
+ * @master_slot_idx: Slot index of the master Sensor
+ */
+struct cci_csid_sync_info {
+	__u16 vc;
+	__u16 dt;
+	__u16 line_to_trigger;
+	__s16 master_slot_idx;
+} __attribute__((packed));
+
+/**
+ * struct cam_sensor_async_info - Async GPIO information
+ * @gpio_number: GPIO number for async operation
+ */
+struct cam_sensor_async_info {
+	__s64 gpio_number;
+} __attribute__((packed));
+
+/**
+ * struct cci_gpio_timing_event - GPIO timing event configuration
+ * @gpio_number:         GPIO number (0-4)
+ * @delay_to_trigger_ns: Relative time with respect to last event
+ * @level:               GPIO level (HIGH or LOW) of type enum cci_gpio_level
+ * @reserved:            Reserved for padding and future use
+ * @external_event:      External event information
+ */
+struct cci_gpio_timing_event {
+	__s64 gpio_number;
+	__s64 delay_to_trigger_ns;
+	__u32 level;
+	__u32 reserved;
+	union {
+		struct cci_csid_sync_info    cid_info;
+		struct cam_sensor_async_info async_gpio_info;
+	} external_event;
+} __attribute__((packed));
+
+/**
+ * struct cci_gpio_timing_schema - GPIO timing schema
+ * @events:       Array of GPIO timing events (max CAM_CCI_TIMER_MAX_EVENTS)
+ * @event_count:  Number of events in the array
+ * @reserved:     Future use
+ */
+struct cci_gpio_timing_schema {
+	struct cci_gpio_timing_event events[CAM_CCI_TIMER_MAX_EVENTS];
+	__u32  event_count;
+	__u32  reserved;
+} __attribute__((packed));
+
+/**
+ * struct cci_timer_trigger_point_info - Trigger point information
+ * @tpoint_fsync_info:    Trigger point of type enum cci_timer_fsync_trigger_point
+ * @tpoint_perframe_info: Per-frame trigger point of type enum cci_timer_per_frame_trigger_point
+ * @refcount_to_trigger:  Trigger reference count
+ * @reserved:             Future use
+ */
+struct cci_timer_trigger_point_info {
+	union {
+		__u32 tpoint_fsync_info;
+		__u32 tpoint_perframe_info;
+	} tp;
+	__u16   refcount_to_trigger;
+	__u16   reserved;
+} __attribute__((packed));
+
+/**
+ * struct cci_trigger_control_info - CCI trigger control information
+ * @repeat_freq_info: Repeat frequency information
+ * @tpoint_info:      Timer start control information
+ */
+struct cci_trigger_control_info {
+	struct cci_timer_freq_info          repeat_freq_info;
+	struct cci_timer_trigger_point_info tpoint_info;
+} __attribute__((packed));
+
+/**
+ * struct cci_timer_sync_info - CCI timer synchronization information
+ * @timer_info:          GPIO timing schema
+ * @trigger_cntrl_info:  Trigger control information
+ */
+struct cci_timer_sync_info {
+	struct cci_gpio_timing_schema   timer_info;
+	struct cci_trigger_control_info trigger_cntrl_info;
+} __attribute__((packed));
+
+/**
+ * struct cci_sync_info - CCI synchronization configuration
+ * @operational_mode: Operational mode for selecting the Sync specific
+ *                    configuration. Mode list in enum cci_timer_gpio_ops_mode
+ * @cci_timer_info:   Array of CCI timer sync information; allocate
+ *                    sizeof(struct cci_sync_info) + (n - 1) *
+ *                    sizeof(struct cci_timer_sync_info) for n timers
+ */
+struct cci_sync_info {
+	__u32 operational_mode;
+	union {
+		struct cci_timer_sync_info cci_timer_info[1];
+		__DECLARE_FLEX_ARRAY(struct cci_timer_sync_info, cci_timer_info_flex);
+	};
+} __attribute__((packed));
 
 #endif

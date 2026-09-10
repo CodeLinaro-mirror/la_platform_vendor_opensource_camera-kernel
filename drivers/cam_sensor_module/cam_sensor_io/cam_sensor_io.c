@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cam_sensor_io.h"
@@ -394,6 +394,71 @@ int32_t camera_io_release(struct camera_io_master *io_master_info)
 			return 0;
 	default:
 		CAM_ERR(CAM_SENSOR_IO, "Invalid Master Type:%d", io_master_info->master_type);
+	}
+
+	return -EINVAL;
+}
+
+int32_t camera_io_gpio_cfg(struct camera_io_master *io_master_info)
+{
+	int rc = 0;
+
+	CAM_DBG(CAM_SENSOR, "ENTER");
+	if (!io_master_info) {
+		CAM_ERR(CAM_SENSOR, "Invalid Args");
+		return -EINVAL;
+	}
+
+	switch (io_master_info->master_type) {
+	case CCI_MASTER:
+		rc = cam_sensor_cci_i2c_util(io_master_info, MSM_CCI_TIMER_FSYNC_ALL);
+		break;
+	case I2C_MASTER:
+	case I3C_MASTER:
+	case SPI_MASTER:
+	default:
+		CAM_ERR(CAM_SENSOR, "Invalid Master Type:%d", io_master_info->master_type);
+	}
+
+	CAM_DBG(CAM_SENSOR, "EXIT : rc:%d", rc);
+	return rc;
+}
+
+int32_t camera_io_gpio_halt(struct camera_io_master *io_master_info)
+{
+	if (!io_master_info) {
+		CAM_ERR(CAM_SENSOR, "Invalid Args");
+		return -EINVAL;
+	}
+
+	switch (io_master_info->master_type) {
+	case CCI_MASTER:
+		return cam_sensor_cci_i2c_util(io_master_info, MSM_CCI_GPIO_QUEUE_HALT);
+	case I2C_MASTER:
+	case I3C_MASTER:
+	case SPI_MASTER:
+	default:
+		CAM_ERR(CAM_SENSOR, "Invalid Master Type:%d", io_master_info->master_type);
+	}
+
+	return -EINVAL;
+}
+
+int32_t camera_io_gpio_start(struct camera_io_master *io_master_info)
+{
+	if (!io_master_info) {
+		CAM_ERR(CAM_SENSOR, "Invalid Args");
+		return -EINVAL;
+	}
+
+	switch (io_master_info->master_type) {
+	case CCI_MASTER:
+		return cam_sensor_cci_i2c_util(io_master_info, MSM_CCI_GPIO_QUEUE_START);
+	case I2C_MASTER:
+	case I3C_MASTER:
+	case SPI_MASTER:
+	default:
+		CAM_ERR(CAM_SENSOR, "Invalid Master Type:%d", io_master_info->master_type);
 	}
 
 	return -EINVAL;
