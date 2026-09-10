@@ -669,6 +669,7 @@ struct cam_isp_hw_active_hw_ctx {
  *                             not to call config Hw from start hw.
  * @is_trigger_type:           Indicate if usecase is trigger type or not
  * @is_recovery:               Csid path error recovery
+ * @is_dual_trigger:           Indicate if usecase is dual trigger camera or not
  *
  */
 struct cam_isp_start_args {
@@ -678,6 +679,7 @@ struct cam_isp_start_args {
 	bool                      frame_drop;
 	int8_t                    is_trigger_type;
 	bool                      is_recovery;
+	bool                      is_dual_trigger;
 };
 
 /**

@@ -213,6 +213,7 @@ struct cam_ife_hw_mgr_sfe_info {
  * @skip_reg_dump_buf_put:    Set if put_cpu_buf for reg dump buf is already called
  * @hwfence_en:               set if HW fence is enabled
  * @fast_crop_en              Fast crop enable flag
+ * @is_dual_trigger           Dual trigger camera use case
  *
  */
 struct cam_ife_hw_mgr_ctx_flags {
@@ -245,6 +246,7 @@ struct cam_ife_hw_mgr_ctx_flags {
 	bool   skip_reg_dump_buf_put;
 	bool   hwfence_en;
 	bool   fast_crop_en;
+	bool   is_dual_trigger;
 };
 
 /**

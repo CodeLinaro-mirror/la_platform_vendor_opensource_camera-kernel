@@ -1661,6 +1661,7 @@ static int cam_ife_mgr_csid_start_hw(
 			start_args.is_frame_drop = is_frame_drop;
 			start_args.is_trigger_mode = ctx->flags.is_trigger_type;
 			start_args.is_recovery = is_recovery;
+			start_args.is_dual_trigger = ctx->flags.is_dual_trigger;
 			hw_intf->hw_ops.start(hw_intf->hw_priv, &start_args,
 			    sizeof(start_args));
 		}
@@ -11209,7 +11210,7 @@ static int cam_ife_mgr_csid_start_hw_stream_grp(
 	struct cam_isp_hw_mgr_res      *hw_mgr_res;
 	struct cam_isp_resource_node   *isp_res;
 	struct cam_isp_resource_node   *res[CAM_IFE_PIX_PATH_RES_MAX - 1];
-	struct cam_csid_hw_start_args  start_args;
+	struct cam_csid_hw_start_args  start_args = {0};
 	struct cam_hw_intf             *hw_intf;
 	uint32_t  cnt;
 	int rc = 0;
@@ -11575,6 +11576,7 @@ static int cam_ife_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 	}
 
 	ctx->flags.is_trigger_type = start_isp->is_trigger_type;
+	ctx->flags.is_dual_trigger = start_isp->is_dual_trigger;
 
 	CAM_DBG(CAM_ISP, "Enter... ctx id:%d",
 		ctx->ctx_index);

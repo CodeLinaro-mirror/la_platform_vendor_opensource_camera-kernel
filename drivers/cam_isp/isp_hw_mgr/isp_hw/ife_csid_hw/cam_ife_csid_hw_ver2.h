@@ -577,6 +577,9 @@ struct cam_ife_csid_token_info {
  *                             otherwise VC of IPP path
  * @active_res_mask:           Active path or resource mask
  * @is_trigger_type:           Indicates if it is a trigger mode or not.
+ * @is_dual_trigger:           Indicates if it is the dual trigger camera use
+ *                             case, where each CSID is configured with only
+ *                             one of the two VCs the sensor streams.
  *
  */
 
@@ -584,6 +587,7 @@ struct cam_ife_csid_trigger_cam_data {
 	uint32_t                 primary_vc;
 	uint32_t                 active_res_mask;
 	bool                     is_trigger_type;
+	bool                     is_dual_trigger;
 };
 
 /*
