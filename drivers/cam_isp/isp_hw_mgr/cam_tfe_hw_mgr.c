@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -5711,10 +5711,7 @@ static int cam_tfe_mgr_prepare_hw_update(void *hw_mgr_priv,
 		mup_config.num_expoures = prepare_hw_data->num_exp;
 		mup_config.mup_en = prepare_hw_data->mup_en;
 
-		if (ctx->is_shdr_slave)
-			continue;
-
-		/*Add reg update */
+		/* Add reg update */
 		rc = cam_isp_add_reg_update(prepare, &ctx->res_list_tfe_in,
 			ctx->base[i].idx, &prepare_hw_data->kmd_cmd_buff_info, false, &mup_config);
 		if (rc) {
