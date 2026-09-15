@@ -6,6 +6,7 @@
 
 #include <linux/types.h>
 #include <linux/slab.h>
+#include <linux/overflow.h>
 
 #include "cam_mem_mgr.h"
 #include "cam_packet_util.h"
@@ -60,6 +61,7 @@ int cam_packet_util_validate_packet(struct cam_packet *packet,
 	size_t sum_io_cfgs = 0;
 	size_t sum_patch_desc = 0;
 	size_t pkt_wo_payload = offsetof(struct cam_packet, payload);
+	size_t tmp = 0;
 
 	if (!packet)
 		return -EINVAL;
@@ -77,16 +79,40 @@ int cam_packet_util_validate_packet(struct cam_packet *packet,
 		packet->num_cmd_buf, packet->num_io_configs,
 		packet->kmd_cmd_buf_index);
 
-	sum_cmd_desc = packet->num_cmd_buf * sizeof(struct cam_cmd_buf_desc);
-	sum_io_cfgs = packet->num_io_configs * sizeof(struct cam_buf_io_cfg);
-	sum_patch_desc = packet->num_patches * sizeof(struct cam_patch_desc);
+	if(check_mul_overflow(packet->num_cmd_buf,
+			sizeof(struct cam_cmd_buf_desc), &sum_cmd_desc) ||
+		check_mul_overflow(packet->num_io_configs,
+			sizeof(struct cam_buf_io_cfg), &sum_io_cfgs) ||
+		check_mul_overflow(packet->num_patches,
+			sizeof(struct cam_patch_desc), &sum_patch_desc)) {
+		CAM_ERR(CAM_UTIL, "Overflow in computing descriptor sizes");
+		return -EINVAL;
+	}
 
-	if (((pkt_wo_payload + (size_t)packet->cmd_buf_offset +
-		sum_cmd_desc) > (size_t)packet->header.size) ||
-		((pkt_wo_payload + (size_t)packet->io_configs_offset +
-			sum_io_cfgs) > (size_t)packet->header.size) ||
-		((pkt_wo_payload + (size_t)packet->patch_offset +
-			sum_patch_desc) > (size_t)packet->header.size)) {
+	if (check_add_overflow(pkt_wo_payload,
+			(size_t)packet->cmd_buf_offset, &tmp) ||
+		check_add_overflow(tmp, sum_cmd_desc, &tmp) ||
+		(tmp > (size_t)packet->header.size)) {
+		CAM_ERR(CAM_UTIL, "params not within mem len:%zu %zu %zu %zu",
+			(size_t)packet->header.size, sum_cmd_desc,
+			sum_io_cfgs, sum_patch_desc);
+		return -EINVAL;
+	}
+
+	if (check_add_overflow(pkt_wo_payload,
+			(size_t)packet->io_configs_offset, &tmp) ||
+		check_add_overflow(tmp, sum_io_cfgs, &tmp) ||
+		(tmp > (size_t)packet->header.size)) {
+		CAM_ERR(CAM_UTIL, "params not within mem len:%zu %zu %zu %zu",
+			(size_t)packet->header.size, sum_cmd_desc,
+			sum_io_cfgs, sum_patch_desc);
+		return -EINVAL;
+	}
+
+	if (check_add_overflow(pkt_wo_payload,
+			(size_t)packet->patch_offset, &tmp) ||
+		check_add_overflow(tmp, sum_patch_desc, &tmp) ||
+		(tmp > (size_t)packet->header.size)) {
 		CAM_ERR(CAM_UTIL, "params not within mem len:%zu %zu %zu %zu",
 			(size_t)packet->header.size, sum_cmd_desc,
 			sum_io_cfgs, sum_patch_desc);
