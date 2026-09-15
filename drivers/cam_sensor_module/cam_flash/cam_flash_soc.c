@@ -291,7 +291,7 @@ static int32_t cam_get_source_node_info(
 #endif
 
 #if IS_REACHABLE(CONFIG_LEDS_QCOM_FLASH)
-static int32_t cam_get_led_source_node_info(
+static __maybe_unused int32_t cam_get_led_source_node_info(
 	struct device_node *of_node,
 	struct cam_flash_ctrl *fctrl,
 	struct cam_flash_private_soc *soc_private)
