@@ -2690,6 +2690,7 @@ static int __cam_isp_ctx_handle_fence_signaling_util(
 		CAM_ERR(CAM_ISP, "Sync = %u for req = %llu failed with rc = %d",
 			req_isp->fence_map_out[map_entry_idx].sync_id, req->request_id, rc);
 	} else if (req_isp->num_deferred_acks) {
+		req_isp->fence_map_out[map_entry_idx].sync_id = -1;
 		/* Process deferred buf_done acks */
 		__cam_isp_handle_deferred_buf_done(ctx_isp, req, false,
 			fence_status, fence_cause);
@@ -5533,8 +5534,6 @@ apply_wait:
 			if (ctx_isp->ul_path_en)
 				cam_isp_ctx_reset_producer_q_for_req(ctx_isp, req_isp);
 			ctx_isp->waitlist_req_cnt--;
-			list_del_init(&req->list);
-			__cam_isp_ctx_move_req_to_free_list(ctx, req);
 		} else {
 			reapply_type = CAM_CONFIG_REAPPLY_NONE;
 			*last_applied_ife_req = req->request_id;
@@ -5640,8 +5639,6 @@ apply_pending:
 			}
 			if (ctx_isp->ul_path_en)
 				cam_isp_ctx_reset_producer_q_for_req(ctx_isp, req_isp);
-			list_del_init(&req->list);
-			__cam_isp_ctx_move_req_to_free_list(ctx, req);
 		}
 	}
 
