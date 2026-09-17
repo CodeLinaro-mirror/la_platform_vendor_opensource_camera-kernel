@@ -3097,6 +3097,15 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_pixel(
 					ife_out_res->comp_grp_id = vfe_acquire.vfe_out.comp_grp_id;
 
 				comp_grp = &ife_ctx->vfe_bus_comp_grp[ife_out_res->comp_grp_id];
+				if (comp_grp->num_res >= CAM_NUM_OUT_PER_COMP_IRQ_MAX) {
+					CAM_ERR(CAM_ISP,
+						"comp_grp num_res %u exceeds max %u, comp grp id:%d ctx:%u",
+						comp_grp->num_res, CAM_NUM_OUT_PER_COMP_IRQ_MAX,
+						ife_out_res->comp_grp_id, ife_ctx->ctx_index);
+					rc = -EINVAL;
+					goto err;
+				}
+
 				comp_grp->res_id[comp_grp->num_res] =
 					ife_out_res->hw_res[j]->res_id;
 
@@ -12696,6 +12705,7 @@ static void cam_isp_copy_fcg_config(
 static int cam_isp_blob_fcg_config_prepare(
 	struct cam_isp_generic_fcg_config     *fcg_config_args,
 	struct cam_hw_prepare_update_args     *prepare,
+	uint32_t                               blob_size,
 	enum cam_isp_hw_type                   hw_type)
 {
 	struct cam_ife_hw_mgr_ctx             *ctx = NULL;
@@ -12735,6 +12745,13 @@ static int cam_isp_blob_fcg_config_prepare(
 	fcg_size += fcg_config_args->num_ch_ctx *
 		(fcg_config_args->num_predictions - 1) *
 		sizeof(struct cam_isp_predict_fcg_config);
+
+	if (fcg_size > blob_size) {
+		CAM_ERR(CAM_ISP,
+			"%s: FCG config size %u exceeds blob size %u, ctx_idx: %u, request_id: %llu",
+			__func__, fcg_size, blob_size, ctx->ctx_index, request_id);
+		return -EINVAL;
+	}
 
 	if (fcg_size != fcg_config_args->size) {
 		CAM_ERR(CAM_ISP,
@@ -13621,7 +13638,7 @@ static int cam_isp_packet_generic_blob_handler(void *user_data,
 		}
 
 		rc = cam_isp_blob_fcg_config_prepare(fcg_config_args,
-			prepare, CAM_ISP_HW_TYPE_VFE);
+			prepare, blob_size, CAM_ISP_HW_TYPE_VFE);
 		if (rc)
 			CAM_ERR(CAM_ISP,
 				"FCG configuration preparation failed, rc: %d, ctx_idx: %d",
@@ -14546,7 +14563,7 @@ static int cam_sfe_packet_generic_blob_handler(void *user_data,
 		}
 
 		rc = cam_isp_blob_fcg_config_prepare(fcg_config_args,
-			prepare, CAM_ISP_HW_TYPE_SFE);
+			prepare, blob_size, CAM_ISP_HW_TYPE_SFE);
 		if (rc)
 			CAM_ERR(CAM_ISP,
 				"FCG configuration preparation failed, rc: %d, ctx_idx: %d",

@@ -1670,8 +1670,12 @@ static int cam_icp_update_clk_rate(struct cam_icp_hw_mgr *hw_mgr,
 	CAM_DBG(CAM_PERF|CAM_ICP, "%s: clk_rate %u",
 		ctx_data->ctx_id_string, curr_clk_rate);
 
-	if (atomic_read(&hw_mgr->abort_in_process))
+	if (atomic_read(&hw_mgr->abort_in_process[ctx_data->device_info->hw_dev_type])) {
+		CAM_DBG(CAM_ICP,
+			"Abort in progress for %s HW_type %d, Skipping clock update",
+			hw_mgr->hw_mgr_name, ctx_data->device_info->hw_dev_type);
 		return 0;
+	}
 
 	return cam_icp_update_clk_util(curr_clk_rate, hw_mgr, ctx_data);
 }
@@ -3487,6 +3491,7 @@ static void cam_icp_mgr_process_dbg_buf(struct cam_icp_hw_mgr *hw_mgr)
 	uint32_t pre_buf_word_size = 0;
 	uint64_t timestamp = 0;
 	char *msg_data;
+	uint32_t *dbg_buf = NULL;
 	int rc = 0;
 
 	if (!hw_mgr) {
@@ -3494,37 +3499,43 @@ static void cam_icp_mgr_process_dbg_buf(struct cam_icp_hw_mgr *hw_mgr)
 		return;
 	}
 
+	dbg_buf = CAM_MEM_ZALLOC_ARRAY(ICP_DBG_BUF_SIZE_IN_WORDS, sizeof(uint32_t), GFP_KERNEL);
+	if (!dbg_buf) {
+		CAM_ERR(CAM_ICP, "%s Failed to allocate dbg_buf", hw_mgr->hw_mgr_name);
+		return;
+	}
+
 	do {
 		rc = hfi_read_message(hw_mgr->hfi_handle,
-			hw_mgr->dbg_buf + (pre_remain_len >> BYTE_WORD_SHIFT),
+			dbg_buf + (pre_remain_len >> BYTE_WORD_SHIFT),
 			Q_DBG, buf_word_size, &read_in_words);
 		if (rc)
-			break;
+			goto free_buf;
 
 		remain_len = pre_remain_len + (read_in_words << BYTE_WORD_SHIFT);
 		pre_remain_len = 0;
 		pre_buf_word_size = buf_word_size;
-		msg_ptr = (uint32_t *)hw_mgr->dbg_buf;
+		msg_ptr = (uint32_t *)dbg_buf;
 		buf_word_size = ICP_DBG_BUF_SIZE_IN_WORDS;
 
 		while (remain_len) {
 			pkt_ptr = msg_ptr;
 
-			if (pkt_ptr >= hw_mgr->dbg_buf + ICP_DBG_BUF_SIZE_IN_WORDS) {
+			if (pkt_ptr >= dbg_buf + ICP_DBG_BUF_SIZE_IN_WORDS) {
 				CAM_WARN(CAM_ICP,
 					"Error message: pkt_ptr:%p overflows assigned memory for dbg_buf: %p",
-					pkt_ptr, hw_mgr->dbg_buf);
-				return;
+					pkt_ptr, dbg_buf);
+				goto free_buf;
 			}
 
-			if (remain_len >= (ICP_DBG_BUF_SIZE_IN_WORDS << BYTE_WORD_SHIFT) ||
+			if (remain_len > (ICP_DBG_BUF_SIZE_IN_WORDS << BYTE_WORD_SHIFT) ||
 				(pkt_ptr[ICP_PACKET_TYPE] != HFI_MSG_SYS_DEBUG)) {
 				CAM_WARN(CAM_ICP,
 					"Error message: remain_len:%u, dbg_buf:%p pkt_ptr:%p pkt_size:%u pkt_type:0x%x read_in_words:%d",
-					remain_len, hw_mgr->dbg_buf, pkt_ptr,
+					remain_len, dbg_buf, pkt_ptr,
 					pkt_ptr[ICP_PACKET_SIZE], pkt_ptr[ICP_PACKET_TYPE],
 					read_in_words);
-				return;
+				goto free_buf;
 			}
 
 			if (remain_len < pkt_ptr[ICP_PACKET_SIZE]) {
@@ -3534,7 +3545,7 @@ static void cam_icp_mgr_process_dbg_buf(struct cam_icp_hw_mgr *hw_mgr)
 				 * the remain data to start of buffer and shift buffer ptr to
 				 * after the remaining data ends to read from queue.
 				 */
-				memcpy(hw_mgr->dbg_buf, msg_ptr, remain_len);
+				memcpy(dbg_buf, msg_ptr, remain_len);
 				pre_remain_len = remain_len;
 				buf_word_size -= (pre_remain_len >> BYTE_WORD_SHIFT);
 				break;
@@ -3561,6 +3572,9 @@ static void cam_icp_mgr_process_dbg_buf(struct cam_icp_hw_mgr *hw_mgr)
 
 	/* Repeat reading if drain buffer is insufficient to read all MSGs at once */
 	} while (read_in_words >= pre_buf_word_size);
+
+free_buf:
+	CAM_MEM_FREE(dbg_buf);
 }
 
 static int cam_icp_process_msg_pkt_type(
@@ -7902,7 +7916,19 @@ static int cam_icp_mgr_enqueue_abort(
 	task_data->data = (void *)ctx_info;
 	task_data->type = ICP_WORKER_TASK_CMD_TYPE;
 
-	atomic_inc(&hw_mgr->abort_in_process);
+	if (!ctx_data->device_info) {
+		CAM_ERR(CAM_ICP, "device_info is NULL for ctx %d", ctx_data->ctx_id);
+		return -EINVAL;
+	}
+
+	if (!CAM_ICP_IS_VALID_HW_DEV_TYPE(ctx_data->device_info->hw_dev_type)) {
+		CAM_ERR(CAM_ICP, "Invalid hw_dev_type %d for ctx %d",
+			ctx_data->device_info->hw_dev_type, ctx_data->ctx_id);
+		return -EINVAL;
+	}
+
+	atomic_inc(&hw_mgr->abort_in_process[ctx_data->device_info->hw_dev_type]);
+
 	cam_icp_update_clk_util(ctx_data->clk_info.clk_rate[CAM_TURBO_VOTE],
 		hw_mgr, ctx_data);
 	CAM_DBG(CAM_ICP, "[%s] voting device to %u rate",
@@ -7939,8 +7965,8 @@ static int cam_icp_mgr_enqueue_abort(
 	CAM_DBG(CAM_ICP, "%s: Abort after flush is success", ctx_data->ctx_id_string);
 
 end:
-	atomic_dec(&hw_mgr->abort_in_process);
-	if (!atomic_read(&hw_mgr->abort_in_process)) {
+	atomic_dec(&hw_mgr->abort_in_process[ctx_data->device_info->hw_dev_type]);
+	if (!atomic_read(&hw_mgr->abort_in_process[ctx_data->device_info->hw_dev_type])) {
 		dev_clk_info = &ctx_data->device_info->clk_info;
 
 		cam_icp_update_clk_util(dev_clk_info->curr_clk, hw_mgr, ctx_data);
@@ -8069,6 +8095,13 @@ static int cam_icp_mgr_hw_dump(void *hw_priv, void *hw_dump_args)
 	remain_len = icp_dump_args.buf_len - dump_args->offset;
 	min_len = sizeof(struct cam_icp_dump_header) +
 			(CAM_ICP_DUMP_NUM_WORDS_MGR * sizeof(uint32_t));
+	if (remain_len < min_len) {
+		CAM_WARN(CAM_ICP, "[%s] dump buffer exhaust remain %zu min %u",
+			hw_mgr->hw_mgr_name, remain_len, min_len);
+		rc = -ENOSPC;
+		goto put_cpu_buf;
+	}
+
 	/* Dumping hw mgr info */
 	dst = (uint8_t *)icp_dump_args.cpu_addr + dump_args->offset;
 	hdr = (struct cam_icp_dump_header *)dst;
@@ -8090,6 +8123,13 @@ static int cam_icp_mgr_hw_dump(void *hw_priv, void *hw_dump_args)
 	remain_len = icp_dump_args.buf_len - dump_args->offset;
 	min_len = sizeof(struct cam_icp_dump_header) +
 			(CAM_ICP_DUMP_NUM_WORDS_REQ * sizeof(uint64_t));
+	if (remain_len < min_len) {
+		CAM_WARN(CAM_ICP, "[%s] dump buffer exhaust remain %zu min %u",
+			hw_mgr->hw_mgr_name, remain_len, min_len);
+		rc = -ENOSPC;
+		goto put_cpu_buf;
+	}
+
 	/* Dumping time info */
 	dst = (uint8_t *)icp_dump_args.cpu_addr + dump_args->offset;
 	hdr = (struct cam_icp_dump_header *)dst;
@@ -8401,7 +8441,8 @@ static int cam_icp_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 	rc = cam_icp_mgr_release_ctx(hw_mgr, ctx_data);
 	if (!hw_mgr->ctxt_cnt) {
 		/* Clear SSR flag on last release */
-		atomic_set(&hw_mgr->abort_in_process, 0);
+		for (i = 0; i < CAM_ICP_HW_MAX; i++)
+			atomic_set(&hw_mgr->abort_in_process[i], 0);
 		CAM_DBG(CAM_ICP, "[%s] Last Release, all_handle_invalid %d",
 			hw_mgr->hw_mgr_name, hw_mgr->all_handle_invalid);
 		hw_mgr->all_handle_invalid = false;
@@ -10469,8 +10510,8 @@ int cam_icp_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 	}
 
 	g_icp_hw_mgr[device_idx] = hw_mgr;
-	atomic_set(&hw_mgr->abort_in_process, 0);
-
+	for (i = 0; i < CAM_ICP_HW_MAX; i++)
+		atomic_set(&hw_mgr->abort_in_process[i], 0);
 	CAM_DBG(CAM_ICP, "Done hw mgr[%u] init: icp name:%s",
 		device_idx, hw_mgr->hw_mgr_name);
 

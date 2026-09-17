@@ -43,7 +43,7 @@
 
 /* size of buffer to drain from msg/dbq queue */
 #define ICP_MSG_BUF_SIZE_IN_WORDS 512
-#define ICP_DBG_BUF_SIZE_IN_WORDS 10240
+#define ICP_DBG_BUF_SIZE_IN_WORDS 4096
 
 #define ICP_OVER_CLK_THRESHOLD  5
 #define ICP_TWO_DEV_BW_SHARE_RATIO 2
@@ -479,7 +479,6 @@ struct cam_icp_hw_ctx_data {
  * @msg_buf: Drain Buffer for message data from firmware
  *           Buffer is an array of type __u32, total size
  *           would be sizeof(_u32) * queue_size
- * @dbg_buf: Drain Buffer for debug data from firmware
  * @icp_complete: Completion info
  * @icp_fw_download_complete: Completion for FW download at
  *           the time of recovery.
@@ -548,7 +547,6 @@ struct cam_icp_hw_mgr {
 	void *msg_worker_ctx;
 	void *timer_worker_ctx;
 	uint32_t msg_buf[ICP_MSG_BUF_SIZE_IN_WORDS];
-	uint32_t dbg_buf[ICP_DBG_BUF_SIZE_IN_WORDS];
 	struct completion icp_complete;
 	struct completion icp_fw_download_complete;
 	struct hfi_cmd_work_data *cmd_work_data;
@@ -568,7 +566,7 @@ struct cam_icp_hw_mgr {
 	uint64_t icp_svs_clk;
 	atomic_t frame_in_process;
 	int frame_in_process_ctx_id;
-	atomic_t abort_in_process;
+	atomic_t abort_in_process[CAM_ICP_HW_MAX];
 	uint32_t hw_cap_mask;
 	uint32_t num_pid;
 	uint32_t pid[CAM_ICP_PID_NUM_MAX];
