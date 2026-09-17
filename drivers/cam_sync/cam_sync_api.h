@@ -133,14 +133,17 @@ struct cam_sync_hw_fence_res_info {
  * @applied_crop_req_id     Applied crop request id. This is valid only for IFE fences,
  *                          for other drivers it should be zero.
  * @fh                      File handle
+ * @release_cb_list         Optional list to collect kernel callbacks on, honoured only
+ *                          for CAM_SYNC_COMMON_RELEASE_EVENT; caller dispatches them
  */
 struct cam_sync_signal_param {
-	uint32_t   sync_obj;
-	uint32_t   status;
-	uint32_t   event_cause;
-	uint64_t   request_id;
-	uint64_t   applied_crop_req_id;
-	void       *fh;
+	uint32_t           sync_obj;
+	uint32_t           status;
+	uint32_t           event_cause;
+	uint64_t           request_id;
+	uint64_t           applied_crop_req_id;
+	void               *fh;
+	struct list_head   *release_cb_list;
 };
 
 
