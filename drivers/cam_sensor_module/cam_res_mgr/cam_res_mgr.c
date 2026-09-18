@@ -227,6 +227,23 @@ static bool cam_res_mgr_gpio_is_in_shared_gpio(
 	return found;
 }
 
+static bool cam_res_mgr_gpio_is_in_shared_gpio_no_refcount(
+	uint gpio)
+{
+	int index = 0;
+	bool found = false;
+	struct cam_res_mgr_dt *dt = &cam_res->dt;
+
+	for (; index < dt->num_shared_gpio_no_refcnt; index++) {
+		if (gpio == dt->shared_gpio_no_refcount[index]) {
+			found = true;
+			break;
+		}
+	}
+
+	return found;
+}
+
 int cam_res_mgr_util_shared_gpio_check_hold(uint gpio)
 {
 	int index = 0;
@@ -417,19 +434,25 @@ static bool __cam_res_mgr_find_if_gpio_is_shared(uint gpio)
 {
 	bool found_in_shared_gpio = false;
 	bool found_in_shared_pctrl_gpio = false;
+	bool found_in_shared_gpio_no_refcount = false;
 
 	found_in_shared_gpio = cam_res_mgr_gpio_is_in_shared_gpio(gpio);
+	found_in_shared_gpio_no_refcount =
+		cam_res_mgr_gpio_is_in_shared_gpio_no_refcount(gpio);
 
 	found_in_shared_pctrl_gpio =
 		cam_res_mgr_gpio_is_in_shared_pctrl_gpio(gpio);
 
-	if (found_in_shared_pctrl_gpio && found_in_shared_gpio) {
+	if (found_in_shared_pctrl_gpio &&
+		(found_in_shared_gpio || found_in_shared_gpio_no_refcount)) {
 		CAM_WARN(CAM_RES, "gpio: %u cannot be shared in both list",
 			gpio);
 		return false;
 	}
 
-	if (found_in_shared_pctrl_gpio || found_in_shared_gpio)
+	if (found_in_shared_pctrl_gpio ||
+		found_in_shared_gpio ||
+		found_in_shared_gpio_no_refcount)
 		return true;
 
 	return false;
@@ -493,6 +516,7 @@ int cam_res_mgr_gpio_request(struct device *dev, uint gpio,
 	if ((!gpio_found && cam_res
 		&& cam_res->shared_gpio_enabled) &&
 		(cam_res_mgr_gpio_is_in_shared_gpio(gpio) ||
+		cam_res_mgr_gpio_is_in_shared_gpio_no_refcount(gpio) ||
 		(cam_res_mgr_gpio_is_in_shared_pctrl_gpio(gpio)))) {
 		CAM_DBG(CAM_RES, "gpio: %u is shared", gpio);
 
@@ -671,13 +695,16 @@ int cam_res_mgr_gpio_set_value(unsigned int gpio, int value)
 	}
 
 	/*
-	 * Set the value directly for non-shared gpio, for shared
-	 * gpio need add ref count support.
+	 * Set the value directly for non-shared gpio. For shared gpio,
+	 * use refcount except the shared_gpio_no_refcount, which
+	 * should be driven directly.
 	 **/
 	if (!found) {
 		CAM_ERR(CAM_RES, "gpio: %u not found", gpio);
+		mutex_unlock(&cam_res->gpio_res_lock);
 		return -EINVAL;
-	} else if (!cam_res->shared_gpio_enabled) {
+	} else if (!cam_res->shared_gpio_enabled ||
+		cam_res_mgr_gpio_is_in_shared_gpio_no_refcount(gpio)) {
 		gpio_set_value_cansleep(gpio, value);
 		CAM_DBG(CAM_RES, "Set GPIO(%d) : %d", gpio, value);
 	} else {
@@ -741,9 +768,9 @@ static int cam_res_mgr_shared_pinctrl_init(
 		cam_res->pctrl_res[i].suspend =
 			pinctrl_lookup_state(cam_res->pinctrl,
 			pctrl_suspend);
-		if (IS_ERR_OR_NULL(cam_res->pctrl_res[i].active)) {
+		if (IS_ERR_OR_NULL(cam_res->pctrl_res[i].suspend)) {
 			CAM_ERR(CAM_RES,
-				"Failed to get the active state pinctrl handle");
+				"Failed to get the suspend state pinctrl handle");
 			return -EINVAL;
 		}
 		cam_res->pctrl_res[i].pstatus = PINCTRL_STATUS_GOT;
@@ -787,6 +814,69 @@ static int cam_res_mgr_parse_dt_shared_gpio(
 	}
 
 	return rc;
+}
+
+static int cam_res_mgr_parse_dt_shared_gpio_no_refcount(
+	struct device *dev)
+{
+	int rc = 0;
+	struct device_node *of_node = NULL;
+	struct cam_res_mgr_dt *dt = &cam_res->dt;
+
+	of_node = dev->of_node;
+	dt->num_shared_gpio_no_refcnt = of_property_count_u32_elems(of_node,
+		"gpios-shared-no-refcount");
+
+	if (dt->num_shared_gpio_no_refcnt == -EINVAL ||
+		dt->num_shared_gpio_no_refcnt == 0) {
+		dt->num_shared_gpio_no_refcnt = 0;
+		CAM_DBG(CAM_RES,
+			"Not found any shared gpio(no-refcount)");
+		return -ENODEV;
+	}
+
+	if (dt->num_shared_gpio_no_refcnt < 0) {
+		CAM_ERR(CAM_RES,
+			"Invalid gpios-shared-no-refcount property: %d",
+			dt->num_shared_gpio_no_refcnt);
+		dt->num_shared_gpio_no_refcnt = 0;
+		return -EINVAL;
+	}
+
+	if (dt->num_shared_gpio_no_refcnt >= MAX_SHARED_GPIO_SIZE) {
+		CAM_ERR(CAM_RES,
+			"shared_gpio_no_refcnt: %d max supported: %d",
+			dt->num_shared_gpio_no_refcnt,
+			MAX_SHARED_GPIO_SIZE);
+		return -EINVAL;
+	}
+
+	rc = of_property_read_u32_array(of_node, "gpios-shared-no-refcount",
+		dt->shared_gpio_no_refcount, dt->num_shared_gpio_no_refcnt);
+	if (rc) {
+		CAM_ERR(CAM_RES, "Get shared gpio(no-refcount) array failed.");
+		return -EINVAL;
+	}
+
+	return rc;
+}
+
+static int cam_res_mgr_validate_shared_gpio_no_refcount_subset(void)
+{
+	int i = 0;
+	struct cam_res_mgr_dt *dt = &cam_res->dt;
+
+	for (i = 0; i < dt->num_shared_gpio_no_refcnt; i++) {
+		if (!cam_res_mgr_gpio_is_in_shared_pctrl_gpio(
+			dt->shared_gpio_no_refcount[i])) {
+			CAM_ERR(CAM_RES,
+				"GPIO %u in gpios-shared-no-refcount must also be present in gpios-shared_pctrl",
+				dt->shared_gpio_no_refcount[i]);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
 }
 
 static int cam_res_mgr_parse_dt_shared_pinctrl_gpio(
@@ -887,6 +977,23 @@ static int cam_res_mgr_parse_dt(struct device *dev)
 		}
 	}
 
+	rc = cam_res_mgr_parse_dt_shared_gpio_no_refcount(dev);
+	if (rc) {
+		if (rc == -ENODEV) {
+			CAM_DBG(CAM_RES,
+				"Shared GPIO(no-refcount) resources not available");
+		} else {
+			CAM_ERR(CAM_RES,
+				"Shared gpio(no-refcount) parsing failed: rc: %d",
+				rc);
+			return rc;
+		}
+	}
+
+	rc = cam_res_mgr_validate_shared_gpio_no_refcount_subset();
+	if (rc)
+		return rc;
+
 	return 0;
 }
 
@@ -915,7 +1022,9 @@ static int cam_res_mgr_component_bind(struct device *dev,
 		return rc;
 	}
 
-	if (cam_res->dt.num_shared_gpio || cam_res->dt.num_shared_pctrl_gpio) {
+	if (cam_res->dt.num_shared_gpio ||
+		cam_res->dt.num_shared_gpio_no_refcnt ||
+		cam_res->dt.num_shared_pctrl_gpio) {
 		CAM_DBG(CAM_RES, "Enable shared gpio support.");
 		cam_res->shared_gpio_enabled = true;
 	} else {

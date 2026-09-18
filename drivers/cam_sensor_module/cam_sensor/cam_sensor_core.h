@@ -91,6 +91,18 @@ int cam_sensor_process_evt(struct cam_req_mgr_link_evt_data *evt_data);
 int cam_sensor_dump_request(struct cam_req_mgr_dump_info *dump);
 
 /**
+ * cam_sensor_external_trigger - CRM external trigger callback for GPIO fsync
+ * @external_trigger: External trigger info containing dev_hdl and req_id
+ *
+ * Called by the CRM when a request marked as external_trigger is ready.
+ * Loads the pre-converted GPIO command buffer for the given req_id and
+ * starts the CCI GPIO queue.
+ *
+ * Returns: 0 on success, negative error code on failure
+ */
+int cam_sensor_external_trigger(struct cam_req_mgr_extern_trigger *external_trigger);
+
+/**
  * @s_ctrl: Sensor ctrl structure
  * @arg:    Camera control command argument
  *
