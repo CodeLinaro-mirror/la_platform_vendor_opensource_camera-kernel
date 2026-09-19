@@ -6195,6 +6195,7 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	ife_ctx->res_list_sfe_out = NULL;
 	ife_ctx->pri_rdi_out_res = g_ife_hw_mgr.isp_caps.max_vfe_out_res_type;
 	ife_ctx->ctx_index = acquire_args->ctx_id;
+	ife_ctx->scratch_buf_info.sfe_scratch_config = NULL;
 	ife_ctx->scratch_buf_info.ife_scratch_config = NULL;
 	ife_ctx->is_init_drv_cfg_received = false;
 	ife_ctx->flags.skip_reg_dump_buf_put = false;
@@ -6467,6 +6468,7 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 				ife_ctx->ctx_index);
 			rc = -ENOMEM;
 			CAM_MEM_FREE(ife_ctx->scratch_buf_info.sfe_scratch_config);
+			ife_ctx->scratch_buf_info.sfe_scratch_config = NULL;
 			goto free_cdm_cmd;
 		}
 
