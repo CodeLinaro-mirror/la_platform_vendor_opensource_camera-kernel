@@ -18,7 +18,7 @@
 #include <media/v4l2-ioctl.h>
 #include "cam_sync_api.h"
 
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX)
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX) || defined(CONFIG_TARGET_SYNX_ENABLE)
 #include <synx_api.h>
 #endif
 
@@ -199,7 +199,7 @@ struct sync_device {
 	struct v4l2_fh *cam_sync_eventq;
 	spinlock_t cam_sync_eventq_lock;
 	DECLARE_BITMAP(bitmap, CAM_SYNC_MAX_OBJS);
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX)
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX) || defined(CONFIG_TARGET_SYNX_ENABLE)
 	struct synx_register_params params;
 #endif
 	uint32_t version;

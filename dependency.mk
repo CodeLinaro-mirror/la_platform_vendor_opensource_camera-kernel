@@ -18,5 +18,15 @@ endif # End of check for board platform MMRM_BOARDS
 
 endif # End of find msm-mmrm driver
 
-KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS=$(CAM_MMRM_EXTRA_SYMBOLS)
+# Check if this board includes synx-driver.ko; cam_sync uses exported synx_register_ops symbols.
+ifeq ($(findstring synx-driver.ko,$(BOARD_VENDOR_KERNEL_MODULES)), synx-driver.ko)
+CAM_SYNX_EXTRA_SYMBOLS ?= $(realpath $(TOP))/$(call intermediates-dir-for,DLKM,synx-driver-symvers)/Module.symvers
+$(info camera-kernel: Found synx driver, adding symbol dependency! $(CAM_SYNX_EXTRA_SYMBOLS))
+LOCAL_REQUIRED_MODULES    += synx-driver-symvers
+LOCAL_ADDITIONAL_DEPENDENCIES += $(call intermediates-dir-for,DLKM,synx-driver-symvers)/Module.symvers
+endif # End of find synx-driver
+
+CAMERA_EXTRA_SYMBOLS := $(strip $(CAM_MMRM_EXTRA_SYMBOLS) $(CAM_SYNX_EXTRA_SYMBOLS))
+
+KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS=$(CAMERA_EXTRA_SYMBOLS)
 KBUILD_OPTIONS += KBUILD_EXTRA_CONFIGS=$(CAM_MMRM_EXTRA_CONFIGS)

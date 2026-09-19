@@ -292,7 +292,17 @@ def _define_module(target, variant):
         copts = [
         "-D__NO_FORTIFY","-fstrict-flex-arrays=0",
         "-include", "$(location :camera_banner)"],
-        deps = base_deps + sun_deps +deps,
+        local_defines = select({
+            "//build/kernel/kleaf:socrepo_true": ["CONFIG_TARGET_SYNX_ENABLE"],
+            "//build/kernel/kleaf:socrepo_false": [],
+        }),
+        deps = base_deps + sun_deps + deps + select({
+            "//build/kernel/kleaf:socrepo_true": [
+                "//vendor/qcom/opensource/synx-kernel:synx_headers",
+                "//vendor/qcom/opensource/synx-kernel:{}_modules".format(tv),
+            ],
+            "//build/kernel/kleaf:socrepo_false": [],
+        }),
         kconfig = "Kconfig",
         defconfig = "{}_defconfig_generated".format(tv),
         kernel_build = kernel_build,

@@ -53,6 +53,7 @@ KBUILD_OPTIONS := CAMERA_KERNEL_ROOT=$(TOP)/$(LOCAL_PATH)
 KBUILD_OPTIONS += KERNEL_ROOT=$(TOP)/kernel_platform/common
 KBUILD_OPTIONS += MODNAME=camera
 KBUILD_OPTIONS += BOARD_PLATFORM=$(TARGET_BOARD_PLATFORM)
+KBUILD_OPTIONS += TARGET_SYNX_ENABLE=$(TARGET_SYNX_ENABLE)
 
 # Clear shell environment variables from previous android module during build
 include $(CLEAR_VARS)

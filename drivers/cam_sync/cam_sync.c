@@ -10,7 +10,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/debugfs.h>
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX)
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX) || defined(CONFIG_TARGET_SYNX_ENABLE)
 #include <synx_api.h>
 #endif
 
@@ -1073,7 +1073,7 @@ end:
 	return rc;
 }
 
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX)
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX) || defined(CONFIG_TARGET_SYNX_ENABLE)
 int cam_synx_sync_signal(int32_t sync_obj, uint32_t synx_status)
 {
 	int rc = 0;
@@ -1218,7 +1218,7 @@ static int cam_sync_component_bind(struct device *dev,
 
 	trigger_cb_without_switch = false;
 	cam_sync_create_debugfs();
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX)
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX) || defined(CONFIG_TARGET_SYNX_ENABLE)
 	CAM_DBG(CAM_SYNC, "Registering with synx driver");
 	cam_sync_configure_synx_obj(&sync_dev->params);
 	rc = cam_sync_register_synx_bind_ops(&sync_dev->params);
@@ -1248,7 +1248,7 @@ static void cam_sync_component_unbind(struct device *dev,
 
 	v4l2_device_unregister(sync_dev->vdev->v4l2_dev);
 	cam_sync_media_controller_cleanup(sync_dev);
-#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX)
+#if IS_REACHABLE(CONFIG_MSM_GLOBAL_SYNX) || defined(CONFIG_TARGET_SYNX_ENABLE)
 	cam_sync_unregister_synx_bind_ops(&sync_dev->params);
 #endif
 	video_unregister_device(sync_dev->vdev);
