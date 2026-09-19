@@ -32,6 +32,7 @@
 #define CAM_MEM_SHARED_BUFFER_PAD_4K (4 * 1024)
 
 #define MEM_TRACE_MAGIC      0x179621
+#define DISPLAY_BUF_SIZE     2048
 #define RECORD_PAGE_SIZE     8192
 #define MEM_TRACE_USAGE_STRING                                                     \
 	"Usage:\n"                                                                     \
@@ -319,10 +320,6 @@ static void cam_mem_trace_reset(void)
 	struct cam_mem_trace_header *trace_header, *trace_header_tmp;
 	struct cam_mem_trace_record_page *page_header, *page_header_tmp;
 
-	g_trace.total_trace_mem = 0;
-	g_trace.page_count = 0;
-	g_trace.trace_premise = false;
-
 	list_for_each_entry_safe(page_header, page_header_tmp,
 		&g_trace.record_page_list, list) {
 		list_del_init(&page_header->list);
@@ -332,6 +329,14 @@ static void cam_mem_trace_reset(void)
 	list_for_each_entry_safe(trace_header, trace_header_tmp,
 		&g_trace.trace_list, list)
 		list_del_init(&trace_header->list);
+
+	if (g_trace.total_trace_mem != 0)
+		CAM_WARN(CAM_MEM, "Possible leakage: total_trace_mem NOT zero: %lu",
+			g_trace.total_trace_mem);
+
+	g_trace.total_trace_mem = 0;
+	g_trace.page_count = 0;
+	g_trace.trace_premise = false;
 }
 
 void *cam_mem_trace_alloc(size_t size, gfp_t gfp_flags,
@@ -500,7 +505,8 @@ void cam_mem_trace_free(const void *vaddr_ptr)
 	header_magic = *(int *)header_kva;
 	if (header_magic != MEM_TRACE_MAGIC) {
 		CAM_WARN(CAM_MEM,
-			"No header magic detected, likely memory corruption");
+			"Likely memory corruption - No header magic detected for %pK",
+			vaddr_ptr);
 		kvfree(vaddr_ptr);
 		return;
 	}
@@ -510,8 +516,8 @@ void cam_mem_trace_free(const void *vaddr_ptr)
 	footer_kva = (void *)vaddr_ptr + trace_header->size;
 	footer_magic = *(int *)footer_kva;
 	if (unlikely(footer_magic != MEM_TRACE_MAGIC))
-		CAM_WARN(CAM_MEM, "Memory overflow likely happened at %s",
-			trace_header->mem_owner);
+		CAM_WARN(CAM_MEM, "Memory overflow likely happened to %s at %pK",
+			trace_header->mem_owner, footer_kva);
 
 	if (mem_trace_en && (trace_header->size >= mass_mem_threshold))
 		cam_mem_trace_record_mass_mem(trace_header);
@@ -586,7 +592,6 @@ static void cam_mem_trace_overview(void)
 
 static void cam_mem_trace_query(uint64_t threshold)
 {
-	bool output = false;
 	ktime_t now;
 	uint64_t kept_time_ms;
 	size_t len = 0, remain_len, line_len;
@@ -613,9 +618,6 @@ static void cam_mem_trace_query(uint64_t threshold)
 			scnprintf(kept_time_str, 8, "%lldms", kept_time_ms);
 
 		if (kept_time_ms >= (threshold * 1000)) {
-			if (!output)
-				output = true;
-
 			memset(line_buf, '\0', 256);
 			line_len = scnprintf(line_buf, 256,
 				"Mem owner %s, size %lu bytes, flags %#x%s, kept_time %s",
@@ -638,8 +640,7 @@ static void cam_mem_trace_query(uint64_t threshold)
 
 	if (log_buf[0] != '\0')
 		CAM_INFO(CAM_MEM, "%s", log_buf);
-
-	if (!output)
+	else
 		CAM_INFO(CAM_MEM, "No allocated mem kept >= %llds", threshold);
 }
 
@@ -651,18 +652,15 @@ static void cam_mem_trace_query_mass_mem(void)
 	unsigned long flags;
 	struct cam_mem_trace_header *trace_header;
 	struct cam_mem_trace_record_page *page_header;
-	char buf[RECORD_PAGE_SIZE];
-	char *buf_ptr;
+	char *buf, *buf_ptr;
 
 	now = ktime_get();
+	buf = vzalloc(RECORD_PAGE_SIZE);
 
 	spin_lock_irqsave(&g_trace.lock, flags);
 
 	list_for_each_entry(page_header, &g_trace.record_page_list, list) {
-		page = (char *)page_header +
-			sizeof(struct cam_mem_trace_record_page);
-
-		memset(buf, '\0', RECORD_PAGE_SIZE);
+		page = (char *)page_header + sizeof(struct cam_mem_trace_record_page);
 		memcpy(buf, page, RECORD_PAGE_SIZE);
 		buf_ptr = buf;
 
@@ -671,6 +669,8 @@ static void cam_mem_trace_query_mass_mem(void)
 			CAM_INFO(CAM_MEM, "%s", token);
 			token = strsep(&buf_ptr, "$");
 		}
+
+		memset(buf, '\0', RECORD_PAGE_SIZE);
 	}
 
 	list_for_each_entry(trace_header, &g_trace.trace_list, list) {
@@ -685,21 +685,25 @@ static void cam_mem_trace_query_mass_mem(void)
 	}
 
 	spin_unlock_irqrestore(&g_trace.lock, flags);
+	vfree(buf);
 }
 
 static ssize_t cam_mem_trace_read(struct file *file,
 	char __user *ubuf, size_t size, loff_t *ppos)
 {
 	int count = 0, offset;
-	char display_buf[2048] = {'\0'};
+	char *display_buf;
 
-	offset = scnprintf(display_buf, 2048, "\nHeap mem trace is %s\n\n",
-		mem_trace_en ? "enabled" : "disabled");
-	strlcat(display_buf, MEM_TRACE_USAGE_STRING, 2048 - offset);
+	display_buf = vzalloc(DISPLAY_BUF_SIZE);
+
+	offset = scnprintf(display_buf, DISPLAY_BUF_SIZE,
+		"\nHeap mem trace is %s\n\n", mem_trace_en ? "enabled" : "disabled");
+	strlcat(display_buf, MEM_TRACE_USAGE_STRING, DISPLAY_BUF_SIZE - offset);
 
 	count = simple_read_from_buffer(ubuf, size, ppos,
 		display_buf, strlen(display_buf));
 
+	vfree(display_buf);
 	return count;
 }
 
