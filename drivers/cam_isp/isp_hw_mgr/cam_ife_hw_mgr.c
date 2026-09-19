@@ -6609,8 +6609,9 @@ static int cam_ife_mgr_acquire_dev(void *hw_mgr_priv, void *acquire_hw_args)
 
 	CAM_DBG(CAM_ISP, "Enter...");
 
-	if (!acquire_args || acquire_args->num_acq <= 0) {
-		CAM_ERR(CAM_ISP, "Nothing to acquire. Seems like error");
+	if (!acquire_args || acquire_args->num_acq <= 0 ||
+		acquire_args->num_acq > CAM_MAX_ACQ_RES) {
+		CAM_ERR(CAM_ISP, "Invalid acquire arguments");
 		return -EINVAL;
 	}
 
