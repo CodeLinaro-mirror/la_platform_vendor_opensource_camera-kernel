@@ -20,10 +20,14 @@ endif # End of find msm-mmrm driver
 
 # Check if this board includes synx-driver.ko; cam_sync uses exported synx_register_ops symbols.
 ifeq ($(findstring synx-driver.ko,$(BOARD_VENDOR_KERNEL_MODULES)), synx-driver.ko)
+ifeq ($(TARGET_SYNX_ENABLE),true)
 CAM_SYNX_EXTRA_SYMBOLS ?= $(realpath $(TOP))/$(call intermediates-dir-for,DLKM,synx-driver-symvers)/Module.symvers
 $(info camera-kernel: Found synx driver, adding symbol dependency! $(CAM_SYNX_EXTRA_SYMBOLS))
 LOCAL_REQUIRED_MODULES    += synx-driver-symvers
 LOCAL_ADDITIONAL_DEPENDENCIES += $(call intermediates-dir-for,DLKM,synx-driver-symvers)/Module.symvers
+else
+$(info camera-kernel: synx-driver.ko listed but TARGET_SYNX_ENABLE=$(TARGET_SYNX_ENABLE); skipping synx symbol dependency)
+endif
 endif # End of find synx-driver
 
 CAMERA_EXTRA_SYMBOLS := $(strip $(CAM_MMRM_EXTRA_SYMBOLS) $(CAM_SYNX_EXTRA_SYMBOLS))
