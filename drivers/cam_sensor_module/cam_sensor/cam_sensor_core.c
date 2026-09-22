@@ -828,19 +828,8 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			goto free_power_settings;
 		}
 		if (s_ctrl->i2c_data.reg_bank_unlock_settings.is_settings_valid) {
-			int retry = 3;
-
-			do {
-				rc = cam_sensor_apply_settings(s_ctrl, 0,
-					CAM_SENSOR_PACKET_OPCODE_SENSOR_REG_BANK_UNLOCK);
-				if (rc == 0)
-					break;
-				CAM_WARN(CAM_SENSOR,
-					"REG_bank unlock failed rc=%d, retries left:%d",
-					rc, retry - 1);
-				usleep_range(5000, 6000); /* 5ms CCI recovery delay */
-			} while (--retry > 0);
-
+			rc = cam_sensor_apply_settings(s_ctrl, 0,
+				CAM_SENSOR_PACKET_OPCODE_SENSOR_REG_BANK_UNLOCK);
 			if (rc < 0) {
 				CAM_ERR(CAM_SENSOR, "REG_bank unlock failed");
 				cam_sensor_power_down(s_ctrl);
