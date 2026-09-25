@@ -13,6 +13,9 @@
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
 
+#define CAM_SENSOR_WRITE_MAX_ATTEMPTS  3
+#define CAM_SENSOR_WRITE_RETRY_DELAY_MS 2
+
 static bool ais_stack = TRUE;
 static int32_t cam_sensor_update_i2c_slave_info(
 	struct camera_io_master *io_master,
@@ -1368,12 +1371,33 @@ static int cam_sensor_process_write_array_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		i2c_write.count,
 		i2c_write.addr_type, i2c_write.data_type);
 
-	rc = camera_io_dev_write(&(s_ctrl->io_master_info),
-			&write_setting);
-	if (rc < 0)
-		CAM_ERR(CAM_SENSOR, "Failed to write array to 0x%x %d",
-			slave_info.slave_addr,
-			write_setting.size);
+	{
+		int attempt = 0;
+
+		do {
+			rc = camera_io_dev_write(&(s_ctrl->io_master_info),
+					&write_setting);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR,
+					"attempt %d/%d: Failed to write array to 0x%x %d, rc = %d (%s)",
+					attempt + 1, CAM_SENSOR_WRITE_MAX_ATTEMPTS,
+					slave_info.slave_addr,
+					write_setting.size, rc,
+					(rc == -ETIMEDOUT) ?
+					"CCI queue timeout" :
+					(rc == -EINVAL) ?
+					"invalid argument or CCI NACK error" : "unknown");
+				/*
+				 * CCI already halts/resets the master on both
+				 * timeout (-ETIMEDOUT) and HW error (-EINVAL)
+				 * before returning here, so the bus is back in
+				 * a clean state for the next attempt.
+				 */
+				msleep(CAM_SENSOR_WRITE_RETRY_DELAY_MS);
+			}
+			attempt++;
+		} while (rc < 0 && attempt < CAM_SENSOR_WRITE_MAX_ATTEMPTS);
+	}
 
 	(void)cam_sensor_restore_slave_info(s_ctrl);
 	kfree(wr_array);
