@@ -1679,6 +1679,21 @@ int cam_hw_cdm_reset_hw(struct cam_hw_info *cdm_hw, uint32_t handle)
 
 	cam_hw_cdm_pause_core(cdm_hw, true);
 
+	for (i = 0; i < cdm_core->offsets->reg_data->num_bl_fifo; i++) {
+		if (!cdm_core->bl_fifo[i].bl_depth)
+			continue;
+
+		reset_val = reset_val | (1 << (i + CAM_CDM_BL_FIFO_FLUSH_SHIFT));
+		if (cam_cdm_write_hw_reg(cdm_hw,
+				cdm_core->offsets->irq_reg[i]->irq_mask,
+				0x70003)) {
+			CAM_ERR(CAM_CDM, "Failed to Write %s%u HW IRQ mask",
+				soc_info->label_name,
+				soc_info->index);
+			goto end;
+		}
+	}
+
 	if (cam_cdm_write_hw_reg(cdm_hw, cdm_core->offsets->cmn_reg->rst_cmd, reset_val)) {
 		CAM_ERR(CAM_CDM, "Failed to Write %s%u HW reset",
 			soc_info->label_name,
