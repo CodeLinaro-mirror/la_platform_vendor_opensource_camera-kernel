@@ -180,3 +180,7 @@ config_setting(
     name = "shikra",
     flag_values = {":project_name": "shikra"},
 )
+config_setting(
+    name = "sa2390",
+    flag_values = {":project_name": "sa2390"},
+)
