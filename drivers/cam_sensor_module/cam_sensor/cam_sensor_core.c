@@ -757,7 +757,7 @@ int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
 int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 	void *arg)
 {
-	int rc = 0, pkt_opcode = 0;
+	int rc = 0, delete_rc = 0, pkt_opcode = 0;
 	struct cam_control *cmd = (struct cam_control *)arg;
 	struct cam_sensor_power_ctrl_t *power_info =
 		&s_ctrl->sensordata->power_info;
@@ -831,7 +831,23 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			rc = cam_sensor_apply_settings(s_ctrl, 0,
 				CAM_SENSOR_PACKET_OPCODE_SENSOR_REG_BANK_UNLOCK);
 			if (rc < 0) {
-				CAM_ERR(CAM_SENSOR, "REG_bank unlock failed");
+				CAM_ERR(CAM_SENSOR,
+					"REG_bank unlock failed sensorID=%d slot=%d "
+					"slave=0x%x sid=0x%x freq=%d rc=%d",
+					s_ctrl->sensordata->slave_info.sensor_id,
+					s_ctrl->soc_info.index,
+					s_ctrl->sensordata->slave_info.sensor_slave_addr,
+					s_ctrl->io_master_info.cci_client->sid,
+					s_ctrl->io_master_info.cci_client->i2c_freq_mode,
+					rc);
+				delete_rc = delete_request(
+						&s_ctrl->i2c_data.reg_bank_unlock_settings);
+				if (delete_rc < 0) {
+					CAM_ERR(CAM_SENSOR,
+						"Failed deleting REG_bank unlock settings "
+						"after failure apply_rc=%d delete_rc=%d", rc, delete_rc);
+				}
+				s_ctrl->i2c_data.reg_bank_unlock_settings.is_settings_valid = false;
 				cam_sensor_power_down(s_ctrl);
 				goto free_power_settings;
 			}
@@ -855,7 +871,22 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			rc = cam_sensor_apply_settings(s_ctrl, 0,
 				CAM_SENSOR_PACKET_OPCODE_SENSOR_REG_BANK_LOCK);
 			if (rc < 0) {
-				CAM_ERR(CAM_SENSOR, "REG_bank lock failed");
+				CAM_ERR(CAM_SENSOR,
+					"REG_bank lock failed sensorID=%d slot=%d "
+					"slave=0x%x sid=0x%x freq=%d rc=%d",
+					s_ctrl->sensordata->slave_info.sensor_id,
+					s_ctrl->soc_info.index,
+					s_ctrl->sensordata->slave_info.sensor_slave_addr,
+					s_ctrl->io_master_info.cci_client->sid,
+					s_ctrl->io_master_info.cci_client->i2c_freq_mode,
+					rc);
+				delete_rc = delete_request(&s_ctrl->i2c_data.reg_bank_lock_settings);
+				if (delete_rc < 0) {
+					CAM_ERR(CAM_SENSOR,
+						"Failed deleting REG_bank lock settings "
+						"after failure apply_rc=%d delete_rc=%d", rc, delete_rc);
+				}
+				s_ctrl->i2c_data.reg_bank_lock_settings.is_settings_valid = false;
 				cam_sensor_power_down(s_ctrl);
 				goto free_power_settings;
 			}
