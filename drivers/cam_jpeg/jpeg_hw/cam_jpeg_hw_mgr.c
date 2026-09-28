@@ -249,6 +249,13 @@ static int cam_jpeg_process_next_hw_update(void *priv, void *data,
 
 	dev_type = ctx_data->jpeg_dev_acquire_info.dev_type;
 	p_cfg_req = hw_mgr->dev_hw_cfg_args[dev_type][0];
+	if (!p_cfg_req) {
+		CAM_ERR(CAM_JPEG, "cfg req is NULL for dev_type %u, device may have been flushed",
+			dev_type);
+		buf_data->evt_param = CAM_SYNC_JPEG_EVENT_INVLD_CMD;
+		return -EINVAL;
+	}
+
 	config_args = (struct cam_hw_config_args *)&p_cfg_req->hw_cfg_args;
 
 	if (!hw_mgr->devices[dev_type][0]->hw_ops.reset) {
@@ -1373,6 +1380,7 @@ static int cam_jpeg_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 		return -EINVAL;
 	}
 
+	mutex_lock(&hw_mgr->hw_mgr_mutex);
 	ctx_data = (struct cam_jpeg_hw_ctx_data *)release_hw->ctxt_to_hw_map;
 	if (!ctx_data->in_use) {
 		CAM_ERR(CAM_JPEG, "ctx is not in use");
@@ -1381,7 +1389,6 @@ static int cam_jpeg_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 	}
 	dev_type = ctx_data->jpeg_dev_acquire_info.dev_type;
 
-	mutex_lock(&hw_mgr->hw_mgr_mutex);
 	if (hw_mgr->cdm_info[dev_type][0].ref_cnt == 0) {
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
 		CAM_ERR(CAM_JPEG, "Error Unbalanced deinit");
