@@ -4034,7 +4034,9 @@ int cam_req_mgr_destroy_session(
 			link->is_shutdown = is_shutdown;
 			__cam_req_mgr_unlink(cam_session, link);
 			__cam_req_mgr_free_link(link);
+			cam_session->links[i] = NULL;
 		}
+		cam_session->num_links = 0;
 	}
 	list_del(&cam_session->entry);
 	mutex_unlock(&cam_session->lock);
