@@ -5139,6 +5139,7 @@ static int __cam_req_mgr_setup_link_info(struct cam_req_mgr_core_link *link,
 	if (num_trigger_devices == CAM_REQ_MGR_MAX_TRIGGERS) {
 		link->dual_trigger = true;
 		link_data.dual_trigger = true;
+		link_data.sensor_apply_check_en = false;
 	} else
 		link_data.dual_trigger = false;
 	num_trigger_devices = 0;
