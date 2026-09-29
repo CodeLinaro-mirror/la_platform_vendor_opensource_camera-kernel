@@ -6718,7 +6718,6 @@ static inline void __cam_isp_ctx_reset_fcg_tracker(
 	CAM_DBG(CAM_ISP, "Reset FCG skip info on ctx %u link: %x",
 		ctx->ctx_id, ctx->link_hdl);
 }
-
 static int cam_isp_ctx_flush_affected_ctx_req_list(
 	struct cam_context               *ctx,
 	struct cam_req_mgr_flush_request *flush_req)
@@ -6788,7 +6787,6 @@ static int cam_isp_ctx_flush_all_affected_ctx_stream_grp(
 	struct cam_isp_hw_active_hw_ctx   active_hw_ctx;
 	int active_hw_ctx_cnt;
 	int i;
-
 	hw_cmd_args.ctxt_to_hw_map = ctx->ctxt_to_hw_map;
 	hw_cmd_args.cmd_type = CAM_HW_MGR_CMD_INTERNAL;
 	isp_hw_cmd_args.cmd_type = CAM_ISP_HW_MGR_GET_ACTIVE_HW_CTX_CNT;
@@ -6817,6 +6815,9 @@ static int cam_isp_ctx_flush_all_affected_ctx_stream_grp(
 			&hw_cmd_args);
 
 		active_ctx = (struct cam_context *)isp_hw_cmd_args.u.ptr;
+
+		if (!active_ctx)
+			continue;
 
 		if (active_ctx->ctx_id == ctx->ctx_id)
 			continue;
@@ -10819,6 +10820,7 @@ int cam_isp_context_init(struct cam_isp_context *ctx,
 	ctx->substate_machine_irq = cam_isp_ctx_activated_state_machine_irq;
 	ctx->init_timestamp = jiffies_to_msecs(jiffies);
 	ctx->isp_device_type = isp_device_type;
+	mutex_init(&ctx->isp_mutex);
 
 	for (i = 0; i < CAM_ISP_CTX_REQ_MAX; i++) {
 		ctx->req_base[i].req_priv = &ctx->req_isp[i];
@@ -10901,6 +10903,7 @@ int cam_isp_context_deinit(struct cam_isp_context *ctx)
 			ctx->substate_activated));
 
 	isp_ctx_debug.dentry = NULL;
+	mutex_destroy(&ctx->isp_mutex);
 	memset(ctx, 0, sizeof(*ctx));
 
 	return 0;

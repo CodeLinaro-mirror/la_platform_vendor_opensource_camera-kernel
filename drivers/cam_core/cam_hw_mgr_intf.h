@@ -19,7 +19,7 @@
 
 
 /* maximum context numbers */
-#define CAM_CTX_MAX                         16
+#define CAM_CTX_MAX                         24
 
 /* maximum buf done irqs, multiplied by 3 hw context entries per resource */
 #define CAM_NUM_OUT_PER_COMP_IRQ_MAX        36

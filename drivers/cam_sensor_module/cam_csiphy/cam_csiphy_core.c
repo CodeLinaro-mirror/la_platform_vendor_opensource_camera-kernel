@@ -640,6 +640,7 @@ void cam_csiphy_query_cap(struct csiphy_device *csiphy_dev,
 	csiphy_cap->slot_info = soc_info->index;
 	csiphy_cap->version = csiphy_dev->hw_version;
 	csiphy_cap->clk_lane = csiphy_dev->clk_lane;
+	csiphy_cap->reserved = csiphy_dev->is_aggregator_rx;
 }
 
 int cam_csiphy_dump_status_reg(struct csiphy_device *csiphy_dev)

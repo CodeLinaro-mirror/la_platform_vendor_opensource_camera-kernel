@@ -252,6 +252,7 @@ struct cam_ife_hw_mgr_ctx_scratch_buf_info {
  * @dynamic_drv_supported: Indicate if the dynamic drv is supported
  * @skip_reg_dump_buf_put: Set if put_cpu_buf for reg dump buf is already called
  * @per_port_en:             Indicates if per port feature is enabled or not
+ * @multi_stream_perport:    Indicates if sensor has more than one stream per port
  *
  */
 struct cam_ife_hw_mgr_ctx_flags {
@@ -277,6 +278,7 @@ struct cam_ife_hw_mgr_ctx_flags {
 	bool   dynamic_drv_supported;
 	bool   skip_reg_dump_buf_put;
 	bool   per_port_en;
+	bool   multi_stream_perport;
 };
 
 /**
@@ -408,8 +410,6 @@ struct cam_ife_virtual_rdi_mapping {
  * @drv_path_idle_en:       Path idle enable value for DRV
  * @major_version:          Major version for acquire
  * @sensor_id:              Sensor id for context
- * @vfe_bus_comp_grp:       VFE composite group placeholder
- * @sfe_bus_comp_grp:       SFE composite group placeholder
  * @cdm_done_ts:            CDM callback done timestamp
  * @is_hw_ctx_acq:          If acquire for ife ctx is having hw ctx acquired
  * @acq_hw_ctxt_src_dst_map: Src to dst hw ctxt map for acquired pixel paths
@@ -481,8 +481,6 @@ struct cam_ife_hw_mgr_ctx {
 	uint32_t                                   drv_path_idle_en;
 	uint32_t                                   major_version;
 	uint32_t                                   sensor_id;
-	struct cam_isp_context_comp_record        *vfe_bus_comp_grp;
-	struct cam_isp_context_comp_record        *sfe_bus_comp_grp;
 	struct timespec64                          cdm_done_ts;
 	bool                                       is_hw_ctx_acq;
 	uint32_t                                   acq_hw_ctxt_src_dst_map[CAM_ISP_MULTI_CTXT_MAX];
@@ -491,6 +489,8 @@ struct cam_ife_hw_mgr_ctx {
 	uint8_t                                    wr_per_req_index;
 	bool                                       is_init_drv_cfg_received;
 	struct cam_ife_virtual_rdi_mapping         mapping_table;
+	uint32_t                                   vfe_bus_comp_grp_hw_idx_mask;
+	uint32_t                                   sfe_bus_comp_grp_hw_idx_mask;
 };
 
 /**
@@ -613,6 +613,12 @@ enum cam_isp_irq_inject_common_param_pos {
  * @ife_devices:           IFE device instances array. This will be filled by
  *                         HW layer during initialization
  * @sfe_devices:           SFE device instance array
+ * @vfe_bus_comp_grp:      VFE bus composite group records, indexed by VFE hw_idx
+ * @sfe_bus_comp_grp:      SFE bus composite group records, indexed by SFE hw_idx
+ * @vfe_bus_comp_grp_ref_cnt: Number of contexts currently holding a reference on
+ *                         vfe_bus_comp_grp[hw_idx], indexed by VFE hw_idx
+ * @sfe_bus_comp_grp_ref_cnt: Number of contexts currently holding a reference on
+ *                         sfe_bus_comp_grp[hw_idx], indexed by SFE hw_idx
  * @ctx_mutex:             mutex for the hw context pool
  * @free_ctx_list:         free hw context list
  * @used_ctx_list:         used hw context list
@@ -643,6 +649,10 @@ struct cam_ife_hw_mgr {
 	struct cam_isp_hw_intf_data   *ife_devices[CAM_IFE_HW_NUM_MAX];
 	struct cam_isp_hw_intf_data   *sfe_devices[CAM_SFE_HW_NUM_MAX];
 	struct cam_soc_reg_map        *cdm_reg_map[CAM_IFE_HW_NUM_MAX];
+	struct cam_isp_context_comp_record *vfe_bus_comp_grp[CAM_IFE_HW_NUM_MAX];
+	struct cam_isp_context_comp_record *sfe_bus_comp_grp[CAM_SFE_HW_NUM_MAX];
+	uint32_t                            vfe_bus_comp_grp_ref_cnt[CAM_IFE_HW_NUM_MAX];
+	uint32_t                            sfe_bus_comp_grp_ref_cnt[CAM_SFE_HW_NUM_MAX];
 
 	struct mutex                     ctx_mutex;
 	atomic_t                         active_ctx_cnt;
@@ -689,6 +699,7 @@ struct cam_ife_hw_mgr {
  * @rdi_vc                      : input virtual channel number for rdi path
  * @rdi_dt                      : input data type number for rdi path
  * @decode_format               : input data format
+ * @color_filter_arrangement    : indicates YUV CHROMA Downscale conversion enabled
  * @rdi_vc_dt_updated           : Indicates count of rdi vc-dt associated to any hw res
  * @pxl_vc_dt_updated           : Indicates if pxl vc-dt is associated to any hw res
  * @lcr_vc_dt_updated           : Indicates if lcr vc-dt associated to any hw res
@@ -712,6 +723,7 @@ struct cam_ife_hw_mgr_sensor_stream_config {
 	uint32_t                                   rdi_vc[CAM_ISP_VC_DT_CFG];
 	uint32_t                                   rdi_dt[CAM_ISP_VC_DT_CFG];
 	uint32_t                                   decode_format;
+	uint32_t                                   color_filter_arrangement;
 	uint32_t                                   rdi_vc_dt_updated;
 	bool                                       pxl_vc_dt_updated;
 	uint32_t                                   lcr_vc_dt_updated;
@@ -732,6 +744,7 @@ struct cam_ife_hw_mgr_sensor_stream_config {
  * @acquire_cnt                 : count of number of acquire calls
  * @stream_cfg_cnt              : number of sensor configurations for pxl and rdi paths
  * @rdi_stream_cfg_cnt          : number of sensor configurations for only rdi path
+ * @rdi_yuv_conversion_stream_cnt: number of rdi streams that need yuv conversion paths
  * @hw_ctx_cnt                  : count of number of hw ctx
  * @stream_on_cnt               : count of number of streamon calls for this ife device
  * @res_ife_csid_list           : CSID resource list
@@ -753,6 +766,7 @@ struct cam_ife_hw_mgr_stream_grp_config {
 	uint32_t                                      acquire_cnt;
 	uint32_t                                      stream_cfg_cnt;
 	uint32_t                                      rdi_stream_cfg_cnt;
+	uint32_t                                      rdi_yuv_conversion_stream_cnt;
 	uint32_t                                      hw_ctx_cnt;
 	uint32_t                                      stream_on_cnt;
 	struct list_head                              res_ife_csid_list;

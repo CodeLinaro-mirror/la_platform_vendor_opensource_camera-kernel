@@ -314,6 +314,7 @@ enum cam_isp_hw_cmd_type {
  * @is_per_port_start:            Indicates start_hw is called on real streamon call or
  *                                on per port streamon call
  * @is_per_port_acquire:          Indicates if resource is yet to be really acquired
+ * @multi_stream_perport:         Indicates sensor has more than one stream per port
  */
 struct cam_isp_resource_node {
 	enum cam_isp_resource_type     res_type;
@@ -342,6 +343,7 @@ struct cam_isp_resource_node {
 	bool                           is_per_port_acquire;
 	/* WA, need to revisit */
 	bool                           rdi_only_ctx;
+	bool                           multi_stream_perport;
 };
 
 /*

@@ -129,11 +129,14 @@ static int cam_ife_mgr_update_irq_mask_affected_ctx_stream_grp(
 
 static int cam_ife_mgr_disable_irq(struct cam_ife_hw_mgr_ctx *ctx);
 
-static int cam_ife_hw_mgr_start_ife_out_res_stream_grp(int grp_cfg_index);
+static int cam_ife_hw_mgr_start_ife_out_res_stream_grp(int grp_cfg_index,
+	bool multi_stream_perport);
 
-static int cam_ife_hw_mgr_ife_src_start_hw_stream_grp(int grp_cfg_index);
+static int cam_ife_hw_mgr_ife_src_start_hw_stream_grp(int grp_cfg_index,
+	bool multi_stream_perport);
 
-static int cam_ife_mgr_csid_start_hw_stream_grp(int grp_cfg_index, bool is_internal_start);
+static int cam_ife_mgr_csid_start_hw_stream_grp(int grp_cfg_index, bool is_internal_start,
+	bool multi_stream_perport);
 
 static int cam_ife_mgr_enable_irq(struct cam_ife_hw_mgr_ctx *ctx, bool is_internal_start);
 
@@ -1292,6 +1295,11 @@ static int cam_ife_mgr_check_for_previous_sensor_cfg(
 	for (i = 0; i < grp_cfg->stream_cfg_cnt; i++) {
 		if (grp_cfg->stream_cfg[i].sensor_id ==
 			stream_grp_cfg->stream_cfg[stream_idx].sensor_id) {
+			grp_cfg->stream_cfg[i].color_filter_arrangement +=
+				stream_grp_cfg->stream_cfg[stream_idx].color_filter_arrangement;
+			if (stream_grp_cfg->stream_cfg[stream_idx].color_filter_arrangement)
+				grp_cfg->rdi_yuv_conversion_stream_cnt +=
+					stream_grp_cfg->stream_cfg[stream_idx].color_filter_arrangement;
 			rc = cam_ife_mgr_update_vc_dt_sensor_stream_cfg(
 					stream_grp_cfg->stream_cfg[stream_idx].path_id,
 					stream_grp_cfg->stream_cfg[stream_idx].vc,
@@ -1319,13 +1327,14 @@ static int cam_ife_mgr_dump_sensor_grp_stream_cfg(void)
 
 		for (j = 0; j < grp_cfg->stream_cfg_cnt; j++) {
 			CAM_DBG(CAM_ISP,
-				"i:%d sensor_id:%d pxl :%d rdi :%d lcr:%d ppp:%d decode_fmt:%d",
+				"i:%d sensor_id:%d pxl :%d rdi :%d lcr:%d ppp:%d decode_fmt:%d color_filter_arrangement:%d",
 				i, grp_cfg->stream_cfg[j].sensor_id,
 				grp_cfg->stream_cfg[j].num_valid_vc_dt_pxl,
 				grp_cfg->stream_cfg[j].num_valid_vc_dt_rdi,
 				grp_cfg->stream_cfg[j].num_valid_vc_dt_lcr,
 				grp_cfg->stream_cfg[j].num_valid_vc_dt_ppp,
-				grp_cfg->stream_cfg[j].decode_format);
+				grp_cfg->stream_cfg[j].decode_format,
+				grp_cfg->stream_cfg[j].color_filter_arrangement);
 
 			if (grp_cfg->stream_cfg[j].num_valid_vc_dt_rdi) {
 				for (k = 0; k < grp_cfg->stream_cfg[j].num_valid_vc_dt_rdi;
@@ -1581,6 +1590,12 @@ static int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 				stream_grp_cfg->stream_cfg[j].sensor_id;
 			grp_cfg->stream_cfg[grp_cfg->stream_cfg_cnt].decode_format =
 				stream_grp_cfg->stream_cfg[j].decode_format;
+			grp_cfg->stream_cfg[grp_cfg->stream_cfg_cnt].color_filter_arrangement =
+				stream_grp_cfg->stream_cfg[j].color_filter_arrangement;
+
+			if (stream_grp_cfg->stream_cfg[j].color_filter_arrangement)
+				grp_cfg->rdi_yuv_conversion_stream_cnt +=
+					stream_grp_cfg->stream_cfg[j].color_filter_arrangement;
 
 			rc = cam_ife_mgr_update_vc_dt_sensor_stream_cfg(
 					stream_grp_cfg->stream_cfg[j].path_id,
@@ -1605,8 +1620,10 @@ static int cam_ife_mgr_update_sensor_grp_stream_cfg(void *hw_mgr_priv,
 		grp_cfg->rdi_stream_cfg_cnt =
 				cam_ife_mgr_get_rdi_stream_cfg_cnt(sensor_grp_config, i);
 
-		CAM_DBG(CAM_ISP, "rdi_stream_cfg_cnt : %d stream_cfg_cnt:%d",
-			grp_cfg->rdi_stream_cfg_cnt, grp_cfg->stream_cfg_cnt);
+		CAM_DBG(CAM_ISP,
+			"rdi_stream_cfg_cnt : %d stream_cfg_cnt:%d rdi_yuv_conversion_stream_cnt:%d",
+			grp_cfg->rdi_stream_cfg_cnt, grp_cfg->stream_cfg_cnt,
+			grp_cfg->rdi_yuv_conversion_stream_cnt);
 
 		grp_cfg->res_list_ife_out = kcalloc(max_ife_out_res,
 			sizeof(struct cam_isp_hw_mgr_res), GFP_KERNEL);
@@ -2078,6 +2095,14 @@ static int cam_ife_hw_mgr_start_hw_res(
 		if (!isp_hw_res->hw_res[i])
 			continue;
 		hw_intf = isp_hw_res->hw_res[i]->hw_intf;
+		if (!hw_intf) {
+			CAM_ERR(CAM_ISP,
+				"NULL hw_intf split[%d] (ctx_idx: %u type:%d, id:%d)",
+				i, ctx ? ctx->ctx_index : 0xFFFFFFFF,
+				isp_hw_res->res_type, isp_hw_res->res_id);
+			goto err;
+		}
+
 		if (hw_intf->hw_ops.start) {
 			rc = hw_intf->hw_ops.start(hw_intf->hw_priv,
 				isp_hw_res->hw_res[i],
@@ -2085,11 +2110,12 @@ static int cam_ife_hw_mgr_start_hw_res(
 			if (rc) {
 				CAM_ERR(CAM_ISP,
 					"Can not start HW:%d resources, ctx_idx: %u",
-					hw_intf->hw_idx, ctx->ctx_index);
+					hw_intf->hw_idx, ctx ? ctx->ctx_index : 0xFFFFFFFF);
 				goto err;
 			}
 		} else {
-			CAM_ERR(CAM_ISP, "function null, ctx_idx: %u", ctx->ctx_index);
+			CAM_ERR(CAM_ISP, "function null, ctx_idx: %u",
+				ctx ? ctx->ctx_index : 0xFFFFFFFF);
 			goto err;
 		}
 	}
@@ -2097,7 +2123,7 @@ static int cam_ife_hw_mgr_start_hw_res(
 	return 0;
 err:
 	CAM_ERR(CAM_ISP, "Start hw res failed (ctx_idx: %u type:%d, id:%d)",
-		ctx->ctx_index, isp_hw_res->res_type, isp_hw_res->res_id);
+		ctx ? ctx->ctx_index : 0xFFFFFFFF, isp_hw_res->res_type, isp_hw_res->res_id);
 	return rc;
 }
 
@@ -2112,6 +2138,12 @@ static void cam_ife_hw_mgr_stop_hw_res(
 		if (!isp_hw_res->hw_res[i])
 			continue;
 		hw_intf = isp_hw_res->hw_res[i]->hw_intf;
+		if (!hw_intf) {
+			CAM_ERR(CAM_ISP,
+				"NULL hw_intf split[%d] (type:%d, id:%d) — skipping stop",
+				i, isp_hw_res->res_type, isp_hw_res->res_id);
+			continue;
+		}
 
 		if (isp_hw_res->hw_res[i]->res_state !=
 			CAM_ISP_RESOURCE_STATE_STREAMING)
@@ -2827,12 +2859,21 @@ static int cam_ife_hw_mgr_release_hw_for_ctx(
 	}
 
 	/* ife leaf resource */
-	num_out = ife_ctx->num_acq_vfe_out;
-	for (i = 0; i < num_out; i++) {
-		if (ife_ctx->flags.per_port_en && (index != CAM_IFE_STREAM_GRP_INDEX_NONE))
+	if (ife_ctx->flags.per_port_en && (index != CAM_IFE_STREAM_GRP_INDEX_NONE)) {
+		/*
+		 * grp_cfg[index]->res_list_ife_out[] is keyed by vfe-out res_id
+		 * (see vfe_out_map population), not by acquire order, so walk
+		 * vfe_out_map to find which res_ids this ctx actually acquired.
+		 */
+		for (i = 0; i < max_ife_out_res; i++) {
+			if (ife_ctx->vfe_out_map[i] == 0xff)
+				continue;
 			cam_ife_hw_mgr_free_hw_res(
 				&g_ife_sns_grp_cfg.grp_cfg[index]->res_list_ife_out[i], false);
-		else {
+		}
+	} else {
+		num_out = ife_ctx->num_acq_vfe_out;
+		for (i = 0; i < num_out; i++) {
 			cam_ife_hw_mgr_free_hw_res(&ife_ctx->res_list_ife_out[i], false);
 			ife_ctx->num_acq_vfe_out--;
 		}
@@ -2897,6 +2938,46 @@ static int cam_ife_hw_mgr_release_hw_for_ctx(
 		ife_ctx->ctx_index);
 
 	return 0;
+}
+
+/*
+ * vfe/sfe_bus_comp_grp tables live on the hw_mgr, keyed by hw_idx, and are
+ * shared by every ctx acquired on that hw_idx. Drop this ctx's ref on each
+ * hw_idx it used, and free the table only once its ref count hits zero
+ * (i.e. the last ctx sharing that hw_idx has released it).
+ */
+static void cam_ife_hw_mgr_put_bus_comp_grp_ref(
+	struct cam_ife_hw_mgr_ctx  *ife_ctx)
+{
+	uint32_t i;
+
+	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
+		if (!(ife_ctx->vfe_bus_comp_grp_hw_idx_mask & BIT(i)))
+			continue;
+
+		if (ife_ctx->hw_mgr->vfe_bus_comp_grp_ref_cnt[i])
+			ife_ctx->hw_mgr->vfe_bus_comp_grp_ref_cnt[i]--;
+
+		if (!ife_ctx->hw_mgr->vfe_bus_comp_grp_ref_cnt[i]) {
+			CAM_MEM_FREE(ife_ctx->hw_mgr->vfe_bus_comp_grp[i]);
+			ife_ctx->hw_mgr->vfe_bus_comp_grp[i] = NULL;
+		}
+	}
+	ife_ctx->vfe_bus_comp_grp_hw_idx_mask = 0;
+
+	for (i = 0; i < CAM_SFE_HW_NUM_MAX; i++) {
+		if (!(ife_ctx->sfe_bus_comp_grp_hw_idx_mask & BIT(i)))
+			continue;
+
+		if (ife_ctx->hw_mgr->sfe_bus_comp_grp_ref_cnt[i])
+			ife_ctx->hw_mgr->sfe_bus_comp_grp_ref_cnt[i]--;
+
+		if (!ife_ctx->hw_mgr->sfe_bus_comp_grp_ref_cnt[i]) {
+			CAM_MEM_FREE(ife_ctx->hw_mgr->sfe_bus_comp_grp[i]);
+			ife_ctx->hw_mgr->sfe_bus_comp_grp[i] = NULL;
+		}
+	}
+	ife_ctx->sfe_bus_comp_grp_hw_idx_mask = 0;
 }
 
 
@@ -3366,6 +3447,7 @@ static int cam_ife_hw_mgr_link_csid_pxl_resources(
 	ife_ctx->left_hw_idx = hw_intf->hw_idx;
 	ife_ctx->right_hw_idx = 0;
 	ife_ctx->buf_done_controller = csid_acquire.buf_done_controller;
+	ife_ctx->mc_comp_buf_done_controller = csid_acquire.mc_comp_buf_done_controller;
 	ife_ctx->flags.need_csid_top_cfg = csid_acquire.need_top_cfg;
 
 	*csid_res = *hw_mgr_res;
@@ -3778,9 +3860,15 @@ static int cam_ife_hw_mgr_link_res_ife_out_rdi(
 
 	ife_out_res_tmp =
 		&g_ife_sns_grp_cfg.grp_cfg[index]->res_list_ife_out[vfe_out_res_id & 0xFF];
+	/* At this point invalid map means linking resource */
+	if (ife_ctx->vfe_out_map[vfe_out_res_id & 0xFF] == 0xFF) {
+		ife_ctx->vfe_out_map[vfe_out_res_id & 0xFF] = ife_ctx->num_acq_vfe_out;
+		ife_ctx->num_acq_vfe_out++;
+		CAM_DBG(CAM_ISP, "ctx: %u vfe_out_map[%d] = %u", ife_ctx->ctx_index,
+			vfe_out_res_id & 0xFF, ife_ctx->vfe_out_map[vfe_out_res_id & 0xFF]);
+	}
 
-	ife_out_res = &ife_ctx->res_list_ife_out[out_port_res_type & 0xFF];
-
+	ife_out_res = &ife_ctx->res_list_ife_out[ife_ctx->vfe_out_map[vfe_out_res_id & 0xFF]];
 	if (ife_out_res_tmp->hw_res[0] == NULL || ife_out_res_tmp->linked) {
 		CAM_ERR(CAM_ISP,
 			"no free ife_out RDI resource available ife_ctx: %d sensor_id: %d linked:%d",
@@ -3802,6 +3890,7 @@ static int cam_ife_hw_mgr_link_res_ife_out_rdi(
 		g_ife_hw_mgr.debug_cfg.disable_ubwc_comp;
 	vfe_acquire.event_cb = cam_ife_hw_mgr_event_handler;
 	vfe_acquire.buf_done_controller = ife_ctx->buf_done_controller;
+	vfe_acquire.mc_comp_buf_done_controller = ife_ctx->mc_comp_buf_done_controller;
 	vfe_acquire.vfe_out.use_wm_pack = ife_src_res->use_wm_pack;
 
 	rc = cam_ife_hw_mgr_update_vfe_res_data(ife_ctx, ife_out_res_tmp, &vfe_acquire,
@@ -3822,7 +3911,6 @@ static int cam_ife_hw_mgr_link_res_ife_out_rdi(
 	ife_out_res->linked = true;
 
 	ife_src_res->num_children++;
-	ife_ctx->num_acq_vfe_out++;
 
 	return 0;
 err:
@@ -3860,7 +3948,8 @@ static int cam_ife_hw_mgr_link_res_ife_out_pixel(
 		k = out_port->res_type & 0xFF;
 		ife_out_res_tmp = &g_ife_sns_grp_cfg.grp_cfg[index]->res_list_ife_out[k];
 
-		ife_out_res = &ife_ctx->res_list_ife_out[k];
+		ife_out_res = &ife_ctx->res_list_ife_out[ife_ctx->vfe_out_map[k]];
+
 
 		if (ife_out_res_tmp->hw_res[0] == NULL || ife_out_res_tmp->linked) {
 			CAM_ERR(CAM_ISP,
@@ -3881,9 +3970,11 @@ static int cam_ife_hw_mgr_link_res_ife_out_pixel(
 			g_ife_hw_mgr.debug_cfg.disable_ubwc_comp;
 		vfe_acquire.event_cb = cam_ife_hw_mgr_event_handler;
 		vfe_acquire.buf_done_controller = ife_ctx->buf_done_controller;
+		vfe_acquire.mc_comp_buf_done_controller = ife_ctx->mc_comp_buf_done_controller;
 		vfe_acquire.vfe_out.split_id  = CAM_ISP_HW_SPLIT_LEFT;
 		vfe_acquire.vfe_out.is_master = 0;
 		vfe_acquire.vfe_out.dual_slave_core = 0;
+		vfe_acquire.vfe_out.use_wm_pack = ife_src_res->use_wm_pack;
 
 		CAM_DBG(CAM_ISP, "resource type :0x%x res id:0x%x",
 			ife_out_res_tmp->hw_res[0]->res_type,
@@ -3908,7 +3999,6 @@ static int cam_ife_hw_mgr_link_res_ife_out_pixel(
 		ife_out_res->linked = true;
 
 		ife_src_res->num_children++;
-		ife_ctx->num_acq_vfe_out++;
 		/* WA, need to revisit */
 	//	if (out_port->secure_mode)
 	//		ife_ctx->flags.secure_mode = true;
@@ -3930,8 +4020,6 @@ static int cam_ife_hw_mgr_link_ife_out_resources(
 	int rc = -EINVAL;
 
 	list_for_each_entry(ife_src_res, &ife_ctx->res_list_ife_src, list) {
-		if (ife_src_res->num_children)
-			continue;
 
 		switch (ife_src_res->res_id) {
 		case CAM_ISP_HW_VFE_IN_CAMIF:
@@ -3945,6 +4033,8 @@ static int cam_ife_hw_mgr_link_ife_out_resources(
 		case CAM_ISP_HW_VFE_IN_RDI1:
 		case CAM_ISP_HW_VFE_IN_RDI2:
 		case CAM_ISP_HW_VFE_IN_RDI3:
+			if (ife_src_res->num_children)
+				continue;
 			rc = cam_ife_hw_mgr_link_res_ife_out_rdi(ife_ctx,
 				ife_src_res, in_port, index);
 			break;
@@ -4019,7 +4109,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 
 	if (in_port->per_port_en && (index != CAM_IFE_STREAM_GRP_INDEX_NONE)) {
 		per_port_acquire = true;
-		num_out_res = 1;
+		num_out_res = in_port->num_out_res;
 	} else {
 		per_port_acquire = false;
 		num_out_res = in_port->num_out_res;
@@ -4027,6 +4117,30 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 
 	/* take left resource */
 	vfe_in_res_id = ife_src_res->hw_res[0]->res_id;
+
+	if (per_port_acquire) {
+		switch (vfe_in_res_id) {
+		case CAM_ISP_HW_VFE_IN_RDI0:
+			res_id = CAM_ISP_IFE_OUT_RES_RDI_0;
+			break;
+		case CAM_ISP_HW_VFE_IN_RDI1:
+			res_id = CAM_ISP_IFE_OUT_RES_RDI_1;
+			break;
+		case CAM_ISP_HW_VFE_IN_RDI2:
+			res_id = CAM_ISP_IFE_OUT_RES_RDI_2;
+			break;
+		case CAM_ISP_HW_VFE_IN_RDI3:
+			res_id = CAM_ISP_IFE_OUT_RES_RDI_3;
+			break;
+		case CAM_ISP_HW_VFE_IN_RDI4:
+			res_id = CAM_ISP_IFE_OUT_RES_RDI_4;
+			break;
+		default:
+			CAM_ERR(CAM_ISP, "invalid resource type vfe_in_res_id:%d ctx_idx:%u",
+				vfe_in_res_id, ife_ctx->ctx_index);
+			return -EINVAL;
+		}
+	}
 
 	CAM_DBG(CAM_ISP,
 		"vfe_in_res_id = %d num_out_res:%d per_port_acquire:%d",
@@ -4037,21 +4151,19 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 	for (i = 0; i < num_out_res; i++) {
 		out_port = &in_port->data[i];
 
-		if (cam_convert_rdi_out_res_id_to_src(out_port->res_type) != vfe_in_res_id)
-			continue;
-
-		res_id = out_port->res_type & 0xFF;
-		CAM_DBG(CAM_ISP, "i = %d, vfe_out_res_id = %d num_out_res %d",
-			i, res_id, num_out_res);
-/*
 		if (!per_port_acquire) {
-			if (res_id != out_port->res_type) {
-				CAM_DBG(CAM_ISP, "i = %d, ctx: %d out_res_id = %d, out_port: %d",
-					i, ife_ctx->ctx_index, res_id, out_port->res_type);
+			if (cam_convert_rdi_out_res_id_to_src(out_port->res_type) != vfe_in_res_id)
 				continue;
-			}
+			res_id = out_port->res_type & 0xFF;
+		} else {
+			if ((out_port->res_type != CAM_ISP_IFE_OUT_RES_RDI_0) &&
+				(out_port->res_type != CAM_ISP_IFE_OUT_RES_RDI_1) &&
+				(out_port->res_type != CAM_ISP_IFE_OUT_RES_RDI_2) &&
+				(out_port->res_type != CAM_ISP_IFE_OUT_RES_RDI_3) &&
+				(out_port->res_type != CAM_ISP_IFE_OUT_RES_RDI_4))
+			continue;
 		}
-*/
+
 		vfe_acquire.vfe_out.cdm_ops = ife_ctx->cdm_ops;
 		vfe_acquire.priv = ife_ctx;
 		vfe_acquire.vfe_out.out_port_info = out_port;
@@ -4081,8 +4193,9 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 		}
 
 		idx = vfe_acquire.vfe_out.comp_grp_id;
-		comp_grp = &ife_ctx->vfe_bus_comp_grp[idx];
-		comp_grp->res_id[comp_grp->num_res] = out_port->res_type;
+		comp_grp = &ife_ctx->hw_mgr->vfe_bus_comp_grp[hw_intf->hw_idx][idx];
+		comp_grp->res_id[comp_grp->num_res] =
+			per_port_acquire ? res_id : out_port->res_type;
 		comp_grp->num_res++;
 		break;
 	}
@@ -4090,14 +4203,15 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 	CAM_DBG(CAM_ISP, "ctx: %d out_res_id = %d, in_res_id: %d", ife_ctx->ctx_index, res_id,
 		vfe_in_res_id);
 
-	if (i == in_port->num_out_res || res_id >= max_ife_out_res) {
+	if (i == in_port->num_out_res ||
+			(!per_port_acquire && res_id >= max_ife_out_res) ||
+			(per_port_acquire && (res_id & 0xFF) >= max_ife_out_res)) {
 		CAM_ERR(CAM_ISP,
 			"Cannot acquire out resource, i=%d, num_out_res=%d, ctx_idx: %u res_id: %d",
 			i, in_port->num_out_res, ife_ctx->ctx_index, res_id);
 		goto err;
 	}
 
-	ife_ctx->vfe_out_map[res_id] = ife_ctx->num_acq_vfe_out;
 	if (per_port_acquire)
 		ife_out_res =
 			&g_ife_sns_grp_cfg.grp_cfg[index]->res_list_ife_out[res_id & 0xFF];
@@ -4109,11 +4223,13 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 	ife_out_res->res_id = out_port->res_type;
 	ife_out_res->res_type = CAM_ISP_RESOURCE_VFE_OUT;
 	if (per_port_acquire) {
+		ife_ctx->vfe_out_map[res_id & 0xFF] = ife_ctx->num_acq_vfe_out;
 		ife_out_res->linked = false;
 	} else {
+		ife_ctx->vfe_out_map[res_id] = ife_ctx->num_acq_vfe_out;
 		ife_src_res->num_children++;
-		ife_ctx->num_acq_vfe_out++;
 	}
+	ife_ctx->num_acq_vfe_out++;
 	CAM_DBG(CAM_ISP, "Acquire success in_res_id: %d out_res_id :%d",
 		ife_src_res->hw_res[0]->res_id,
 		ife_out_res->hw_res[0]->res_id);
@@ -4212,6 +4328,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_pixel(
 			if (per_port_acquire) {
 				ife_out_res =
 					&g_ife_sns_grp_cfg.grp_cfg[index]->res_list_ife_out[k];
+				ife_ctx->vfe_out_map[k] = ife_ctx->num_acq_vfe_out;
 			} else {
 				ife_ctx->vfe_out_map[k] = ife_ctx->num_acq_vfe_out;
 				ife_out_res = &ife_ctx->res_list_ife_out[ife_ctx->num_acq_vfe_out];
@@ -4281,7 +4398,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_pixel(
 				if (!is_ife_out_in_list)
 					ife_out_res->comp_grp_id = vfe_acquire.vfe_out.comp_grp_id;
 
-				comp_grp = &ife_ctx->vfe_bus_comp_grp[ife_out_res->comp_grp_id];
+				comp_grp = &ife_ctx->hw_mgr->vfe_bus_comp_grp[hw_intf->hw_idx][ife_out_res->comp_grp_id];
 				comp_grp->res_id[comp_grp->num_res] =
 					ife_out_res->hw_res[j]->res_id;
 
@@ -4304,10 +4421,11 @@ static int cam_ife_hw_mgr_acquire_res_ife_out_pixel(
 		ife_out_res->res_type = CAM_ISP_RESOURCE_VFE_OUT;
 		ife_out_res->res_id = res_type;
 		ife_out_res->hw_ctxt_id_mask |= vfe_acquire.vfe_out.out_port_info->hw_context_id;
+
 		if ((!is_ife_out_in_list) && (!per_port_acquire)) {
 			ife_src_res->num_children++;
-			ife_ctx->num_acq_vfe_out++;
 		}
+		ife_ctx->num_acq_vfe_out++;
 	}
 
 	return 0;
@@ -4394,7 +4512,7 @@ static int cam_ife_hw_mgr_acquire_res_sfe_out_rdi(
 		}
 
 		index = sfe_acquire.sfe_out.comp_grp_id;
-		comp_grp = &ife_ctx->sfe_bus_comp_grp[index];
+		comp_grp = &ife_ctx->hw_mgr->sfe_bus_comp_grp[hw_intf->hw_idx][index];
 		comp_grp->res_id[comp_grp->num_res] = sfe_out_res_id;
 		comp_grp->num_res++;
 		break;
@@ -4493,7 +4611,7 @@ static int cam_ife_hw_mgr_acquire_res_sfe_out_pix(
 				sfe_acquire.sfe_out.rsrc_node;
 			if (j == CAM_ISP_HW_SPLIT_LEFT) {
 				index = sfe_acquire.sfe_out.comp_grp_id;
-				comp_grp = &ife_ctx->sfe_bus_comp_grp[index];
+				comp_grp = &ife_ctx->hw_mgr->sfe_bus_comp_grp[hw_intf->hw_idx][index];
 				comp_grp->res_id[comp_grp->num_res] =
 					sfe_out_res->hw_res[j]->res_id;
 				comp_grp->num_res++;
@@ -4522,11 +4640,32 @@ static int cam_ife_hw_mgr_acquire_res_sfe_out(
 	struct cam_isp_in_port_generic_info *in_port)
 {
 	int rc = -EINVAL;
+	uint32_t hw_idx;
 	struct cam_isp_hw_mgr_res *sfe_res_iterator;
 
 	if (list_empty(&ife_ctx->res_list_sfe_src)) {
 		CAM_WARN(CAM_ISP, "SFE src list empty");
 		return 0;
+	}
+
+	sfe_res_iterator = list_first_entry(&ife_ctx->res_list_sfe_src,
+		struct cam_isp_hw_mgr_res, list);
+	hw_idx = sfe_res_iterator->hw_res[CAM_ISP_HW_SPLIT_LEFT]->hw_intf->hw_idx;
+	if (!(ife_ctx->sfe_bus_comp_grp_hw_idx_mask & BIT(hw_idx))) {
+		if (!ife_ctx->hw_mgr->sfe_bus_comp_grp[hw_idx]) {
+			ife_ctx->hw_mgr->sfe_bus_comp_grp[hw_idx] = CAM_MEM_ZALLOC_ARRAY(
+				CAM_SFE_BUS_COMP_NUM_MAX,
+				sizeof(struct cam_isp_context_comp_record), GFP_KERNEL);
+			if (!ife_ctx->hw_mgr->sfe_bus_comp_grp[hw_idx]) {
+				CAM_ERR(CAM_CTXT, "No memory for sfe_bus_comp_grp hw_idx: %u", hw_idx);
+				return -ENOMEM;
+			}
+		} else {
+			memset(ife_ctx->hw_mgr->sfe_bus_comp_grp[hw_idx], 0,
+				sizeof(struct cam_isp_context_comp_record) * CAM_SFE_BUS_COMP_NUM_MAX);
+		}
+		ife_ctx->hw_mgr->sfe_bus_comp_grp_ref_cnt[hw_idx]++;
+		ife_ctx->sfe_bus_comp_grp_hw_idx_mask |= BIT(hw_idx);
 	}
 
 	list_for_each_entry(sfe_res_iterator,
@@ -4578,6 +4717,8 @@ static int cam_ife_hw_mgr_acquire_res_ife_out(
 	int   index)
 {
 	int rc = -EINVAL;
+	uint32_t hw_idx;
+	bool vfe_bus_comp_grp_reset[CAM_IFE_HW_NUM_MAX] = { false };
 	struct cam_isp_hw_mgr_res       *ife_src_res;
 	struct list_head                 *ife_src_list_head;
 
@@ -4587,8 +4728,10 @@ static int cam_ife_hw_mgr_acquire_res_ife_out(
 		ife_src_list_head = &ife_ctx->res_list_ife_src;
 
 	if (list_empty(ife_src_list_head)) {
-		CAM_WARN(CAM_ISP, "IFE src list empty");
-		return 0;
+		CAM_ERR(CAM_ISP,
+			"IFE src list empty — no ife_src resources acquired yet ctx_idx:%u sensor_id:0x%x index:%d per_port_en:%d",
+			ife_ctx->ctx_index, in_port->sensor_id, index, in_port->per_port_en);
+		return -ENODEV;
 	}
 
 	list_for_each_entry(ife_src_res, ife_src_list_head, list) {
@@ -4596,6 +4739,34 @@ static int cam_ife_hw_mgr_acquire_res_ife_out(
 			ife_src_res->hw_ctxt_id_mask) &&
 			ife_src_res->num_children)
 			continue;
+
+		/*
+		 * ife_src_list_head can span multiple VFEs (e.g. dual/multi-VFE
+		 * per-port groups) — ensure the comp_grp record for THIS entry's
+		 * hw_idx is allocated/reset, not just the first list entry's.
+		 */
+		hw_idx = ife_src_res->hw_res[CAM_ISP_HW_SPLIT_LEFT]->hw_intf->hw_idx;
+		if (!vfe_bus_comp_grp_reset[hw_idx]) {
+			if (!(ife_ctx->vfe_bus_comp_grp_hw_idx_mask & BIT(hw_idx))) {
+				if (!ife_ctx->hw_mgr->vfe_bus_comp_grp[hw_idx]) {
+					ife_ctx->hw_mgr->vfe_bus_comp_grp[hw_idx] = CAM_MEM_ZALLOC_ARRAY(
+						CAM_IFE_BUS_COMP_NUM_MAX,
+						sizeof(struct cam_isp_context_comp_record), GFP_KERNEL);
+					if (!ife_ctx->hw_mgr->vfe_bus_comp_grp[hw_idx]) {
+						CAM_ERR(CAM_CTXT, "No memory for vfe_bus_comp_grp hw_idx: %u",
+							hw_idx);
+						return -ENOMEM;
+					}
+				} else {
+					memset(ife_ctx->hw_mgr->vfe_bus_comp_grp[hw_idx], 0,
+						sizeof(struct cam_isp_context_comp_record) *
+						CAM_IFE_BUS_COMP_NUM_MAX);
+				}
+				ife_ctx->hw_mgr->vfe_bus_comp_grp_ref_cnt[hw_idx]++;
+				ife_ctx->vfe_bus_comp_grp_hw_idx_mask |= BIT(hw_idx);
+			}
+			vfe_bus_comp_grp_reset[hw_idx] = true;
+		}
 
 		switch (ife_src_res->res_id) {
 		case CAM_ISP_HW_VFE_IN_CAMIF:
@@ -6049,7 +6220,7 @@ static int cam_ife_hw_mgr_acquire_res_ife_csid_pxl(
 	}
 
 	CAM_DBG(CAM_ISP, "CSID Acquire: Enter, ctx_idx: %u", ife_ctx->ctx_index);
-	cam_ife_hw_mgr_put_res(&ife_ctx->res_list_ife_csid, &csid_res);
+	cam_ife_hw_mgr_put_res(csid_res_list_head, &csid_res);
 
 	/* for dual ife, acquire the right ife first */
 	for (i = csid_res->is_dual_isp; i >= 0 ; i--) {
@@ -6401,13 +6572,19 @@ static int cam_ife_hw_mgr_acquire_res_ife_csid_rdi(
 	int                                    rc = 0;
 	int                                    i;
 	int                                    out_res_count = 0;
+	uint32_t                               rdi_yuv_conversion_stream_cnt = 0;
 	struct cam_isp_out_port_generic_info  *out_port = NULL;
 	enum cam_ife_pix_path_res_id           res_id = CAM_IFE_PIX_PATH_RES_MAX;
 	bool                                   per_port_acquire;
 
 	if (in_port->per_port_en && (index != CAM_IFE_STREAM_GRP_INDEX_NONE)) {
 		per_port_acquire = true;
-		out_res_count = g_ife_sns_grp_cfg.grp_cfg[index]->rdi_stream_cfg_cnt;
+		out_res_count = (g_ife_sns_grp_cfg.grp_cfg[index]->rdi_stream_cfg_cnt -
+			g_ife_sns_grp_cfg.grp_cfg[index]->rdi_yuv_conversion_stream_cnt);
+		rdi_yuv_conversion_stream_cnt =
+			g_ife_sns_grp_cfg.grp_cfg[index]->rdi_yuv_conversion_stream_cnt;
+		CAM_DBG(CAM_ISP, "rdi_yuv_conversion_stream_cnt:%d out_res_count:%d",
+			rdi_yuv_conversion_stream_cnt, out_res_count);
 	} else {
 		per_port_acquire = false;
 		out_res_count = in_port->num_out_res;
@@ -6422,6 +6599,15 @@ static int cam_ife_hw_mgr_acquire_res_ife_csid_rdi(
 				continue;
 		} else {
 			res_id = CAM_IFE_PIX_PATH_RES_RDI_0 + i;
+			if (res_id >= CAM_IFE_PIX_PATH_RES_RDI_3 &&
+				res_id <= CAM_IFE_PIX_PATH_RES_RDI_4) {
+				res_id = CAM_IFE_PIX_PATH_RES_RDI_1 + i;
+				if (res_id > CAM_IFE_PIX_PATH_RES_RDI_4) {
+					CAM_ERR(CAM_ISP, "Unsupported Usecase");
+					rc = -EINVAL;
+					break;
+				}
+			}
 		}
 
 		rc  = cam_ife_hw_mgr_acquire_csid_rdi_util(ife_ctx,
@@ -6431,7 +6617,29 @@ static int cam_ife_hw_mgr_acquire_res_ife_csid_rdi(
 				ife_ctx->ctx_index, res_id, rc);
 			break;
 		}
-		*acquired_rdi_res |= BIT(res_id);
+		if (acquired_rdi_res)
+			*acquired_rdi_res |= BIT(res_id);
+	}
+
+	if (per_port_acquire && !rc && rdi_yuv_conversion_stream_cnt) {
+		for (i = 0; i < rdi_yuv_conversion_stream_cnt; i++) {
+			res_id = CAM_IFE_PIX_PATH_RES_RDI_3 + i;
+			if (res_id > CAM_IFE_PIX_PATH_RES_RDI_4) {
+				CAM_ERR(CAM_ISP, "Unsupported Usecase");
+				rc = -EINVAL;
+				break;
+			}
+
+			rc  = cam_ife_hw_mgr_acquire_csid_rdi_util(ife_ctx,
+					in_port, res_id, out_port, index);
+			if (rc) {
+				CAM_ERR(CAM_ISP, "Ctx: %u Res %d acquire failed rc %d",
+					ife_ctx->ctx_index, res_id, rc);
+				break;
+			}
+			if (acquired_rdi_res)
+				*acquired_rdi_res |= BIT(res_id);
+		}
 	}
 
 	CAM_DBG(CAM_ISP, "Ctx: %u  rdi: %d", ife_ctx->ctx_index, res_id);
@@ -7480,6 +7688,14 @@ static int cam_ife_hw_mgr_acquire_res_stream_grp(
 		if (found)
 			break;
 	}
+
+	if (!found) {
+		CAM_ERR(CAM_ISP,
+			"sensor_id:0x%x not found in any stream group ctx_idx:%u — no resources acquired",
+			in_port->sensor_id, ife_ctx->ctx_index);
+		return -ENODEV;
+	}
+
 	return 0;
 end:
 	mutex_unlock(&g_ife_sns_grp_cfg.grp_cfg[i]->lock);
@@ -8334,7 +8550,8 @@ static int cam_ife_mgr_acquire_get_unified_structure(
 
 	major_ver = (acquire_hw_info->common_info_version >> 12) & 0xF;
 	minor_ver = (acquire_hw_info->common_info_version) & 0xFFF;
-
+	CAM_DBG(CAM_ISP, "Versions of i/p port info from user. minor %u, major %u",
+			minor_ver, major_ver);
 	switch (major_ver) {
 	case 1:
 		return cam_ife_mgr_acquire_get_unified_structure_v0(
@@ -8379,12 +8596,14 @@ static void cam_ife_mgr_populate_hw_ctxt_map(struct cam_ife_hw_mgr_ctx          
 }
 
 static int cam_ife_mgr_check_per_port_enable(
-	struct cam_isp_in_port_generic_info *in_port)
+	struct cam_isp_in_port_generic_info *in_port,
+	struct cam_ife_hw_mgr_ctx           *ife_ctx)
 {
 	int i, j;
 	bool   found = false;
 
 	in_port->per_port_en = false;
+	ife_ctx->flags.multi_stream_perport = false;
 
 	if (!g_ife_sns_grp_cfg.num_grp_cfg)
 		goto end;
@@ -8402,8 +8621,22 @@ static int cam_ife_mgr_check_per_port_enable(
 				break;
 			}
 		}
-		if (found)
+		if (found) {
+			int k;
+
+			for (k = 0; k < g_ife_sns_grp_cfg.grp_cfg[i]->stream_cfg_cnt; k++) {
+
+				if (g_ife_sns_grp_cfg.grp_cfg[i]->stream_cfg[k].num_valid_vc_dt_pxl +
+					g_ife_sns_grp_cfg.grp_cfg[i]->stream_cfg[k].num_valid_vc_dt_rdi > 1) {
+					ife_ctx->flags.multi_stream_perport = true;
+					CAM_DBG(CAM_ISP,
+						"Multi stream per port, sensor_id:%d",
+						in_port->sensor_id);
+					break;
+				}
+			}
 			break;
+		}
 	}
 
 	if (!found)
@@ -8497,22 +8730,6 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 		goto free_ctx;
 	}
 
-	ife_ctx->vfe_bus_comp_grp = CAM_MEM_ZALLOC_ARRAY(CAM_IFE_BUS_COMP_NUM_MAX,
-		sizeof(struct cam_isp_context_comp_record), GFP_KERNEL);
-	if (!ife_ctx->vfe_bus_comp_grp) {
-		CAM_ERR(CAM_CTXT, "No memory for vfe_bus_comp_grp");
-		rc = -ENOMEM;
-		goto free_mem;
-	}
-
-	ife_ctx->sfe_bus_comp_grp = CAM_MEM_ZALLOC_ARRAY(CAM_SFE_BUS_COMP_NUM_MAX,
-		sizeof(struct cam_isp_context_comp_record), GFP_KERNEL);
-	if (!ife_ctx->sfe_bus_comp_grp) {
-		CAM_ERR(CAM_CTXT, "No memory for sfe_bus_comp_grp");
-		rc = -ENOMEM;
-		goto free_mem;
-	}
-
 	/* Update in_port structure */
 	for (i = 0; i < acquire_hw_info->num_inputs; i++) {
 		rc = cam_ife_mgr_acquire_get_unified_structure(acquire_hw_info,
@@ -8560,7 +8777,7 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 			ife_ctx->is_hw_ctx_acq = true;
 	}
 
-	cam_ife_mgr_check_per_port_enable(in_port);
+	cam_ife_mgr_check_per_port_enable(in_port, ife_ctx);
 
 	for (i = 0; i < in_port->num_valid_vc_dt; i++) {
 		if (cam_ife_mgr_hw_validate_vc_dt_stream_grp(in_port,
@@ -8575,7 +8792,7 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 
 	total_ports = total_pix_port + total_rdi_port + total_pd_port;
 	acquire_args->total_ports_acq = total_ports;
-	ife_ctx->res_list_ife_out = CAM_MEM_ZALLOC_ARRAY(total_ports,
+	ife_ctx->res_list_ife_out = CAM_MEM_ZALLOC_ARRAY(max_ife_out_res,
 		sizeof(struct cam_isp_hw_mgr_res), GFP_KERNEL);
 	ife_ctx->flags.per_port_en = in_port->per_port_en;
 	ife_ctx->common.virtual_rdi_mapping_cb =
@@ -8587,6 +8804,9 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 		CAM_ERR(CAM_ISP, "Alloc failed for ife out map");
 		goto free_mem;
 	}
+
+	for (i = 0; i < max_ife_out_res; i++)
+		INIT_LIST_HEAD(&ife_ctx->res_list_ife_out[i].list);
 	/* Check whether context has only RDI resource */
 	if (!total_pix_port && !total_pd_port) {
 		ife_ctx->flags.is_rdi_only_context = true;
@@ -8812,6 +9032,7 @@ free_cdm_cmd:
 free_res:
 	cam_ife_hw_mgr_release_hw_for_ctx(ife_ctx,
 		CAM_IFE_STREAM_GRP_INDEX_NONE);
+	cam_ife_hw_mgr_put_bus_comp_grp_ref(ife_ctx);
 free_mem:
 	if (in_port) {
 		for (i = 0; i < acquire_hw_info->num_inputs; i++) {
@@ -8822,11 +9043,6 @@ free_mem:
 		CAM_MEM_FREE(in_port);
 		in_port = NULL;
 	}
-
-	CAM_MEM_FREE(ife_ctx->vfe_bus_comp_grp);
-	CAM_MEM_FREE(ife_ctx->sfe_bus_comp_grp);
-	ife_ctx->vfe_bus_comp_grp = NULL;
-	ife_ctx->sfe_bus_comp_grp = NULL;
 
 	CAM_MEM_FREE(ife_ctx->res_list_sfe_out);
 	ife_ctx->res_list_sfe_out = NULL;
@@ -9116,6 +9332,7 @@ free_cdm_cmd:
 free_res:
 	cam_ife_hw_mgr_release_hw_for_ctx(ife_ctx,
 		CAM_IFE_STREAM_GRP_INDEX_NONE);
+	cam_ife_hw_mgr_put_bus_comp_grp_ref(ife_ctx);
 	cam_ife_hw_mgr_put_ctx(&ife_hw_mgr->free_ctx_list, &ife_ctx);
 free_mem:
 	if (gen_port_info) {
@@ -10528,24 +10745,25 @@ static int cam_ife_mgr_stop_hw_res_stream_grp(
 
 static int cam_ife_mgr_start_hw_res_stream_grp(
 	int          grp_cfg_index,
-	bool          is_internal_start)
+	bool          is_internal_start,
+	bool          multi_stream_perport)
 {
 	int rc = 0;
 
-	rc = cam_ife_hw_mgr_start_ife_out_res_stream_grp(grp_cfg_index);
+	rc = cam_ife_hw_mgr_start_ife_out_res_stream_grp(grp_cfg_index, multi_stream_perport);
 	if (rc) {
 		CAM_ERR(CAM_ISP, "Can not start IFE OUT RES");
 		goto end;
 	}
 
-	rc = cam_ife_hw_mgr_ife_src_start_hw_stream_grp(grp_cfg_index);
+	rc = cam_ife_hw_mgr_ife_src_start_hw_stream_grp(grp_cfg_index, multi_stream_perport);
 	if (rc) {
 		CAM_ERR(CAM_ISP, "Can not start IFE SRC RES");
 		goto end;
 	}
 
 	/* Start the IFE CSID HW devices */
-	rc = cam_ife_mgr_csid_start_hw_stream_grp(grp_cfg_index, is_internal_start);
+	rc = cam_ife_mgr_csid_start_hw_stream_grp(grp_cfg_index, is_internal_start, multi_stream_perport);
 	if (rc) {
 		CAM_ERR(CAM_ISP, "Can not start CSID RES");
 		goto end;
@@ -10595,7 +10813,8 @@ static int cam_ife_hw_mgr_res_stream_on_off_grp_cfg(
 		if (!grp_cfg->stream_on_cnt ||
 			start_isp->start_only) {
 			rc = cam_ife_mgr_start_hw_res_stream_grp(i,
-				start_isp->is_internal_start);
+				start_isp->is_internal_start,
+				ctx->flags.multi_stream_perport);
 			if (rc) {
 				CAM_ERR(CAM_ISP,
 					"Can not start HW res stream grp");
@@ -11139,9 +11358,10 @@ static void cam_ife_hw_mgr_set_hw_debug_config(
 }
 
 static int cam_ife_hw_mgr_start_ife_out_res_stream_grp(
-	int    grp_cfg_index)
+	int    grp_cfg_index,
+	bool   multi_stream_perport)
 {
-	int rc;
+	int rc = 0;
 	struct cam_isp_hw_mgr_res           *hw_mgr_res;
 	uint32_t i;
 
@@ -11154,6 +11374,7 @@ static int cam_ife_hw_mgr_start_ife_out_res_stream_grp(
 			continue;
 
 		hw_mgr_res->hw_res[0]->is_per_port_start = true;
+		hw_mgr_res->hw_res[0]->multi_stream_perport = multi_stream_perport;
 		rc = cam_ife_hw_mgr_start_hw_res(hw_mgr_res, NULL);
 		if (rc) {
 			CAM_ERR(CAM_ISP, "Can not start IFE OUT (%d) ", i);
@@ -11165,7 +11386,8 @@ end:
 }
 
 static int cam_ife_hw_mgr_ife_src_start_hw_stream_grp(
-	int                    grp_cfg_index)
+	int                    grp_cfg_index,
+	bool                   multi_stream_perport)
 {
 	int                                  rc = -1;
 	struct cam_isp_hw_mgr_res           *hw_mgr_res;
@@ -11174,6 +11396,7 @@ static int cam_ife_hw_mgr_ife_src_start_hw_stream_grp(
 		list_for_each_entry(hw_mgr_res,
 			&g_ife_sns_grp_cfg.grp_cfg[grp_cfg_index]->res_ife_src_list, list) {
 			hw_mgr_res->hw_res[0]->is_per_port_start = true;
+			hw_mgr_res->hw_res[0]->multi_stream_perport = multi_stream_perport;
 
 			rc = cam_ife_hw_mgr_start_hw_res(hw_mgr_res, NULL);
 			if (rc) {
@@ -11190,7 +11413,8 @@ err:
 
 static int cam_ife_mgr_csid_start_hw_stream_grp(
 	int           grp_cfg_index,
-	bool          is_internal_start)
+	bool          is_internal_start,
+	bool          multi_stream_perport)
 {
 	struct cam_isp_hw_mgr_res      *hw_mgr_res;
 	struct cam_isp_resource_node   *isp_res;
@@ -11214,6 +11438,7 @@ static int cam_ife_mgr_csid_start_hw_stream_grp(
 				return -EINVAL;
 
 			isp_res->is_per_port_start = true;
+			isp_res->multi_stream_perport = multi_stream_perport;
 			CAM_DBG(CAM_ISP, "csid[%u] res:%s res_id %d cnt %u",
 				isp_res->hw_intf->hw_idx,
 				isp_res->res_name, isp_res->res_id, cnt);
@@ -11258,8 +11483,10 @@ static int cam_ife_mgr_update_vfe_irq_mask(
 				CAM_ERR(CAM_ISP, "invalid param");
 				goto end;
 			}
-			if (enable_irq)
+			if (enable_irq) {
 				isp_res->is_per_port_start = false;
+				isp_res->multi_stream_perport = ctx->flags.multi_stream_perport;
+			}
 
 			CAM_DBG(CAM_ISP, "ife_src[%u] res:%s res_id %d cnt %u",
 					isp_res->hw_intf->hw_idx,
@@ -11284,8 +11511,10 @@ static int cam_ife_mgr_update_vfe_irq_mask(
 			if (!isp_res)
 				continue;
 
-			if (enable_irq)
+			if (enable_irq) {
 				isp_res->is_per_port_start = false;
+				isp_res->multi_stream_perport = ctx->flags.multi_stream_perport;
+			}
 
 			CAM_DBG(CAM_ISP, "ife_out[%u] res:%s res_id %d cnt %u",
 					isp_res->hw_intf->hw_idx,
@@ -11345,8 +11574,10 @@ static int cam_ife_mgr_update_csid_irq_mask(
 	list_for_each_entry(hw_mgr_res, &ctx->res_list_ife_csid, list) {
 		isp_res = hw_mgr_res->hw_res[0];
 
-		if (enable_irq)
+		if (enable_irq) {
 			hw_mgr_res->hw_res[0]->is_per_port_start = false;
+			hw_mgr_res->hw_res[0]->multi_stream_perport = ctx->flags.multi_stream_perport;
+		}
 
 		CAM_DBG(CAM_ISP, "csid[%u] res:%s res_id %d cnt %u",
 				isp_res->hw_intf->hw_idx,
@@ -11898,7 +12129,6 @@ static int cam_ife_hw_mgr_free_hw_ctx(
 
 	/* ife leaf resource */
 	for (i = 0; i < max_ife_out_res; i++) {
-		/* caller should make sure the resource is in a list */
 		hw_mgr_res = &ife_ctx->res_list_ife_out[i];
 
 		if (!hw_mgr_res->hw_res[0])
@@ -12017,11 +12247,12 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 					g_ife_sns_grp_cfg.grp_cfg[i]->stream_cfg[j].sensor_id) {
 					mutex_lock(&g_ife_sns_grp_cfg.grp_cfg[i]->lock);
 					skip_deinit_hw = true;
+					g_ife_sns_grp_cfg.grp_cfg[i]->hw_ctx_cnt--;
 					if (g_ife_sns_grp_cfg.grp_cfg[i]->stream_on_cnt ==
 						0) {
 						rc = cam_ife_hw_mgr_release_hw_for_ctx(ctx, i);
+						cam_ife_hw_mgr_put_bus_comp_grp_ref(ctx);
 						skip_deinit_hw = false;
-						g_ife_sns_grp_cfg.grp_cfg[i]->hw_ctx_cnt--;
 					}
 					cam_ife_hw_mgr_free_hw_ctx(ctx);
 					per_port_feature_enable = true;
@@ -12038,8 +12269,10 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 		cam_ife_hw_mgr_deinit_hw(ctx);
 
 	/* we should called the stop hw before this already */
-	if (!per_port_feature_enable)
+	if (!per_port_feature_enable) {
 		cam_ife_hw_mgr_release_hw_for_ctx(ctx, CAM_IFE_STREAM_GRP_INDEX_NONE);
+		cam_ife_hw_mgr_put_bus_comp_grp_ref(ctx);
+	}
 
 	if (ctx->ctx_type == CAM_IFE_CTX_TYPE_SFE) {
 		rc = cam_ife_mgr_update_core_info_to_cpas(ctx, false);
@@ -12096,10 +12329,6 @@ static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 	ctx->try_recovery_cnt = 0;
 	ctx->recovery_req_id = 0;
 	ctx->drv_path_idle_en = 0;
-	CAM_MEM_FREE(ctx->vfe_bus_comp_grp);
-	CAM_MEM_FREE(ctx->sfe_bus_comp_grp);
-	ctx->vfe_bus_comp_grp = NULL;
-	ctx->sfe_bus_comp_grp = NULL;
 
 	atomic_set(&ctx->overflow_pending, 0);
 	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
@@ -17771,7 +18000,15 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 			io_buf_info.fill_fence = fill_ife_fence;
 			io_buf_info.out_base = CAM_ISP_IFE_OUT_RES_BASE;
 			io_buf_info.out_max = (CAM_ISP_IFE_OUT_RES_BASE + max_ife_out_res);
+
+
 			io_buf_info.res_list_isp_out = ctx->res_list_ife_out;
+			if (!ctx->flags.per_port_en) {
+				io_buf_info.per_port_en = false;
+			} else {
+				io_buf_info.per_port_en = true;
+			}
+
 			io_buf_info.out_map = ctx->vfe_out_map;
 			io_buf_info.res_list_in_rd = res_list_ife_rd_tmp;
 			io_buf_info.priv = ctx;
@@ -18826,17 +19063,37 @@ static int cam_ife_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 				cam_ife_mgr_user_dump_stream_info, ctx,
 				sizeof(int32_t), "ISP_STREAM_INFO_FROM_IFE_HW_MGR:");
 			break;
-		case CAM_ISP_HW_MGR_GET_BUS_COMP_GROUP:
+		case CAM_ISP_HW_MGR_GET_BUS_COMP_GROUP: {
+			struct cam_isp_hw_mgr_res *src_res;
+			uint32_t hw_idx;
+
 			query_cmd = (struct cam_isp_comp_record_query *)
 				isp_hw_cmd_args->cmd_data;
-			memcpy(query_cmd->vfe_bus_comp_grp, ctx->vfe_bus_comp_grp,
-				sizeof(struct cam_isp_context_comp_record) *
-				CAM_IFE_BUS_COMP_NUM_MAX);
-			if (ctx->ctx_type == CAM_IFE_CTX_TYPE_SFE)
-				memcpy(query_cmd->sfe_bus_comp_grp, ctx->sfe_bus_comp_grp,
-					sizeof(struct cam_isp_context_comp_record) *
-					CAM_SFE_BUS_COMP_NUM_MAX);
+
+			if (!list_empty(&ctx->res_list_ife_src)) {
+				src_res = list_first_entry(&ctx->res_list_ife_src,
+					struct cam_isp_hw_mgr_res, list);
+				hw_idx = src_res->hw_res[CAM_ISP_HW_SPLIT_LEFT]->hw_intf->hw_idx;
+				if (ctx->hw_mgr->vfe_bus_comp_grp[hw_idx])
+					memcpy(query_cmd->vfe_bus_comp_grp,
+						ctx->hw_mgr->vfe_bus_comp_grp[hw_idx],
+						sizeof(struct cam_isp_context_comp_record) *
+						CAM_IFE_BUS_COMP_NUM_MAX);
+			}
+
+			if (ctx->ctx_type == CAM_IFE_CTX_TYPE_SFE &&
+				!list_empty(&ctx->res_list_sfe_src)) {
+				src_res = list_first_entry(&ctx->res_list_sfe_src,
+					struct cam_isp_hw_mgr_res, list);
+				hw_idx = src_res->hw_res[CAM_ISP_HW_SPLIT_LEFT]->hw_intf->hw_idx;
+				if (ctx->hw_mgr->sfe_bus_comp_grp[hw_idx])
+					memcpy(query_cmd->sfe_bus_comp_grp,
+						ctx->hw_mgr->sfe_bus_comp_grp[hw_idx],
+						sizeof(struct cam_isp_context_comp_record) *
+						CAM_SFE_BUS_COMP_NUM_MAX);
+			}
 			break;
+		}
 		case CAM_ISP_HW_MGR_GET_LAST_CONSUMED_ADDR:
 			rc = cam_ife_mgr_cmd_get_last_consumed_addr(ctx,
 				(struct cam_isp_hw_done_event_data *)(isp_hw_cmd_args->cmd_data));
@@ -22387,6 +22644,16 @@ void cam_ife_hw_mgr_deinit(void)
 		g_ife_hw_mgr.ctx_pool[i].vfe_out_map = NULL;
 		g_ife_hw_mgr.ctx_pool[i].sfe_out_map = NULL;
 		g_ife_hw_mgr.ctx_pool[i].common.tasklet_info = NULL;
+	}
+
+	for (i = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
+		CAM_MEM_FREE(g_ife_hw_mgr.vfe_bus_comp_grp[i]);
+		g_ife_hw_mgr.vfe_bus_comp_grp[i] = NULL;
+	}
+
+	for (i = 0; i < CAM_SFE_HW_NUM_MAX; i++) {
+		CAM_MEM_FREE(g_ife_hw_mgr.sfe_bus_comp_grp[i]);
+		g_ife_hw_mgr.sfe_bus_comp_grp[i] = NULL;
 	}
 
 	cam_smmu_destroy_handle(

@@ -3798,15 +3798,15 @@ static inline void cam_ife_csid_ver2_maskout_path_irqs(
 				csid_hw->hw_intf->hw_idx, rc);
 
 		path_cfg->top_irq_handle = 0;
-
-		rc = cam_irq_controller_unregister_dependent(
-			csid_hw->top_irq_controller[CAM_IFE_CSID_TOP_IRQ_STATUS_REG0],
-			csid_hw->path_irq_controller[res_id]);
-		if (rc)
-			CAM_WARN(CAM_ISP,
-				"Failed to unregister path dependent with top CSID:%u rc: %d",
-				csid_hw->hw_intf->hw_idx, rc);
 	}
+
+	rc = cam_irq_controller_unregister_dependent(
+		csid_hw->top_irq_controller[CAM_IFE_CSID_TOP_IRQ_STATUS_REG0],
+		csid_hw->path_irq_controller[res_id]);
+	if (rc)
+		CAM_WARN(CAM_ISP,
+			"Failed to unregister path dependent with top CSID:%u rc: %d",
+			csid_hw->hw_intf->hw_idx, rc);
 }
 
 static inline void cam_ife_csid_ver2_disable_path_irqs_evts(
@@ -3862,15 +3862,16 @@ static inline void cam_ife_csid_ver2_disable_path_irqs_evts(
 				csid_hw->hw_intf->hw_idx, rc);
 
 		path_cfg->top_irq_handle = 0;
-
-		rc =  cam_irq_controller_unregister_dependent(
-			csid_hw->top_irq_controller[CAM_IFE_CSID_TOP_IRQ_STATUS_REG0],
-			csid_hw->path_irq_controller[res_id]);
-		if (rc)
-			CAM_WARN(CAM_ISP,
-				"Failed to unregister path dependent with top CSID:%u rc: %d",
-				csid_hw->hw_intf->hw_idx, rc);
 	}
+
+	rc =  cam_irq_controller_unregister_dependent(
+		csid_hw->top_irq_controller[CAM_IFE_CSID_TOP_IRQ_STATUS_REG0],
+		csid_hw->path_irq_controller[res_id]);
+	if (rc)
+		CAM_WARN(CAM_ISP,
+			"Failed to unregister path dependent with top CSID:%u rc: %d",
+			csid_hw->hw_intf->hw_idx, rc);
+
 }
 
 static int cam_ife_csid_ver2_disable_path(
@@ -3882,11 +3883,12 @@ static int cam_ife_csid_ver2_disable_path(
 	int                                      rc = 0;
 
 	if (res->res_state != CAM_ISP_RESOURCE_STATE_STREAMING) {
-		if (res->is_per_port_acquire) {
+		if (res->is_per_port_acquire ||
+			res->res_state == CAM_ISP_RESOURCE_STATE_INIT_HW) {
 			CAM_DBG(CAM_ISP,
-				"CSID:%u path res type:%d res_id:%d not streaming, skip disable (per_port)",
+				"CSID:%u path res type:%d res_id:%d not streaming, skip disable (per_port) state:%d",
 				csid_hw->hw_intf->hw_idx,
-				res->res_type, res->res_id);
+				res->res_type, res->res_id, res->res_state);
 			return 0;
 		}
 		CAM_ERR(CAM_ISP,
@@ -4545,6 +4547,8 @@ int cam_ife_csid_ver2_release(void *hw_priv,
 	cam_ife_csid_cid_release(&csid_hw->cid_data[path_cfg->cid],
 		csid_hw->hw_intf->hw_idx,
 		path_cfg->cid);
+
+	cam_ife_csid_ver2_disable_path_irqs_evts(res->res_id, csid_hw, path_cfg);
 
 	memset(path_cfg, 0, sizeof(*path_cfg));
 
@@ -5279,11 +5283,11 @@ static int cam_ife_csid_ver2_path_irq_subscribe(
 	path_cfg->stored_irq_masks[CAM_IFE_CSID_ERR_MASK][path_cfg->irq_reg_idx] =
 		err_irq_mask;
 
-	if (res->is_per_port_start) {
+	if (!res->multi_stream_perport && res->is_per_port_start) {
 		CAM_DBG(CAM_ISP, "Skipping irq subscribe for resources that are not updated");
-	//	goto skip_irq_subscribe;
 		goto end;
 	}
+
 
 	if ((res->res_id == CAM_IFE_PIX_PATH_RES_IPP) &&
 		csid_reg->path_reg[res->res_id]->capabilities &
@@ -6823,10 +6827,12 @@ int cam_ife_csid_ver2_deinit_hw(void *hw_priv,
 		return -EINVAL;
 	}
 
-	if (res->res_state == CAM_ISP_RESOURCE_STATE_RESERVED) {
-		CAM_DBG(CAM_ISP, "CSID:%u Res:%d already in De-init state",
+	if (res->res_state == CAM_ISP_RESOURCE_STATE_RESERVED ||
+		res->res_state == CAM_ISP_RESOURCE_STATE_AVAILABLE) {
+		CAM_DBG(CAM_ISP,
+			"CSID:%u Res:%d already in De-init/Release state state:%d",
 			csid_hw->hw_intf->hw_idx,
-			res->res_id);
+			res->res_id, res->res_state);
 		return -EINVAL;
 	}
 
@@ -8464,6 +8470,8 @@ skip_cfg1_reprogram:
 	res->cdm_ops = reserve->cdm_ops;
 
 	reserve->buf_done_controller = csid_hw->buf_done_irq_controller;
+	reserve->mc_comp_buf_done_controller =
+		csid_hw->top_irq_controller[CAM_IFE_CSID_TOP_IRQ_STATUS_REG0];
 	csid_hw->flags.sfe_en = reserve->sfe_en;
 	path_cfg->sfe_shdr = reserve->sfe_inline_shdr;
 	csid_hw->flags.offline_mode = reserve->is_offline;
@@ -8585,8 +8593,11 @@ static int cam_ife_csid_ver2_update_path_irq(
 	int rc = 0;
 	struct cam_ife_csid_ver2_path_cfg *path_cfg;
 	CAM_IRQ_HANDLER_BOTTOM_HALF        bh_handler, sof_discard_bh;
+	struct cam_ife_csid_ver2_reg_info *csid_reg;
 
 	path_cfg = (struct cam_ife_csid_ver2_path_cfg *)res->res_priv;
+	csid_reg = (struct cam_ife_csid_ver2_reg_info *)
+			csid_hw->core_info->csid_reg;
 
 	if (path_cfg->irq_reg_idx >= CAM_IFE_CSID_IRQ_REG_MAX) {
 		CAM_ERR(CAM_ISP, "CSID[%d] Invalid irq reg id %d",
@@ -8595,7 +8606,18 @@ static int cam_ife_csid_ver2_update_path_irq(
 		goto end;
 	}
 
-	if (!res->is_per_port_acquire && !path_cfg->irq_handle && !res->is_per_port_start) {
+	if (!enable && !path_cfg->irq_handle) {
+		CAM_DBG(CAM_ISP,
+			"CSID:%u %s irq_handle=0, nothing to disable",
+			csid_hw->hw_intf->hw_idx, res->res_name);
+		goto end;
+	}
+
+	if (enable && !res->is_per_port_acquire && !path_cfg->irq_handle && !res->is_per_port_start) {
+
+		CAM_DBG(CAM_ISP,
+			"CSID:%u %s per_port_acquire=0 irq_handle=0 per_port_start=0 -- subscribing fresh irqs",
+			csid_hw->hw_intf->hw_idx, res->res_name);
 		switch (res->res_id) {
 		case  CAM_IFE_PIX_PATH_RES_IPP:
 			bh_handler = cam_ife_csid_ver2_ipp_bottom_half;
@@ -8631,13 +8653,56 @@ static int cam_ife_csid_ver2_update_path_irq(
 			break;
 		}
 	} else {
+		if (res->rdi_only_ctx) {
+			uint32_t dbg_frm_irq_mask;
+			const struct cam_ife_csid_ver2_path_reg_info *path_reg;
+
+
+			path_reg = csid_reg->path_reg[res->res_id];
+			dbg_frm_irq_mask = csid_hw->debug_info.path_mask;
+
+			dbg_frm_irq_mask |= path_reg->rup_irq_mask;
+			if (path_cfg->handle_camif_irq)
+				dbg_frm_irq_mask |= path_reg->sof_irq_mask |
+					path_reg->eof_irq_mask | path_reg->epoch0_irq_mask;
+
+			if (path_cfg->sec_evt_config.en_secondary_evt) {
+				if (path_cfg->sec_evt_config.evt_type & CAM_IFE_CSID_EVT_SOF)
+					dbg_frm_irq_mask |= path_reg->sof_irq_mask;
+
+				if (path_cfg->sec_evt_config.evt_type & CAM_IFE_CSID_EVT_EPOCH)
+					dbg_frm_irq_mask |= path_reg->epoch0_irq_mask;
+
+			}
+
+			path_cfg->stored_irq_masks[CAM_IFE_CSID_TOP_MASK][path_cfg->irq_reg_idx] = dbg_frm_irq_mask;
+			CAM_DBG(CAM_ISP, "CSID[%u] res: %s subscribe_irq(path) mask: 0x%x RDIp %x",
+				csid_hw->hw_intf->hw_idx, res->res_name, dbg_frm_irq_mask, res->rdi_only_ctx);
+			path_cfg->irq_handle = cam_irq_controller_subscribe_irq(
+				csid_hw->path_irq_controller[res->res_id],
+				CAM_IRQ_PRIORITY_1,
+				&dbg_frm_irq_mask,
+				res,
+				cam_ife_csid_ver2_path_top_half,
+				cam_ife_csid_ver2_get_path_bh(res->res_id),
+				csid_hw->tasklet,
+				&tasklet_bh_api,
+				CAM_IRQ_EVT_GROUP_0);
+
+			if (path_cfg->irq_handle < 1) {
+				CAM_ERR(CAM_ISP, "CSID[%u] subscribe path irq fail %s",
+					csid_hw->hw_intf->hw_idx, res->res_name);
+				rc = -EINVAL;
+				goto end;
+			}
+		}
+
 		if (path_cfg->irq_handle) {
 			rc = cam_irq_controller_update_irq(
 				csid_hw->path_irq_controller[res->res_id],
 				path_cfg->irq_handle,
 				enable,
 				path_cfg->stored_irq_masks[CAM_IFE_CSID_TOP_MASK]);
-
 			if (rc) {
 				CAM_ERR(CAM_ISP, "CSID[%d] Update Irq fail %d",
 					csid_hw->hw_intf->hw_idx, res->res_id);

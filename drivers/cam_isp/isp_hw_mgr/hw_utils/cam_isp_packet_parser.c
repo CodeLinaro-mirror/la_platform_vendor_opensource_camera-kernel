@@ -767,9 +767,10 @@ static int cam_isp_get_outport_res_id(
 
 	prepare_hw_data = (struct cam_isp_prepare_hw_update_data  *)
 			prepare->priv;
-
-	if ((io_cfg->resource_type >= CAM_ISP_IFE_OUT_RES_VIRTUAL_RDI0 &&
-		io_cfg->resource_type <= CAM_ISP_IFE_OUT_RES_VIRTUAL_RDI4) &&
+	if (((io_cfg->resource_type >= CAM_ISP_IFE_OUT_RES_RDI_0 &&
+		io_cfg->resource_type <= CAM_ISP_IFE_OUT_RES_RDI_3) ||
+		(io_cfg->resource_type >= CAM_ISP_IFE_OUT_RES_VIRTUAL_RDI0 &&
+		io_cfg->resource_type <= CAM_ISP_IFE_OUT_RES_VIRTUAL_RDI4)) &&
 		prepare_hw_data->per_port_enable) {
 		if (prepare_hw_data->virtual_rdi_mapping_cb) {
 			out_port = prepare_hw_data->virtual_rdi_mapping_cb(priv,
