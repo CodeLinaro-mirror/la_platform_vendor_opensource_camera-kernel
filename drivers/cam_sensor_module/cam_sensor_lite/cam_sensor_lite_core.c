@@ -67,7 +67,8 @@ static int __cam_sensor_lite_handle_perframe(
 static int cam_sensor_lite_request_queue_cmd(
 	struct sensor_lite_device  *dev,
 	struct sensor_lite_request *req,
-	struct sensor_lite_header  *cmd)
+	struct sensor_lite_header  *cmd,
+	size_t                      cmd_size)
 {
 
 	if (!dev || !req || !cmd) {
@@ -80,14 +81,14 @@ static int cam_sensor_lite_request_queue_cmd(
 		 * Alloc and memcpy
 		 * needed as we are applying after the call returns
 		 **/
-		void *payload = kzalloc(cmd->size, GFP_KERNEL);
+		void *payload = kzalloc(cmd_size, GFP_KERNEL);
 
 		if (!payload) {
 			CAM_ERR(CAM_SENSOR_LITE, "[%d] alloc failed",
 					dev->soc_info.index);
 			return -ENOMEM;
 		}
-		memcpy(payload, cmd, cmd->size);
+		memcpy(payload, cmd, cmd_size);
 		req->payload[req->num_cmds++]    = payload;
 	} else {
 		CAM_ERR(CAM_SENSOR_LITE,
@@ -822,17 +823,19 @@ static int __cam_sensor_lite_handle_start_cmd(
 	struct sensor_lite_start_stop_cmd *cmd)
 {
 	int rc = 0;
+	size_t cmd_size;
 
 	if (sensor_lite_dev->start_cmd) {
 		CAM_ERR(CAM_SENSOR_LITE, "Previous instance is not cleared");
 		rc = -EINVAL;
 	} else {
-		sensor_lite_dev->start_cmd = kzalloc(cmd->header.size, GFP_KERNEL);
+		cmd_size = cmd->header.size;
+		sensor_lite_dev->start_cmd = kzalloc(cmd_size, GFP_KERNEL);
 		if (sensor_lite_dev->start_cmd == NULL)
 			return -ENOMEM;
 
 		__set_slave_pkt_headers(&cmd->header, HCM_PKT_OPCODE_SENSOR_START_DEV);
-		memcpy(sensor_lite_dev->start_cmd, cmd, cmd->header.size);
+		memcpy(sensor_lite_dev->start_cmd, cmd, cmd_size);
 
 		sensor_lite_dev->is_trigger_mode =
 			(sensor_lite_dev->start_cmd->start_stop_settings_size == 0) ? true : false;
@@ -850,16 +853,18 @@ static int __cam_sensor_lite_handle_stop_cmd(
 	struct sensor_lite_start_stop_cmd *cmd)
 {
 	int rc = 0;
+	size_t cmd_size;
 
 	if (sensor_lite_dev->stop_cmd) {
 		CAM_ERR(CAM_SENSOR_LITE, "Previous instance is not cleared");
 		rc = -EINVAL;
 	} else {
-		sensor_lite_dev->stop_cmd = kzalloc(cmd->header.size, GFP_KERNEL);
+		cmd_size = cmd->header.size;
+		sensor_lite_dev->stop_cmd = kzalloc(cmd_size, GFP_KERNEL);
 		if (sensor_lite_dev->stop_cmd == NULL)
 			return -ENOMEM;
 		__set_slave_pkt_headers(&cmd->header, HCM_PKT_OPCODE_SENSOR_STOP_DEV);
-		memcpy(sensor_lite_dev->stop_cmd, cmd, cmd->header.size);
+		memcpy(sensor_lite_dev->stop_cmd, cmd, cmd_size);
 	}
 	return rc;
 }
@@ -895,7 +900,8 @@ static int cam_sensor_lite_validate_cmd_descriptor(
 	struct sensor_lite_device *sensor_lite_dev,
 	struct cam_cmd_buf_desc *cmd_desc,
 	uint32_t *cmd_type,
-	uintptr_t *cmd_addr)
+	uintptr_t *cmd_addr,
+	size_t *validated_size)
 {
 	int rc = 0;
 	uintptr_t generic_ptr;
@@ -905,7 +911,7 @@ static int cam_sensor_lite_validate_cmd_descriptor(
 	struct sensor_lite_header *cmd_header = NULL;
 	ssize_t cmd_header_size = 0;
 
-	if (!cmd_desc || !cmd_type || !cmd_addr)
+	if (!cmd_desc || !cmd_type || !cmd_addr || !validated_size)
 		return -EINVAL;
 
 	rc = cam_mem_get_cpu_buf(cmd_desc->mem_handle,
@@ -951,6 +957,7 @@ static int cam_sensor_lite_validate_cmd_descriptor(
 
 	*cmd_type = cmd_header->tag;
 	*cmd_addr = (uintptr_t)cmd_header;
+	*validated_size = cmd_header->size;
 
 	if ((cmd_header->tag <= SENSORLITE_CMD_TYPE_INVALID) ||
 			(cmd_header->tag >= SENSORLITE_CMD_TYPE_MAX)) {
@@ -992,6 +999,7 @@ static int cam_sensor_lite_cmd_buf_parse(
 	for (i = 0; i < packet->num_cmd_buf; i++) {
 		uint32_t  cmd_type = -1;
 		uintptr_t cmd_addr = 0;
+		size_t validated_size = 0;
 		cmd_desc = (struct cam_cmd_buf_desc *)
 			((uint32_t *)&packet->payload_flex +
 			(packet->cmd_buf_offset / 4) +
@@ -1000,7 +1008,8 @@ static int cam_sensor_lite_cmd_buf_parse(
 				sensor_lite_dev,
 				cmd_desc,
 				&cmd_type,
-				&cmd_addr);
+				&cmd_addr,
+				&validated_size);
 		if (rc < 0)	{
 			if (cmd_addr != 0) {
 				kfree((void *)cmd_addr);
@@ -1038,7 +1047,8 @@ static int cam_sensor_lite_cmd_buf_parse(
 				rc = cam_sensor_lite_request_queue_cmd(
 						sensor_lite_dev,
 						req,
-						(struct sensor_lite_header *)cmd_addr);
+						(struct sensor_lite_header *)cmd_addr,
+						validated_size);
 			}
 			break;
 		case SENSORLITE_CMD_TYPE_EXPOSUREUPDATE:
@@ -1046,7 +1056,8 @@ static int cam_sensor_lite_cmd_buf_parse(
 			rc = cam_sensor_lite_request_queue_cmd(
 						sensor_lite_dev,
 						req,
-						(struct sensor_lite_header *)cmd_addr);
+						(struct sensor_lite_header *)cmd_addr,
+						validated_size);
 			break;
 		default:
 			CAM_INFO(CAM_SENSOR_LITE,
