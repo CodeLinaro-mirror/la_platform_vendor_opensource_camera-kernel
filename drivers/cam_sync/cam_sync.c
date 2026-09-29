@@ -4232,7 +4232,7 @@ static int cam_sync_component_bind(struct device *dev,
 		size_t map_size = 0;
 
 		total_entries = (CAM_SYNC_HW_FENCE_MAX_CLIENTS * CAM_SYNC_HW_FENCE_MAX_SUB_GRPS);
-		total_size = total_entries * sizeof(struct cam_sync_hw_fence_info);
+		total_size = total_entries * sizeof(struct cam_sync_hw_fence_client_entries);
 		hw_fence_info.hw_fence_tbl = kvzalloc(total_size, GFP_KERNEL);
 		if (!hw_fence_info.hw_fence_tbl) {
 			rc = -ENOMEM;
