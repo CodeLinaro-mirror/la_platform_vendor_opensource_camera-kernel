@@ -636,6 +636,13 @@ void cam_sync_util_dispatch_signaled_cb(struct cam_sync_signal_param *param,
 		temp_sync_cb, &signalable_row->callback_list, list) {
 		sync_cb->status = param->status;
 		list_del_init(&sync_cb->list);
+
+		if ((param->event_cause == CAM_SYNC_COMMON_RELEASE_EVENT) &&
+			param->release_cb_list) {
+			list_add_tail(&sync_cb->list, param->release_cb_list);
+			continue;
+		}
+
 		task = cam_req_mgr_worker_get_task(sync_dev->worker);
 		if (IS_ERR_OR_NULL(task)) {
 			CAM_ERR(CAM_SYNC, "Failed to get task = %d", PTR_ERR(task));

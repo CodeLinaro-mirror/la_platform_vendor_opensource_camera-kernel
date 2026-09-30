@@ -516,6 +516,7 @@ static int cam_sync_synx_obj_cb(int32_t sync_obj,
 	}
 
 	row->state = signal_sync_obj->status;
+	memset(&param, 0, sizeof(param));
 	param.status = signal_sync_obj->status;
 	param.sync_obj = sync_obj;
 	param.fh = sync_dev->cam_sync_eventq[0];
@@ -3794,8 +3795,12 @@ static int cam_sync_close(struct file *filep)
 	int i;
 	struct sync_device *sync_dev = video_drvdata(filep);
 	struct cam_sync_signal_param param;
+	struct sync_callback_info *sync_cb, *temp_sync_cb;
 	void *fh = filep->private_data;
 	uint32_t sync_manager_idx = get_syncmanager_index(fh);
+	struct list_head release_cb_list;
+
+	INIT_LIST_HEAD(&release_cb_list);
 
 	if (!sync_dev) {
 		CAM_ERR(CAM_SYNC, "Sync device NULL");
@@ -3831,11 +3836,17 @@ static int cam_sync_close(struct file *filep)
 		param.sync_obj = __compose_sync_var(i, sync_manager_idx, row->uid);
 		param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
 		param.event_cause = CAM_SYNC_COMMON_RELEASE_EVENT;
+		param.release_cb_list = &release_cb_list;
 		rc = cam_sync_signal(&param, NULL);
 		if (rc < 0)
 			CAM_ERR(CAM_SYNC,
 			  "Cleanup signal fail idx:%d uid:%d rc:%d\n",
 			  i, row->uid, rc);
+	}
+
+	list_for_each_entry_safe(sync_cb, temp_sync_cb, &release_cb_list, list) {
+		list_del_init(&sync_cb->list);
+		cam_sync_util_cb_dispatch(NULL, sync_cb);
 	}
 
 	/*
