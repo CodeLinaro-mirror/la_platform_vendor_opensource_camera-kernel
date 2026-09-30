@@ -366,6 +366,8 @@ struct cam_csid_hw_stop_args {
  * @is_trigger_mode:    Indicates if the start hw is called for trigger more or
  *                      streaming mode.
  * @is_recovery:        Csid path error recovery
+ * @is_dual_trigger:    Indicates if the start hw is called for the dual
+ *                      trigger camera use case.
  */
 struct cam_csid_hw_start_args {
 	struct cam_isp_resource_node            **node_res;
@@ -375,6 +377,7 @@ struct cam_csid_hw_start_args {
 	bool                                      is_frame_drop;
 	bool                                      is_trigger_mode;
 	bool                                      is_recovery;
+	bool                                      is_dual_trigger;
 };
 
 /**

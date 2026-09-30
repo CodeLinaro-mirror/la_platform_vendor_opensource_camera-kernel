@@ -1661,6 +1661,7 @@ static int cam_ife_mgr_csid_start_hw(
 			start_args.is_frame_drop = is_frame_drop;
 			start_args.is_trigger_mode = ctx->flags.is_trigger_type;
 			start_args.is_recovery = is_recovery;
+			start_args.is_dual_trigger = ctx->flags.is_dual_trigger;
 			hw_intf->hw_ops.start(hw_intf->hw_priv, &start_args,
 			    sizeof(start_args));
 		}
@@ -7602,10 +7603,17 @@ static int cam_ife_hw_mgr_set_secure_port_info(
 		sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].protect, sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].mask,
 		sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].protect, sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].mask,
 		is_release, ife_ctx->ctx_index);
-	if (!sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].mask)
-		CAM_INFO(CAM_ISP, "No port to mask as unsecure in secure usecase");
-	else
-		rc = cam_isp_notify_secure_unsecure_port(sec_unsec_port_info);
+
+	if (!sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].mask) {
+		CAM_INFO(CAM_ISP,
+			"ctx %d No port to mask as unsecure in secure usecase",
+			ife_ctx->ctx_index);
+	} else if (!sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].mask) {
+		rc = cam_isp_notify_secure_unsecure_port
+			(&sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX], 1);
+	} else {
+		rc = cam_isp_notify_secure_unsecure_port(sec_unsec_port_info, 2);
+	}
 end:
 	if (!is_release) {
 		if (cam_ife_hw_mgr_is_secure_context(ife_ctx)) {
@@ -7771,12 +7779,16 @@ static int cam_ife_hw_mgr_set_secure_port_info(
 		sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports,
 		is_release, ife_ctx->ctx_index);
 
-	if (!sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports)
+	if (!sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX].num_ports) {
 		CAM_INFO(CAM_ISP,
 			"ctx %d No port to mask as unsecure in secure usecase",
 			ife_ctx->ctx_index);
-	else
-		rc = cam_isp_notify_secure_unsecure_port(sec_unsec_port_info);
+	} else if (!sec_unsec_port_info[CAM_IFE_SECURE_PORT_IDX].num_ports) {
+		rc = cam_isp_notify_secure_unsecure_port
+			(&sec_unsec_port_info[CAM_IFE_NON_SECURE_PORT_IDX], 1);
+	} else {
+		rc = cam_isp_notify_secure_unsecure_port(sec_unsec_port_info, 2);
+	}
 end:
 	if (!is_release) {
 		if (cam_ife_hw_mgr_is_secure_context(ife_ctx))
@@ -11198,7 +11210,7 @@ static int cam_ife_mgr_csid_start_hw_stream_grp(
 	struct cam_isp_hw_mgr_res      *hw_mgr_res;
 	struct cam_isp_resource_node   *isp_res;
 	struct cam_isp_resource_node   *res[CAM_IFE_PIX_PATH_RES_MAX - 1];
-	struct cam_csid_hw_start_args  start_args;
+	struct cam_csid_hw_start_args  start_args = {0};
 	struct cam_hw_intf             *hw_intf;
 	uint32_t  cnt;
 	int rc = 0;
@@ -11564,6 +11576,7 @@ static int cam_ife_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 	}
 
 	ctx->flags.is_trigger_type = start_isp->is_trigger_type;
+	ctx->flags.is_dual_trigger = start_isp->is_dual_trigger;
 
 	CAM_DBG(CAM_ISP, "Enter... ctx id:%d",
 		ctx->ctx_index);
@@ -12599,6 +12612,15 @@ static int cam_isp_scratch_buf_update_util(
 			"no scratch buf addr for res: 0x%x",
 			buffer_info->resource_type);
 		rc = -ENOMEM;
+		return rc;
+	}
+
+	if (buffer_info->offset >= size) {
+		CAM_ERR(CAM_ISP,
+			"Invalid scratch buffer offset:%u size:%u mmu_hdl:%d hdl:%d res_type:0x%x",
+			buffer_info->offset, size, mmu_hdl, buffer_info->mem_handle,
+			buffer_info->resource_type);
+		rc = -EINVAL;
 		return rc;
 	}
 

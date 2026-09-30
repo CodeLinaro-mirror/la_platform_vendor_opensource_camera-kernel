@@ -122,7 +122,8 @@ void cam_smmu_util_iommu_custom(struct device *dev,
 	dma_addr_t discard_start, size_t discard_length);
 
 #if defined CONFIG_SECURE_CAMERA_V3 || defined CONFIG_TZ_DCP_API_VER_2
-int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info);
+int cam_isp_notify_secure_unsecure_port(struct port_info *sec_unsec_port_info,
+	uint32_t port_info_len);
 #endif
 
 #ifdef CONFIG_SECURE_CAMERA_V3
