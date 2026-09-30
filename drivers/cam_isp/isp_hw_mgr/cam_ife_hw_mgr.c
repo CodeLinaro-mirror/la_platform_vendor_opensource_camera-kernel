@@ -1987,6 +1987,7 @@ static int cam_ife_hw_mgr_free_hw_res(
 		if (!isp_hw_res->hw_res[i])
 			continue;
 		hw_intf = isp_hw_res->hw_res[i]->hw_intf;
+		isp_hw_res->hw_res[i]->is_per_port_start = false;
 		if (hw_intf->hw_ops.release) {
 			rc = hw_intf->hw_ops.release(hw_intf->hw_priv,
 				isp_hw_res->hw_res[i],
