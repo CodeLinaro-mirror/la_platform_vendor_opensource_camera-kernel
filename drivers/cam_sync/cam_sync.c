@@ -281,6 +281,14 @@ static inline int __add_sync_manager_idx(int32_t sync_id, uint32_t sync_manager_
 	return (sync_manager_idx << sync_dev->sync_manager_id_shift) | sync_id;
 }
 
+/* Compose sync_var with the row's live uid to avoid stale generation checks. */
+static inline int32_t __compose_sync_var(uint32_t sync_id, uint32_t sync_manager_idx,
+	uint16_t uid)
+{
+	return ((uint32_t)uid << sync_uid_access.uidShift) |
+		(sync_manager_idx << sync_dev->sync_manager_id_shift) | sync_id;
+}
+
 static inline int get_sync_manager_idx(uint32_t sync_obj)
 {
 	return (sync_obj >> sync_dev->sync_manager_id_shift) & sync_dev->sync_manager_id_mask;
@@ -3804,23 +3812,30 @@ static int cam_sync_close(struct file *filep)
 	for (i = 1; i < CAM_SYNC_MAX_OBJS; i++) {
 		struct sync_table_row *row =
 		sync_dev->sync_table + i;
+
 		/*
 		 * Signal all ACTIVE objects as ERR, but we don't
 		 * care about the return status here apart from logging
 		 * it.
 		 */
-		if ((row->sync_manager_idx == sync_manager_idx) &&
-				(row->state == CAM_SYNC_STATE_ACTIVE)) {
-			memset(&param, 0, sizeof(param));
-			param.sync_obj = __add_sync_manager_idx(i, sync_manager_idx);
-			param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
-			param.event_cause = CAM_SYNC_COMMON_RELEASE_EVENT;
-			rc = cam_sync_signal(&param, NULL);
-			if (rc < 0)
-				CAM_ERR(CAM_SYNC,
-				  "Cleanup signal fail idx:%d\n",
-				  i);
+		spin_lock_bh(&sync_dev->row_spinlocks[i]);
+		if ((row->sync_manager_idx != sync_manager_idx) ||
+				(row->state != CAM_SYNC_STATE_ACTIVE)) {
+			spin_unlock_bh(&sync_dev->row_spinlocks[i]);
+			continue;
 		}
+		atomic_set(&row->ref_cnt, 1);
+		spin_unlock_bh(&sync_dev->row_spinlocks[i]);
+
+		memset(&param, 0, sizeof(param));
+		param.sync_obj = __compose_sync_var(i, sync_manager_idx, row->uid);
+		param.status = CAM_SYNC_STATE_SIGNALED_ERROR;
+		param.event_cause = CAM_SYNC_COMMON_RELEASE_EVENT;
+		rc = cam_sync_signal(&param, NULL);
+		if (rc < 0)
+			CAM_ERR(CAM_SYNC,
+			  "Cleanup signal fail idx:%d uid:%d rc:%d\n",
+			  i, row->uid, rc);
 	}
 
 	/*
