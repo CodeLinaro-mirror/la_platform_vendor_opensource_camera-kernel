@@ -6603,6 +6603,16 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 		goto free_unique_tbl;
 	}
 
+	if ((acquire_hw_info->num_inputs == 0) ||
+		(acquire_hw_info->num_inputs > CAM_MAX_ACQ_RES)) {
+		CAM_ERR(CAM_ISP,
+		"Invalid num_inputs %d (max %d), ctx_idx: %u",
+		acquire_hw_info->num_inputs, CAM_MAX_ACQ_RES,
+		ife_ctx->ctx_index);
+		rc = -EINVAL;
+		goto free_unique_tbl;
+	}
+
 	in_port = CAM_MEM_ZALLOC_ARRAY(acquire_hw_info->num_inputs,
 			sizeof(struct cam_isp_in_port_generic_info),
 			GFP_KERNEL);
