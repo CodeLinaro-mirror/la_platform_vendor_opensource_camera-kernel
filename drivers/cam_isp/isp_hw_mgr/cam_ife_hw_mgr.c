@@ -512,6 +512,13 @@ static int cam_isp_blob_path_exp_order_update(struct cam_ife_hw_mgr_ctx         
 
 			res_id = exp_order_update->exp_info[i].res_id & 0xFF;
 
+			if (res_id >= max_ife_out_res) {
+				CAM_ERR(CAM_ISP,
+					"[FRMHDR] Invalid res_id:%u (max:%u), req_id:%llu ctx_idx:%u",
+					res_id, max_ife_out_res, request_id, ctx->ctx_index);
+				return -EINVAL;
+			}
+
 			if (ctx->vfe_out_map[res_id] == 0xFF) {
 				CAM_ERR(CAM_ISP,
 					"[FRMHDR] Invalid index:%d for out_map, req_id:%llu ctx_idx:%u",
@@ -12184,6 +12191,16 @@ static int cam_isp_blob_frameheader_cfg(
 	for (i = 0; i < frame_header_cfg->num_ports; i++) {
 		buf_cfg = &frame_header_cfg->frame_header_cfg[i];
 		res_id = buf_cfg->resource_type & 0xFF;
+
+		if ((buf_cfg->resource_type < CAM_ISP_SFE_OUT_RES_BASE) &&
+			(res_id >= max_ife_out_res)) {
+			CAM_ERR(CAM_ISP,
+				"[FRMHDR] Invalid res_id:%u (max:%u) req_id: %llu, ctx_idx:%u",
+				res_id, max_ife_out_res,
+				prepare->packet->header.request_id, ctx->ctx_index);
+			rc = -EINVAL;
+			break;
+		}
 
 		if ((buf_cfg->resource_type >= CAM_ISP_SFE_OUT_RES_BASE) &&
 			(buf_cfg->resource_type <= CAM_ISP_SFE_OUT_RES_BASE + max_sfe_out_res)) {
