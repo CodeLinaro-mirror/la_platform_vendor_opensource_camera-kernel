@@ -1020,6 +1020,13 @@ static int cam_isp_add_io_buffers_util(
 			return rc;
 		}
 
+		if (io_cfg->offsets[plane_id] >= size) {
+			CAM_ERR(CAM_ISP,
+				"invalid offset for plane%d: offset=%u size=%zu",
+				plane_id, io_cfg->offsets[plane_id], size);
+			return -EINVAL;
+		}
+
 		/* need to update with offset */
 		io_addr[plane_id] += io_cfg->offsets[plane_id];
 		CAM_DBG(CAM_ISP, "get io_addr for plane %d: 0x%llx, mem_hdl=0x%x",
