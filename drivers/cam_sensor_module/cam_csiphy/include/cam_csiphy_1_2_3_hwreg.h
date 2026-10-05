@@ -82,6 +82,7 @@ struct csiphy_reg_t csiphy_irq_reg_1_2_3[] = {
 
 struct csiphy_reg_t csiphy_2ph_v1_2_3_reg[] = {
 	{0x0024, 0x00, 0x00, CSIPHY_DEFAULT_PARAMS},
+	{0x0028, 0x04, 0x00, CSIPHY_2PH_SEC_CLK_LN_SETTINGS},
 	{0x0000, 0x8D, 0x00, CSIPHY_DEFAULT_PARAMS},
 	{0x0038, 0xFE, 0x00, CSIPHY_DEFAULT_PARAMS},
 	{0x002C, 0x01, 0x00, CSIPHY_DEFAULT_PARAMS},
