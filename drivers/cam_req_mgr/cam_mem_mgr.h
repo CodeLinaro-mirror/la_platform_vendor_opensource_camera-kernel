@@ -222,6 +222,7 @@ struct cam_mem_buf_queue {
  * struct cam_mem_table
  *
  * @m_lock: mutex lock for table
+ * @chunk_map_lock: spinlock for table
  * @bitmap: bitmap of the mem mgr utility
  * @bufq: array of chunk pointers; each chunk is allocated on demand
  * @buf_smmu_hdls: Slab cache for per-slot hdls_info arrays
@@ -257,6 +258,7 @@ struct cam_mem_buf_queue {
  */
 struct cam_mem_table {
 	struct mutex m_lock;
+	spinlock_t chunk_map_lock;
 	void *bitmap;
 	struct cam_mem_buf_queue *bufq[CAM_BUFQ_MAX_CHUNKS];
 	struct kmem_cache *buf_smmu_hdls;
