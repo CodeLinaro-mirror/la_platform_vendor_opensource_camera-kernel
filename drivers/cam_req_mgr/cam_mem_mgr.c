@@ -218,6 +218,8 @@ int cam_mem_mgr_init(void)
 	if (atomic_read(&cam_mem_mgr_state))
 		return 0;
 
+	CAM_INFO(CAM_MEM, "KALAMA_MEM_TRACE event=init_begin");
+
 	memset(tbl.bufq, 0, sizeof(tbl.bufq));
 
 	#if KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE
@@ -229,7 +231,8 @@ int cam_mem_mgr_init(void)
 		rc = cam_smmu_need_force_alloc_cached(&tbl.force_cache_allocs);
 	}
 	if (rc) {
-		CAM_ERR(CAM_MEM, "Error in getting force cache alloc flag");
+		CAM_ERR(CAM_MEM,
+			"KALAMA_MEM_TRACE event=init_force_cache_failed rc=%d", rc);
 		return rc;
 	}
 	#else
@@ -270,6 +273,12 @@ int cam_mem_mgr_init(void)
 	mutex_init(&tbl.m_lock);
 
 	atomic_set(&cam_mem_mgr_state, CAM_MEM_MGR_INITIALIZED);
+#if KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE
+	CAM_INFO(CAM_MEM, "KALAMA_MEM_SMMU_RETRY attempts=%d rc=%d",
+		retry, rc);
+#else
+	CAM_INFO(CAM_MEM, "KALAMA_MEM_SMMU_RETRY attempts=0 rc=%d", rc);
+#endif
 
 	cam_mem_mgr_create_debug_fs();
 	cam_common_register_mini_dump_cb(cam_mem_mgr_mini_dump_cb,

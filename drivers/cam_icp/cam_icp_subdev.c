@@ -12,6 +12,7 @@
 #include <linux/iommu.h>
 #include <linux/timer.h>
 #include <linux/platform_device.h>
+#include <linux/sched.h>
 #include <linux/videodev2.h>
 #include <media/v4l2-fh.h>
 #include <media/v4l2-device.h>
@@ -121,6 +122,10 @@ static int cam_icp_subdev_open(struct v4l2_subdev *sd,
 	struct cam_node *node = v4l2_get_subdevdata(sd);
 	int rc = 0;
 
+	CAM_INFO(CAM_ICP,
+		"KALAMA_ICP_CALLER event=open pid=%d tgid=%d comm=%s",
+		current->pid, current->tgid, current->comm);
+
 	cam_req_mgr_rwsem_read_op(CAM_SUBDEV_LOCK);
 
 	mutex_lock(&g_icp_dev.icp_lock);
@@ -139,13 +144,18 @@ static int cam_icp_subdev_open(struct v4l2_subdev *sd,
 	hw_mgr_intf = &node->hw_mgr_intf;
 	rc = hw_mgr_intf->hw_open(hw_mgr_intf->hw_mgr_priv, NULL);
 	if (rc < 0) {
-		CAM_ERR(CAM_ICP, "FW download failed");
+		CAM_ERR(CAM_ICP,
+			"KALAMA_ICP_CALLER event=hw_open_failed pid=%d tgid=%d comm=%s rc=%d",
+			current->pid, current->tgid, current->comm, rc);
 		goto end;
 	}
 	g_icp_dev.open_cnt++;
 end:
 	mutex_unlock(&g_icp_dev.icp_lock);
 	cam_req_mgr_rwsem_read_op(CAM_SUBDEV_UNLOCK);
+	CAM_INFO(CAM_ICP,
+		"KALAMA_ICP_CALLER event=hw_open_done pid=%d tgid=%d comm=%s rc=%d",
+		current->pid, current->tgid, current->comm, rc);
 	return rc;
 }
 

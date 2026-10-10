@@ -10,6 +10,7 @@
 #include <linux/highmem.h>
 #include <linux/types.h>
 #include <linux/rwsem.h>
+#include <linux/sched.h>
 #include <linux/version.h>
 
 #include <mm/slab.h>
@@ -139,6 +140,10 @@ static int cam_req_mgr_open(struct file *filep)
 {
 	int rc;
 
+	CAM_INFO(CAM_CRM,
+		"KALAMA_CRM_CALLER event=open pid=%d tgid=%d comm=%s",
+		current->pid, current->tgid, current->comm);
+
 	cam_req_mgr_rwsem_write_op(CAM_SUBDEV_LOCK);
 
 	mutex_lock(&g_dev.cam_lock);
@@ -161,12 +166,17 @@ static int cam_req_mgr_open(struct file *filep)
 	rc = cam_mem_mgr_init();
 	if (rc) {
 		g_dev.open_cnt--;
-		CAM_ERR(CAM_CRM, "mem mgr init failed");
+		CAM_ERR(CAM_CRM,
+			"KALAMA_CRM_TRACE event=open_mem_init_failed pid=%d tgid=%d comm=%s rc=%d",
+			current->pid, current->tgid, current->comm, rc);
 		goto mem_mgr_init_fail;
 	}
 
 	mutex_unlock(&g_dev.cam_lock);
 	cam_req_mgr_rwsem_write_op(CAM_SUBDEV_UNLOCK);
+	CAM_INFO(CAM_CRM,
+		"KALAMA_CRM_CALLER event=open_done pid=%d tgid=%d comm=%s rc=%d",
+		current->pid, current->tgid, current->comm, rc);
 	return rc;
 
 mem_mgr_init_fail:
@@ -201,8 +211,8 @@ static int cam_req_mgr_close(struct file *filep)
 	struct v4l2_subdev_fh *subdev_fh = to_v4l2_subdev_fh(vfh);
 
 	CAM_WARN(CAM_CRM,
-		"release invoked associated userspace process has died, open_cnt: %d",
-		g_dev.open_cnt);
+		"KALAMA_CRM_CALLER event=close pid=%d tgid=%d comm=%s open_cnt=%d",
+		current->pid, current->tgid, current->comm, g_dev.open_cnt);
 
 	cam_req_mgr_rwsem_write_op(CAM_SUBDEV_LOCK);
 

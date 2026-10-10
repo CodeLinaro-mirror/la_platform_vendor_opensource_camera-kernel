@@ -264,6 +264,7 @@ int32_t cam_sensor_handle_random_write(
 	struct list_head **list)
 {
 	struct i2c_settings_list  *i2c_list;
+	struct i2c_random_wr_payload *payload;
 	int32_t rc = 0, cnt, payload_count;
 
 	payload_count = cam_cmd_i2c_random_wr->header.count;
@@ -283,12 +284,13 @@ int32_t cam_sensor_handle_random_write(
 		cam_cmd_i2c_random_wr->header.addr_type;
 	i2c_list->i2c_settings.data_type =
 		cam_cmd_i2c_random_wr->header.data_type;
+	payload = cam_cmd_i2c_random_wr->random_wr_payload;
 
 	for (cnt = 0; cnt < payload_count; cnt++) {
 		i2c_list->i2c_settings.reg_setting[cnt].reg_addr =
-			cam_cmd_i2c_random_wr->random_wr_payload[cnt].reg_addr;
+			payload[cnt].reg_addr;
 		i2c_list->i2c_settings.reg_setting[cnt].reg_data =
-			cam_cmd_i2c_random_wr->random_wr_payload[cnt].reg_data;
+			payload[cnt].reg_data;
 		i2c_list->i2c_settings.reg_setting[cnt].data_mask = 0;
 	}
 	*offset = cnt;
@@ -304,6 +306,7 @@ static int32_t cam_sensor_handle_continuous_write(
 	struct list_head **list)
 {
 	struct i2c_settings_list *i2c_list;
+	struct cam_cmd_read *data_read;
 	int32_t rc = 0, cnt, payload_count;
 
 	payload_count = cam_cmd_i2c_continuous_wr->header.count;
@@ -327,6 +330,7 @@ static int32_t cam_sensor_handle_continuous_write(
 		i2c_list->op_code = CAM_SENSOR_I2C_WRITE_SEQ;
 	else
 		return -EINVAL;
+	data_read = cam_cmd_i2c_continuous_wr->data_read;
 
 	i2c_list->i2c_settings.addr_type =
 		cam_cmd_i2c_continuous_wr->header.addr_type;
@@ -339,7 +343,7 @@ static int32_t cam_sensor_handle_continuous_write(
 		i2c_list->i2c_settings.reg_setting[cnt].reg_addr =
 			cam_cmd_i2c_continuous_wr->reg_addr;
 		i2c_list->i2c_settings.reg_setting[cnt].reg_data =
-			cam_cmd_i2c_continuous_wr->data_read[cnt].reg_data;
+			data_read[cnt].reg_data;
 		i2c_list->i2c_settings.reg_setting[cnt].data_mask = 0;
 	}
 	*offset = cnt;
@@ -457,6 +461,7 @@ static int32_t cam_sensor_handle_random_read(
 	struct cam_buf_io_cfg *io_cfg)
 {
 	struct i2c_settings_list *i2c_list;
+	struct cam_cmd_read *data_read;
 	int32_t rc = 0, cnt = 0, payload_count = 0;
 
 	payload_count = cmd_i2c_random_rd->header.count;
@@ -484,10 +489,11 @@ static int32_t cam_sensor_handle_random_read(
 			cmd_i2c_random_rd->header.data_type;
 		i2c_list->i2c_settings.size =
 			cmd_i2c_random_rd->header.count;
+		data_read = cmd_i2c_random_rd->data_read;
 
 		for (cnt = 0; cnt < payload_count; cnt++) {
 			i2c_list->i2c_settings.reg_setting[cnt].reg_addr =
-				cmd_i2c_random_rd->data_read[cnt].reg_data;
+				data_read[cnt].reg_data;
 		}
 		*offset = cnt;
 		*list = &(i2c_list->list);
