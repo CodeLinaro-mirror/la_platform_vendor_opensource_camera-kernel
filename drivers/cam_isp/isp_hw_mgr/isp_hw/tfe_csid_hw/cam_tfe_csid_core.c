@@ -893,7 +893,7 @@ end:
 
 static void cam_tfe_csid_send_secure_info(struct cam_tfe_csid_hw  *csid_hw)
 {
-	struct cam_tfe_csid_secure_info   secure_info;
+	struct cam_subdev_msg_phy_secure_params   secure_info = {0};
 	const struct cam_tfe_csid_reg_offset   *csid_reg;
 	int                               phy_sel = 0;
 
@@ -904,11 +904,6 @@ static void cam_tfe_csid_send_secure_info(struct cam_tfe_csid_hw  *csid_hw)
 	secure_info.vc_mask = 0;
 	secure_info.csid_hw_idx_mask = BIT(csid_hw->hw_intf->hw_idx);
 
-	CAM_INFO(CAM_ISP,
-		"PHY secure info for CSID[%u], lane_cfg: 0x%x, tfe: 0x%x, cdm: 0x%x, vc_mask: 0x%llx",
-		csid_hw->hw_intf->hw_idx, secure_info.lane_cfg, secure_info.csid_hw_idx_mask,
-		secure_info.cdm_hw_idx_mask, secure_info.vc_mask);
-
 	phy_sel = (int)(csid_hw->csi2_rx_cfg.phy_sel - csid_reg->csi2_reg->phy_sel_base);
 	if (phy_sel < 0) {
 		CAM_WARN(CAM_ISP, "Can't notify csiphy, incorrect phy selected=%d",
@@ -916,6 +911,10 @@ static void cam_tfe_csid_send_secure_info(struct cam_tfe_csid_hw  *csid_hw)
 	} else {
 		secure_info.phy_sel = (uint32_t)phy_sel;
 		CAM_DBG(CAM_ISP, "Notify CSIPHY: %d", phy_sel);
+		CAM_INFO(CAM_ISP,
+			"Notify secure info for PHY[%u], CSID[%u], lane_cfg: 0x%x, tfe: 0x%x, cdm: 0x%x, vc_mask: 0x%llx",
+			phy_sel, csid_hw->hw_intf->hw_idx, secure_info.lane_cfg, secure_info.csid_hw_idx_mask,
+			secure_info.cdm_hw_idx_mask, secure_info.vc_mask);
 		cam_subdev_notify_message(CAM_CSIPHY_DEVICE_TYPE,
 			CAM_SUBDEV_MESSAGE_DOMAIN_ID_SECURE_PARAMS, (void *)&secure_info);
 	}
