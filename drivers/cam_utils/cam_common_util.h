@@ -8,6 +8,26 @@
 #define _CAM_COMMON_UTIL_H_
 
 #include <linux/types.h>
+#include <linux/version.h>
+#include <linux/string.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+static inline size_t cam_strlcpy(char *dst, const char *src, size_t size)
+{
+	size_t len = strlen(src);
+	size_t copy_len = 0;
+
+	if (size) {
+		copy_len = len < size - 1 ? len : size - 1;
+		memcpy(dst, src, copy_len);
+		dst[copy_len] = '\0';
+	}
+
+	return len;
+}
+
+#define strlcpy(dst, src, size) cam_strlcpy(dst, src, size)
+#endif
 #include <linux/kernel.h>
 
 #define CAM_BITS_MASK_SHIFT(x, mask, shift) (((x) & (mask)) >> shift)

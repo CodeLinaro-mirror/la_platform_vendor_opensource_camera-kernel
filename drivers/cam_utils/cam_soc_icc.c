@@ -6,6 +6,7 @@
 
 #include <linux/interconnect.h>
 #include <dt-bindings/interconnect/qcom,icc.h>
+#include "cam_compat.h"
 #include "cam_soc_bus.h"
 
 /**
@@ -96,6 +97,10 @@ int cam_soc_bus_client_register(struct platform_device *pdev,
 {
 	struct cam_soc_bus_client *bus_client = NULL;
 	struct cam_soc_bus_client_data *bus_client_data = NULL;
+#if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
+	struct device icc_dev;
+#endif
+	struct device *icc_devp = &pdev->dev;
 	int rc = 0;
 
 	bus_client = kzalloc(sizeof(struct cam_soc_bus_client), GFP_KERNEL);
@@ -117,9 +122,17 @@ int cam_soc_bus_client_register(struct platform_device *pdev,
 
 	bus_client->client_data = bus_client_data;
 	bus_client->common_data = common_data;
+	#if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
+	if (dev_node != pdev->dev.of_node) {
+		icc_dev = pdev->dev;
+		icc_dev.of_node = dev_node;
+		icc_devp = &icc_dev;
+	}
+	#endif
 	if (bus_client->common_data->is_drv_port) {
-		bus_client_data->icc_data[CAM_SOC_BUS_PATH_DATA_DRV_HIGH] = icc_get(&pdev->dev,
-			bus_client->common_data->src_id, bus_client->common_data->dst_id);
+		bus_client_data->icc_data[CAM_SOC_BUS_PATH_DATA_DRV_HIGH] = cam_icc_get_path(icc_devp,
+				bus_client->common_data->src_id, bus_client->common_data->dst_id,
+				bus_client->common_data->name);
 		if (IS_ERR_OR_NULL(bus_client_data->icc_data[CAM_SOC_BUS_PATH_DATA_DRV_HIGH])) {
 			CAM_ERR(CAM_UTIL,
 				"Failed to register DRV bus client Bus Client=[%s] : src=%d, dst=%d bus_path:%d",
@@ -129,8 +142,9 @@ int cam_soc_bus_client_register(struct platform_device *pdev,
 			goto error;
 		}
 
-		bus_client_data->icc_data[CAM_SOC_BUS_PATH_DATA_DRV_LOW] = icc_get(&pdev->dev,
-			bus_client->common_data->src_id, bus_client->common_data->dst_id);
+		bus_client_data->icc_data[CAM_SOC_BUS_PATH_DATA_DRV_LOW] = cam_icc_get_path(icc_devp,
+				bus_client->common_data->src_id, bus_client->common_data->dst_id,
+				bus_client->common_data->name);
 		if (IS_ERR_OR_NULL(bus_client_data->icc_data[CAM_SOC_BUS_PATH_DATA_DRV_LOW])) {
 			CAM_ERR(CAM_UTIL,
 				"Failed to register DRV bus client Bus Client=[%s] : src=%d, dst=%d bus_path:%d",
@@ -160,8 +174,9 @@ int cam_soc_bus_client_register(struct platform_device *pdev,
 			goto fail_unregister_client;
 		}
 	} else {
-		bus_client_data->icc_data[CAM_SOC_BUS_PATH_DATA_HLOS] = icc_get(&pdev->dev,
-			bus_client->common_data->src_id, bus_client->common_data->dst_id);
+		bus_client_data->icc_data[CAM_SOC_BUS_PATH_DATA_HLOS] = cam_icc_get_path(icc_devp,
+				bus_client->common_data->src_id, bus_client->common_data->dst_id,
+				bus_client->common_data->name);
 		if (IS_ERR_OR_NULL(bus_client_data->icc_data[CAM_SOC_BUS_PATH_DATA_HLOS])) {
 			CAM_ERR(CAM_UTIL, "failed to register HLOS bus client");
 			rc = -EINVAL;

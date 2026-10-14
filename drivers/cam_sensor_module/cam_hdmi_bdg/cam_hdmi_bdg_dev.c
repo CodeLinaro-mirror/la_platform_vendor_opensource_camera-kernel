@@ -13,6 +13,7 @@
 #include <linux/of_gpio.h>
 #include <linux/interrupt.h>
 #include <linux/delay.h>
+#include <linux/version.h>
 #include "cam_hdmi_bdg_core.h"
 
 #define HDMI_BDG_IRQ_HANDLER_DEVNAME             "hdmi_bdg_irq_handler"
@@ -214,8 +215,12 @@ static int hdmi_bdg_irq_handler_probe(struct platform_device *pdev)
 	ret = cdev_add(hdmi_bdg_irq_handler_cdev, hdmi_bdg_irq_handler_dev, 1);
 	if (ret)
 		goto fail_cdev_del;
+#if KERNEL_VERSION(6, 4, 0) > LINUX_VERSION_CODE
 	hdmi_bdg_irq_handler_class = class_create(THIS_MODULE,
-			HDMI_BDG_IRQ_HANDLER_DEVNAME);
+		HDMI_BDG_IRQ_HANDLER_DEVNAME);
+#else
+	hdmi_bdg_irq_handler_class = class_create(HDMI_BDG_IRQ_HANDLER_DEVNAME);
+#endif
 	if (IS_ERR(hdmi_bdg_irq_handler_class)) {
 		ret = PTR_ERR(hdmi_bdg_irq_handler_class);
 		goto fail_cdev_del;

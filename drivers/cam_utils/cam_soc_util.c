@@ -9,10 +9,12 @@
 #include <linux/slab.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
+#include <linux/pinctrl/consumer.h>
 #ifdef CONFIG_INTERCONNECT_QCOM_CAMSX
 #include <linux/interconnect.h>
 #include "cam_res_mgr_api.h"
 #endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
+#include "cam_compat.h"
 #include "cam_soc_util.h"
 #include "cam_debug_util.h"
 #include "cam_cx_ipeak.h"
@@ -1884,7 +1886,10 @@ static int cam_soc_util_get_gpio_info(struct cam_hw_soc_info *soc_info)
 		return -EINVAL;
 	}
 
-	gpio_array_size = of_gpio_count(of_node);
+	/* Count GPIO specifiers, not the individual cells in each specifier. */
+	gpio_array_size = cam_get_gpio_count(of_node);
+	if (gpio_array_size == -EPROBE_DEFER)
+		return -EPROBE_DEFER;
 
 	if (gpio_array_size <= 0)
 		return 0;
@@ -1896,7 +1901,7 @@ static int cam_soc_util_get_gpio_info(struct cam_hw_soc_info *soc_info)
 		goto free_gpio_conf;
 
 	for (i = 0; i < gpio_array_size; i++) {
-		gpio_array[i] = of_get_gpio(of_node, i);
+		gpio_array[i] = cam_get_gpio(of_node, i);
 		CAM_DBG(CAM_UTIL, "gpio_array[%d] = %d", i, gpio_array[i]);
 	}
 
@@ -1981,7 +1986,8 @@ static int cam_soc_util_request_gpio_table(
 			}
 		}
 	} else {
-		gpio_free_array(gpio_tbl, size);
+		for (i = 0; i < size; i++)
+			gpio_free(gpio_tbl[i].gpio);
 	}
 
 	return rc;
@@ -2137,6 +2143,23 @@ int cam_soc_util_get_dt_properties(struct cam_hw_soc_info *soc_info)
 		soc_info->irq_line =
 			platform_get_resource_byname(soc_info->pdev,
 			IORESOURCE_IRQ, soc_info->irq_name);
+		if (!soc_info->irq_line) {
+			int irq = platform_get_irq_byname(soc_info->pdev,
+				soc_info->irq_name);
+
+			if (irq == -EPROBE_DEFER)
+				return irq;
+
+			if (irq >= 0) {
+				soc_info->irq_line = devm_kzalloc(&soc_info->pdev->dev,
+					sizeof(*soc_info->irq_line), GFP_KERNEL);
+				if (!soc_info->irq_line)
+					return -ENOMEM;
+
+				*soc_info->irq_line = DEFINE_RES_IRQ_NAMED(irq,
+					soc_info->irq_name);
+			}
+		}
 		if (!soc_info->irq_line) {
 			CAM_ERR(CAM_UTIL, "no irq resource");
 #ifndef CONFIG_CAM_PRESIL

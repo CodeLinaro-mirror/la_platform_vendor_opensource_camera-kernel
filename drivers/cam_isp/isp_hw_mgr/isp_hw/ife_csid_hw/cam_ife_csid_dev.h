@@ -10,8 +10,14 @@
 
 irqreturn_t cam_ife_csid_irq(int irq_num, void *data);
 
+#include <linux/version.h>
+
 int cam_ife_csid_probe(struct platform_device *pdev);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 int cam_ife_csid_remove(struct platform_device *pdev);
+#else
+void cam_ife_csid_remove(struct platform_device *pdev);
+#endif
 
 /**
  * @brief : API to register CSID hw to platform framework.

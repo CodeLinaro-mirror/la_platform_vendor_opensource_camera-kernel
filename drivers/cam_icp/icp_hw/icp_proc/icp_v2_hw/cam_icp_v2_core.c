@@ -5,7 +5,12 @@
  */
 
 #include <linux/of_address.h>
+#include <linux/version.h>
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+#include <linux/firmware/qcom/qcom_scm.h>
+#else
 #include <linux/qcom_scm.h>
+#endif
 #include <linux/soc/qcom/mdt_loader.h>
 
 #include "cam_cpas_api.h"

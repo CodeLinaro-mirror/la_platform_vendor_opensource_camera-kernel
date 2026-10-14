@@ -5,6 +5,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/version.h>
 #include "cam_flash_dev.h"
 #include "cam_flash_soc.h"
 #include "cam_flash_core.h"
@@ -570,10 +571,17 @@ const static struct component_ops cam_flash_component_ops = {
 	.unbind = cam_flash_component_unbind,
 };
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_flash_platform_remove(struct platform_device *pdev)
+#else
+static void cam_flash_platform_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_flash_component_ops);
+
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static int32_t cam_flash_platform_probe(struct platform_device *pdev)
@@ -739,14 +747,23 @@ const static struct component_ops cam_flash_i2c_component_ops = {
 	.unbind = cam_flash_i2c_component_unbind,
 };
 
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client)
+#else
 static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
 	const struct i2c_device_id *id)
+#endif
 {
 	int rc = 0;
 
+#if KERNEL_VERSION(6, 2, 0) > LINUX_VERSION_CODE
 	if (client == NULL || id == NULL) {
 		CAM_ERR(CAM_FLASH, "Invalid Args client: %pK id: %pK",
 			client, id);
+#else
+	if (client == NULL) {
+		CAM_ERR(CAM_FLASH, "Invalid Args client: %pK", client);
+#endif
 		return -EINVAL;
 	}
 
@@ -764,11 +781,17 @@ static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
 static int32_t cam_flash_i2c_driver_remove(struct i2c_client *client)
+#else
+static void cam_flash_i2c_driver_remove(struct i2c_client *client)
+#endif
 {
 	component_del(&client->dev, &cam_flash_i2c_component_ops);
 
+#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 MODULE_DEVICE_TABLE(of, cam_flash_dt_match);

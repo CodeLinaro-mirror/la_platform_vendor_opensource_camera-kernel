@@ -1419,6 +1419,8 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 			CAMERA_SENSOR_CMD_TYPE_PWR_UP) {
 			struct cam_cmd_power *pwr_cmd =
 				(struct cam_cmd_power *)ptr;
+			struct cam_power_settings *power_settings =
+				pwr_cmd->power_settings;
 
 			if ((U16_MAX - power_info->power_setting_size) <
 				pwr_cmd->count) {
@@ -1445,9 +1447,9 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 
 			for (i = 0; i < pwr_cmd->count; i++, pwr_up++) {
 				power_info->power_setting[pwr_up].seq_type =
-				pwr_cmd->power_settings[i].power_seq_type;
+				power_settings[i].power_seq_type;
 				power_info->power_setting[pwr_up].config_val =
-				pwr_cmd->power_settings[i].config_val_low;
+				power_settings[i].config_val_low;
 				power_info->power_setting[pwr_up].delay = 0;
 				if (i) {
 					scr = scr +
@@ -1525,6 +1527,8 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 			CAMERA_SENSOR_CMD_TYPE_PWR_DOWN) {
 			struct cam_cmd_power *pwr_cmd =
 				(struct cam_cmd_power *)ptr;
+			struct cam_power_settings *power_settings =
+				pwr_cmd->power_settings;
 
 			scr = ptr + sizeof(struct cam_cmd_power);
 			tot_size = tot_size + sizeof(struct cam_cmd_power);
@@ -1554,9 +1558,9 @@ int32_t cam_sensor_update_power_settings(void *cmd_buf,
 				pwr_settings =
 				&power_info->power_down_setting[pwr_down];
 				pwr_settings->seq_type =
-				pwr_cmd->power_settings[i].power_seq_type;
+				power_settings[i].power_seq_type;
 				pwr_settings->config_val =
-				pwr_cmd->power_settings[i].config_val_low;
+				power_settings[i].config_val_low;
 				power_info->power_down_setting[pwr_down].delay
 					= 0;
 				if (i) {

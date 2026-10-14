@@ -3,6 +3,9 @@
  * Copyright (c) 2016-2019, 2021, The Linux Foundation. All rights reserved.
  */
 
+#include <linux/timer.h>
+#include <linux/version.h>
+
 #include "cam_req_mgr_timer.h"
 #include "cam_debug_util.h"
 #include "cam_common_util.h"
@@ -84,7 +87,11 @@ void crm_timer_exit(struct cam_req_mgr_timer **crm_timer)
 {
 	CAM_DBG(CAM_CRM, "destroy timer %pK @ %pK", *crm_timer, crm_timer);
 	if (*crm_timer) {
+	#if KERNEL_VERSION(6, 15, 0) <= LINUX_VERSION_CODE
+		timer_delete_sync(&(*crm_timer)->sys_timer);
+	#else
 		del_timer_sync(&(*crm_timer)->sys_timer);
+	#endif
 		if (g_cam_req_mgr_timer_cachep)
 			kmem_cache_free(g_cam_req_mgr_timer_cachep, *crm_timer);
 		*crm_timer = NULL;

@@ -7,6 +7,7 @@
 #include <linux/slab.h>
 #include <linux/mod_devicetable.h>
 #include <linux/of_device.h>
+#include <linux/version.h>
 #include <linux/module.h>
 #include "cam_sfe_dev.h"
 #include "cam_sfe_core.h"
@@ -210,10 +211,17 @@ int cam_sfe_probe(struct platform_device *pdev)
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 int cam_sfe_remove(struct platform_device *pdev)
+#else
+void cam_sfe_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_sfe_component_ops);
+
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 int cam_sfe_hw_init(struct cam_isp_hw_intf_data **sfe_hw, uint32_t hw_idx)

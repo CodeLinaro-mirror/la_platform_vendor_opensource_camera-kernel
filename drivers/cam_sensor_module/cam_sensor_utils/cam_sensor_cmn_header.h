@@ -7,6 +7,8 @@
 #ifndef _CAM_SENSOR_CMN_HEADER_
 #define _CAM_SENSOR_CMN_HEADER_
 
+#include "cam_gpio_compat.h"
+
 #include <linux/i2c.h>
 #include <linux/i3c/master.h>
 #include <linux/types.h>

@@ -439,17 +439,22 @@ int cam_req_mgr_ordered_list_cmp(void *priv,
 
 int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)
+	struct iosys_map mapping;
+	int error_code = dma_buf_vmap_unlocked(dmabuf, &mapping);
+#else
 	struct dma_buf_map mapping;
 	int error_code = dma_buf_vmap(dmabuf, &mapping);
+#endif
 
 	if (error_code) {
 		*vaddr = 0;
 	} else {
-		*vaddr = (mapping.is_iomem) ?
+		*vaddr = mapping.is_iomem ?
 			(uintptr_t)mapping.vaddr_iomem : (uintptr_t)mapping.vaddr;
 		CAM_DBG(CAM_MEM,
 			"dmabuf=%p, *vaddr=%p, is_iomem=%d, vaddr_iomem=%p, vaddr=%p",
-			dmabuf, *vaddr, mapping.is_iomem, mapping.vaddr_iomem, mapping.vaddr);
+				dmabuf, *vaddr, mapping.is_iomem, mapping.vaddr_iomem, mapping.vaddr);
 	}
 
 	return error_code;
@@ -457,9 +462,15 @@ int cam_compat_util_get_dmabuf_va(struct dma_buf *dmabuf, uintptr_t *vaddr)
 
 void cam_compat_util_put_dmabuf_va(struct dma_buf *dmabuf, void *vaddr)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)
+	struct iosys_map mapping = IOSYS_MAP_INIT_VADDR(vaddr);
+
+	dma_buf_vunmap_unlocked(dmabuf, &mapping);
+#else
 	struct dma_buf_map mapping = DMA_BUF_MAP_INIT_VADDR(vaddr);
 
 	dma_buf_vunmap(dmabuf, &mapping);
+#endif
 }
 
 void cam_i3c_driver_remove(struct i3c_device *client)

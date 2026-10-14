@@ -293,14 +293,23 @@ const static struct component_ops cam_ois_i2c_component_ops = {
 	.unbind = cam_ois_i2c_component_unbind,
 };
 
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+static int cam_ois_i2c_driver_probe(struct i2c_client *client)
+#else
 static int cam_ois_i2c_driver_probe(struct i2c_client *client,
 	const struct i2c_device_id *id)
+#endif
 {
 	int rc = 0;
 
+#if KERNEL_VERSION(6, 2, 0) > LINUX_VERSION_CODE
 	if (client == NULL || id == NULL) {
 		CAM_ERR(CAM_OIS, "Invalid Args client: %pK id: %pK",
 			client, id);
+#else
+	if (client == NULL) {
+		CAM_ERR(CAM_OIS, "Invalid Args client: %pK", client);
+#endif
 		return -EINVAL;
 	}
 
@@ -318,11 +327,17 @@ static int cam_ois_i2c_driver_probe(struct i2c_client *client,
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
 static int cam_ois_i2c_driver_remove(struct i2c_client *client)
+#else
+static void cam_ois_i2c_driver_remove(struct i2c_client *client)
+#endif
 {
 	component_del(&client->dev, &cam_ois_i2c_component_ops);
 
+#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static int cam_ois_component_bind(struct device *dev,
@@ -466,10 +481,17 @@ static int32_t cam_ois_platform_driver_probe(
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_ois_platform_driver_remove(struct platform_device *pdev)
+#else
+static void cam_ois_platform_driver_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_ois_component_ops);
+
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_ois_dt_match[] = {

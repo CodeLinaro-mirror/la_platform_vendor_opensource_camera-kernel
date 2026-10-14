@@ -5,6 +5,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/delay.h>
 #include <linux/types.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
@@ -27,6 +28,8 @@
 #include "cam_compat.h"
 
 #define CAM_MEM_SHARED_BUFFER_PAD_4K (4 * 1024)
+#define CAM_MEM_SMMU_READY_RETRIES 250
+#define CAM_MEM_SMMU_READY_DELAY_US 20000
 
 static struct cam_mem_table tbl;
 static atomic_t cam_mem_mgr_state = ATOMIC_INIT(CAM_MEM_MGR_UNINITIALIZED);
@@ -208,16 +211,33 @@ int cam_mem_mgr_init(void)
 	int i;
 	int bitmap_size;
 	int rc = 0;
+#if KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE
+	int retry;
+#endif
 
 	if (atomic_read(&cam_mem_mgr_state))
 		return 0;
 
 	memset(tbl.bufq, 0, sizeof(tbl.bufq));
 
+	#if KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE
+	rc = cam_smmu_need_force_alloc_cached(&tbl.force_cache_allocs);
+	for (retry = 0; rc == -EPROBE_DEFER &&
+		retry < CAM_MEM_SMMU_READY_RETRIES; retry++) {
+		usleep_range(CAM_MEM_SMMU_READY_DELAY_US,
+			CAM_MEM_SMMU_READY_DELAY_US + 10000);
+		rc = cam_smmu_need_force_alloc_cached(&tbl.force_cache_allocs);
+	}
+	if (rc) {
+		CAM_ERR(CAM_MEM, "Error in getting force cache alloc flag");
+		return rc;
+	}
+	#else
 	if (cam_smmu_need_force_alloc_cached(&tbl.force_cache_allocs)) {
 		CAM_ERR(CAM_MEM, "Error in getting force cache alloc flag");
 		return -EINVAL;
 	}
+	#endif
 
 	tbl.need_shared_buffer_padding = cam_smmu_need_shared_buffer_padding();
 

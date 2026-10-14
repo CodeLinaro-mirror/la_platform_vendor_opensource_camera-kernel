@@ -7,6 +7,7 @@
 #include <linux/slab.h>
 #include <linux/mod_devicetable.h>
 #include <linux/of_device.h>
+#include <linux/version.h>
 #include "cam_ife_csid_common.h"
 #include "cam_ife_csid_dev.h"
 #include "cam_ife_csid_hw_intf.h"
@@ -151,10 +152,17 @@ int cam_ife_csid_probe(struct platform_device *pdev)
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 int cam_ife_csid_remove(struct platform_device *pdev)
+#else
+void cam_ife_csid_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_ife_csid_component_ops);
+
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 int cam_ife_csid_hw_init(struct cam_hw_intf **ife_csid_hw,

@@ -20,6 +20,7 @@
 #include <linux/debugfs.h>
 #include <linux/of_fdt.h>
 
+#include "cam_gpio_compat.h"
 #include "cam_io_util.h"
 #include <media/cam_defs.h>
 

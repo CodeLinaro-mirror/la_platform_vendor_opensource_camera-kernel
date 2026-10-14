@@ -11,10 +11,77 @@
 #include <linux/platform_device.h>
 #include <linux/component.h>
 #include <linux/iommu.h>
+#include <linux/dma-buf.h>
+#include <linux/interconnect.h>
+#include <linux/of.h>
+#include <linux/of_gpio.h>
+
+/* The unlocked DMA-buf attachment API was added after the 5.15 kernel. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0)
+#define dma_buf_map_attachment_unlocked dma_buf_map_attachment
+#define dma_buf_unmap_attachment_unlocked dma_buf_unmap_attachment
+#endif
+
+static inline int cam_iommu_map(struct iommu_domain *domain,
+	dma_addr_t iova, phys_addr_t paddr, size_t size, int prot, gfp_t gfp)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)
+	return iommu_map(domain, iova, paddr, size, prot, gfp);
+#else
+	return iommu_map(domain, iova, paddr, size, prot);
+#endif
+}
+
+static inline size_t cam_iommu_map_sg(struct iommu_domain *domain,
+	dma_addr_t iova, struct scatterlist *sg, unsigned int nents,
+	int prot, gfp_t gfp)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)
+	return iommu_map_sg(domain, iova, sg, nents, prot, gfp);
+#else
+	return iommu_map_sg(domain, iova, sg, nents, prot);
+#endif
+}
+
+static inline int cam_get_gpio_count(struct device_node *of_node)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)
+	return of_count_phandle_with_args(of_node, "gpios", "#gpio-cells");
+#else
+	return of_gpio_count(of_node);
+#endif
+}
+
+static inline int cam_get_gpio(struct device_node *of_node, int index)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)
+	return of_get_named_gpio(of_node, "gpios", index);
+#else
+	return of_get_gpio(of_node, index);
+#endif
+}
+
+static inline struct icc_path *cam_icc_get_path(struct device *dev,
+	int src_id, int dst_id, const char *path_name)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+	return of_icc_get(dev, path_name);
+#else
+	return icc_get(dev, src_id, dst_id);
+#endif
+}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)
+#include <linux/firmware/qcom/qcom_scm.h>
+#else
 #include <linux/qcom_scm.h>
+#endif
 #include <linux/list_sort.h>
-#include <linux/dma-iommu.h>
 #include <soc/qcom/of_common.h>
+
+#ifndef V4L2_SUBDEV_NAME_SIZE
+#define V4L2_SUBDEV_NAME_SIZE 32
+#endif
 
 #include "cam_csiphy_dev.h"
 #include "cam_cpastop_hw.h"

@@ -309,14 +309,23 @@ const static struct component_ops cam_actuator_i2c_component_ops = {
 	.unbind = cam_actuator_i2c_component_unbind,
 };
 
+#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
+static int32_t cam_actuator_driver_i2c_probe(struct i2c_client *client)
+#else
 static int32_t cam_actuator_driver_i2c_probe(struct i2c_client *client,
 	const struct i2c_device_id *id)
+#endif
 {
 	int rc = 0;
 
+#if KERNEL_VERSION(6, 2, 0) > LINUX_VERSION_CODE
 	if (client == NULL || id == NULL) {
 		CAM_ERR(CAM_ACTUATOR, "Invalid Args client: %pK id: %pK",
 			client, id);
+#else
+	if (client == NULL) {
+		CAM_ERR(CAM_ACTUATOR, "Invalid Args client: %pK", client);
+#endif
 		return -EINVAL;
 	}
 
@@ -334,11 +343,19 @@ static int32_t cam_actuator_driver_i2c_probe(struct i2c_client *client,
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
 static int32_t cam_actuator_driver_i2c_remove(
 	struct i2c_client *client)
+#else
+static void cam_actuator_driver_i2c_remove(
+	struct i2c_client *client)
+#endif
 {
 	component_del(&client->dev, &cam_actuator_i2c_component_ops);
+
+#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static int cam_actuator_platform_component_bind(struct device *dev,
@@ -488,11 +505,19 @@ const static struct component_ops cam_actuator_platform_component_ops = {
 	.unbind = cam_actuator_platform_component_unbind,
 };
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int32_t cam_actuator_platform_remove(
 	struct platform_device *pdev)
+#else
+static void cam_actuator_platform_remove(
+	struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_actuator_platform_component_ops);
+
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_actuator_driver_dt_match[] = {

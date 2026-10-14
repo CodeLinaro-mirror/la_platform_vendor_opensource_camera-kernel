@@ -7,6 +7,7 @@
 #define __CAM_RES_MGR_API_H__
 
 #include <linux/leds.h>
+#include "cam_gpio_compat.h"
 
 /**
  * @brief: Register the led trigger

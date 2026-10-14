@@ -5,6 +5,7 @@
  */
 
 #include <linux/debugfs.h>
+#include <linux/version.h>
 #include <linux/videodev2.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
@@ -1682,7 +1683,11 @@ static int cam_context_user_dump(struct cam_context *ctx,
 				local_len = dump_args->offset +
 					sizeof(struct cam_context_dump_header);
 				scnprintf(hdr->tag, CAM_CTXT_DUMP_TAG_MAX_LEN,
+#if KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE
+					"%s_OUT_FENCE_REQUEST_ACTIVE.%d.%pK.%d:",
+#else
 					"%s_OUT_FENCE_REQUEST_ACTIVE.%d.%d.%d:",
+#endif
 					ctx->dev_name,
 					req->out_map_entries[i].resource_handle,
 					&(req->out_map_entries[i].image_buf_addr),

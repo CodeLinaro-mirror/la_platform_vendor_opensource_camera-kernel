@@ -933,6 +933,10 @@ static int cam_cpastop_poweroff(struct cam_hw_info *cpas_hw)
 static int cam_cpastop_qchannel_handshake(struct cam_hw_info *cpas_hw,
 	bool power_on, bool force_on)
 {
+#if IS_ENABLED(CONFIG_ARCH_KALAMA) && \
+	LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+	return 0;
+#else
 	struct cam_cpas *cpas_core = (struct cam_cpas *) cpas_hw->core_info;
 	struct cam_hw_soc_info *soc_info = &cpas_hw->soc_info;
 	int32_t reg_indx = cpas_core->regbase_index[CAM_CPAS_REG_CPASTOP];
@@ -1017,6 +1021,7 @@ static int cam_cpastop_qchannel_handshake(struct cam_hw_info *cpas_hw,
 	}
 
 	return rc;
+#endif
 }
 #endif /* CONFIG_INTERCONNECT_QCOM_CAMSX */
 

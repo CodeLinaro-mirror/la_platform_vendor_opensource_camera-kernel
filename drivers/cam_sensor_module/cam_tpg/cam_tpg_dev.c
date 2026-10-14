@@ -4,6 +4,9 @@
  * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
+#include <linux/of_device.h>
+#include <linux/version.h>
+
 #include "cam_tpg_dev.h"
 #include "cam_tpg_core.h"
 #include "camera_main.h"
@@ -361,10 +364,17 @@ static int32_t cam_tpg_platform_probe(struct platform_device *pdev)
 }
 
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int32_t cam_tpg_device_remove(struct platform_device *pdev)
+#else
+static void cam_tpg_device_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_tpg_component_ops);
+
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_tpg_dt_match[] = {

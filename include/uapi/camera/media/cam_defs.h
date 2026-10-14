@@ -58,6 +58,31 @@
 #define CAM_UBWC_CFG_VERSION_1              1
 #define CAM_UBWC_CFG_VERSION_2              2
 
+#define CAM_COMMON_BUS_MAX_STRIPES          64
+#define CAM_UBWC_FORMAT_NV12_Y              0
+#define CAM_UBWC_FORMAT_NV12_UV             1
+#define CAM_UBWC_FORMAT_TP10_Y              2
+#define CAM_UBWC_FORMAT_TP10_UV             3
+#define CAM_UBWC_FORMAT_NV12_4R_Y           4
+#define CAM_UBWC_FORMAT_NV12_4R_UV          5
+#define CAM_UBWC_FORMAT_P010_Y              6
+#define CAM_UBWC_FORMAT_P010_UV             7
+#define CAM_UBWC_FORMAT_P016_Y              8
+#define CAM_UBWC_FORMAT_P016_UV             9
+#define CAM_UBWC_FORMAT_BAYER_TP10          10
+#define CAM_UBWC_FORMAT_P012_Y              11
+#define CAM_UBWC_FORMAT_P012_UV             12
+#define CAM_UBWC_FORMAT_G016_Y              13
+#define CAM_UBWC_FORMAT_G016_UV             14
+#define CAM_UBWC_FORMAT_BAYER16             15
+#define CAM_UBWC_VER_3_0                    1
+#define CAM_UBWC_VER_4_0                    2
+#define CAM_UBWC_VER_4_4                    3
+#define CAM_UBWC_VER_5_0                    4
+#define CAM_UBWC_VER_6_0                    5
+#define CAM_UBWC_VER_7_0                    6
+#define CAM_UBWC_VER_7_1                    7
+
 #define CAM_MAX_ACQ_RES    5
 #define CAM_MAX_HW_SPLIT   3
 

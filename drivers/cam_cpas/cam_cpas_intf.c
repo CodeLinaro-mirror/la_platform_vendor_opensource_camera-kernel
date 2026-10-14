@@ -8,6 +8,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
+#include <linux/version.h>
 
 #include <media/v4l2-event.h>
 #include <media/v4l2-ioctl.h>
@@ -1146,10 +1147,17 @@ static int cam_cpas_dev_probe(struct platform_device *pdev)
 	return rc;
 }
 
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 static int cam_cpas_dev_remove(struct platform_device *pdev)
+#else
+static void cam_cpas_dev_remove(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &cam_cpas_dev_component_ops);
+
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static const struct of_device_id cam_cpas_dt_match[] = {

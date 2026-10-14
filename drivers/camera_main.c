@@ -4,6 +4,7 @@
  * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/build_bug.h>
 
 #include "cam_req_mgr_dev.h"
@@ -26,7 +27,7 @@
 #include "cam_ois_dev.h"
 #include "cam_tpg_dev.h"
 #include "cam_flash_dev.h"
-#include "cam_hdmi_bdg_core.h"
+#include "cam_sensor_module/cam_hdmi_bdg/cam_hdmi_bdg_core.h"
 
 #include "cam_icp_v1_dev.h"
 #include "cam_icp_v2_dev.h"
@@ -61,7 +62,6 @@
 #include "cam_csid_ppi100.h"
 #include "camera_main.h"
 
-#include "cam_generated_h"
 
 char camera_banner[] = "Camera-Banner: (" CAMERA_COMPILE_BY "@"
 	CAMERA_COMPILE_HOST ") (" CAMERA_COMPILE_TIME ")";
@@ -114,11 +114,16 @@ static const struct camera_submodule_component camera_sensor[] = {
 	{&cam_res_mgr_init, &cam_res_mgr_exit},
 	{&cam_cci_init_module, &cam_cci_exit_module},
 	{&cam_csiphy_init_module, &cam_csiphy_exit_module},
+#if KERNEL_VERSION(6, 18, 0) > LINUX_VERSION_CODE
 	{&cam_tpg_init_module, &cam_tpg_exit_module},
+#endif
 	{&cam_actuator_driver_init, &cam_actuator_driver_exit},
 	{&cam_sensor_driver_init, &cam_sensor_driver_exit},
 	{&cam_eeprom_driver_init, &cam_eeprom_driver_exit},
 	{&cam_ois_driver_init, &cam_ois_driver_exit},
+#if KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE
+	{&cam_tpg_init_module, &cam_tpg_exit_module},
+#endif
 	{&cam_flash_init_module, &cam_flash_exit_module},
 	{&hdmi_bdg_irq_handler_init, &hdmi_bdg_irq_handler_exit},
 #endif
@@ -305,7 +310,15 @@ static int camera_init(void)
 		CAM_DBG(CAM_UTIL, "Number of %s components: %u",
 			submodule_table[i].name, num_inits);
 		for (j = 0; j < num_inits; j++) {
+			CAM_INFO(CAM_UTIL,
+				"KALAMA_CAMERA_INIT_BEGIN group=%s index=%u init=%ps",
+				submodule_table[i].name, j,
+				submodule_table[i].component[j].init);
 			rc = submodule_table[i].component[j].init();
+			CAM_INFO(CAM_UTIL,
+				"KALAMA_CAMERA_INIT_END group=%s index=%u init=%ps rc=%d",
+				submodule_table[i].name, j,
+				submodule_table[i].component[j].init, rc);
 			if (rc) {
 				CAM_ERR(CAM_UTIL,
 					"%s module failure at %ps rc = %d",
@@ -337,3 +350,4 @@ module_exit(camera_exit);
 
 MODULE_DESCRIPTION("Spectra camera driver");
 MODULE_LICENSE("GPL v2");
+MODULE_IMPORT_NS("DMA_BUF");

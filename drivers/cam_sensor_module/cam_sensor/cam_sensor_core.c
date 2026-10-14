@@ -5,17 +5,21 @@
  */
 
 #include <linux/module.h>
+#include <linux/version.h>
 #include <cam_sensor_cmn_header.h>
 #include "cam_sensor_core.h"
+
 #include "cam_sensor_util.h"
 #include "cam_soc_util.h"
 #include "cam_trace.h"
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
 #include "cam_req_mgr_dev.h"
-#include "cam_hdmi_bdg_core.h"
+#include "../cam_hdmi_bdg/cam_hdmi_bdg_core.h"
 
+#if KERNEL_VERSION(6, 18, 0) > LINUX_VERSION_CODE
 #include <soc/qcom/boot_stats.h>
+#endif
 
 extern struct completion *cam_sensor_get_i3c_completion(uint32_t index);
 
@@ -340,7 +344,7 @@ static int32_t cam_sensor_i2c_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 		if (io_cfg == NULL) {
 			CAM_ERR(CAM_SENSOR, "I/O config is invalid(NULL)");
 			goto end;
-		}
+	}
 		break;
 	}
 	case CAM_SENSOR_PACKET_OPCODE_SENSOR_UPDATE: {
@@ -1296,8 +1300,10 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			s_ctrl->sensordata->slave_info.sensor_id,
 			s_ctrl->sensordata->slave_info.sensor_slave_addr,
 			s_ctrl->is_always_on);
-
+		#if KERNEL_VERSION(6, 18, 0) > LINUX_VERSION_CODE
 		place_marker("M - Hibernation: CAM_ACQUIRE_DEV Success");
+		#endif
+
 	}
 		break;
 	case CAM_RELEASE_DEV: {
@@ -1429,7 +1435,9 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			s_ctrl->sensordata->slave_info.sensor_id,
 			s_ctrl->sensordata->slave_info.sensor_slave_addr,
 			s_ctrl->num_batched_frames);
+		#if KERNEL_VERSION(6, 18, 0) > LINUX_VERSION_CODE
 		place_marker("M - Hibernation: Sensor Start dev success");
+		#endif
 	}
 		break;
 	case CAM_STOP_DEV: {
