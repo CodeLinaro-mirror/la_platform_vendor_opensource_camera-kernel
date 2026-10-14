@@ -10846,23 +10846,30 @@ static int cam_ife_hw_mgr_res_stream_on_off_grp_cfg(
 		struct cam_isp_stop_args   *stop_isp = hw_args;
 		*skip_hw_deinit = true;
 
-		if (!grp_cfg->stream_cfg[j].is_streamon)
-			rc = 0;
+		if (grp_cfg->stream_cfg[j].is_streamon) {
+			if (stop_isp->stop_only)
+				rc = cam_ife_mgr_update_irq_mask_affected_ctx_stream_grp(
+					ctx, i, false, false);
+			else
+				rc = cam_ife_mgr_disable_irq(ctx);
 
-		if (stop_isp->stop_only) {
-			rc =
-			cam_ife_mgr_update_irq_mask_affected_ctx_stream_grp(
-				ctx, i, false, false);
-		} else if (grp_cfg->stream_cfg[j].is_streamon) {
-			rc = cam_ife_mgr_disable_irq(ctx);
-			if (rc) {
+			if (rc)
 				CAM_WARN(CAM_ISP,
 					"failed to disable irqs for ife_ctx: %d, sensor_id:0x%x",
 					ctx->ctx_index, ctx->sensor_id);
-			}
+
+			/*
+			 * Always account for this ctx's stream-off here, regardless of
+			 * whether the irq-mask update above found anything to do -
+			 * otherwise a stop_only (flush) call can leave stream_on_cnt
+			 * stuck non-zero and the shared per-port HW (CSID/VFE) never
+			 * gets released.
+			 */
 			grp_cfg->stream_cfg[j].is_streamon = false;
 			if (grp_cfg->stream_on_cnt > 0)
 				grp_cfg->stream_on_cnt--;
+		} else {
+			rc = 0;
 		}
 
 		if (grp_cfg->stream_on_cnt == 0) {
