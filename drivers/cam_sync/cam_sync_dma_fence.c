@@ -278,7 +278,7 @@ int cam_dma_fence_get_put_ref(
 
 	if (get_or_put)
 		dma_fence_get(dma_fence);
-	} else if (kref_put(&dma_fence->refcount, dma_fence_release)) {
+        else if (kref_put(&dma_fence->refcount, dma_fence_release)) {
 		row->fence = NULL;
 		row->state = CAM_DMA_FENCE_STATE_INVALID;
 	}
