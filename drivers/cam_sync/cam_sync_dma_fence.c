@@ -276,17 +276,6 @@ int cam_dma_fence_get_put_ref(
 
 	dma_fence = row->fence;
 
-	if (expected_fence && (dma_fence != expected_fence)) {
-		CAM_ERR(CAM_DMA_FENCE,
-			"dma fence mismatch at idx: %d exp: %pK actual: %pK row recycled",
-			dma_fence_row_idx, expected_fence, dma_fence);
-		spin_unlock_bh(&g_cam_dma_fence_dev->row_spinlocks[dma_fence_row_idx]);
-		dma_fence_put(expected_fence);
-		return -EINVAL;
-	}
-
-	seqno = dma_fence->seqno;
-	refcnt = kref_read(&dma_fence->refcount);
 	if (get_or_put) {
 		dma_fence_get(dma_fence);
 	} else if (kref_put(&dma_fence->refcount, dma_fence_release)) {
