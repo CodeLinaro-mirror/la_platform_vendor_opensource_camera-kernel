@@ -6978,6 +6978,9 @@ static int cam_icp_llcc_sys_cache_config_util(
 	int rc = 0;
 
 	if (scid_match == false) {
+		if (ctx_data->sys_cache_cfg.num >= CAM_ICP_SYS_CACHE_TYPE_MAX)
+			return -EINVAL;
+
 		current_info->scid_id = blob_info->scid_id;
 		current_info->staling_distance = blob_info->staling_distance;
 		current_info->llcc_staling_mode = blob_info->llcc_staling_mode;
@@ -7320,6 +7323,13 @@ static int cam_icp_packet_generic_blob_handler(void *user_data,
 		}
 
 		sys_cache_blob_info = (struct cam_sys_cache_config_request *)blob_data;
+		if (sys_cache_blob_info->num > CAM_ICP_SYS_CACHE_TYPE_MAX) {
+			CAM_ERR(CAM_ICP, "%s: Invalid num %u > %u",
+				ctx_data->ctx_id_string, sys_cache_blob_info->num,
+				CAM_ICP_SYS_CACHE_TYPE_MAX);
+			return -EINVAL;
+		}
+
 		scid_blob_size = sizeof(struct cam_sys_cache_config_request) +
 			((sys_cache_blob_info->num - 1) *
 			sizeof(struct cam_sys_cache_config));
@@ -7355,6 +7365,15 @@ static int cam_icp_packet_generic_blob_handler(void *user_data,
 							.staling_distance);
 					break;
 				}
+			}
+
+			if (!scid_match &&
+				sys_cache_cfg->num >= CAM_ICP_SYS_CACHE_TYPE_MAX) {
+				CAM_ERR(CAM_ICP,
+					"%s: scid table full (%u), dropping new scid %u",
+					ctx_data->ctx_id_string, sys_cache_cfg->num,
+					sys_cache_blob_info->sys_cache_config_flex[j].scid_id);
+				continue;
 			}
 
 			rc = cam_icp_llcc_sys_cache_config_util(
@@ -8706,6 +8725,10 @@ static int cam_icp_get_acquire_info_v1(struct cam_icp_hw_mgr *hw_mgr,
 		return -EFAULT;
 	}
 
+	acquire_info->secure_mode = icp_dev_acquire_info.secure_mode;
+	acquire_info->num_out_res = icp_dev_acquire_info.num_out_res;
+	acquire_info->dev_type = icp_dev_acquire_info.dev_type;
+
 	acquire_size_unified = sizeof(struct cam_icp_acquire_dev_info_unified) +
 		((icp_dev_acquire_info.num_out_res) *
 		sizeof(struct cam_icp_res_info_unified));
@@ -8835,6 +8858,10 @@ static int cam_icp_get_acquire_info_v2(struct cam_icp_hw_mgr *hw_mgr,
 		CAM_MEM_FREE(acquire_info);
 		return -EFAULT;
 	}
+
+	acquire_info->secure_mode = icp_dev_acquire_info_v2.secure_mode;
+	acquire_info->num_out_res = icp_dev_acquire_info_v2.num_out_res;
+	acquire_info->dev_type = icp_dev_acquire_info_v2.dev_type;
 
 	acquire_size_unified = sizeof(struct cam_icp_acquire_dev_info_unified) +
 		((icp_dev_acquire_info_v2.num_out_res) *
