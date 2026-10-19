@@ -87,7 +87,7 @@ int32_t cam_camera_cci_i2c_read_seq(struct cam_sensor_cci_client *cci_client,
 		&cci_ctrl);
 	if (rc < 0) {
 		CAM_ERR(CAM_SENSOR, "CCI config failed rc = %d", rc);
-		return rc;
+		goto end;
 	}
 	rc = cci_ctrl.status;
 	CAM_DBG(CAM_SENSOR, "addr = 0x%x, rc = %d", addr, rc);
@@ -95,6 +95,7 @@ int32_t cam_camera_cci_i2c_read_seq(struct cam_sensor_cci_client *cci_client,
 		data[i] = buf[i];
 		CAM_DBG(CAM_SENSOR, "Byte %d: Data: 0x%x\n", i, data[i]);
 	}
+end:
 	kfree(buf);
 	return rc;
 }
