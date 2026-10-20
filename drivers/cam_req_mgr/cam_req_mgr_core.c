@@ -3255,9 +3255,7 @@ error:
  */
 static void __cam_req_mgr_free_link(struct cam_req_mgr_core_link *link)
 {
-	int i;
-
-	i = __cam_req_mgr_unpublish_link(link);
+	ptrdiff_t i;
 
 	/*
 	 * Acquire link->lock to synchronize with cam_req_mgr_cb_add_req()
@@ -3270,7 +3268,6 @@ static void __cam_req_mgr_free_link(struct cam_req_mgr_core_link *link)
 	link->req.in_q = NULL;
 	mutex_unlock(&link->lock);
 
-	link->parent = NULL;
 	i = link - g_links;
 	CAM_DBG(CAM_CRM, "free link index %d", i);
 	cam_req_mgr_core_link_reset(link);
