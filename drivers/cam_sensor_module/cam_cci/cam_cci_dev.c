@@ -9,6 +9,7 @@
 #include "cam_cci_soc.h"
 #include "cam_cci_core.h"
 #include "camera_main.h"
+#include "cam_cci_api.h"
 
 #define CCI_MAX_DELAY 1000000
 
@@ -880,10 +881,21 @@ static int cam_cci_component_bind(struct device *dev,
 	if (soc_info->index >= MAX_CCI) {
 		CAM_ERR(CAM_CCI, "Invalid index: %d max supported:%d",
 			soc_info->index, MAX_CCI-1);
-		goto cci_no_resource;
+		goto cci_unregister_subdev;
 	}
 
 	g_cci_subdev[soc_info->index] = &new_cci_dev->v4l2_dev_str.sd;
+	/* Allocate and initialize CCI client interface */
+	struct cam_cci_client_iface *iface = kzalloc(sizeof(*iface), GFP_KERNEL);
+
+	if (!iface) {
+		CAM_ERR(CAM_CCI, "Failed to allocate CCI client interface");
+		goto cci_unregister_subdev;
+	}
+
+	iface->cci_ops = cam_cci_client_ops;
+	v4l2_set_subdev_hostdata(&new_cci_dev->v4l2_dev_str.sd, iface);
+
 	mutex_init(&(new_cci_dev->init_mutex));
 	mutex_init(&(new_cci_dev->ctx_mutex));
 	CAM_DBG(CAM_CCI, "Device Type :%d", soc_info->index);
@@ -896,7 +908,7 @@ static int cam_cci_component_bind(struct device *dev,
 	rc = cam_cpas_register_client(&cpas_parms);
 	if (rc) {
 		CAM_ERR(CAM_CCI, "CPAS registration failed rc:%d", rc);
-		goto cci_unregister_subdev;
+		goto cci_free_iface;
 	}
 
 	CAM_DBG(CAM_CCI, "CPAS registration successful handle=%d",
@@ -911,6 +923,9 @@ static int cam_cci_component_bind(struct device *dev,
 	CAM_DBG(CAM_CCI, "Component bound successfully");
 	return rc;
 
+cci_free_iface:
+	kfree(iface);
+	v4l2_set_subdev_hostdata(&new_cci_dev->v4l2_dev_str.sd, NULL);
 cci_unregister_subdev:
 	cam_unregister_subdev(&(new_cci_dev->v4l2_dev_str));
 cci_no_resource:
@@ -927,6 +942,7 @@ static void cam_cci_component_unbind(struct device *dev,
 	struct v4l2_subdev *subdev = platform_get_drvdata(pdev);
 	struct cci_device *cci_dev =
 		v4l2_get_subdevdata(subdev);
+	struct cam_cci_client_iface *iface = v4l2_get_subdev_hostdata(subdev);
 
 	cam_cpas_unregister_client(cci_dev->cpas_handle);
 	debugfs_remove_recursive(debugfs_root);
@@ -936,6 +952,7 @@ static void cam_cci_component_unbind(struct device *dev,
 	if (rc < 0)
 		CAM_ERR(CAM_CCI, "Fail with cam_unregister_subdev. rc:%d", rc);
 
+	kfree(iface);
 	devm_kfree(&pdev->dev, cci_dev);
 }
 

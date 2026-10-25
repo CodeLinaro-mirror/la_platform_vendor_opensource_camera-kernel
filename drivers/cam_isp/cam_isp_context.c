@@ -2690,6 +2690,7 @@ static int __cam_isp_ctx_handle_fence_signaling_util(
 		CAM_ERR(CAM_ISP, "Sync = %u for req = %llu failed with rc = %d",
 			req_isp->fence_map_out[map_entry_idx].sync_id, req->request_id, rc);
 	} else if (req_isp->num_deferred_acks) {
+		req_isp->fence_map_out[map_entry_idx].sync_id = -1;
 		/* Process deferred buf_done acks */
 		__cam_isp_handle_deferred_buf_done(ctx_isp, req, false,
 			fence_status, fence_cause);
@@ -5439,7 +5440,7 @@ static int __cam_isp_ctx_apply_dropped_req_in_bubble_state(
 	struct cam_isp_ctx_req          *req_isp;
 	struct cam_isp_context          *ctx_isp = NULL;
 	struct cam_ctx_request  *req_temp = NULL;
-	uint64_t last_ife_merged_req, ife_recover_req;
+	uint64_t ife_recover_req;
 	uint32_t event_cause, reapply_type = 0;
 
 	ctx_isp = (struct cam_isp_context *) ctx->ctx_priv;
@@ -5533,8 +5534,6 @@ apply_wait:
 			if (ctx_isp->ul_path_en)
 				cam_isp_ctx_reset_producer_q_for_req(ctx_isp, req_isp);
 			ctx_isp->waitlist_req_cnt--;
-			list_del_init(&req->list);
-			__cam_isp_ctx_move_req_to_free_list(ctx, req);
 		} else {
 			reapply_type = CAM_CONFIG_REAPPLY_NONE;
 			*last_applied_ife_req = req->request_id;
@@ -5565,18 +5564,36 @@ apply_pending:
 	}
 
 	/* As part of recovery, last merged IQ settings ife req
-	 * should be based on frame drop count.
+	 * should be based on frame drop count, except when the sensor request
+	 * is checked before isp apply, in which case the sensor is the reference.
 	 * In case of trigger type check if last applied sensor request is
 	 * greater than calculated last merged and adjust ife recover req accordingly
 	 */
-	last_ife_merged_req = ife_dropped_req + ctx_isp->frame_drop_cnt;
-	if (sensor_applied_req > last_ife_merged_req)
-		last_ife_merged_req = sensor_applied_req - (ctx_isp->sensor_pd - 1);
-	ife_recover_req = last_ife_merged_req + 1;
+	if (ctx_isp->sensor_apply_check_en && !ctx_isp->ul_path_en &&
+		(ctx_isp->sensor_pd > 0) && sensor_applied_req) {
+		/*
+		 * The sensor request is checked before isp apply, so the IQ settings
+		 * used by ISP and the ones applied by the sensor have to match and the
+		 * sensor is the reference, not the frame drop count. Recover on the ISP
+		 * request matching the request the sensor last applied. The frame drop
+		 * count can point past what userspace has submitted, and recovering
+		 * there would leave no request for ISP to apply, no anchor for the
+		 * sensor resume, and ISP and sensor permanently out of sync.
+		 */
+		ife_recover_req = sensor_applied_req + 1 - (ctx_isp->sensor_pd - 1);
+	} else {
+		uint64_t last_ife_merged_req;
+
+		last_ife_merged_req = ife_dropped_req + ctx_isp->frame_drop_cnt;
+		if (sensor_applied_req > last_ife_merged_req)
+			last_ife_merged_req = sensor_applied_req - (ctx_isp->sensor_pd - 1);
+		ife_recover_req = last_ife_merged_req + 1;
+	}
+
 	CAM_DBG(CAM_ISP,
-		"last_ife_merged_req :%lld sensor_applied_req :%lld ife_recover_req :%lld frame_drop_cnt:%d ctx:%u",
-		last_ife_merged_req, sensor_applied_req,
-		ife_recover_req, (ctx_isp->frame_drop_cnt + 1), ctx->ctx_id);
+		"sensor_applied_req :%lld ife_recover_req :%lld dropped_req :%lld frame_drop_cnt:%d ctx:%u",
+		sensor_applied_req, ife_recover_req, ife_dropped_req,
+		(ctx_isp->frame_drop_cnt + 1), ctx->ctx_id);
 
 	list_for_each_entry_safe(req, req_temp,
 		&ctx->pending_req_list, list) {
@@ -5640,12 +5657,20 @@ apply_pending:
 			}
 			if (ctx_isp->ul_path_en)
 				cam_isp_ctx_reset_producer_q_for_req(ctx_isp, req_isp);
-			list_del_init(&req->list);
-			__cam_isp_ctx_move_req_to_free_list(ctx, req);
 		}
 	}
 
 end:
+	if (!rc && ctx_isp->frame_drop_detected && !*last_applied_ife_req) {
+		CAM_WARN(CAM_ISP,
+			"No recovery anchor req applied dropped_req:%lld "
+			"sensor_applied_req:%lld ctx:%u",
+			ife_dropped_req, sensor_applied_req, ctx->ctx_id);
+		ctx_isp->frame_drop_detected = false;
+		ctx_isp->frame_drop = false;
+		ctx_isp->check_rup_status = false;
+	}
+
 	ctx_isp->frame_drop_cnt = 0;
 	return rc;
 }
