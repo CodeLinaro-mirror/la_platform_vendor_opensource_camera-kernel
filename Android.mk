@@ -46,7 +46,7 @@ LOCAL_MODULE_TAGS           := optional
 #LOCAL_MODULE_KBUILD_NAME   := camera.ko
 #LOCAL_MODULE_DEBUG_ENABLE  := true
 
-ifneq (, $(filter $(TARGET_BOARD_PLATFORM), shikra))
+ifneq (, $(filter $(TARGET_BOARD_PLATFORM), shikra sa2390))
 # Use DDK build system for shikra and holi platforms
 include $(DLKM_DIR)/Build_external_kernelmodule.mk
 # Include Camera UAPI Android.mk target to copy headers

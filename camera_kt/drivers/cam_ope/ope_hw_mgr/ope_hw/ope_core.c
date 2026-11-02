@@ -13,6 +13,8 @@
 #include <linux/delay.h>
 #include <linux/timer.h>
 #include <linux/iopoll.h>
+#include <linux/slab.h>
+#include <linux/mm.h>
 #include <media/cam_ope.h>
 
 #include "cam_io_util.h"
@@ -526,6 +528,147 @@ int ope_validate_buff_offset(size_t buf_len,
 		return 0;
 }
 
+static int ope_init_dmi_dma_ranges(struct cam_ope_hw_mgr *hw_mgr,
+	struct cam_ope_dev_prepare_req *ope_dev_prepare_req)
+{
+	int rc = 0;
+	uint32_t i = 0;
+	int32_t hdl = 0;
+	dma_addr_t iova_addr = 0;
+	size_t src_buf_size = 0;
+	struct cam_packet *packet = NULL;
+	struct cam_patch_desc *patch_desc = NULL;
+	struct ope_dmi_dma_range *ranges = NULL;
+
+	if (!hw_mgr || !ope_dev_prepare_req || !ope_dev_prepare_req->packet)
+		return -EINVAL;
+
+	ope_dev_prepare_req->dmi_dma_ranges = NULL;
+	ope_dev_prepare_req->num_dmi_dma_ranges = 0;
+	packet = ope_dev_prepare_req->packet;
+
+	if (!packet->num_patches) {
+		CAM_DBG(CAM_OPE,
+			"No patches for DMI command validation, skipping range check");
+		return 0;
+	}
+
+	ranges = kvcalloc(packet->num_patches, sizeof(*ranges), GFP_KERNEL);
+	if (!ranges)
+		return -ENOMEM;
+
+	patch_desc = (struct cam_patch_desc *)
+		((uint32_t *)&packet->payload + packet->patch_offset / 4);
+
+	for (i = 0; i < packet->num_patches; i++) {
+		hdl = cam_mem_is_secure_buf(patch_desc[i].src_buf_hdl) ?
+			hw_mgr->iommu_sec_cdm_hdl : hw_mgr->iommu_cdm_hdl;
+		rc = cam_mem_get_io_buf(patch_desc[i].src_buf_hdl, hdl,
+			&iova_addr, &src_buf_size);
+		if (rc || !iova_addr || !src_buf_size) {
+			CAM_ERR(CAM_OPE,
+				"Invalid patch source hdl=0x%x idx=%u rc=%d",
+				patch_desc[i].src_buf_hdl, i, rc);
+			rc = -EINVAL;
+			goto end;
+		}
+
+		if (patch_desc[i].src_offset >= src_buf_size) {
+			CAM_ERR(CAM_OPE,
+				"Invalid patch src_offset=0x%x src_size=%zu",
+				patch_desc[i].src_offset, src_buf_size);
+			rc = -EINVAL;
+			goto end;
+		}
+
+		ranges[i].start = (uint64_t)iova_addr + patch_desc[i].src_offset;
+		ranges[i].end = (uint64_t)iova_addr + src_buf_size;
+		if (ranges[i].start >= ranges[i].end) {
+			CAM_ERR(CAM_OPE,
+				"Invalid patch range start=0x%llx end=0x%llx",
+				ranges[i].start, ranges[i].end);
+			rc = -EINVAL;
+			goto end;
+		}
+	}
+
+	ope_dev_prepare_req->dmi_dma_ranges = ranges;
+	ope_dev_prepare_req->num_dmi_dma_ranges = packet->num_patches;
+
+	return 0;
+
+end:
+	kvfree(ranges);
+	return rc;
+}
+
+static void ope_deinit_dmi_dma_ranges(
+	struct cam_ope_dev_prepare_req *ope_dev_prepare_req)
+{
+	if (!ope_dev_prepare_req)
+		return;
+
+	kvfree(ope_dev_prepare_req->dmi_dma_ranges);
+	ope_dev_prepare_req->dmi_dma_ranges = NULL;
+	ope_dev_prepare_req->num_dmi_dma_ranges = 0;
+}
+
+static int ope_validate_dmi_dma_range(struct cdm_dmi_cmd *dmi_cmd,
+	struct cam_ope_dev_prepare_req *ope_dev_prepare_req)
+{
+	struct ope_dmi_dma_range *dma_ranges = NULL;
+	uint32_t num_dma_ranges = 0;
+	uint64_t dma_start = 0;
+	uint64_t dma_end = 0;
+	uint64_t dma_len = 0;
+	uint32_t i = 0;
+
+	if (!dmi_cmd || !ope_dev_prepare_req)
+		return -EINVAL;
+
+	if (!dmi_cmd->addr) {
+		CAM_ERR(CAM_OPE, "Null dmi cmd addr");
+		return -EINVAL;
+	}
+
+	num_dma_ranges = ope_dev_prepare_req->num_dmi_dma_ranges;
+	dma_ranges = ope_dev_prepare_req->dmi_dma_ranges;
+	if (!num_dma_ranges || !dma_ranges) {
+		CAM_ERR(CAM_OPE,
+			"No DMA range available for DMI command addr=0x%x",
+			dmi_cmd->addr);
+		return -EINVAL;
+	}
+
+	dma_len = (uint64_t)dmi_cmd->length + 1;
+	if (dma_len < sizeof(uint32_t) ||
+		(dma_len & (sizeof(uint32_t) - 1))) {
+		CAM_ERR(CAM_OPE, "Invalid DMI length field=0x%x bytes=%llu",
+			dmi_cmd->length, dma_len);
+		return -EINVAL;
+	}
+
+	dma_start = dmi_cmd->addr;
+	dma_end = dma_start + dma_len;
+	if (dma_end <= dma_start) {
+		CAM_ERR(CAM_OPE,
+			"Invalid DMI range start=0x%llx len=%llu end=0x%llx",
+			dma_start, dma_len, dma_end);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < num_dma_ranges; i++) {
+		if (dma_start >= dma_ranges[i].start &&
+			dma_end <= dma_ranges[i].end)
+			return 0;
+	}
+
+	CAM_ERR(CAM_OPE,
+		"DMI range outside patched buffers start=0x%llx len=%llu end=0x%llx",
+		dma_start, dma_len, dma_end);
+	return -EINVAL;
+}
+
 static uint32_t *ope_create_frame_cmd_batch(struct cam_ope_hw_mgr *hw_mgr,
 	struct cam_ope_ctx *ctx_data, uint32_t req_idx,
 	uint32_t *kmd_buf, uint32_t buffered, int batch_idx,
@@ -602,8 +745,10 @@ static uint32_t *ope_create_frame_cmd_batch(struct cam_ope_hw_mgr *hw_mgr,
 		}
 
 		rc = ope_validate_buff_offset(buf_len, &frm_proc->cmd_buf[i][j]);
-		if (rc)
+		if (rc) {
+			cam_mem_put_cpu_buf(frm_proc->cmd_buf[i][j].mem_handle);
 			return NULL;
+		}
 
 		cpu_addr = cpu_addr + frm_proc->cmd_buf[i][j].offset;
 		if (frm_proc->cmd_buf[i][j].type ==
@@ -624,9 +769,11 @@ static uint32_t *ope_create_frame_cmd_batch(struct cam_ope_hw_mgr *hw_mgr,
 				memcpy(temp, (const void *)print_ptr,
 					sizeof(struct cdm_dmi_cmd));
 				dmi_cmd = (struct cdm_dmi_cmd *)temp;
-				if (!dmi_cmd->addr) {
-					CAM_ERR(CAM_OPE, "Null dmi cmd addr");
-					cam_mem_put_cpu_buf(frm_proc->cmd_buf[i][j].mem_handle);
+				rc = ope_validate_dmi_dma_range(dmi_cmd,
+					ope_dev_prepare_req);
+				if (rc) {
+					cam_mem_put_cpu_buf(
+						frm_proc->cmd_buf[i][j].mem_handle);
 					return NULL;
 				}
 
@@ -768,8 +915,10 @@ static uint32_t *ope_create_frame_cmd(struct cam_ope_hw_mgr *hw_mgr,
 				return NULL;
 			}
 			rc = ope_validate_buff_offset(buf_len, &frm_proc->cmd_buf[i][j]);
-			if (rc)
+			if (rc) {
+				cam_mem_put_cpu_buf(frm_proc->cmd_buf[i][j].mem_handle);
 				return NULL;
+			}
 			cpu_addr = cpu_addr + frm_proc->cmd_buf[i][j].offset;
 			if (frm_proc->cmd_buf[i][j].type ==
 				OPE_CMD_BUF_TYPE_DIRECT) {
@@ -790,9 +939,9 @@ static uint32_t *ope_create_frame_cmd(struct cam_ope_hw_mgr *hw_mgr,
 					memcpy(temp, (const void *)print_ptr,
 						sizeof(struct cdm_dmi_cmd));
 					dmi_cmd = (struct cdm_dmi_cmd *)temp;
-					if (!dmi_cmd->addr) {
-						CAM_ERR(CAM_OPE,
-							"Null dmi cmd addr");
+					rc = ope_validate_dmi_dma_range(dmi_cmd,
+						ope_dev_prepare_req);
+					if (rc) {
 						cam_mem_put_cpu_buf(
 							frm_proc->cmd_buf[i][j].mem_handle);
 						return NULL;
@@ -825,16 +974,17 @@ static uint32_t *ope_create_frame_cmd(struct cam_ope_hw_mgr *hw_mgr,
 
 static uint32_t *ope_create_stripe_cmd(struct cam_ope_hw_mgr *hw_mgr,
 	struct cam_ope_ctx *ctx_data,
+	struct cam_ope_dev_prepare_req *ope_dev_prepare_req,
 	uint32_t *kmd_buf,
 	size_t buffer_size,
 	int batch_idx,
 	int s_idx,
-	uint32_t stripe_idx,
-	struct ope_frame_process *frm_proc)
+	uint32_t stripe_idx)
 {
 	int rc = 0, i, j, k;
 	uint32_t temp[3];
 	struct cdm_dmi_cmd *dmi_cmd;
+	struct ope_frame_process *frm_proc;
 	dma_addr_t iova_addr;
 	uintptr_t cpu_addr;
 	size_t buf_len, size;
@@ -858,6 +1008,7 @@ static uint32_t *ope_create_stripe_cmd(struct cam_ope_hw_mgr *hw_mgr,
 	i = batch_idx;
 	j = s_idx;
 	cdm_ops = ctx_data->ope_cdm.cdm_ops;
+	frm_proc = ope_dev_prepare_req->frame_process;
 	/* cmd buffer stripes */
 	for (k = 0; k < frm_proc->num_cmd_bufs[i]; k++) {
 		if (frm_proc->cmd_buf[i][k].cmd_buf_scope !=
@@ -892,8 +1043,10 @@ static uint32_t *ope_create_stripe_cmd(struct cam_ope_hw_mgr *hw_mgr,
 			return NULL;
 		}
 		rc = ope_validate_buff_offset(buf_len, &frm_proc->cmd_buf[i][k]);
-		if (rc)
+		if (rc) {
+			cam_mem_put_cpu_buf(frm_proc->cmd_buf[i][k].mem_handle);
 			return NULL;
+		}
 		cpu_addr = cpu_addr + frm_proc->cmd_buf[i][k].offset;
 
 		if (frm_proc->cmd_buf[i][k].type == OPE_CMD_BUF_TYPE_DIRECT) {
@@ -913,7 +1066,7 @@ static uint32_t *ope_create_stripe_cmd(struct cam_ope_hw_mgr *hw_mgr,
 			CAM_DBG(CAM_OPE, "Stripe:%d direct:X", stripe_idx);
 		} else if (frm_proc->cmd_buf[i][k].type ==
 			OPE_CMD_BUF_TYPE_INDIRECT) {
-			num_dmi = frm_proc->cmd_buf[i][j].length /
+			num_dmi = frm_proc->cmd_buf[i][k].length /
 				sizeof(struct cdm_dmi_cmd);
 			CAM_DBG(CAM_OPE, "Stripe:%d Indirect:E", stripe_idx);
 			print_ptr = (uint32_t *)cpu_addr;
@@ -921,9 +1074,11 @@ static uint32_t *ope_create_stripe_cmd(struct cam_ope_hw_mgr *hw_mgr,
 				memcpy(temp, (const void *)print_ptr,
 					sizeof(struct cdm_dmi_cmd));
 				dmi_cmd = (struct cdm_dmi_cmd *)temp;
-				if (!dmi_cmd->addr) {
-					CAM_ERR(CAM_OPE, "Null dmi cmd addr");
-					cam_mem_put_cpu_buf(frm_proc->cmd_buf[i][k].mem_handle);
+				rc = ope_validate_dmi_dma_range(dmi_cmd,
+					ope_dev_prepare_req);
+				if (rc) {
+					cam_mem_put_cpu_buf(
+						frm_proc->cmd_buf[i][k].mem_handle);
 					return NULL;
 				}
 
@@ -1034,12 +1189,10 @@ static uint32_t *ope_create_stripes_batch(struct cam_ope_hw_mgr *hw_mgr,
 	struct cam_ope_request *ope_request;
 	struct ope_bus_wr_io_port_cdm_info *wr_cdm_info;
 	struct ope_bus_rd_io_port_cdm_info *rd_cdm_info;
-	struct ope_frame_process *frm_proc;
 	uint32_t stripe_idx = 0;
 	struct cam_cdm_utils_ops *cdm_ops;
 	size_t avaliable_size;
 
-	frm_proc = ope_dev_prepare_req->frame_process;
 	ope_request = ctx_data->req_list[req_idx];
 	cdm_ops = ctx_data->ope_cdm.cdm_ops;
 
@@ -1059,7 +1212,8 @@ static uint32_t *ope_create_stripes_batch(struct cam_ope_hw_mgr *hw_mgr,
 		avaliable_size = ope_request->ope_kmd_buf.size -
 			((uintptr_t)kmd_buf - (uintptr_t)ope_request->ope_kmd_buf.cpu_addr);
 		kmd_buf = ope_create_stripe_cmd(hw_mgr, ctx_data,
-			kmd_buf, avaliable_size, i, j, stripe_idx, frm_proc);
+			ope_dev_prepare_req, kmd_buf,
+			avaliable_size, i, j, stripe_idx);
 		if (!kmd_buf)
 			goto end;
 
@@ -1128,7 +1282,8 @@ static uint32_t *ope_create_stripes(struct cam_ope_hw_mgr *hw_mgr,
 			avaliable_size = ope_request->ope_kmd_buf.size -
 				((uintptr_t)kmd_buf - (uintptr_t)ope_request->ope_kmd_buf.cpu_addr);
 			kmd_buf = ope_create_stripe_cmd(hw_mgr, ctx_data,
-				kmd_buf, avaliable_size, i, j, stripe_idx, frm_proc);
+				ope_dev_prepare_req, kmd_buf,
+				avaliable_size, i, j, stripe_idx);
 			if (!kmd_buf)
 				goto end;
 
@@ -1225,7 +1380,8 @@ static uint32_t *ope_create_stripes_nrt(struct cam_ope_hw_mgr *hw_mgr,
 			avaliable_size = ope_request->ope_kmd_buf.size -
 				((uintptr_t)kmd_buf - (uintptr_t)ope_request->ope_kmd_buf.cpu_addr);
 			kmd_buf = ope_create_stripe_cmd(hw_mgr, ctx_data,
-				kmd_buf, avaliable_size, i, j, stripe_idx, frm_proc);
+				ope_dev_prepare_req, kmd_buf,
+				avaliable_size, i, j, stripe_idx);
 			if (!kmd_buf)
 				goto end;
 
@@ -1507,25 +1663,29 @@ static int cam_ope_dev_create_kmd_buf(struct cam_ope_hw_mgr *hw_mgr,
 	struct ope_bus_rd_io_port_cdm_info *rd_cdm_info;
 	struct cam_cdm_utils_ops *cdm_ops;
 
+	if (ope_init_dmi_dma_ranges(hw_mgr, ope_dev_prepare_req))
+		return -EINVAL;
 
 	if (ctx_data->ope_acquire.dev_type == OPE_DEV_TYPE_OPE_NRT) {
-		return cam_ope_dev_create_kmd_buf_nrt(
+		rc = cam_ope_dev_create_kmd_buf_nrt(
 			ope_dev_prepare_req->hw_mgr,
 			ope_dev_prepare_req->prepare_args,
 			ope_dev_prepare_req->ctx_data,
 			ope_dev_prepare_req->req_idx,
 			ope_dev_prepare_req->kmd_buf_offset,
 			ope_dev_prepare_req);
+		goto end;
 	}
 
 	if (ctx_data->ope_acquire.batch_size > 1) {
-		return cam_ope_dev_create_kmd_buf_batch(
-		ope_dev_prepare_req->hw_mgr,
-		ope_dev_prepare_req->prepare_args,
-		ope_dev_prepare_req->ctx_data,
-		ope_dev_prepare_req->req_idx,
-		ope_dev_prepare_req->kmd_buf_offset,
-		ope_dev_prepare_req);
+		rc = cam_ope_dev_create_kmd_buf_batch(
+			ope_dev_prepare_req->hw_mgr,
+			ope_dev_prepare_req->prepare_args,
+			ope_dev_prepare_req->ctx_data,
+			ope_dev_prepare_req->req_idx,
+			ope_dev_prepare_req->kmd_buf_offset,
+			ope_dev_prepare_req);
+		goto end;
 	}
 
 	ope_request = ctx_data->req_list[req_idx];
@@ -1607,6 +1767,7 @@ static int cam_ope_dev_create_kmd_buf(struct cam_ope_hw_mgr *hw_mgr,
 		ope_dev_prepare_req,
 		len, false);
 end:
+	ope_deinit_dmi_dma_ranges(ope_dev_prepare_req);
 	return rc;
 }
 
@@ -1887,4 +2048,3 @@ irqreturn_t cam_ope_irq(int irq_num, void *data)
 
 	return IRQ_HANDLED;
 }
-
