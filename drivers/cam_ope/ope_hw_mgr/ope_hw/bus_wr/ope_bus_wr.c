@@ -193,6 +193,7 @@ static uint32_t *cam_ope_bus_wr_update(struct ope_hw *ope_hw_info,
 	struct ope_bus_wr_io_port_cdm_batch *io_port_cdm_batch;
 	struct ope_bus_wr_io_port_cdm_info *io_port_cdm;
 	struct cam_cdm_utils_ops *cdm_ops;
+	uint32_t write_len;
 
 
 	if (ctx_id < 0 || !prepare) {
@@ -321,12 +322,22 @@ static uint32_t *cam_ope_bus_wr_update(struct ope_hw *ope_hw_info,
 			header_size = cdm_ops->cdm_get_cmd_header_size(
 				CAM_CDM_CMD_REG_RANDOM);
 			idx = io_port_cdm->num_s_cmd_bufs[l];
+			if (idx >= MAX_WR_CLIENTS) {
+				CAM_ERR(CAM_OPE,
+					"s_cdm_info overflow: plane %d stripe %d idx %u >= MAX_WR_CLIENTS %d",
+					k, l, idx, MAX_WR_CLIENTS);
+				return NULL;
+			}
 			io_port_cdm->s_cdm_info[l][idx].len =
 				sizeof(temp) * (count + header_size);
 			io_port_cdm->s_cdm_info[l][idx].offset =
 				prepare->kmd_buf_offset;
 			io_port_cdm->s_cdm_info[l][idx].addr = kmd_buf;
 			io_port_cdm->num_s_cmd_bufs[l]++;
+			write_len = (count + header_size) * sizeof(uint32_t);
+			if (cam_ope_validate_kmd_space(ope_request->ope_kmd_buf.size,
+						prepare->kmd_buf_offset, write_len))
+				return NULL;
 
 			kmd_buf = cdm_ops->cdm_write_regrandom(
 				kmd_buf, count/2, temp_reg);
