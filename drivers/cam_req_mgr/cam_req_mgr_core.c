@@ -798,7 +798,6 @@ static int __cam_req_mgr_send_req(struct cam_req_mgr_core_link *link,
 			if (dev->ops && dev->ops->process_evt)
 				dev->ops->process_evt(&evt_data);
 		}
-		__cam_req_mgr_notify_frame_skip(link, trigger);
 	} else {
 		if (req_applied_to_min_pd) {
 			link->open_req_cnt--;
